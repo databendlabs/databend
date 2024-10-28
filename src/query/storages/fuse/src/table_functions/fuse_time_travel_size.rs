@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
@@ -30,10 +29,12 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use futures_util::TryStreamExt;
+use log::info;
 use opendal::Metakey;
 use opendal::Operator;
 
 use super::parse_opt_opt_args;
+use crate::io::SnapshotsIO;
 use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
@@ -84,6 +85,10 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 "time_travel_size",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
+            TableField::new(
+                "latest_snapshot_size",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 
@@ -96,71 +101,60 @@ impl SimpleArgFunc for FuseTimeTravelSize {
         let mut database_names = Vec::new();
         let mut table_names = Vec::new();
         let mut sizes = Vec::new();
-        match (&args.database_name, &args.table_name) {
-            (Some(database_name), Some(table_name)) => {
-                let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
+        let mut latest_snapshot_sizes = Vec::new();
+        let catalog = ctx.get_default_catalog()?;
+        let dbs = match &args.database_name {
+            Some(db_name) => {
+                let start = std::time::Instant::now();
                 let db = catalog
-                    .get_database(&ctx.get_tenant(), database_name.as_str())
+                    .get_database(&ctx.get_tenant(), db_name.as_str())
                     .await?;
-                let tbl = db.get_table(table_name.as_str()).await?;
-                let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
-                let operator = fuse_table.get_operator();
-                let storage_prefix = fuse_table.get_storage_prefix();
-                let size = get_time_travel_size(storage_prefix, &operator).await?;
-                database_names.push(database_name.clone());
-                table_names.push(table_name.clone());
-                sizes.push(size);
+                info!("get_database cost: {:?}", start.elapsed());
+                vec![db]
             }
-            (Some(database_name), None) => {
-                let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-                let database = catalog
-                    .get_database(&ctx.get_tenant(), database_name.as_str())
-                    .await?;
-                let tables = database.list_tables().await?;
-                for tbl in tables {
-                    let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
-                        continue;
-                    };
-                    let operator = fuse_table.get_operator();
-                    let storage_prefix = fuse_table.get_storage_prefix();
-                    let size = get_time_travel_size(storage_prefix, &operator).await?;
-                    database_names.push(database_name.clone());
-                    table_names.push(tbl.name().to_string());
-                    sizes.push(size);
+            None => {
+                let start = std::time::Instant::now();
+                let dbs = catalog.list_databases(&ctx.get_tenant()).await?;
+                info!("list_databases cost: {:?}", start.elapsed());
+                dbs
+            }
+        };
+        for db in dbs {
+            let tables = match &args.table_name {
+                Some(table_name) => {
+                    let start = std::time::Instant::now();
+                    let table = db.get_table(table_name.as_str()).await?;
+                    info!("get_table cost: {:?}", start.elapsed());
+                    vec![table]
                 }
-            }
-            (None, None) => {
-                let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-                let databases = catalog.list_databases(&ctx.get_tenant()).await?;
-                for db in databases {
-                    let tables = match db.list_tables().await {
-                        Ok(tables) => tables,
-                        Err(e) if e.code() == ErrorCode::UNIMPLEMENTED => {
-                            continue;
-                        }
-                        Err(e) => {
-                            return Err(e);
-                        }
-                    };
-                    for tbl in tables {
-                        let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
-                            continue;
-                        };
-                        let operator = fuse_table.get_operator();
-                        let storage_prefix = fuse_table.get_storage_prefix();
-                        let size = get_time_travel_size(storage_prefix, &operator).await?;
-                        database_names.push(db.name().to_string());
-                        table_names.push(tbl.name().to_string());
-                        sizes.push(size);
-                    }
+                None => {
+                    let start = std::time::Instant::now();
+                    let tables = db.list_tables().await?;
+                    info!("list_tables cost: {:?}", start.elapsed());
+                    tables
                 }
+            };
+
+            for tbl in tables {
+                let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
+                    // ignore non-fuse tables
+                    continue;
+                };
+                if FuseTable::is_table_attached(&tbl.get_table_info().meta.options) {
+                    continue;
+                }
+                let (time_travel_size, latest_snapshot_size) = calc_tbl_size(fuse_table).await?;
+                database_names.push(db.name().to_string());
+                table_names.push(tbl.name().to_string());
+                sizes.push(time_travel_size);
+                latest_snapshot_sizes.push(latest_snapshot_size);
             }
-            (None, Some(_)) => unreachable!(),
         }
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(database_names),
             StringType::from_data(table_names),
             UInt64Type::from_data(sizes),
+            UInt64Type::from_data(latest_snapshot_sizes),
         ]))
     }
 }
@@ -176,4 +170,23 @@ async fn get_time_travel_size(storage_prefix: &str, op: &Operator) -> Result<u64
         size += entry.metadata().content_length();
     }
     Ok(size)
+}
+
+async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, u64)> {
+    let operator = tbl.get_operator();
+    let storage_prefix = tbl.get_storage_prefix();
+    let start = std::time::Instant::now();
+    let time_travel_size = get_time_travel_size(storage_prefix, &operator).await?;
+    info!("get_time_travel_size cost: {:?}", start.elapsed());
+    let snapshot_location = tbl.snapshot_loc().await?;
+    let latest_snapshot_size = match snapshot_location {
+        Some(snapshot_location) => {
+            let start = std::time::Instant::now();
+            let (snapshot, _) = SnapshotsIO::read_snapshot(snapshot_location, operator).await?;
+            info!("read_snapshot cost: {:?}", start.elapsed());
+            snapshot.summary.compressed_byte_size + snapshot.summary.index_size
+        }
+        None => 0,
+    };
+    Ok((time_travel_size, latest_snapshot_size))
 }
