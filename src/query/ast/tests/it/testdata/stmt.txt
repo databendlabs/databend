@@ -7139,9 +7139,9 @@ Query(
 
 
 ---------- Input ----------
-SETTINGS (max_thread, timezone)=(1, 'Aisa/Shanghai') select 1;
+SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;
 ---------- Output ---------
-SETTINGS (max_thread, timezone) = (1, 'Aisa/Shanghai') SELECT 1
+SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
 ---------- AST ------------
 QueryWithSetting {
     settings: Some(
@@ -7158,7 +7158,7 @@ QueryWithSetting {
                 },
                 Identifier {
                     span: Some(
-                        22..30,
+                        24..32,
                     ),
                     name: "timezone",
                     quote: None,
@@ -7169,7 +7169,7 @@ QueryWithSetting {
                 [
                     Literal {
                         span: Some(
-                            33..34,
+                            21..22,
                         ),
                         value: UInt64(
                             1,
@@ -7177,10 +7177,10 @@ QueryWithSetting {
                     },
                     Literal {
                         span: Some(
-                            36..51,
+                            33..48,
                         ),
                         value: String(
-                            "Aisa/Shanghai",
+                            "Asia/Shanghai",
                         ),
                     },
                 ],
@@ -7190,13 +7190,13 @@ QueryWithSetting {
     query: Query(
         Query {
             span: Some(
-                53..61,
+                50..58,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        53..61,
+                        50..58,
                     ),
                     hints: None,
                     distinct: false,
@@ -7205,7 +7205,7 @@ QueryWithSetting {
                         AliasedExpr {
                             expr: Literal {
                                 span: Some(
-                                    60..61,
+                                    57..58,
                                 ),
                                 value: UInt64(
                                     1,

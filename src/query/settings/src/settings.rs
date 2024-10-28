@@ -157,7 +157,9 @@ impl Settings {
                 self.set_setting(k.to_string(), v.to_string())?;
             }
         }
-        self.set_query_level_change(query_level_change);
+        if !settings.is_empty() {
+            self.set_query_level_change(query_level_change);
+        }
 
         Ok(())
     }

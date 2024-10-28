@@ -39,6 +39,7 @@ mod presign;
 mod project;
 mod project_set;
 mod qualify;
+mod query_setting;
 mod replace;
 mod scalar;
 mod scalar_common;

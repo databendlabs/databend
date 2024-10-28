@@ -200,7 +200,7 @@ fn test_statement() {
         r#"select * from a semi join b on a.a = b.a;"#,
         r#"select * from a left anti join b on a.a = b.a;"#,
         r#"select * from a anti join b on a.a = b.a;"#,
-        r#"SETTINGS (max_thread, timezone)=(1, 'Aisa/Shanghai') select 1;"#,
+        r#"SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;"#,
         r#"SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;"#,
         r#"select * from a right semi join b on a.a = b.a;"#,
         r#"select * from a right anti join b on a.a = b.a;"#,

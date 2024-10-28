@@ -50,7 +50,7 @@ impl SetInterpreter {
     }
 
     async fn set_settings(&self, var: String, value: String, is_global: bool) -> Result<()> {
-        let settings = self.ctx.get_shared_settings();
+        let settings = self.ctx.get_session_settings();
 
         match is_global {
             true => settings.set_global_setting(var, value).await,
