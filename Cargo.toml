@@ -432,6 +432,7 @@ wiremock = "0.6"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 
 # Observability
+env_logger = "0.11"
 fastrace = { version = "0.7.4", features = ["enable"] }
 fastrace-opentelemetry = "0.7.4"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
@@ -450,7 +451,6 @@ prometheus-parse = "0.2.3"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
-env_logger = "0.11"
 
 # Databend Integration Test
 databend-client = { version = "0.22" }
