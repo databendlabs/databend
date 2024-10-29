@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_channel::Sender;
-use databend_common_base::runtime::{GlobalIORuntime};
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -31,7 +31,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use log::info;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -219,19 +218,29 @@ impl FuseTable {
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
 
-            GlobalIORuntime::instance().spawn( async move{
-                info!("Pruning lazy partitions");
-                let (_statistics, partitions) = table
+            GlobalIORuntime::instance().try_spawn(async move {
+                match table
                     .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                    .await?;
-                let sender_size = senders.len();
-                for (i, part) in partitions.partitions.into_iter().enumerate() {
-                    senders[i % sender_size]
-                        .send(part)
-                        .await.map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
+                    .await
+                {
+                    Ok((_, partitions)) => {
+                        let sender_size = senders.len();
+                        for (i, part) in partitions.partitions.into_iter().enumerate() {
+                            senders[i % sender_size]
+                                .send(Ok(part))
+                                .await
+                                .map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
+                        }
+                    }
+                    Err(err) => {
+                        senders[0]
+                            .send(Err(err))
+                            .await
+                            .map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
+                    }
                 }
                 Ok::<_, ErrorCode>(())
-            });
+            })?;
         }
 
         Ok(())
@@ -250,7 +259,7 @@ impl FuseTable {
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
         is_lazy: bool,
-    ) -> Result<Vec<Sender<PartInfoPtr>>> {
+    ) -> Result<Vec<Sender<Result<PartInfoPtr>>>> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
         match storage_format {

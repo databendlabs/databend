@@ -54,7 +54,7 @@ pub fn build_fuse_native_source_pipeline(
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
     is_lazy: bool,
-) -> Result<Vec<Sender<PartInfoPtr>>> {
+) -> Result<Vec<Sender<Result<PartInfoPtr>>>> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
 
@@ -169,7 +169,7 @@ pub fn build_fuse_parquet_source_pipeline(
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
     is_lazy: bool,
-) -> Result<Vec<Sender<PartInfoPtr>>> {
+) -> Result<Vec<Sender<Result<PartInfoPtr>>>> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
 
@@ -342,7 +342,7 @@ pub fn adjust_threads_and_request(
 pub fn build_lazy_source(
     max_threads: usize,
     ctx: Arc<dyn TableContext>,
-) -> Result<(Pipe, Vec<Sender<PartInfoPtr>>)> {
+) -> Result<(Pipe, Vec<Sender<Result<PartInfoPtr>>>)> {
     let mut source_builder = SourcePipeBuilder::create();
     let mut senders = Vec::with_capacity(max_threads);
     for _i in 0..max_threads {

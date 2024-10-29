@@ -26,13 +26,13 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 
 pub struct BlockPartitionReceiverSource {
-    pub meta_receiver: Receiver<PartInfoPtr>,
+    pub meta_receiver: Receiver<databend_common_exception::Result<PartInfoPtr>>,
 }
 
 impl BlockPartitionReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        receiver: Receiver<PartInfoPtr>,
+        receiver: Receiver<databend_common_exception::Result<PartInfoPtr>>,
         output_port: Arc<OutputPort>,
     ) -> databend_common_exception::Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
@@ -49,9 +49,13 @@ impl AsyncSource for BlockPartitionReceiverSource {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> databend_common_exception::Result<Option<DataBlock>> {
         match self.meta_receiver.recv().await {
-            Ok(part) => Ok(Some(DataBlock::empty_with_meta(
+            Ok(Ok(part)) => Ok(Some(DataBlock::empty_with_meta(
                 BlockPartitionMeta::create(vec![part]),
             ))),
+            Ok(Err(e)) => Err(
+                // The error is occurred in pruning process
+                e,
+            ),
             Err(_) => {
                 // The channel is closed, we should return None to stop generating
                 Ok(None)

@@ -111,7 +111,7 @@ impl ReadParquetDataTransform<false> {
 }
 
 impl Transform for ReadParquetDataTransform<true> {
-    const NAME: &'static str = "ReadParquetDataTransform";
+    const NAME: &'static str = "SyncReadParquetDataTransform";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         if let Some(meta) = data.get_meta() {
