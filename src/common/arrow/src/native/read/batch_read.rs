@@ -60,6 +60,7 @@ pub fn read_simple<R: NativeReadBuf>(
             )
         }),
         Binary | Utf8 => read_binary::<i32, _>(reader, is_nullable, data_type, page_metas),
+        BinaryView | Utf8View => read_view::<_>(reader, is_nullable, data_type, page_metas),
         LargeBinary | LargeUtf8 => {
             read_binary::<i64, _>(reader, is_nullable, data_type, page_metas)
         }
@@ -121,6 +122,18 @@ pub fn read_nested<R: NativeReadBuf>(
                 page_metas.pop().unwrap(),
             )?
         }
+
+        BinaryView | Utf8View => {
+            init.push(InitNested::Primitive(field.is_nullable));
+            read_nested_view_array::<_>(
+                &mut readers.pop().unwrap(),
+                field.data_type().clone(),
+                leaves.pop().unwrap(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
+
         LargeBinary | LargeUtf8 => {
             init.push(InitNested::Primitive(field.is_nullable));
             read_nested_binary::<i64, _>(
