@@ -30,6 +30,7 @@ use super::rewrite::RulePushDownSortEvalScalar;
 use super::rewrite::RuleTryApplyAggIndex;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleEliminateSort;
+use crate::optimizer::rule::rewrite::RuleFilterNulls;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::optimizer::rule::rewrite::RulePushDownFilterProjectSet;
@@ -61,6 +62,7 @@ impl RuleFactory {
         match id {
             RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(metadata))),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(metadata))),
+            RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),

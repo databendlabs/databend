@@ -1,0 +1,60 @@
+statement ok
+CREATE TABLE table1 (
+    value INT
+);
+
+statement ok
+INSERT INTO table1 (value) SELECT number from numbers(2000);
+
+statement ok
+INSERT INTO table1 (value) SELECT NULL FROM numbers(2000);
+
+statement ok
+CREATE TABLE table2 (
+    value INT
+);
+
+statement ok
+INSERT INTO table2 (value) SELECT number from numbers(1000);
+
+statement ok
+INSERT INTO table2 (value) SELECT NULL FROM numbers(3000);
+
+query T
+explain SELECT * FROM table1 INNER JOIN table2 ON table1.value = table2.value;
+----
+HashJoin
+├── output columns: [table1.value (#0), table2.value (#1)]
+├── join type: INNER
+├── build keys: [table2.value (#1)]
+├── probe keys: [table1.value (#0)]
+├── filters: []
+├── estimated rows: 1600.00
+├── Filter(Build)
+│   ├── output columns: [table2.value (#1)]
+│   ├── filters: [is_not_null(table2.value (#1))]
+│   ├── estimated rows: 800.00
+│   └── TableScan
+│       ├── table: default.default.table2
+│       ├── output columns: [value (#1)]
+│       ├── read rows: 1000
+│       ├── read size: 1.88 KiB
+│       ├── partitions total: 2
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+│       └── estimated rows: 4000.00
+└── Filter(Probe)
+    ├── output columns: [table1.value (#0)]
+    ├── filters: [is_not_null(table1.value (#0))]
+    ├── estimated rows: 800.00
+    └── TableScan
+        ├── table: default.default.table1
+        ├── output columns: [value (#0)]
+        ├── read rows: 2000
+        ├── read size: 4.02 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+        └── estimated rows: 4000.00
