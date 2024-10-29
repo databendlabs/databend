@@ -241,7 +241,7 @@ select builtin_echo('abc');
 abc
 
 query T
-select * from udf_echo('http://localhost:8815', 'abc')
+select * from udf_echo('http://0.0.0.0:8815', 'abc')
 ----
 abc
 
