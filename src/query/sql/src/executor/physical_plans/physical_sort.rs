@@ -147,6 +147,7 @@ impl PhysicalPlanBuilder {
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
                 after_exchange: sort.after_exchange,
+                limit: sort.limit,
                 stat_info: Some(stat_info.clone()),
             }));
         }

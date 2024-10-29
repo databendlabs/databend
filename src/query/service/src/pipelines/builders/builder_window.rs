@@ -23,6 +23,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
@@ -31,6 +32,7 @@ use opendal::Operator;
 
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindow;
+use crate::pipelines::processors::transforms::TransformWindowPartialTopN;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
@@ -168,6 +170,14 @@ impl PipelineBuilder {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
+
+        if let Some(limit) = window_partition.limit {
+            if limit > 0 {
+                self.main_pipeline.add_transformer(|| {
+                    TransformWindowPartialTopN::new(partition_by.clone(), sort_desc.clone(), limit)
+                })
+            }
+        }
 
         self.main_pipeline.exchange(
             num_processors,

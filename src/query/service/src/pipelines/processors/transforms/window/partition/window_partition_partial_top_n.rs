@@ -26,11 +26,11 @@ pub struct TransformWindowPartialTopN {
 }
 
 impl TransformWindowPartialTopN {
-    pub fn try_new(
+    pub fn new(
         partition_indices: Vec<usize>,
         order_by: Vec<SortColumnDescription>,
         limit: usize,
-    ) -> Result<Self> {
+    ) -> Self {
         assert!(limit > 0);
         let partition_indices = partition_indices.into_boxed_slice();
         let sort_desc = partition_indices
@@ -44,12 +44,12 @@ impl TransformWindowPartialTopN {
             .collect::<Vec<_>>()
             .into();
 
-        Ok(Self {
+        Self {
             partition_indices,
             limit,
             sort_desc,
             indices: Vec::new(),
-        })
+        }
     }
 }
 
@@ -151,11 +151,8 @@ mod tests {
         data.check_valid()?;
 
         {
-            let mut transform = TransformWindowPartialTopN::try_new(
-                partition_indices.clone(),
-                order_by.clone(),
-                3,
-            )?;
+            let mut transform =
+                TransformWindowPartialTopN::new(partition_indices.clone(), order_by.clone(), 3);
 
             let got = transform.transform(data.clone())?;
             let want = DataBlock::new_from_columns(vec![
@@ -168,8 +165,7 @@ mod tests {
         }
 
         {
-            let mut transform =
-                TransformWindowPartialTopN::try_new(partition_indices, order_by, 1)?;
+            let mut transform = TransformWindowPartialTopN::new(partition_indices, order_by, 1);
 
             let got = transform.transform(data.clone())?;
             let want = DataBlock::new_from_columns(vec![
