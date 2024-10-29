@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::ColumnId;
-
+use databend_common_expression::types::DataType;
 use crate::meta::ColumnStatistics;
 
 pub type FormatVersion = u64;
@@ -35,4 +35,17 @@ pub struct BlockSlotDescription {
     // `block_index` mod `num_slots` == `slot_index` indicates that the block should be taken care of by current executor
     // otherwise, the block should be taken care of by other executors
     pub slot: u32,
+}
+
+
+pub fn supported_stat_type(data_type: &DataType) -> bool {
+    let inner_type = data_type.remove_nullable();
+    matches!(
+            inner_type,
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        )
 }

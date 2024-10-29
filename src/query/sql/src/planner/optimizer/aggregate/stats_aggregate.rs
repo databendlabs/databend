@@ -16,8 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-
+use databend_storages_common_table_meta::meta::supported_stat_type;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::ConstantExpr;
@@ -88,7 +87,7 @@ impl RuleStatsAggregateOptimizer {
                         if ["min", "max"].contains(&function.func_name.as_str())
                             && function.args.len() == 1
                             && !function.distinct
-                            && Self::supported_stat_type(&function.args[0].data_type()?)
+                            && supported_stat_type(&function.args[0].data_type()?)
                         {
                             if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
                                 if let Ok(col_id) =
@@ -177,18 +176,5 @@ impl RuleStatsAggregateOptimizer {
             }
         }
         Ok(s_expr.clone())
-    }
-
-    // from RangeIndex::supported_stat_type
-    fn supported_stat_type(data_type: &DataType) -> bool {
-        let inner_type = data_type.remove_nullable();
-        matches!(
-            inner_type,
-            DataType::Number(_)
-                | DataType::Date
-                | DataType::Timestamp
-                | DataType::String
-                | DataType::Decimal(_)
-        )
     }
 }

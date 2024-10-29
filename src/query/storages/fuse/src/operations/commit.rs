@@ -40,7 +40,7 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::{supported_stat_type, Location};
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -124,11 +124,23 @@ impl FuseTable {
         ctx: &dyn TableContext,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
-        snapshot: TableSnapshot,
+        mut snapshot: TableSnapshot,
         table_statistics: Option<TableSnapshotStatistics>,
         copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
+
+
+        // filter out column statistics that the corresponding column :
+        // - no longer exist in schema
+        // - which type is not support
+
+        let leaf_column_id_set = table_info.meta.schema.to_leaf_column_id_set();
+        snapshot.summary.col_stats.retain( |column_id, val| {
+            leaf_column_id_set.contains(column_id)
+                && supported_stat_type(&val.max.as_ref().infer_data_type())
+        });
+
         let snapshot_location = location_generator
             .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
         let need_to_save_statistics =
