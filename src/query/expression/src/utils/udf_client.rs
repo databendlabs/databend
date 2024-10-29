@@ -249,3 +249,23 @@ impl UDFFlightClient {
             .map_err(|err| ErrorCode::UDFDataError(err.to_string()))
     }
 }
+
+pub fn error_kind(message: &str) -> &str {
+    let message = message.to_ascii_lowercase();
+    if message.contains("timeout") || message.contains("timedout") {
+        // Error(Connect, Custom)
+        if message.contains("connect,") {
+            "ConnectTimeout"
+        } else {
+            "RequestTimeout"
+        }
+    } else if message.contains("cannot connect") {
+        "ConnectError"
+    } else if message.contains("stream closed because of a broken pipe") {
+        "ServerClosed"
+    } else if message.contains("dns error") || message.contains("lookup address") {
+        "DnsError"
+    } else {
+        "Other"
+    }
+}

@@ -190,14 +190,7 @@ pub(super) fn deserialize_footer(footer_data: &[u8], size: u64) -> Result<FileMe
         .map_err(|err| Error::from(OutOfSpecKind::InvalidFlatbufferRecordBatches(err)))?
         .ok_or_else(|| Error::from(OutOfSpecKind::MissingRecordBatches))?;
 
-    let blocks = blocks
-        .iter()
-        .map(|block| {
-            block
-                .try_into()
-                .map_err(|err| Error::from(OutOfSpecKind::InvalidFlatbufferRecordBatches(err)))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let blocks = blocks.iter().map(|block| block.into()).collect::<Vec<_>>();
 
     let ipc_schema = footer
         .schema()
@@ -211,14 +204,9 @@ pub(super) fn deserialize_footer(footer_data: &[u8], size: u64) -> Result<FileMe
         .map(|dictionaries| {
             dictionaries
                 .into_iter()
-                .map(|block| {
-                    block.try_into().map_err(|err| {
-                        Error::from(OutOfSpecKind::InvalidFlatbufferRecordBatches(err))
-                    })
-                })
-                .collect::<Result<Vec<_>>>()
-        })
-        .transpose()?;
+                .map(|block| block.into())
+                .collect::<Vec<_>>()
+        });
 
     Ok(FileMetadata {
         schema,

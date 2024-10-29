@@ -27,7 +27,7 @@ use super::jwk;
 
 #[derive(Debug, Clone)]
 pub enum PubKey {
-    RSA256(RS256PublicKey),
+    RSA256(Box<RS256PublicKey>),
     ES256(ES256PublicKey),
 }
 

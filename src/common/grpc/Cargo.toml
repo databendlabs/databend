@@ -14,13 +14,15 @@ test = true
 anyerror = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
-hickory-resolver = "0.24"
-hyper_v0_14 = { workspace = true }
-jwt-simple = "0.11.0"
+hickory-resolver = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+jwt-simple = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+tower-service = { workspace = true }
 
 [build-dependencies]
 

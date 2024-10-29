@@ -56,4 +56,5 @@ select count() from fuse_snapshot('test_txn_snapshots', 't');
 ----
 1
 
-
+statement ok
+create or replace table transaction(c int);
