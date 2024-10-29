@@ -320,6 +320,10 @@ impl<'a> SelectivityEstimator<'a> {
         let col_hist = column_stat.histogram.as_ref();
 
         if col_hist.is_none() && const_datum.is_numeric() {
+            // If there is no histogram and the column isn't numeric, return default selectivity.
+            if !column_stat.min.is_numeric() {
+                return Ok(DEFAULT_SELECTIVITY);
+            }
             let min = column_stat.min.to_double()?;
             let max = column_stat.max.to_double()?;
             let ndv = column_stat.ndv;
