@@ -249,20 +249,12 @@ geozero = { version = "0.14.0", features = ["default", "with-wkb", "with-geos", 
 hashbrown = { version = "0.15.0", default-features = false }
 hickory-resolver = "0.24"
 http = "1"
-<<<<<<< HEAD
-hyper_v0_14 = { package = "hyper", version = "0.14" }
-iceberg = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "a0e74b1412ae7ce4b857c251bcbb3179b7713fb6" }
-iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "a0e74b1412ae7ce4b857c251bcbb3179b7713fb6" }
-iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "a0e74b1412ae7ce4b857c251bcbb3179b7713fb6" }
-itertools = "0.10.5"
-=======
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 iceberg = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
 iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
 iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
 itertools = "0.13.0"
->>>>>>> upstream/main
 jsonb = "0.4.3"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
