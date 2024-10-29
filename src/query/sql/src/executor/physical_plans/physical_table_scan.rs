@@ -24,6 +24,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -35,6 +36,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
@@ -457,14 +459,15 @@ impl PhysicalPlanBuilder {
                         .project_column_ref(|col| col.column_name.clone()),
                 )?;
                 let filter = filter.as_remote_expr();
-                let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
+                let virtual_column_ids =
+                    self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,
                     prewhere_columns,
                     remain_columns,
                     filter,
-                    virtual_columns,
+                    virtual_column_ids,
                 })
             })
             .transpose()?;
@@ -515,7 +518,7 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        let virtual_columns = self.build_virtual_columns(&scan.columns);
+        let virtual_column = self.build_virtual_column(&scan.columns);
 
         Ok(PushDownInfo {
             projection: Some(projection),
@@ -525,7 +528,7 @@ impl PhysicalPlanBuilder {
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
-            virtual_columns,
+            virtual_column,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
             agg_index: None,
             change_type: scan.change_type.clone(),
@@ -534,18 +537,38 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    fn build_virtual_columns(&self, indices: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
+    fn build_prewhere_virtual_column_ids(&self, indices: &ColumnSet) -> Option<Vec<u32>> {
+        let mut virtual_column_ids = Vec::new();
+        for index in indices.iter() {
+            if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
+            {
+                virtual_column_ids.push(virtual_column.column_id);
+            }
+        }
+        if !virtual_column_ids.is_empty() {
+            Some(virtual_column_ids)
+        } else {
+            None
+        }
+    }
+
+    fn build_virtual_column(&self, indices: &ColumnSet) -> Option<VirtualColumnInfo> {
+        let mut source_column_ids = HashSet::new();
         let mut column_and_indices = Vec::new();
         for index in indices.iter() {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
-                let virtual_column_info = VirtualColumnInfo {
+                source_column_ids.insert(virtual_column.source_column_id);
+                let virtual_column_field = VirtualColumnField {
+                    source_column_id: virtual_column.source_column_id,
                     source_name: virtual_column.source_column_name.clone(),
+                    column_id: virtual_column.column_id,
                     name: virtual_column.column_name.clone(),
                     key_paths: virtual_column.key_paths.clone(),
                     data_type: Box::new(virtual_column.data_type.clone()),
+                    is_created: virtual_column.is_created,
                 };
-                column_and_indices.push((virtual_column_info, *index));
+                column_and_indices.push((virtual_column_field, *index));
             }
         }
         if column_and_indices.is_empty() {
@@ -554,11 +577,30 @@ impl PhysicalPlanBuilder {
         // Make the order of virtual columns the same as their indexes.
         column_and_indices.sort_by_key(|(_, index)| *index);
 
-        let virtual_column_infos = column_and_indices
+        let virtual_column_fields = column_and_indices
             .into_iter()
             .map(|(column, _)| column)
             .collect::<Vec<_>>();
-        Some(virtual_column_infos)
+
+        let mut fields = Vec::with_capacity(virtual_column_fields.len());
+        let next_column_id = virtual_column_fields[0].column_id;
+        for virtual_column_field in &virtual_column_fields {
+            let field = TableField::new_from_column_id(
+                &virtual_column_field.name,
+                *virtual_column_field.data_type.clone(),
+                virtual_column_field.column_id,
+            );
+            fields.push(field);
+        }
+        let metadata = BTreeMap::new();
+        let schema = TableSchema::new_from_column_ids(fields, metadata, next_column_id);
+
+        let virtual_column_info = VirtualColumnInfo {
+            schema: Arc::new(schema),
+            source_column_ids,
+            virtual_column_fields,
+        };
+        Some(virtual_column_info)
     }
 
     pub(crate) fn build_agg_index(

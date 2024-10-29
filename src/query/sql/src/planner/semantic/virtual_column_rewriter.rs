@@ -53,6 +53,11 @@ pub(crate) struct VirtualColumnRewriter {
     /// Mapping: (table index) -> (virtual column names)
     /// This is used to check whether the virtual column has be created
     virtual_column_names: HashMap<IndexType, HashSet<String>>,
+
+    /// Mapping: (table index) -> (next virtual column id)
+    /// The is used to generate virtual column id for virtual columns.
+    /// Not a real column id, only used to identify a virtual column.
+    next_column_ids: HashMap<IndexType, u32>,
 }
 
 impl VirtualColumnRewriter {
@@ -62,6 +67,7 @@ impl VirtualColumnRewriter {
             metadata,
             table_virtual_columns: Default::default(),
             virtual_column_names: Default::default(),
+            next_column_ids: Default::default(),
         }
     }
 
@@ -81,8 +87,8 @@ impl VirtualColumnRewriter {
                 continue;
             }
 
-            let has_variant_column = table
-                .schema()
+            let schema = table.schema();
+            let has_variant_column = schema
                 .fields
                 .iter()
                 .any(|field| field.data_type.remove_nullable() == TableDataType::Variant);
@@ -90,8 +96,10 @@ impl VirtualColumnRewriter {
             if !has_variant_column {
                 continue;
             }
+            self.next_column_ids
+                .insert(table_entry.index(), schema.next_column_id);
 
-            databend_common_base::runtime::block_on(self.full_virtual_columns(table_entry, table))?;
+            databend_common_base::runtime::block_on(self.get_virtual_columns(table_entry, table))?;
         }
         // If all tables do not have virtual columns created,
         // there is no need to continue checking for rewrites as virtual columns
@@ -102,7 +110,7 @@ impl VirtualColumnRewriter {
         self.rewrite_virtual_column(s_expr)
     }
 
-    async fn full_virtual_columns(
+    async fn get_virtual_columns(
         &mut self,
         table_entry: &TableEntry,
         table: Arc<dyn Table>,
@@ -238,17 +246,15 @@ impl VirtualColumnRewriter {
                             }
                         };
                         // If this field name does not have a virtual column created,
-                        // it cannot be rewritten as a virtual column
-                        match self.virtual_column_names.get(&base_column.table_index) {
-                            Some(names) => {
-                                if !names.contains(&name) {
-                                    return Some(());
-                                }
-                            }
-                            None => {
-                                return Some(());
-                            }
-                        }
+                        // we can't read this data directly, but we can still generate a virtual column
+                        // and push down to the storage layer.
+                        // Those virutal columns can be generated from the source column.
+                        // This can be used to reminder user to create it to speed up the query.
+                        let is_created =
+                            match self.virtual_column_names.get(&base_column.table_index) {
+                                Some(names) => names.contains(&name),
+                                None => false,
+                            };
 
                         let mut index = 0;
                         // Check for duplicate virtual columns
@@ -263,17 +269,26 @@ impl VirtualColumnRewriter {
                             }
                         }
                         if index == 0 {
+                            let column_id =
+                                self.next_column_ids.get(&base_column.table_index).unwrap();
                             let table_data_type =
                                 TableDataType::Nullable(Box::new(TableDataType::Variant));
                             index = self.metadata.write().add_virtual_column(
-                                base_column.table_index,
-                                base_column.column_name.clone(),
-                                base_column.column_index,
+                                &base_column,
+                                *column_id,
                                 name.clone(),
                                 table_data_type,
                                 constant.value.clone(),
                                 item_index,
+                                is_created,
                             );
+
+                            // Increments the column id of the virtual column.
+                            let column_id = self
+                                .next_column_ids
+                                .get_mut(&base_column.table_index)
+                                .unwrap();
+                            *column_id += 1;
                         }
 
                         if let Some(indices) =

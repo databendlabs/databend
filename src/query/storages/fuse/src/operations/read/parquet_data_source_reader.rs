@@ -159,12 +159,14 @@ impl SyncSource for ReadParquetDataSource<true> {
                 // If virtual column file exists, read the data from the virtual columns directly.
                 let virtual_source = if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                     let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    let loc =
-                        TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
-
+                    let virtual_block_meta = fuse_part
+                        .block_meta_index
+                        .as_ref()
+                        .and_then(|b| b.virtual_block_meta.as_ref());
                     virtual_reader.sync_read_parquet_data_by_merge_io(
                         &ReadSettings::from_ctx(&self.partitions.ctx)?,
-                        &loc,
+                        &virtual_block_meta,
+                        fuse_part.nums_rows,
                     )
                 } else {
                     None
@@ -278,17 +280,13 @@ impl Processor for ReadParquetDataSource<false> {
 
                         // If virtual column file exists, read the data from the virtual columns directly.
                         let virtual_source = if let Some(virtual_reader) = virtual_reader.as_ref() {
-                            let loc = TableMetaLocationGenerator::gen_virtual_block_location(
-                                &part.location,
-                            );
-
+                            let virtual_block_meta = part.block_meta_index.as_ref().and_then(|b| b.virtual_block_meta.as_ref());
                             virtual_reader
-                                .read_parquet_data_by_merge_io(&settings, &loc)
+                                .read_parquet_data_by_merge_io(&settings, &virtual_block_meta, part.nums_rows)
                                 .await
                         } else {
                             None
                         };
-
                         let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
                             &virtual_source.ignore_column_ids
                         } else {

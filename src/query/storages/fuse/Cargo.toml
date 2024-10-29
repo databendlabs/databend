@@ -43,6 +43,7 @@ ahash = { workspace = true }
 arrow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }

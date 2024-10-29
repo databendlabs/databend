@@ -296,6 +296,7 @@ impl FuseTable {
             cluster_keys,
             bloom_index_cols,
             None,
+            self.get_storage_format(),
         )?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;

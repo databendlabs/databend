@@ -35,6 +35,7 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -63,10 +64,18 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
-    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols, None)?
-        .read_pruning(segment_locs)
-        .await
-        .map(|v| v.into_iter().map(|(_, v)| v).collect())
+    FusePruner::create(
+        &ctx,
+        op,
+        schema,
+        push_down,
+        bloom_index_cols,
+        None,
+        FuseStorageFormat::Parquet,
+    )?
+    .read_pruning(segment_locs)
+    .await
+    .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
 
 #[tokio::test(flavor = "multi_thread")]

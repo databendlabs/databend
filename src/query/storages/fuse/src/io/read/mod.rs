@@ -32,5 +32,6 @@ pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;
 pub use snapshot_history_reader::SnapshotHistoryReader;
+pub use utils::build_columns_meta;
 pub use virtual_column::VirtualBlockReadResult;
 pub use virtual_column::VirtualColumnReader;

@@ -166,12 +166,14 @@ impl SyncSource for ReadNativeDataSource<true> {
 
                 if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                     let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    let loc =
-                        TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
+                    let virtual_block_meta = fuse_part
+                        .block_meta_index
+                        .as_ref()
+                        .and_then(|b| b.virtual_block_meta.as_ref());
 
                     // If virtual column file exists, read the data from the virtual columns directly.
                     if let Some((mut virtual_source_data, ignore_column_ids)) =
-                        virtual_reader.sync_read_native_data(&loc)
+                        virtual_reader.sync_read_native_data(&virtual_block_meta)
                     {
                         let mut source_data = self
                             .block_reader
@@ -276,13 +278,11 @@ impl Processor for ReadNativeDataSource<false> {
                         }
 
                         if let Some(virtual_reader) = virtual_reader.as_ref() {
-                            let loc = TableMetaLocationGenerator::gen_virtual_block_location(
-                                &fuse_part.location,
-                            );
+                            let virtual_block_meta = fuse_part.block_meta_index.as_ref().and_then(|b| b.virtual_block_meta.as_ref());
 
                             // If virtual column file exists, read the data from the virtual columns directly.
                             if let Some((mut virtual_source_data, ignore_column_ids)) =
-                                virtual_reader.read_native_data(&loc).await
+                                virtual_reader.read_native_data(&virtual_block_meta).await
                             {
                                 let mut source_data = block_reader
                                     .async_read_native_columns_data(&part, &ctx, &ignore_column_ids)
