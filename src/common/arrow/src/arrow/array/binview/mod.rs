@@ -317,7 +317,7 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
         // data: 12 bytes
 
         let bytes = if len <= 12 {
-            let ptr = self.views.data_ptr() as *const u8;
+            let ptr = self.views.as_ptr() as *const u8;
             std::slice::from_raw_parts(ptr.add(i * 16 + 4), len as usize)
         } else {
             let (data_ptr, data_len) = *self.raw_buffers.get_unchecked(v.buffer_idx as usize);
@@ -616,6 +616,7 @@ impl<T: ViewType + ?Sized> Array for BinaryViewArrayGeneric<T> {
             .map(|bitmap| bitmap.sliced_unchecked(offset, length))
             .filter(|bitmap| bitmap.unset_bits() > 0);
         self.views.slice_unchecked(offset, length);
+
         self.total_bytes_len.store(UNKNOWN_LEN, Ordering::Relaxed)
     }
 

@@ -316,9 +316,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Binary(col) => Box::new(col.clone().into_inner()),
-            Column::String(col) => unsafe {
-                Box::new(col.clone().into_inner().to_utf8view_unchecked())
-            },
+            Column::String(col) => Box::new(col.clone().into_inner()),
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,

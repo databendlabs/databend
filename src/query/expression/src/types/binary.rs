@@ -284,7 +284,7 @@ impl BinaryColumnBuilder {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);
         BinaryColumnBuilder {
-            need_estimated: data_capacity == 0 && len > 0,
+            need_estimated: false,
             data: Vec::with_capacity(data_capacity),
             offsets,
         }

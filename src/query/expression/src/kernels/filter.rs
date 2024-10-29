@@ -168,7 +168,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         match value {
             Value::Scalar(c) => self.visit_scalar(c),
             Value::Column(c) => {
-                assert!(c.len() == self.original_rows);
+                assert_eq!(c.len(), self.original_rows);
                 match self.strategy {
                     IterationStrategy::None => self.result = Some(Value::Column(c.slice(0..0))),
                     IterationStrategy::All => self.result = Some(Value::Column(c)),
@@ -222,6 +222,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                 });
             }
         }
+
         self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
         Ok(())
     }
@@ -335,13 +336,25 @@ impl<'a> FilterVisitor<'a> {
 
     fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
         let mut builder = BinaryColumnBuilder::with_capacity(self.filter_rows, 0);
-        let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
-        for i in iter {
-            unsafe {
-                builder.put_slice(values.index_unchecked(i));
-                builder.commit_row();
+
+        match self.strategy {
+            IterationStrategy::IndexIterator => {
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+                for i in iter {
+                    unsafe {
+                        builder.put_slice(values.index_unchecked(i));
+                        builder.commit_row();
+                    }
+                }
+            }
+            _ => {
+                let iter = SlicesIterator::new(self.filter);
+                iter.for_each(|(start, len)| {
+                    builder.append_column(&values.slice(start..start + len));
+                });
             }
         }
+
         builder.build()
     }
 }

@@ -14,14 +14,18 @@
 
 use core::ops::Range;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterVisitor;
 use databend_common_expression::FromData;
@@ -281,10 +285,14 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                 FilterVisitor::new(&filter).with_strategy(IterationStrategy::SlicesIterator);
             let mut f2 =
                 FilterVisitor::new(&filter).with_strategy(IterationStrategy::IndexIterator);
+
             for col in random_block.columns() {
                 f1.visit_value(col.value.clone())?;
                 f2.visit_value(col.value.clone())?;
-                assert_eq!(f1.take_result(), f2.take_result());
+
+                let l = f1.take_result();
+                let r = f2.take_result();
+                assert_eq!(l, r);
             }
         }
 
@@ -599,4 +607,32 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_builder() {
+    let ty = DataType::String;
+    let len = 30;
+    let col = Column::random(&ty, len, None);
+
+    let bitmap = Bitmap::from_iter((0..len).map(|x| x % 4 != 0));
+
+    let mut builder1 = ColumnBuilder::with_capacity(&col.data_type(), col.len());
+    let mut builder2 = ColumnBuilder::with_capacity(&col.data_type(), col.len());
+
+    for i in 0..len {
+        if bitmap.get_bit(i) {
+            builder1.push(col.index(i).unwrap());
+        }
+    }
+
+    for (start, len) in databend_common_arrow::arrow::bitmap::utils::SlicesIterator::new(&bitmap) {
+        let sub_col = col.slice(start..start + len);
+        AnyType::append_column(&mut builder2, &sub_col);
+    }
+
+    let r1 = builder1.build();
+    let r2 = builder2.build();
+
+    assert_eq!(r1, r2)
 }

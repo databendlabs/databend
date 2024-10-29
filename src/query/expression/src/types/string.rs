@@ -15,7 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::array::BinaryViewArray;
+use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,7 +24,6 @@ use serde::Serialize;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
-use super::binary::BinaryIterator;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -222,29 +221,12 @@ impl ArgType for StringType {
 
 #[derive(Clone, PartialEq)]
 pub struct StringColumn {
-    pub(crate) data: BinaryViewArray,
+    pub(crate) data: Utf8ViewArray,
 }
 
 impl StringColumn {
-    pub fn new(data: BinaryViewArray) -> Self {
-        let col = BinaryColumn::new(data);
-
-        col.check_utf8().unwrap();
-
-        unsafe { Self::from_binary_unchecked(col) }
-    }
-
-    /// # Safety
-    /// This function is unsound iff:
-    /// * the offsets are not monotonically increasing
-    /// * The `data` between two consecutive `offsets` are not valid utf8
-    pub unsafe fn new_unchecked(data: BinaryViewArray) -> Self {
-        let col = BinaryColumn::new(data);
-
-        #[cfg(debug_assertions)]
-        col.check_utf8().unwrap();
-
-        unsafe { Self::from_binary_unchecked(col) }
+    pub fn new(data: Utf8ViewArray) -> Self {
+        Self { data }
     }
 
     /// # Safety
@@ -256,7 +238,7 @@ impl StringColumn {
         col.check_utf8().unwrap();
 
         StringColumn {
-            data: col.into_inner(),
+            data: col.into_inner().to_utf8view_unchecked(),
         }
     }
 
@@ -287,12 +269,7 @@ impl StringColumn {
     pub unsafe fn index_unchecked(&self, index: usize) -> &str {
         debug_assert!(index < self.data.len());
 
-        let bytes = self.data.value_unchecked(index);
-
-        #[cfg(debug_assertions)]
-        bytes.check_utf8().unwrap();
-
-        std::str::from_utf8_unchecked(bytes)
+        self.data.value_unchecked(index)
     }
 
     /// # Safety
@@ -302,7 +279,7 @@ impl StringColumn {
     pub unsafe fn index_unchecked_bytes(&self, index: usize) -> &[u8] {
         debug_assert!(index < self.data.len());
 
-        self.data.value_unchecked(index)
+        self.data.value_unchecked(index).as_bytes()
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -310,7 +287,7 @@ impl StringColumn {
             .data
             .clone()
             .sliced(range.start, range.end - range.start);
-        unsafe { Self::from_binary_unchecked(BinaryColumn::new(data)) }
+        Self { data }
     }
 
     pub fn iter(&self) -> StringIterator {
@@ -320,21 +297,14 @@ impl StringColumn {
         }
     }
 
-    pub fn iter_binary(&self) -> BinaryIterator {
-        BinaryIterator {
-            col: &self.data,
-            index: 0,
-        }
-    }
-
-    pub fn into_inner(self) -> BinaryViewArray {
+    pub fn into_inner(self) -> Utf8ViewArray {
         self.data
     }
 }
 
 impl From<StringColumn> for BinaryColumn {
     fn from(col: StringColumn) -> BinaryColumn {
-        BinaryColumn::new(col.into_inner())
+        BinaryColumn::new(col.into_inner().to_binview())
     }
 }
 
@@ -342,9 +312,8 @@ impl TryFrom<BinaryColumn> for StringColumn {
     type Error = ErrorCode;
 
     fn try_from(col: BinaryColumn) -> Result<StringColumn> {
-        col.check_utf8()?;
         Ok(StringColumn {
-            data: col.into_inner(),
+            data: col.into_inner().to_utf8view()?,
         })
     }
 }

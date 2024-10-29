@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use crate::types::binary::BinaryIterator;
+use crate::types::BinaryColumn;
 use crate::Column;
 use crate::HashMethod;
 use crate::InputColumns;
@@ -35,8 +36,13 @@ impl HashMethod for HashMethodSingleBinary {
         "SingleBinary".to_string()
     }
 
+    // Convert string column into binary column in build_keys_state
     fn build_keys_state(&self, group_columns: InputColumns, _rows: usize) -> Result<KeysState> {
-        Ok(KeysState::Column(group_columns[0].clone()))
+        let binary_column = match group_columns[0].clone() {
+            Column::String(c) => Column::Binary(BinaryColumn::from(c)),
+            c => c,
+        };
+        Ok(KeysState::Column(binary_column))
     }
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
@@ -44,7 +50,6 @@ impl HashMethod for HashMethodSingleBinary {
             KeysState::Column(Column::Binary(col))
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => Ok(col.iter()),
-            KeysState::Column(Column::String(col)) => Ok(col.iter_binary()),
             _ => unreachable!(),
         }
     }
@@ -60,10 +65,6 @@ impl HashMethod for HashMethodSingleBinary {
                 let data = col.into_inner();
                 Ok(Box::new(BinaryKeyAccessor::new(data)))
             }
-            KeysState::Column(Column::String(col)) => {
-                let data = col.into_inner();
-                Ok(Box::new(BinaryKeyAccessor::new(data)))
-            }
             _ => unreachable!(),
         }
     }
@@ -74,9 +75,6 @@ impl HashMethod for HashMethodSingleBinary {
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => {
                 hashes.extend(col.iter().map(hash_join_fast_string_hash));
-            }
-            KeysState::Column(Column::String(col)) => {
-                hashes.extend(col.iter_binary().map(hash_join_fast_string_hash));
             }
             _ => unreachable!(),
         }
