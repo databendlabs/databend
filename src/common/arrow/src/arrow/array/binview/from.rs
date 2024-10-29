@@ -36,7 +36,12 @@ impl Arrow2Arrow for BinaryViewArray {
         let builder = ArrayDataBuilder::new(DataType::BinaryView)
             .len(self.len())
             .add_buffer(self.views.clone().into())
-            .add_buffers(self.buffers.iter().map(|x| x.clone().into()).collect())
+            .add_buffers(
+                self.buffers
+                    .iter()
+                    .map(|x| x.clone().into())
+                    .collect::<Vec<_>>(),
+            )
             .nulls(self.validity.clone().map(Into::into));
         unsafe { builder.build_unchecked() }
     }
@@ -63,7 +68,12 @@ impl Arrow2Arrow for Utf8ViewArray {
         let builder = ArrayDataBuilder::new(DataType::Utf8View)
             .len(self.len())
             .add_buffer(self.views.clone().into())
-            .add_buffers(self.buffers.iter().map(|x| x.clone().into()).collect())
+            .add_buffers(
+                self.buffers
+                    .iter()
+                    .map(|x| x.clone().into())
+                    .collect::<Vec<_>>(),
+            )
             .nulls(self.validity.clone().map(Into::into));
         unsafe { builder.build_unchecked() }
     }
