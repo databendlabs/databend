@@ -512,7 +512,6 @@ mod tests {
             offset: 0,
             asc: true,
             nulls_first: true,
-            is_nullable: false,
         }]);
 
         let transform = TransformSortSpill::<A>::create(

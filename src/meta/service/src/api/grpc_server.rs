@@ -66,7 +66,7 @@ impl GrpcServer {
 
         let reflect_srv = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
-            .build()
+            .build_v1()
             .unwrap();
 
         let builder = Server::builder();

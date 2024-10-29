@@ -93,9 +93,9 @@ impl ORCSource {
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
             .map_err(|e| map_orc_error(e, &path))?;
-        let mut reader = builder.build_async();
-        let factory = mem::take(&mut reader.factory).unwrap();
-        let schema = reader.schema();
+        let reader = builder.build_async();
+        let (factory, schema) = reader.into_parts();
+        let factory = factory.unwrap();
         self.check_file_schema(schema, &path)?;
 
         self.reader = Some((path, factory, size));

@@ -17,7 +17,7 @@ storage-hdfs = []
 anyerror = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-cron = "0.12.0"
+cron = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -27,17 +27,17 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
 derive_more = { workspace = true }
 enumflags2 = { workspace = true }
-hex = "0.4.3"
+hex = { workspace = true }
 itertools = { workspace = true }
-maplit = "1.0.2"
-num-derive = "0.3.3"
-num-traits = "0.2.15"
+maplit = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
 opendal = { workspace = true }
 paste = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha1 = "0.10.5"
+sha1 = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 

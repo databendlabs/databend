@@ -38,6 +38,7 @@ use databend_common_cloud_control::pb::ShowTasksRequest;
 use databend_common_cloud_control::pb::ShowTasksResponse;
 use databend_common_cloud_control::pb::Task;
 use databend_common_exception::Result;
+use hyper_util::rt::TokioIo;
 use tonic::codegen::tokio_stream;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
@@ -157,6 +158,7 @@ impl TaskService for MockTaskService {
 #[tokio::test(flavor = "current_thread")]
 async fn test_task_client_success_cases() -> Result<()> {
     let (client, server) = tokio::io::duplex(1024);
+    let client = TokioIo::new(client);
 
     let mock = MockTaskService::default();
 

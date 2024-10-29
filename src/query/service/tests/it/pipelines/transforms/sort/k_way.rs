@@ -34,7 +34,6 @@ fn create_pipeline(
         offset: 0,
         asc: true,
         nulls_first: true,
-        is_nullable: false,
     }]);
     add_k_way_merge_sort(
         &mut pipeline,

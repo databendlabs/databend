@@ -80,7 +80,7 @@ impl FlightService {
         };
 
         let incoming = TcpIncoming::new(addr, true, None)
-            .map_err(|e| ErrorCode::CannotListenerPort(format!("{e}")))?;
+            .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?;
         let server = builder
             .add_service(
                 FlightServiceServer::new(flight_api_service)
