@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
-use databend_common_base::headers::HEADER_SESSION_ID;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
@@ -46,6 +45,7 @@ use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
+use poem::web::cookie::Cookie;
 use poem::web::Json;
 use poem::Addr;
 use poem::Endpoint;
@@ -326,10 +326,10 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant);
         }
 
-        let header_client_session_id = req
-            .headers()
-            .get(HEADER_SESSION_ID)
-            .map(|v| v.to_str().unwrap().to_string());
+        // cookie_enabled is used to recognize old clients that not support cookie yet.
+        // for these old clients, there is no session id available, thus can not use temp table.
+        let cookie_enabled = req.cookie().get("cookie_enabled").is_some();
+        let cookie_session_id = req.cookie().get("session_id").map(|s| s.to_string());
         let (user_name, authed_client_session_id) = self
             .auth_manager
             .auth(
@@ -338,9 +338,26 @@ impl<E> HTTPSessionEndpoint<E> {
                 self.endpoint_kind.need_user_info(),
             )
             .await?;
-        let client_session_id = authed_client_session_id.or(header_client_session_id);
-        if let Some(id) = client_session_id.clone() {
-            session.set_client_session_id(id)
+        let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
+            (Some(id1), Some(id2)) => {
+                if id1 != id2 {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "session id in token ({}) != session id in cookie({}) ",
+                        id1, id2
+                    )));
+                }
+                Some(id1.clone())
+            }
+            (Some(id), None) => Some(id.clone()),
+            (None, Some(id)) => Some(id.clone()),
+            (None, None) => None,
+        };
+        if let Some(id) = &client_session_id {
+            session.set_client_session_id(id.clone());
+        }
+        if cookie_session_id.is_none() && cookie_enabled {
+            let id = Uuid::new_v4().to_string();
+            req.cookie().add(Cookie::new("session_id", &id));
         }
 
         let session = session_manager.register_session(session)?;

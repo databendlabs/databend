@@ -30,6 +30,7 @@ use log::warn;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
+use poem::middleware::CookieJarManager;
 use poem::post;
 use poem::put;
 use poem::web::Json;
@@ -471,6 +472,7 @@ pub fn query_route() -> Route {
             path,
             endpoint
                 .with(MetricsMiddleware::new(path))
+                .with(CookieJarManager::new())
                 .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind)),
         );
     }
