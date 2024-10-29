@@ -175,6 +175,7 @@ tokio-stream = { workspace = true, features = ["net"] }
 toml = { workspace = true, default-features = false }
 tonic = { workspace = true }
 typetag = { workspace = true }
+url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { workspace = true }
