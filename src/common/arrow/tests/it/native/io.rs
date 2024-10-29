@@ -17,6 +17,7 @@ use std::io::BufReader;
 
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::array::BinaryArray;
+use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::array::BooleanArray;
 use databend_common_arrow::arrow::array::Float32Array;
 use databend_common_arrow::arrow::array::Float64Array;
@@ -33,6 +34,7 @@ use databend_common_arrow::arrow::array::UInt32Array;
 use databend_common_arrow::arrow::array::UInt64Array;
 use databend_common_arrow::arrow::array::UInt8Array;
 use databend_common_arrow::arrow::array::Utf8Array;
+use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::chunk::Chunk;
@@ -81,6 +83,12 @@ pub fn new_test_chunk() -> Chunk<Box<dyn Array>> {
         Box::new(BinaryArray::<i64>::from_iter_values(
             ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
+        Box::new(Utf8ViewArray::from_slice_values(
+            ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
+        )) as _,
+        Box::new(BinaryViewArray::from_slice_values(
+            ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
+        )) as _,
     ])
 }
 
@@ -97,6 +105,7 @@ fn test_random_nonull() {
         Box::new(create_random_index(size, 0.0, size)) as _,
         Box::new(create_random_double(size, 0.0, size)) as _,
         Box::new(create_random_string(size, 0.0, size)) as _,
+        Box::new(create_random_view(size, 0.0, size)) as _,
     ]);
     test_write_read(chunk);
 }
@@ -112,6 +121,7 @@ fn test_random() {
         Box::new(create_random_index(size, 0.4, size)) as _,
         Box::new(create_random_double(size, 0.5, size)) as _,
         Box::new(create_random_string(size, 0.4, size)) as _,
+        Box::new(create_random_view(size, 0.0, size)) as _,
     ]);
     test_write_read(chunk);
 }
@@ -127,6 +137,7 @@ fn test_dict() {
         Box::new(create_random_index(size, 0.4, 8)) as _,
         Box::new(create_random_double(size, 0.5, 8)) as _,
         Box::new(create_random_string(size, 0.4, 8)) as _,
+        Box::new(create_random_view(size, 0.0, size)) as _,
     ]);
     test_write_read(chunk);
 }
@@ -409,6 +420,20 @@ fn create_random_string(size: usize, null_density: f32, uniq: usize) -> BinaryAr
             }
         })
         .collect::<BinaryArray<i64>>()
+}
+
+fn create_random_view(size: usize, null_density: f32, uniq: usize) -> Utf8ViewArray {
+    let mut rng = StdRng::seed_from_u64(42);
+    (0..size)
+        .map(|_| {
+            if rng.gen::<f32>() > null_density {
+                let value = rng.gen_range::<i32, _>(0i32..uniq as i32);
+                Some(format!("{value}"))
+            } else {
+                None
+            }
+        })
+        .collect::<Utf8ViewArray>()
 }
 
 fn create_random_offsets(size: usize, null_density: f32) -> (Vec<i32>, Option<Bitmap>) {
