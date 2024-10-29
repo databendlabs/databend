@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -237,12 +236,6 @@ pub struct SortTaskMeta {
     pub id: usize,
     pub total: usize,
     pub input: usize,
-}
-
-impl SortTaskMeta {
-    pub fn as_meta(self) -> BlockMetaInfoPtr {
-        Box::new(self)
-    }
 }
 
 #[typetag::serde(name = "sort_task")]

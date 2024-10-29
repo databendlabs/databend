@@ -96,13 +96,11 @@ pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     }
 }
 
-pub trait BlockMetaInfoDowncast: Sized {
-    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self>;
+pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
+    fn boxed(self) -> BlockMetaInfoPtr {
+        Box::new(self)
+    }
 
-    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self>;
-}
-
-impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
         let boxed: Box<dyn Any> = boxed;
         boxed.downcast().ok().map(|x| *x)
@@ -113,6 +111,8 @@ impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
         boxed.downcast_ref()
     }
 }
+
+impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
 
 impl DataBlock {
     #[inline]
