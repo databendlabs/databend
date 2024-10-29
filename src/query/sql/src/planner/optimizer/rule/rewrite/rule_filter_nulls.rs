@@ -76,7 +76,7 @@ impl Rule for RuleFilterNulls {
                 if let Some(left_key_stat) = left_stat
                     .statistics
                     .column_stats
-                    .get(&left_key.used_columns().iter().next().unwrap())
+                    .get(left_key.used_columns().iter().next().unwrap())
                 {
                     if left_key_stat.null_count >= NULL_THRESHOLD {
                         left_null_predicates.push(join_key_null_filter(left_key));
@@ -87,7 +87,7 @@ impl Rule for RuleFilterNulls {
                 if let Some(right_key_stat) = right_stat
                     .statistics
                     .column_stats
-                    .get(&right_key.used_columns().iter().next().unwrap())
+                    .get(right_key.used_columns().iter().next().unwrap())
                 {
                     if right_key_stat.null_count >= NULL_THRESHOLD {
                         right_null_predicates.push(join_key_null_filter(right_key));
