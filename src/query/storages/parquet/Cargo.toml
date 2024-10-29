@@ -40,12 +40,12 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
-thrift = "0.17.0"
+thrift = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]
 databend-common-sql = { workspace = true }
-tempfile = "3.4.0"
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

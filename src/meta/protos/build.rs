@@ -96,5 +96,5 @@ fn build_proto() -> Result<()> {
             "#[derive(num_derive::FromPrimitive)]",
         )
         .type_attribute("StageType", "#[derive(num_derive::FromPrimitive)]")
-        .compile_with_config(config, &proto_defs, &[proto_path])
+        .compile_protos_with_config(config, &proto_defs, &[proto_path])
 }

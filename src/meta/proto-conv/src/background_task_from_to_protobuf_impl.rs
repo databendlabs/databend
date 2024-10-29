@@ -102,11 +102,9 @@ impl FromToProto for mt::background::CompactionStats {
             table_id: p.table_id,
             before_compaction_stats: p
                 .before_compaction_stats
-                .clone()
                 .and_then(|t| TableStatistics::from_pb(t).ok()),
             after_compaction_stats: p
                 .after_compaction_stats
-                .clone()
                 .and_then(|t| TableStatistics::from_pb(t).ok()),
             total_compaction_time: p
                 .total_compaction_time_secs
