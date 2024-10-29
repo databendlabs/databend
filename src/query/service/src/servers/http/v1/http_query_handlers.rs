@@ -57,6 +57,7 @@ use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
 use crate::servers::http::v1::upload_to_stage;
+use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -446,7 +447,7 @@ pub fn query_route() -> Route {
             post(refresh_handler),
             EndpointKind::Refresh,
         ),
-        ("/auth/verify", post(refresh_handler), EndpointKind::Verify),
+        ("/verify", post(verify_handler), EndpointKind::Verify),
         (
             "/upload_to_stage",
             put(upload_to_stage),

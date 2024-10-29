@@ -39,6 +39,7 @@ pub struct TenantTablesResponse {
 pub struct TenantTableInfo {
     pub table: String,
     pub database: String,
+    pub database_id: String,
     pub engine: String,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
@@ -69,6 +70,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
     };
 
     for database in databases {
+        let database_info = database.get_db_info();
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
             Err(err) => {
@@ -105,6 +107,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
             table_infos.push(TenantTableInfo {
                 table: table.name().to_string(),
                 database: database.name().to_string(),
+                database_id: format!("{}", database_info.database_id),
                 engine: table.engine().to_string(),
                 created_on: table.get_table_info().meta.created_on,
                 updated_on: table.get_table_info().meta.updated_on,

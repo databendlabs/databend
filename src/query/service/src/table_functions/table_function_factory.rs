@@ -25,6 +25,7 @@ use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
+use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
@@ -293,6 +294,14 @@ impl TableFunctionFactory {
         creators.insert(
             "udf_echo".to_string(),
             (next_id(), Arc::new(UdfEchoTable::create)),
+        );
+
+        creators.insert(
+            "fuse_time_travel_size".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseTimeTravelSizeFunc>::create),
+            ),
         );
 
         TableFunctionFactory {

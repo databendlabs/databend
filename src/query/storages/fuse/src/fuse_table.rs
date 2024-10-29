@@ -465,6 +465,10 @@ impl FuseTable {
     pub fn get_storage_format(&self) -> FuseStorageFormat {
         self.storage_format
     }
+
+    pub fn get_storage_prefix(&self) -> &str {
+        self.meta_location_generator.prefix()
+    }
 }
 
 #[async_trait::async_trait]
