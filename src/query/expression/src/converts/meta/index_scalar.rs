@@ -80,7 +80,6 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
             Scalar::Binary(s) => IndexScalar::BinaryV2(s),
-            Scalar::Variant(s) => IndexScalar::Variant(s),
             Scalar::Tuple(tuple) => IndexScalar::Tuple(
                 tuple
                     .into_iter()
@@ -89,6 +88,8 @@ impl TryFrom<Scalar> for IndexScalar {
             ),
             Scalar::Array(_)
             | Scalar::Map(_)
+            // we only support variant read only
+            | Scalar::Variant(_)
             | Scalar::Bitmap(_)
             | Scalar::Geometry(_)
             | Scalar::Geography(_)
