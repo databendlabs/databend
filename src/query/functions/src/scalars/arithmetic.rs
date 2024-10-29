@@ -984,13 +984,9 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
 
                                 unsafe {
                                     for x in from.iter() {
-                                        values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        let bytes = &mut values[offset..];
-
                                         let len = lexical_core::write_with_options::<_, FORMAT>(
                                             Native::from(*x),
-                                            bytes,
+                                            &mut buffer,
                                             &options,
                                         )
                                         .len();

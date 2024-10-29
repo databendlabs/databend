@@ -22,7 +22,7 @@ pub(crate) fn write_view<W: Write>(
     w: &mut W,
     array: &BinaryViewArray,
     _write_options: WriteOptions,
-    _scratch: &mut Vec<u8>,
+    _scratch: &mut [u8],
 ) -> Result<()> {
     // TODO: adaptive gc and dict by stats
     let array = array.clone().gc();
