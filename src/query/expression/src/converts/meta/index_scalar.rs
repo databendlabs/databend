@@ -38,6 +38,7 @@ pub enum IndexScalar {
     String(Vec<u8>),
     Tuple(Vec<IndexScalar>),
     BinaryV2(Vec<u8>),
+    Variant(Vec<u8>),
 }
 
 impl TryFrom<IndexScalar> for Scalar {
@@ -55,6 +56,7 @@ impl TryFrom<IndexScalar> for Scalar {
                 ErrorCode::InvalidUtf8String(format!("invalid utf8 data for string type: {}", e))
             })?),
             IndexScalar::BinaryV2(s) => Scalar::Binary(s),
+            IndexScalar::Variant(s) => Scalar::Variant(s),
             IndexScalar::Tuple(tuple) => Scalar::Tuple(
                 tuple
                     .into_iter()
@@ -78,6 +80,7 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
             Scalar::Binary(s) => IndexScalar::BinaryV2(s),
+            Scalar::Variant(s) => IndexScalar::Variant(s),
             Scalar::Tuple(tuple) => IndexScalar::Tuple(
                 tuple
                     .into_iter()
@@ -87,7 +90,6 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Array(_)
             | Scalar::Map(_)
             | Scalar::Bitmap(_)
-            | Scalar::Variant(_)
             | Scalar::Geometry(_)
             | Scalar::Geography(_)
             | Scalar::EmptyArray
