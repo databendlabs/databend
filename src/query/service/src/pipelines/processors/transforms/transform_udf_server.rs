@@ -23,6 +23,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::udf_client::error_kind;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
@@ -31,7 +32,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_metrics::external_server::record_connect_external_duration;
+use databend_common_metrics::external_server::record_error_external;
 use databend_common_metrics::external_server::record_request_external_duration;
+use databend_common_metrics::external_server::record_retry_external;
+use databend_common_metrics::external_server::record_running_requests_external_finish;
+use databend_common_metrics::external_server::record_running_requests_external_start;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 
@@ -199,6 +204,7 @@ impl AsyncTransform for TransformUdfServer {
                         let connect_timeout = self.connect_timeout;
                         let request_timeout = self.request_timeout;
                         let func = func.clone();
+                        let name = func.name.clone();
 
                         let f = {
                             move || {
@@ -217,21 +223,32 @@ impl AsyncTransform for TransformUdfServer {
                             .with_max_delay(Duration::from_secs(30))
                             .with_max_times(self.retry_times as usize);
 
-                        f.retry(&backoff).when(retry_on).notify(|err, dur| {
+                        f.retry(&backoff).when(retry_on).notify(move |err, dur| {
                             Profile::record_usize_profile(
                                 ProfileStatisticsName::ExternalServerRetryCount,
                                 1,
                             );
+                            record_retry_external(name.clone(), error_kind(&err.message()));
                             log::warn!("Retry udf error: {:?} after {:?}", err.message(), dur);
                         })
                     })
                 })
                 .collect();
 
+            let task_len = tasks.len() as u64;
+            record_running_requests_external_start(func.name.clone(), task_len);
             let blocks = futures::future::join_all(tasks).await;
+            record_running_requests_external_finish(func.name.clone(), task_len);
             let blocks: Vec<DataBlock> = blocks
                 .into_iter()
                 .map(|b| b.unwrap())
+                .map(|b| match b {
+                    Ok(b) => Ok(b),
+                    Err(err) => {
+                        record_error_external(func.name.clone(), error_kind(&err.message()));
+                        Err(err)
+                    }
+                })
                 .collect::<Result<Vec<_>>>()?;
 
             data_block = DataBlock::concat(&blocks)?;
