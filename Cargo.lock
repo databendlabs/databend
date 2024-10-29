@@ -3394,6 +3394,7 @@ dependencies = [
  "geozero 0.14.0",
  "goldenfile",
  "hex",
+ "hyper-util",
  "itertools 0.13.0",
  "jsonb",
  "lexical-core 1.0.2",

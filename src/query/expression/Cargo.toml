@@ -39,6 +39,7 @@ geo = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
+hyper-util = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }

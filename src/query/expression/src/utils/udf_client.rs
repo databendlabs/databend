@@ -31,7 +31,7 @@ use databend_common_grpc::DNSService;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
-use hyper_v0_14::client::connect::HttpConnector;
+use hyper_util::client::legacy::connect::HttpConnector;
 use tonic::metadata::KeyAndValueRef;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
