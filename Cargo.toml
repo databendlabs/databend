@@ -533,7 +533,6 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
