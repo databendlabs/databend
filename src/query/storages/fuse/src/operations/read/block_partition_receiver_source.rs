@@ -22,7 +22,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
-use log::info;
 
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 
@@ -45,6 +44,7 @@ impl BlockPartitionReceiverSource {
 #[async_trait::async_trait]
 impl AsyncSource for BlockPartitionReceiverSource {
     const NAME: &'static str = "BlockPartitionReceiverSource";
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> databend_common_exception::Result<Option<DataBlock>> {

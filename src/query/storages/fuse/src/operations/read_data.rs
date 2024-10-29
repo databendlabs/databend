@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_channel::Sender;
-use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::{GlobalIORuntime};
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -219,7 +219,8 @@ impl FuseTable {
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
 
-            Runtime::with_worker_threads(2, Some("PruneWorker".to_string()))?.spawn(async move {
+            GlobalIORuntime::instance().spawn( async move{
+                info!("Pruning lazy partitions");
                 let (_statistics, partitions) = table
                     .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
                     .await?;
@@ -227,8 +228,7 @@ impl FuseTable {
                 for (i, part) in partitions.partitions.into_iter().enumerate() {
                     senders[i % sender_size]
                         .send(part)
-                        .await
-                        .map_err(|_e| ErrorCode::Internal("partition senders send failed"))?;
+                        .await.map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
                 }
                 Ok::<_, ErrorCode>(())
             });
