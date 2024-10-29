@@ -103,3 +103,88 @@ impl Transform for TransformWindowPartialTopN {
         block.take(&self.indices, &mut buf)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::Value;
+
+    use super::*;
+
+    #[test]
+    fn test_top_n() -> Result<()> {
+        let partition_indices = vec![1, 2];
+        let order_by = vec![SortColumnDescription {
+            offset: 0,
+            asc: true,
+            nulls_first: false,
+        }];
+
+        let data = DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    Int32Type::data_type(),
+                    Value::Column(Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3])),
+                ),
+                BlockEntry::new(
+                    StringType::data_type(),
+                    Value::Scalar(Scalar::String("a".to_string())),
+                ),
+                BlockEntry::new(
+                    Int32Type::data_type(),
+                    Value::Column(Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3])),
+                ),
+                BlockEntry::new(
+                    StringType::data_type(),
+                    Value::Column(StringType::from_data(vec![
+                        "a", "b", "c", "d", "e", "f", "g", "h", "i",
+                    ])),
+                ),
+            ],
+            9,
+        );
+        data.check_valid()?;
+
+        {
+            let mut transform = TransformWindowPartialTopN::try_new(
+                partition_indices.clone(),
+                order_by.clone(),
+                3,
+            )?;
+
+            let got = transform.transform(data.clone())?;
+            let want = DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 2, 4, 0, 2, 3, 7]),
+                StringType::from_data(vec!["a", "a", "a", "a", "a", "a", "a"]),
+                Int32Type::from_data(vec![1, 2, 2, 3, 3, 3, 4]),
+                StringType::from_data(vec!["b", "d", "e", "h", "c", "a", "g"]),
+            ]);
+            assert_eq!(want.to_string(), got.to_string());
+        }
+
+        {
+            let mut transform =
+                TransformWindowPartialTopN::try_new(partition_indices, order_by, 1)?;
+
+            let got = transform.transform(data.clone())?;
+            let want = DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 2, 0, 7]),
+                StringType::from_data(vec!["a", "a", "a", "a"]),
+                Int32Type::from_data(vec![1, 2, 3, 4]),
+                StringType::from_data(vec!["b", "d", "h", "g"]),
+            ]);
+            assert_eq!(want.to_string(), got.to_string());
+
+            let want = got;
+            let got = transform.transform(want.clone())?;
+            assert_eq!(want.to_string(), got.to_string());
+        }
+
+        Ok(())
+    }
+}
