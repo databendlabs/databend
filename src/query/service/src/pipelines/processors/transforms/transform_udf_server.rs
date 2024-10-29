@@ -223,7 +223,7 @@ impl AsyncTransform for TransformUdfServer {
                             .with_max_delay(Duration::from_secs(30))
                             .with_max_times(self.retry_times as usize);
 
-                        f.retry(backoff).when(retry_on).notify(|err, dur| {
+                        f.retry(backoff).when(retry_on).notify(move |err, dur| {
                             Profile::record_usize_profile(
                                 ProfileStatisticsName::ExternalServerRetryCount,
                                 1,
