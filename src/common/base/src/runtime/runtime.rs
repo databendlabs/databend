@@ -152,7 +152,7 @@ impl Runtime {
         let n = name.clone();
         // Block the runtime to shutdown.
         let join_handler = Thread::spawn(move || {
-            let _ = recv_stop.blocking_recv();
+            let _ = runtime.block_on(recv_stop);
             info!(
                 "Runtime({:?}) received shutdown signal, start to shut down",
                 n
