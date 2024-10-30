@@ -7143,7 +7143,7 @@ SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;
 ---------- Output ---------
 SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
 ---------- AST ------------
-QueryWithSetting {
+StatementWithSettings {
     settings: Some(
         Settings {
             set_type: SettingsQuery,
@@ -7187,7 +7187,7 @@ QueryWithSetting {
             ),
         },
     ),
-    query: Query(
+    stmt: Query(
         Query {
             span: Some(
                 50..58,
@@ -7236,7 +7236,7 @@ SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;
 ---------- Output ---------
 SETTINGS (max_thread = 1) SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
-QueryWithSetting {
+StatementWithSettings {
     settings: Some(
         Settings {
             set_type: SettingsQuery,
@@ -7264,7 +7264,7 @@ QueryWithSetting {
             ),
         },
     ),
-    query: Query(
+    stmt: Query(
         Query {
             span: Some(
                 24..64,
