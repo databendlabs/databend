@@ -271,7 +271,11 @@ impl Operator for Scan {
                     column_stats,
                 };
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+                let mut sb = SelectivityEstimator::new(
+                    &mut statistics,
+                    precise_cardinality as f64,
+                    HashSet::new(),
+                );
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction

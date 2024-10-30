@@ -94,8 +94,13 @@ pub async fn filter_selectivity_sample(
                 if let Some(number_scalar) = count.index(0) {
                     // Compute and return selectivity
                     let selectivity = number_scalar.to_f64().to_f64().unwrap() / sample_size;
-                    let mut statistics = child_rel_expr.derive_cardinality()?.statistics.clone();
-                    let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+                    let stat_info = child_rel_expr.derive_cardinality()?;
+                    let mut statistics = stat_info.statistics.clone();
+                    let mut sb = SelectivityEstimator::new(
+                        &mut statistics,
+                        stat_info.cardinality,
+                        HashSet::new(),
+                    );
                     sb.update_other_statistic_by_selectivity(selectivity);
                     let stat_info = Arc::new(StatInfo {
                         cardinality: (selectivity * num_rows as f64).ceil(),

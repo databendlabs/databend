@@ -112,11 +112,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -130,7 +130,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -151,11 +151,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -169,7 +169,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -190,11 +190,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -208,7 +208,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -229,11 +229,11 @@ HashJoin
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t.a (#0)]
 │   ├── filters: [is_not_null(t.a (#0))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#0)]
@@ -247,7 +247,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t1.a (#1)]
     ├── filters: [is_not_null(t1.a (#1))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#1)]
@@ -268,11 +268,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -286,7 +286,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
