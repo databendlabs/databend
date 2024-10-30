@@ -38,6 +38,7 @@ use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
 use log::error;
+use log::info;
 use log::warn;
 use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::Extractor;
@@ -62,6 +63,8 @@ use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::unix_ts;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::HttpHandlerKind;
@@ -69,6 +72,9 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
+const COOKIE_LAST_ACCESS_TIME: &str = "last_access_time";
+const COOKIE_SESSION_ID: &str = "session_id";
+const COOKIE_COOKIE_ENABLED: &str = "cookie_enabled";
 #[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
@@ -333,8 +339,11 @@ impl<E> HTTPSessionEndpoint<E> {
 
         // cookie_enabled is used to recognize old clients that not support cookie yet.
         // for these old clients, there is no session id available, thus can not use temp table.
-        let cookie_enabled = req.cookie().get("cookie_enabled").is_some();
-        let cookie_session_id = req.cookie().get("session_id").map(|s| s.to_string());
+        let cookie_enabled = req.cookie().get(COOKIE_COOKIE_ENABLED).is_some();
+        let cookie_session_id = req
+            .cookie()
+            .get(COOKIE_SESSION_ID)
+            .map(|s| s.value_str().to_string());
         let (user_name, authed_client_session_id) = self
             .auth_manager
             .auth(
@@ -343,6 +352,7 @@ impl<E> HTTPSessionEndpoint<E> {
                 self.endpoint_kind.need_user_info(),
             )
             .await?;
+
         let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
             (Some(id1), Some(id2)) => {
                 if id1 != id2 {
@@ -353,17 +363,43 @@ impl<E> HTTPSessionEndpoint<E> {
                 }
                 Some(id1.clone())
             }
-            (Some(id), None) => Some(id.clone()),
+            (Some(id), None) => {
+                req.cookie()
+                    .add(Cookie::new_with_str(COOKIE_SESSION_ID, id));
+                Some(id.clone())
+            }
             (None, Some(id)) => Some(id.clone()),
-            (None, None) => None,
+            (None, None) => {
+                if cookie_enabled {
+                    let id = Uuid::new_v4().to_string();
+                    info!("new cookie session id: {}", id);
+                    req.cookie()
+                        .add(Cookie::new_with_str(COOKIE_SESSION_ID, &id));
+                    Some(id)
+                } else {
+                    None
+                }
+            }
         };
         if let Some(id) = &client_session_id {
             session.set_client_session_id(id.clone());
+            let last_access_time = req
+                .cookie()
+                .get(COOKIE_LAST_ACCESS_TIME)
+                .map(|s| s.value_str().to_string());
+            if let Some(ts) = &last_access_time {
+                let ts = ts
+                    .parse::<u64>()
+                    .map_err(|_| ErrorCode::BadArguments(format!("bad last_access_time {}", ts)))?;
+                ClientSessionManager::instance()
+                    .refresh_state(session.get_current_tenant(), id, &user_name, ts)
+                    .await?;
+            }
         }
-        if cookie_session_id.is_none() && cookie_enabled {
-            let id = Uuid::new_v4().to_string();
-            req.cookie().add(Cookie::new("session_id", &id));
-        }
+
+        let ts = unix_ts().as_secs().to_string();
+        req.cookie()
+            .add(Cookie::new_with_str(COOKIE_LAST_ACCESS_TIME, ts));
 
         let session = session_manager.register_session(session)?;
 
