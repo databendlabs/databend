@@ -22,6 +22,7 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::optimizer::Statistics;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -30,7 +31,10 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::ScalarExpr;
 
-const NULL_THRESHOLD: u64 = 1024;
+const NULL_THRESHOLD_RATIO: f64 = 0.02;
+
+/// A rule that filters out NULL values from join keys when they exceed a certain threshold.
+/// This optimization can improve join performance by reducing the amount of data processed.
 pub struct RuleFilterNulls {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -47,6 +51,38 @@ impl RuleFilterNulls {
                 op_type: RelOp::Join,
                 children: vec![Matcher::Leaf, Matcher::Leaf],
             }],
+        }
+    }
+
+    /// Checks if null filtering should be applied to a join key based on statistics.
+    ///
+    /// # Arguments
+    /// * `key_expr` - The join key expression to check
+    /// * `stats` - Statistics for the relation containing the key
+    /// * `cardinality` - Total cardinality of the relation
+    ///
+    /// # Returns
+    /// Some(filter) if null filtering should be applied, None otherwise
+    fn should_filter_nulls(
+        key_expr: &ScalarExpr,
+        stats: &Statistics,
+        cardinality: f64,
+    ) -> Option<ScalarExpr> {
+        if !key_expr.has_one_column_ref() {
+            return None;
+        }
+
+        let column_id = *key_expr.used_columns().iter().next()?;
+        let column_stats = stats.column_stats.get(&column_id)?;
+
+        if cardinality == 0.0 {
+            return None;
+        }
+
+        if (column_stats.null_count as f64 / cardinality) >= NULL_THRESHOLD_RATIO {
+            Some(join_key_null_filter(key_expr))
+        } else {
+            None
         }
     }
 }
@@ -72,26 +108,22 @@ impl Rule for RuleFilterNulls {
         for join_key in join.equi_conditions.iter() {
             let left_key = &join_key.left;
             let right_key = &join_key.right;
-            if left_key.has_one_column_ref() {
-                if let Some(left_key_stat) = left_stat
-                    .statistics
-                    .column_stats
-                    .get(left_key.used_columns().iter().next().unwrap())
-                {
-                    if left_key_stat.null_count >= NULL_THRESHOLD {
-                        left_null_predicates.push(join_key_null_filter(left_key));
-                    }
+            if single_plan(&left_child) {
+                if let Some(filter) = Self::should_filter_nulls(
+                    left_key,
+                    &left_stat.statistics,
+                    left_stat.cardinality,
+                ) {
+                    left_null_predicates.push(filter);
                 }
             }
-            if right_key.has_one_column_ref() {
-                if let Some(right_key_stat) = right_stat
-                    .statistics
-                    .column_stats
-                    .get(right_key.used_columns().iter().next().unwrap())
-                {
-                    if right_key_stat.null_count >= NULL_THRESHOLD {
-                        right_null_predicates.push(join_key_null_filter(right_key));
-                    }
+            if single_plan(&right_child) {
+                if let Some(filter) = Self::should_filter_nulls(
+                    right_key,
+                    &right_stat.statistics,
+                    right_stat.cardinality,
+                ) {
+                    right_null_predicates.push(filter);
                 }
             }
         }
@@ -127,12 +159,29 @@ impl Rule for RuleFilterNulls {
     }
 }
 
+/// Creates a NOT NULL filter predicate for a given join key.
 fn join_key_null_filter(key: &ScalarExpr) -> ScalarExpr {
-    // Construct the null filter, `xxx is not NULL`
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![key.clone()],
     })
+}
+
+/// Checks if an expression represents a single-path plan.
+///
+/// A single-path plan is one that follows a linear chain of operations,
+/// meaning each node has at most one child. Examples include:
+/// - Leaf nodes (table scans)
+/// - Linear chains of unary operators (such as: scan -> filter -> project -> limit)
+fn single_plan(expr: &SExpr) -> bool {
+    let children = &expr.children;
+    if children.len() > 1 {
+        return false;
+    }
+    if children.is_empty() {
+        return true;
+    }
+    single_plan(&children[0])
 }
