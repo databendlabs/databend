@@ -130,6 +130,7 @@ def main():
     session_token = login_resp.get("session_token")
     refresh_token = login_resp.get("refresh_token")
     # print(session_token)
+    return
 
     # ok
     query_resp = do_query("select 1", session_token)

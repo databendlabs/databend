@@ -76,7 +76,7 @@ async fn check_login(
 
 #[derive(Deserialize)]
 struct LoginQuery {
-    disable_session_token: bool,
+    disable_session_token: Option<bool>,
 }
 
 ///  # For client/driver developer:
@@ -107,7 +107,7 @@ pub async fn login_handler(
     match ctx.credential {
         Credential::Jwt { .. } => id_only(),
         Credential::Password { .. } => {
-            if query.disable_session_token {
+            if query.disable_session_token.unwrap_or(false) {
                 id_only()
             } else {
                 let (session_id, token_pair) = ClientSessionManager::instance()

@@ -298,7 +298,7 @@ parking_lot = "0.12.1"
 parquet = { version = "53", features = ["async"] }
 paste = "1.0.15"
 pin-project-lite = "0.2.9"
-poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
+poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression", "cookie"] }
 pprof = { version = "0.13.0", features = [
     "flamegraph",
     "protobuf-codec",
