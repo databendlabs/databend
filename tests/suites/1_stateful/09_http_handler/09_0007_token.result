@@ -1,15 +1,15 @@
 ---- do_login()
 200
-['session_token_ttl_in_secs',
- 'refresh_token',
+['refresh_token',
  'session_id',
  'session_token',
+ 'session_token_ttl_in_secs',
  'version']
 ---- do_query('select 1',)
 200
 [['1']]
 False
-True
+False
 ---- do_query('select count(*) from system.clusters',)
 200
 ---- do_query("select 'cluster'",)
@@ -22,7 +22,7 @@ True
 ---- do_query('drop TABLE t',)
 200
 False
-True
+False
 ---- do_query('select 2',)
 401
 {'code': 5100, 'message': 'jwt auth not configured.'}
@@ -39,7 +39,7 @@ True
 {'code': 5100, 'message': 'wrong data token type'}
 ---- do_refresh(1,)
 200
-['session_token_ttl_in_secs', 'refresh_token', 'session_token']
+['refresh_token', 'session_token', 'session_token_ttl_in_secs']
 ---- do_query('select 6',)
 200
 [['6']]

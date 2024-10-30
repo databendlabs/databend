@@ -314,7 +314,7 @@ impl ClientSessionManager {
         user_name: &str,
         session_id: &str,
     ) -> Result<()> {
-        let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
+        let client_session_api = UserApiProvider::instance().client_session_api(tenant);
         client_session_api
             .drop_client_session_id(session_id, user_name)
             .await
