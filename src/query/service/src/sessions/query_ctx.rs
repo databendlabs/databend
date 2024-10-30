@@ -790,11 +790,33 @@ impl TableContext for QueryContext {
         self.shared.get_connection_id()
     }
 
+    // subquery level
     fn get_settings(&self) -> Arc<Settings> {
-        if !self.query_settings.is_changed() {
+        // query level change
+        if self.shared.query_settings.is_changed()
+            && self.shared.query_settings.query_level_change()
+        {
+            let shared_settings = self.shared.query_settings.changes();
+            // if has session level change, should not cover query level change
+            if self.get_session_settings().is_changed() {
+                for r in self.get_session_settings().changes().iter() {
+                    if !self.shared.query_settings.changes().contains_key(r.key()) {
+                        shared_settings.insert(r.key().clone(), r.value().clone());
+                    }
+                }
+                unsafe {
+                    self.query_settings.unchecked_apply_changes(shared_settings);
+                }
+            } else {
+                unsafe {
+                    self.query_settings.unchecked_apply_changes(shared_settings);
+                }
+            }
+        } else {
             unsafe {
+                // apply session level changes
                 self.query_settings
-                    .unchecked_apply_changes(self.shared.get_settings().changes());
+                    .unchecked_apply_changes(self.get_session_settings().changes())
             }
         }
 
@@ -802,6 +824,11 @@ impl TableContext for QueryContext {
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
+        self.shared.query_settings.clone()
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
+        // get session settings from query shared
         self.shared.get_settings()
     }
 

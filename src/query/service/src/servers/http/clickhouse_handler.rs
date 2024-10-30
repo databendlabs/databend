@@ -237,7 +237,7 @@ pub async fn clickhouse_handler_get(
 
         let settings = session.get_settings();
         settings
-            .set_batch_settings(&params.settings)
+            .set_batch_settings(&params.settings, false)
             .map_err(BadRequest)?;
 
         if !settings
@@ -299,7 +299,7 @@ pub async fn clickhouse_handler_post(
 
         let settings = session.get_settings();
         settings
-            .set_batch_settings(&params.settings)
+            .set_batch_settings(&params.settings, false)
             .map_err(BadRequest)?;
 
         if !settings

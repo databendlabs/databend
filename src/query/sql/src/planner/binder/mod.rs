@@ -47,6 +47,7 @@ mod set;
 mod set_priority;
 mod show;
 mod sort;
+mod statement_settings;
 mod stream_column_factory;
 mod system;
 mod table;
