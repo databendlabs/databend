@@ -32,6 +32,7 @@ use crate::DataField;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
+use crate::ScalarRef;
 use crate::TableSchemaRef;
 use crate::Value;
 
@@ -599,6 +600,14 @@ impl DataBlock {
             .map(|(index, e)| DataField::new(&format!("col_{index}"), e.data_type.clone()))
             .collect();
         DataSchema::new(fields)
+    }
+
+    // This is inefficient, don't use it in hot path
+    pub fn value_at(&self, col: usize, row: usize) -> Option<ScalarRef<'_>> {
+        if col >= self.columns.len() {
+            return None;
+        }
+        self.columns[col].value.index(row)
     }
 }
 

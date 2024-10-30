@@ -205,6 +205,15 @@ pub fn write_nested<W: Write>(
 
             write_binary::<i64, W>(w, &binary_array, write_options, scratch)?;
         }
+        BinaryView => {
+            let array: &BinaryViewArray = array.as_any().downcast_ref().unwrap();
+            write_view::<W>(w, array, write_options, scratch)?;
+        }
+        Utf8View => {
+            let array: &Utf8ViewArray = array.as_any().downcast_ref().unwrap();
+            let array = array.clone().to_binview();
+            write_view::<W>(w, &array, write_options, scratch)?;
+        }
         Struct => unreachable!(),
         List => unreachable!(),
         FixedSizeList => unreachable!(),

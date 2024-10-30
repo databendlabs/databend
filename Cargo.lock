@@ -4815,6 +4815,7 @@ dependencies = [
  "async-trait",
  "databend-common-base",
  "databend-common-exception",
+ "databend-common-expression",
  "databend-common-meta-app",
  "serde",
 ]
@@ -4864,7 +4865,6 @@ dependencies = [
 name = "databend-enterprise-query"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "async-backtrace",
  "async-trait",
  "aws-config",
