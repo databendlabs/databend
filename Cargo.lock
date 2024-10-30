@@ -3704,6 +3704,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "async-backtrace",
  "databend-common-arrow",
  "databend-common-base",
  "databend-common-building",

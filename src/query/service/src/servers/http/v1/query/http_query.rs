@@ -566,6 +566,7 @@ impl HttpQuery {
                 }
             }
             .in_span(span),
+            None,
         )?;
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
