@@ -277,6 +277,7 @@ impl BlockReader {
     ) -> Result<ArrayIter<'static>> {
         let field = column_node.field.clone();
         let is_nested = column_node.is_nested;
+
         match self.native_columns_reader.column_iter_to_arrays(
             readers,
             &column_node.leaf_indices,
@@ -294,11 +295,7 @@ impl BlockReader {
     ) -> Result<ArrayIter<'static>> {
         let field = ArrowField::new(
             name,
-            ArrowType::Extension(
-                "Variant".to_string(),
-                Box::new(ArrowType::LargeBinary),
-                None,
-            ),
+            ArrowType::Extension("Variant".to_string(), Box::new(ArrowType::BinaryView), None),
             true,
         );
         let schema = ArrowSchema::from(vec![field.clone()]);

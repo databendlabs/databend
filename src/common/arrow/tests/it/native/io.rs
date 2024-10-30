@@ -121,7 +121,7 @@ fn test_random() {
         Box::new(create_random_index(size, 0.4, size)) as _,
         Box::new(create_random_double(size, 0.5, size)) as _,
         Box::new(create_random_string(size, 0.4, size)) as _,
-        Box::new(create_random_view(size, 0.0, size)) as _,
+        Box::new(create_random_view(size, 0.4, size)) as _,
     ]);
     test_write_read(chunk);
 }
@@ -137,7 +137,7 @@ fn test_dict() {
         Box::new(create_random_index(size, 0.4, 8)) as _,
         Box::new(create_random_double(size, 0.5, 8)) as _,
         Box::new(create_random_string(size, 0.4, 8)) as _,
-        Box::new(create_random_view(size, 0.0, size)) as _,
+        Box::new(create_random_view(size, 0.4, size)) as _,
     ]);
     test_write_read(chunk);
 }
