@@ -36,7 +36,7 @@ struct RefreshRequest {
 pub struct RefreshResponse {
     session_token: Option<String>,
     refresh_token: Option<String>,
-    refresh_interval_in_secs: u64,
+    session_token_ttl_in_secs: u64,
 }
 
 #[poem::handler]
@@ -60,7 +60,7 @@ pub async fn refresh_handler(
                 .await
                 .map_err(HttpErrorCode::server_error)?;
             Ok(Json(RefreshResponse {
-                refresh_interval_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
                 session_token: None,
                 refresh_token: None,
             }))
@@ -71,7 +71,7 @@ pub async fn refresh_handler(
                 .await
                 .map_err(HttpErrorCode::server_error)?;
             Ok(Json(RefreshResponse {
-                refresh_interval_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
                 session_token: Some(token_pair.session.clone()),
                 refresh_token: Some(token_pair.refresh.clone()),
             }))

@@ -39,7 +39,7 @@ struct LoginRequest {
 pub struct LoginResponse {
     version: String,
     session_id: String,
-    refresh_interval_in_secs: u64,
+    session_token_ttl_in_secs: u64,
 
     /// for now, only use session token when authed by user-password
     session_token: Option<String>,
@@ -93,7 +93,7 @@ pub async fn login_handler(
             Ok(Json(LoginResponse {
                 version,
                 session_id,
-                refresh_interval_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
                 session_token: None,
                 refresh_token: None,
             }))
@@ -107,7 +107,7 @@ pub async fn login_handler(
                 version,
                 session_id,
 
-                refresh_interval_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
                 session_token: Some(token_pair.session.clone()),
                 refresh_token: Some(token_pair.refresh.clone()),
             }))

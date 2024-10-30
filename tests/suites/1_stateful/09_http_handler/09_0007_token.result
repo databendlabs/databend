@@ -1,6 +1,6 @@
 ---- do_login()
 200
-['refresh_interval_in_secs',
+['session_token_ttl_in_secs',
  'refresh_token',
  'session_id',
  'session_token',
@@ -39,7 +39,7 @@ True
 {'code': 5100, 'message': 'wrong data token type'}
 ---- do_refresh(1,)
 200
-['refresh_interval_in_secs', 'refresh_token', 'session_token']
+['session_token_ttl_in_secs', 'refresh_token', 'session_token']
 ---- do_query('select 6',)
 200
 [['6']]
