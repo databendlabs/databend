@@ -238,6 +238,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             for _ in 0..ctx.num_rows {
                 let value = Uuid::new_v4();
                 write!(&mut builder.data, "{}", value).unwrap();
+                builder.commit_row();
             }
 
             let col = StringColumn::try_from(builder.build()).unwrap();
