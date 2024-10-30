@@ -404,7 +404,7 @@ impl Spiller {
             }
             (Location::Remote(loc), _) => self.operator.writer_with(loc),
         }
-        .chunk(8 * 1024 * 1024)
+        // .chunk(8 * 1024 * 1024)
         .await?;
 
         let buf = buf

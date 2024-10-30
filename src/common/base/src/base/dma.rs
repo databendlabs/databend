@@ -167,7 +167,8 @@ type DmaBuffer = Vec<u8, DmaAllocator>;
 pub fn dma_buffer_as_vec(mut buf: DmaBuffer) -> Vec<u8> {
     let ptr = buf.as_mut_ptr();
     let len = buf.len();
-    let cap = buf.allocator().real_cap(buf.capacity());
+    // let cap = buf.allocator().real_cap(buf.capacity());
+    let cap = buf.capacity();
     std::mem::forget(buf);
 
     unsafe { Vec::from_raw_parts(ptr, len, cap) }
