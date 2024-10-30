@@ -52,13 +52,19 @@ const ANY_CHAR_SEL: f64 = 0.9; // not 1, since it won't match end-of-string
 const FULL_WILDCARD_SEL: f64 = 2.0;
 
 pub struct SelectivityEstimator<'a> {
+    pub cardinality: f64,
     pub input_stat: &'a mut Statistics,
     pub updated_column_indexes: HashSet<IndexType>,
 }
 
 impl<'a> SelectivityEstimator<'a> {
-    pub fn new(input_stat: &'a mut Statistics, updated_column_indexes: HashSet<IndexType>) -> Self {
+    pub fn new(
+        input_stat: &'a mut Statistics,
+        cardinality: f64,
+        updated_column_indexes: HashSet<IndexType>,
+    ) -> Self {
         Self {
+            cardinality,
             input_stat,
             updated_column_indexes,
         }
@@ -101,6 +107,9 @@ impl<'a> SelectivityEstimator<'a> {
             ScalarExpr::FunctionCall(func) => {
                 if func.func_name.eq("like") {
                     return self.compute_like_selectivity(func);
+                }
+                if func.func_name.eq("is_not_null") {
+                    return self.compute_is_not_null_selectivity(&func.arguments[0]);
                 }
                 if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     return self.compute_selectivity_comparison_expr(
@@ -156,6 +165,29 @@ impl<'a> SelectivityEstimator<'a> {
             Ok(sel)
         } else {
             Ok(DEFAULT_SELECTIVITY)
+        }
+    }
+
+    fn compute_is_not_null_selectivity(&mut self, expr: &ScalarExpr) -> Result<f64> {
+        match expr {
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                let column_stat = if let Some(stat) = self
+                    .input_stat
+                    .column_stats
+                    .get_mut(&column_ref.column.index)
+                {
+                    stat
+                } else {
+                    return Ok(DEFAULT_SELECTIVITY);
+                };
+                if self.cardinality == 0.0 {
+                    return Ok(0.0);
+                }
+                let selectivity =
+                    (self.cardinality - column_stat.null_count as f64) / self.cardinality;
+                Ok(selectivity)
+            }
+            _ => Ok(DEFAULT_SELECTIVITY),
         }
     }
 
