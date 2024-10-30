@@ -74,6 +74,7 @@ pub enum EndpointKind {
     Login,
     Logout,
     Refresh,
+    HeartBeat,
     StartQuery,
     PollQuery,
     Clickhouse,
@@ -91,7 +92,10 @@ impl EndpointKind {
     pub fn may_need_sticky(&self) -> bool {
         matches!(
             self,
-            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout
+            EndpointKind::StartQuery
+                | EndpointKind::PollQuery
+                | EndpointKind::Logout
+                | EndpointKind::HeartBeat
         )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
@@ -102,6 +106,7 @@ impl EndpointKind {
             | EndpointKind::PollQuery
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
+            | EndpointKind::HeartBeat
             | EndpointKind::UploadToStage => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)

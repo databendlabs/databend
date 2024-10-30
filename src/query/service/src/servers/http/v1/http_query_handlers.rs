@@ -57,6 +57,7 @@ use crate::servers::http::v1::logout_handler;
 use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
+use crate::servers::http::v1::session::heartbeat_handler::heartbeat_handler;
 use crate::servers::http::v1::upload_to_stage;
 use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
@@ -447,6 +448,11 @@ pub fn query_route() -> Route {
             "/session/refresh",
             post(refresh_handler),
             EndpointKind::Refresh,
+        ),
+        (
+            "/session/heartbeat",
+            post(heartbeat_handler),
+            EndpointKind::HeartBeat,
         ),
         ("/verify", post(verify_handler), EndpointKind::Verify),
         (

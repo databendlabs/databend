@@ -14,6 +14,7 @@
 
 mod client_session_manager;
 mod consts;
+pub(crate) mod heartbeat_handler;
 pub mod login_handler;
 pub(crate) mod logout_handler;
 pub mod refresh_handler;

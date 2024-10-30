@@ -51,12 +51,6 @@ pub enum Credential {
     NoNeed,
 }
 
-impl Credential {
-    pub fn need_refresh(&self) -> bool {
-        matches!(self, Credential::DatabendToken { .. })
-    }
-}
-
 impl AuthMgr {
     pub fn init(cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(AuthMgr::create(cfg));
