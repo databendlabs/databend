@@ -573,8 +573,8 @@ impl CompactionJob {
         let res = res.unwrap();
         let res = res.consume_convert_to_full();
 
-        let need_segment_compact = res.value_at(0, 0).unwrap().as_boolean().unwrap().clone();
-        let need_block_compact = res.value_at(1, 0).unwrap().as_boolean().unwrap().clone();
+        let need_segment_compact = *res.value_at(0, 0).unwrap().as_boolean().unwrap();
+        let need_block_compact = *res.value_at(1, 0).unwrap().as_boolean().unwrap();
 
         let table_statistics = TableStatistics {
             number_of_rows: *res
