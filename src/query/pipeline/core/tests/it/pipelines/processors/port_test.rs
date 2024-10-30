@@ -18,13 +18,12 @@ use std::sync::Barrier;
 use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::connect;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
-use serde::Deserializer;
-use serde::Serializer;
 
 #[derive(Clone, Debug)]
 struct TestDataMeta {
@@ -43,26 +42,10 @@ impl TestDataMeta {
     }
 }
 
-impl serde::Serialize for TestDataMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Serialize is unimplemented for TestDataMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for TestDataMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Deserialize is unimplemented for TestDataMeta")
-    }
-}
+local_block_meta_serde!(TestDataMeta);
 
 #[typetag::serde(name = "test_data_meta")]
 impl BlockMetaInfo for TestDataMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("equals is unimplemented for TestDataMeta")
-    }
-
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
     }

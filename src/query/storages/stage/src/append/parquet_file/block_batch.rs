@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 
@@ -32,27 +33,7 @@ impl Clone for BlockBatch {
     }
 }
 
-impl serde::Serialize for BlockBatch {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unreachable!("Buffers should not be serialized")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for BlockBatch {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unreachable!("Buffers should not be deserialized")
-    }
-}
+local_block_meta_serde!(BlockBatch);
 
 #[typetag::serde(name = "unload_block_batch")]
-impl BlockMetaInfo for BlockBatch {
-    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
-        unreachable!("Buffers should not be compared")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unreachable!("Buffers should not be cloned")
-    }
-}
+impl BlockMetaInfo for BlockBatch {}

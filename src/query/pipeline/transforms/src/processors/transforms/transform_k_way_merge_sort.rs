@@ -532,7 +532,7 @@ where A: SortAlgorithm + 'static
                 total: task.total,
                 input: 0,
             }
-            .as_meta();
+            .boxed();
             self.output_data.push_back(block.add_meta(Some(meta))?);
         }
         debug_assert_eq!(rows, task.total);
