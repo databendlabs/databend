@@ -14,11 +14,11 @@
 
 mod client_session_manager;
 mod consts;
-pub(crate) mod heartbeat_handler;
 pub mod login_handler;
 pub(crate) mod logout_handler;
 pub mod refresh_handler;
 mod token;
 
 pub use client_session_manager::ClientSessionManager;
+pub(crate) use token::unix_ts;
 pub(crate) use token::SessionClaim;

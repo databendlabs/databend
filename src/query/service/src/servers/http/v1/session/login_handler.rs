@@ -20,6 +20,7 @@ use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
+use poem::web::Query;
 use poem::IntoResponse;
 
 use crate::auth::Credential;
@@ -73,6 +74,11 @@ async fn check_login(
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct LoginQuery {
+    disable_session_token: bool,
+}
+
 ///  # For client/driver developer:
 /// - It is encouraged to call `/v1/session/login` when establishing connection, not mandatory for now.
 /// - May get 404 when talk to old server, may check `/health` (no `/v1` prefix) to ensure the host:port is not wrong.
@@ -81,36 +87,42 @@ async fn check_login(
 pub async fn login_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<LoginRequest>,
+    Query(query): Query<LoginQuery>,
 ) -> PoemResult<impl IntoResponse> {
     let version = QUERY_SEMVER.to_string();
     check_login(ctx, &req)
         .await
         .map_err(HttpErrorCode::bad_request)?;
+    let id_only = || {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        Ok(Json(LoginResponse {
+            version: version.clone(),
+            session_id,
+            session_token_ttl_in_secs: 0,
+            session_token: None,
+            refresh_token: None,
+        }))
+    };
 
     match ctx.credential {
-        Credential::Jwt { .. } => {
-            let session_id = uuid::Uuid::new_v4().to_string();
-            Ok(Json(LoginResponse {
-                version,
-                session_id,
-                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
-                session_token: None,
-                refresh_token: None,
-            }))
-        }
+        Credential::Jwt { .. } => id_only(),
         Credential::Password { .. } => {
-            let (session_id, token_pair) = ClientSessionManager::instance()
-                .new_token_pair(&ctx.session, None, None)
-                .await
-                .map_err(HttpErrorCode::server_error)?;
-            Ok(Json(LoginResponse {
-                version,
-                session_id,
+            if query.disable_session_token {
+                id_only()
+            } else {
+                let (session_id, token_pair) = ClientSessionManager::instance()
+                    .new_token_pair(&ctx.session, None, None)
+                    .await
+                    .map_err(HttpErrorCode::server_error)?;
+                Ok(Json(LoginResponse {
+                    version,
+                    session_id,
 
-                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
-                session_token: Some(token_pair.session.clone()),
-                refresh_token: Some(token_pair.refresh.clone()),
-            }))
+                    session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                    session_token: Some(token_pair.session.clone()),
+                    refresh_token: Some(token_pair.refresh.clone()),
+                }))
+            }
         }
         _ => unreachable!("/session/login expect password or JWT"),
     }

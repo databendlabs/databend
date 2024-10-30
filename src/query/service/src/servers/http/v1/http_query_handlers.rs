@@ -57,7 +57,6 @@ use crate::servers::http::v1::logout_handler;
 use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
-use crate::servers::http::v1::session::heartbeat_handler::heartbeat_handler;
 use crate::servers::http::v1::upload_to_stage;
 use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
@@ -414,6 +413,13 @@ pub(crate) async fn query_handler(
         .await
 }
 
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn heartbeat_handler() -> poem::error::Result<impl IntoResponse> {
+    // work is already done in session manager
+    Ok(())
+}
+
 pub fn query_route() -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
@@ -478,8 +484,8 @@ pub fn query_route() -> Route {
             path,
             endpoint
                 .with(MetricsMiddleware::new(path))
-                .with(CookieJarManager::new())
-                .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind)),
+                .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind))
+                .with(CookieJarManager::new()),
         );
     }
     route
