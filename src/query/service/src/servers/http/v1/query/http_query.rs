@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::intrinsics::needs_drop;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -715,7 +714,8 @@ impl HttpQuery {
                     .await;
             }
         }
-        let has_temp_table = (*self.has_temp_table_after_run.lock()).unwrap_or(false);
+        let has_temp_table =
+            (*self.has_temp_table_after_run.lock()).unwrap_or(self.has_temp_table_before_run);
 
         let need_sticky = txn_state != TxnState::AutoCommit || has_temp_table;
         let need_keep_alive = need_sticky || has_temp_table;
