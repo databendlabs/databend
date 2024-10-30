@@ -44,6 +44,8 @@ pub struct Sort {
 
     /// If sort is for window clause, we need the input to exchange by partitions
     pub window_partition: Vec<ScalarItem>,
+
+    pub window_top_n: Option<usize>,
 }
 
 impl Sort {

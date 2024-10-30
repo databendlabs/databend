@@ -27,7 +27,7 @@ pub struct WindowPartition {
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
     pub after_exchange: Option<bool>,
-    pub limit: Option<usize>,
+    pub top_n: Option<usize>,
 
     pub stat_info: Option<PlanStatsInfo>,
 }

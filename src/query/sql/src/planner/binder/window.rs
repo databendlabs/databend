@@ -116,10 +116,11 @@ impl Binder {
         let child = if !sort_items.is_empty() {
             let sort_plan = Sort {
                 items: sort_items,
-                limit: window_plan.limit,
+                limit: None,
                 after_exchange: None,
                 pre_projection: None,
                 window_partition: window_plan.partition_by.clone(),
+                window_top_n: None,
             };
             SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
         } else {

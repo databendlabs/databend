@@ -36,6 +36,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
+        RuleID::PushDownFilterWindowRank,
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
         // Limit
@@ -88,6 +89,7 @@ pub enum RuleID {
     PushDownFilterSort,
     PushDownFilterProjectSet,
     PushDownFilterWindow,
+    PushDownFilterWindowRank,
     PushDownLimit,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
@@ -137,6 +139,7 @@ impl Display for RuleID {
             RuleID::PushDownSortEvalScalar => write!(f, "PushDownSortEvalScalar"),
             RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
             RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
+            RuleID::PushDownFilterWindowRank => write!(f, "PushDownFilterWindowRank"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateSort => write!(f, "EliminateSort"),

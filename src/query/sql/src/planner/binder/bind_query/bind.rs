@@ -160,6 +160,7 @@ impl Binder {
             after_exchange: None,
             pre_projection: None,
             window_partition: vec![],
+            window_top_n: None,
         };
         Ok(SExpr::create_unary(
             Arc::new(sort_plan.into()),
