@@ -38,6 +38,7 @@ pub fn serialize_group_columns(
                 serialize_column_binary(col, i, &mut builder.data.as_mut_ptr());
             }
         }
+        builder.commit_row();
     }
     builder.build()
 }
