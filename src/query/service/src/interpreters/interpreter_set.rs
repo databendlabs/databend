@@ -50,7 +50,7 @@ impl SetInterpreter {
     }
 
     async fn set_settings(&self, var: String, value: String, is_global: bool) -> Result<()> {
-        let settings = self.ctx.get_shared_settings();
+        let settings = self.ctx.get_session_settings();
 
         match is_global {
             true => settings.set_global_setting(var, value).await,
@@ -204,6 +204,11 @@ impl Interpreter for SetInterpreter {
             SetType::SettingsGlobal => self.execute_settings(scalars, true).await?,
             SetType::SettingsSession => self.execute_settings(scalars, false).await?,
             SetType::Variable => self.execute_variables(scalars).await?,
+            SetType::SettingsQuery => {
+                return Err(ErrorCode::BadArguments(
+                    "Query level setting can not be set",
+                ));
+            }
         }
 
         Ok(PipelineBuildResult::create())

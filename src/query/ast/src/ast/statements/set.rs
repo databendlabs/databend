@@ -26,6 +26,7 @@ pub enum SetType {
     SettingsSession,
     SettingsGlobal,
     Variable,
+    SettingsQuery,
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]

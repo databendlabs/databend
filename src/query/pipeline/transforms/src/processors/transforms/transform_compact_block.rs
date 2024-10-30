@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 
@@ -42,30 +43,10 @@ impl Debug for BlockCompactMeta {
     }
 }
 
-impl serde::Serialize for BlockCompactMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize BlockCompactMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for BlockCompactMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize BlockCompactMeta")
-    }
-}
+local_block_meta_serde!(BlockCompactMeta);
 
 #[typetag::serde(name = "block_compact")]
-impl BlockMetaInfo for BlockCompactMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals BlockCompactMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone BlockCompactMeta")
-    }
-}
+impl BlockMetaInfo for BlockCompactMeta {}
 
 #[derive(Default)]
 pub struct TransformCompactBlock {

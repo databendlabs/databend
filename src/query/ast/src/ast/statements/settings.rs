@@ -35,6 +35,7 @@ impl Display for Settings {
             SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
             SetType::SettingsSession => write!(f, "SESSION ")?,
             SetType::Variable => write!(f, "VARIABLE ")?,
+            SetType::SettingsQuery => write!(f, "")?,
         }
 
         if self.identifiers.len() > 1 {

@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::RemoteExpr;
@@ -69,26 +70,10 @@ impl AggIndexMeta {
     }
 }
 
-impl serde::Serialize for AggIndexMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize AggIndexMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for AggIndexMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize AggIndexMeta")
-    }
-}
+local_block_meta_serde!(AggIndexMeta);
 
 #[typetag::serde(name = "agg_index_meta")]
 impl BlockMetaInfo for AggIndexMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals AggIndexMeta")
-    }
-
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
     }
