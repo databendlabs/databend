@@ -369,7 +369,6 @@ impl PhysicalPlanBuilder {
             .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
                 let predicates = predicates
                     .iter()
-                    .dedup()
                     .map(|p| {
                         Ok(p.as_raw_expr()
                             .type_check(&metadata)?

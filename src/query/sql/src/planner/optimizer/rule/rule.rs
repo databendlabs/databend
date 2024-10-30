@@ -30,10 +30,10 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
         // Filter
+        RuleID::FilterNulls,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::NormalizeScalarFilter,
-        RuleID::FilterNulls,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
