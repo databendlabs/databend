@@ -39,9 +39,9 @@ use crate::ast::Query;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Statement {
     Query(Box<Query>),
-    QueryWithSetting {
+    StatementWithSettings {
         settings: Option<Settings>,
-        query: Box<Statement>,
+        stmt: Box<Statement>,
     },
     Explain {
         kind: ExplainKind,
@@ -418,7 +418,7 @@ impl Display for Statement {
                 }
                 write!(f, " {query}")?;
             }
-            Statement::QueryWithSetting { settings, query } => {
+            Statement::StatementWithSettings { settings, stmt } => {
                 if let Some(setting) = settings {
                     write!(f, "SETTINGS (")?;
                     let ids = &setting.identifiers;
@@ -433,7 +433,7 @@ impl Display for Statement {
                     }
                     write!(f, ") ")?;
                 }
-                write!(f, "{query}")?;
+                write!(f, "{stmt}")?;
             }
             Statement::ExplainAnalyze {
                 partial,

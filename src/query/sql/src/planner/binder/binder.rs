@@ -207,8 +207,8 @@ impl<'a> Binder {
                 }
             }
 
-            Statement::QueryWithSetting { settings, query} => {
-                self.bind_query_setting(bind_context, settings, query).await?
+            Statement::StatementWithSettings { settings, stmt } => {
+                self.bind_statement_settings(bind_context, settings, stmt).await?
             }
 
             Statement::Explain { query, options, kind } => {

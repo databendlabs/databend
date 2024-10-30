@@ -91,9 +91,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             SETTINGS ~ #query_statement_setting? ~ #statement_body
         },
         |(_, opt_settings, statement)| {
-            Ok(Statement::QueryWithSetting {
+            Ok(Statement::StatementWithSettings {
                 settings: opt_settings,
-                query: Box::new(statement),
+                stmt: Box::new(statement),
             })
         },
     );
@@ -2821,16 +2821,6 @@ pub fn query_statement_setting(i: Input) -> IResult<Settings> {
                 identifiers: ids,
                 values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
             }
-            // let (ids, values): (Vec<Identifier>, Vec<Expr>) = query_setting
-            // .iter()
-            // .map(|(id, value)| (id.clone(), value.clone()))
-            // .unzip();
-            //
-            // Ok(Settings {
-            // set_type: SetType::SettingsQuery,
-            // identifiers: ids,
-            // values: SetValues::Expr(values.into_iter().map(Into::into).collect()),
-            // })
         },
     );
     rule!(#query_set: "(SETTING_NAME = VALUE, ...)")(i)

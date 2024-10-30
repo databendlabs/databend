@@ -33,17 +33,17 @@ use crate::Binder;
 use crate::TypeChecker;
 
 impl Binder {
-    pub async fn bind_query_setting(
+    pub async fn bind_statement_settings(
         &mut self,
         bind_context: &mut BindContext,
         settings: &Option<Settings>,
         inner: &Statement,
     ) -> Result<Plan> {
-        if let Statement::QueryWithSetting { .. } = inner {
+        if let Statement::StatementWithSettings { .. } = inner {
             return Err(ErrorCode::SyntaxException("Invalid statement"));
         }
 
-        let mut query_settings: HashMap<String, String> = HashMap::new();
+        let mut statement_settings: HashMap<String, String> = HashMap::new();
         if let Some(settings) = settings {
             let Settings {
                 set_type,
@@ -117,7 +117,7 @@ impl Binder {
                             })?;
                         }
 
-                        query_settings.entry(var.to_string()).or_insert(value);
+                        statement_settings.entry(var.to_string()).or_insert(value);
                     }
                 }
                 _ => {
@@ -126,7 +126,7 @@ impl Binder {
             }
             self.ctx
                 .get_shared_settings()
-                .set_batch_settings(&query_settings, true)?;
+                .set_batch_settings(&statement_settings, true)?;
             self.bind_statement(bind_context, inner).await
         } else {
             self.bind_statement(bind_context, inner).await
