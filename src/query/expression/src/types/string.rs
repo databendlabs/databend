@@ -24,6 +24,7 @@ use serde::Serialize;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
+use super::binary::NewBinaryColumnBuilder;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -509,6 +510,149 @@ impl TryFrom<BinaryColumnBuilder> for StringColumnBuilder {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewStringColumnBuilder {
+    inner: NewBinaryColumnBuilder,
+}
+
+impl NewStringColumnBuilder {
+    pub fn with_capacity(len: usize) -> Self {
+        NewStringColumnBuilder {
+            inner: NewBinaryColumnBuilder::with_capacity(len),
+        }
+    }
+
+    pub fn from_column(col: StringColumn) -> Self {
+        let builder = NewBinaryColumnBuilder::from_column(col.into());
+        unsafe { NewStringColumnBuilder::from_binary_unchecked(builder) }
+    }
+
+    /// # Safety
+    /// This function is unsound iff:
+    /// * the offsets are not monotonically increasing
+    /// * The `data` between two consecutive `offsets` are not valid utf8
+    pub unsafe fn from_binary_unchecked(col: NewBinaryColumnBuilder) -> Self {
+        #[cfg(debug_assertions)]
+        col.check_utf8().unwrap();
+
+        NewStringColumnBuilder { inner: col }
+    }
+
+    pub fn repeat(scalar: &str, n: usize) -> Self {
+        let builder = NewBinaryColumnBuilder::repeat(scalar.as_bytes(), n);
+        unsafe { NewStringColumnBuilder::from_binary_unchecked(builder) }
+    }
+
+    pub fn repeat_default(n: usize) -> Self {
+        let builder = NewBinaryColumnBuilder::repeat_default(n);
+        unsafe { NewStringColumnBuilder::from_binary_unchecked(builder) }
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.inner.memory_size()
+    }
+
+    pub fn put_char(&mut self, item: char) {
+        self.inner.put_char(item);
+    }
+
+    #[inline]
+    pub fn put_slice(&mut self, item: &[u8]) {
+        #[cfg(debug_assertions)]
+        item.check_utf8().unwrap();
+
+        self.inner.put_slice(item);
+    }
+
+    #[inline]
+    pub fn put_str(&mut self, item: &str) {
+        self.inner.put_str(item);
+    }
+
+    pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
+        self.inner.put_char_iter(iter);
+    }
+
+    #[inline]
+    pub fn commit_row(&mut self) {
+        self.inner.commit_row();
+    }
+
+    pub fn append_column(&mut self, other: &StringColumn) {
+        let other = BinaryColumn::from(other.clone());
+        self.inner.append_column(&other);
+    }
+
+    pub fn build(self) -> StringColumn {
+        let col = self.inner.build();
+
+        #[cfg(debug_assertions)]
+        col.check_utf8().unwrap();
+
+        unsafe { StringColumn::from_binary_unchecked(col) }
+    }
+
+    pub fn build_scalar(self) -> String {
+        let bytes = self.inner.build_scalar();
+
+        #[cfg(debug_assertions)]
+        bytes.check_utf8().unwrap();
+
+        unsafe { String::from_utf8_unchecked(bytes) }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, row: usize) -> &str {
+        let bytes = self.inner.index_unchecked(row);
+
+        #[cfg(debug_assertions)]
+        bytes.check_utf8().unwrap();
+
+        std::str::from_utf8_unchecked(bytes)
+    }
+
+    pub fn push_repeat(&mut self, item: &str, n: usize) {
+        self.inner.push_repeat(item.as_bytes(), n);
+    }
+
+    pub fn as_inner_mut(&mut self) -> &mut NewBinaryColumnBuilder {
+        &mut self.inner
+    }
+}
+
+impl<'a> FromIterator<&'a str> for NewStringColumnBuilder {
+    fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let mut builder = NewStringColumnBuilder::with_capacity(iter.size_hint().0);
+        for item in iter {
+            builder.put_str(item);
+            builder.commit_row();
+        }
+        builder
+    }
+}
+
+impl From<NewStringColumnBuilder> for NewBinaryColumnBuilder {
+    fn from(builder: NewStringColumnBuilder) -> NewBinaryColumnBuilder {
+        builder.inner
+    }
+}
+
+impl TryFrom<NewBinaryColumnBuilder> for NewStringColumnBuilder {
+    type Error = ErrorCode;
+
+    fn try_from(builder: NewBinaryColumnBuilder) -> Result<NewStringColumnBuilder> {
+        builder.check_utf8()?;
+        Ok(NewStringColumnBuilder { inner: builder })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: String,
     // max value is None for full domain
@@ -553,6 +697,15 @@ impl CheckUTF8 for BinaryColumn {
 impl CheckUTF8 for BinaryColumnBuilder {
     fn check_utf8(&self) -> Result<()> {
         check_utf8_column(&self.offsets, &self.data)
+    }
+}
+
+impl CheckUTF8 for NewBinaryColumnBuilder {
+    fn check_utf8(&self) -> Result<()> {
+        for bytes in self.data.values() {
+            bytes.check_utf8()?;
+        }
+        Ok(())
     }
 }
 

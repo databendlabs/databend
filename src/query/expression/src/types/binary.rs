@@ -19,6 +19,7 @@ use std::ops::Range;
 use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::array::MutableBinaryViewArray;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_arrow::arrow_format::ipc::BinaryViewBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -476,3 +477,138 @@ impl<'a> FromIterator<&'a [u8]> for BinaryColumnBuilder {
         builder
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct NewBinaryColumnBuilder {
+    pub data: MutableBinaryViewArray<[u8]>,
+    pub row_buffer: Vec<u8>,
+}
+
+impl NewBinaryColumnBuilder {
+    pub fn with_capacity(len: usize) -> Self {
+        let data = MutableBinaryViewArray::with_capacity(len);
+        NewBinaryColumnBuilder {
+            data,
+            row_buffer: vec![],
+        }
+    }
+
+    pub fn from_column(col: BinaryColumn) -> Self {
+        let mut data = MutableBinaryViewArray::with_capacity(col.len());
+        data.extend_values(col.iter());
+        NewBinaryColumnBuilder {
+            data,
+            row_buffer: vec![],
+        }
+    }
+
+    pub fn repeat(scalar: &[u8], n: usize) -> Self {
+        let mut data = MutableBinaryViewArray::with_capacity(n);
+        data.extend_constant(n, Some(scalar));
+        NewBinaryColumnBuilder {
+            data,
+            row_buffer: vec![],
+        }
+    }
+
+    pub fn repeat_default(n: usize) -> Self {
+        let mut data = MutableBinaryViewArray::with_capacity(n);
+        data.extend_constant(n, Some(&[]));
+        NewBinaryColumnBuilder {
+            data,
+            row_buffer: vec![],
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.data.total_buffer_len
+    }
+
+    pub fn put_u8(&mut self, item: u8) {
+        self.row_buffer.push(item);
+    }
+
+    pub fn put_char(&mut self, item: char) {
+        self.row_buffer
+            .extend_from_slice(item.encode_utf8(&mut [0; 4]).as_bytes());
+    }
+
+    #[inline]
+    pub fn put_str(&mut self, item: &str) {
+        self.row_buffer.extend_from_slice(item.as_bytes());
+    }
+
+    #[inline]
+    pub fn put_slice(&mut self, item: &[u8]) {
+        self.row_buffer.extend_from_slice(item);
+    }
+
+    pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
+        for c in iter {
+            let mut buf = [0; 4];
+            let result = c.encode_utf8(&mut buf);
+            self.row_buffer.extend_from_slice(result.as_bytes());
+        }
+    }
+
+    pub fn put(&mut self, item: &[u8]) {
+        self.row_buffer.extend_from_slice(item);
+    }
+
+    #[inline]
+    pub fn commit_row(&mut self) {
+        self.data.push_value(&self.row_buffer);
+        self.row_buffer.clear();
+    }
+
+    pub fn append_column(&mut self, other: &BinaryColumn) {
+        self.data.extend_values(other.iter());
+    }
+
+    pub fn build(self) -> BinaryColumn {
+        BinaryColumn {
+            data: self.data.into(),
+        }
+    }
+
+    pub fn build_scalar(self) -> Vec<u8> {
+        assert_eq!(self.len(), 1);
+
+        self.data.values()[0].to_vec()
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, row: usize) -> &[u8] {
+        self.data.value_unchecked(row)
+    }
+
+    pub fn push_repeat(&mut self, item: &[u8], n: usize) {
+        self.data.extend_constant(n, Some(item));
+    }
+}
+
+impl<'a> FromIterator<&'a [u8]> for NewBinaryColumnBuilder {
+    fn from_iter<T: IntoIterator<Item = &'a [u8]>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let mut builder = NewBinaryColumnBuilder::with_capacity(iter.size_hint().0);
+        for item in iter {
+            builder.put_slice(item);
+            builder.commit_row();
+        }
+        builder
+    }
+}
+
+impl PartialEq for NewBinaryColumnBuilder {
+    fn eq(&self, other: &Self) -> bool {
+        self.data.values_iter().eq(other.data.values_iter())
+    }
+}
+
+impl Eq for NewBinaryColumnBuilder {}
