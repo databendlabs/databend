@@ -39,7 +39,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
 ├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
-└── estimated rows: 1.20
+└── estimated rows: 3.00
 
 query T
 explain select * from t_nullable_prune where a is null
@@ -53,7 +53,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
 ├── push downs: [filters: [NOT is_not_null(t_nullable_prune.a (#0))], limit: NONE]
-└── estimated rows: 4.80
+└── estimated rows: 3.00
 
 statement ok
 DROP TABLE default.default.t_nullable_prune
