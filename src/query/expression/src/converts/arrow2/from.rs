@@ -712,6 +712,15 @@ impl Column {
                         );
                     Column::Geometry(binary_array_to_binary_column(arrow_col))
                 }
+                (DataType::Geometry, ArrowDataType::BinaryView) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryViewArray>()
+                        .expect(
+                            "fail to read `Geometry` from arrow: array should be `BinaryArray<i64>`",
+                        );
+                    Column::Geometry(BinaryColumn::new(arrow_col.clone()))
+                }
                 (DataType::Geography, ArrowDataType::LargeBinary) => {
                     let arrow_col = arrow_col
                         .as_any()

@@ -978,9 +978,8 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
 
                                 let mut builder =
                                     StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                                let mut buffer = Vec::with_capacity(
-                                    <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
-                                );
+                                let mut buffer =
+                                    vec![0u8; <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL];
 
                                 unsafe {
                                     for x in from.iter() {
