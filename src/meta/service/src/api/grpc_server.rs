@@ -100,13 +100,19 @@ impl GrpcServer {
                     .add_service(grpc_srv)
                     .serve_with_shutdown(addr, async move {
                         let _ = started_tx.send(());
-                        info!("metasrv starts to wait for stop signal: {}", addr);
+                        info!(
+                            "meta-service gRPC(on {}) starts to wait for stop signal",
+                            addr
+                        );
                         let _ = stop_rx.await;
-                        info!("metasrv receives stop signal: {}", addr);
+                        info!("meta-service gRPC(on {}) receives stop signal", addr);
                     })
                     .await;
 
-                info!("grpc task returned res: {:?}", res);
+                info!(
+                    "meta-service gRPC(on {}) task returned res: {:?}",
+                    addr, res
+                );
             }
             .in_span(Span::enter_with_local_parent("spawn-grpc")),
         );
