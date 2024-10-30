@@ -385,10 +385,13 @@ impl Column {
                 )
                 .unwrap(),
             ),
+
             Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col)
-            | Column::Geography(GeographyColumn(col)) => Box::new(col.clone().into_inner()),
+            | Column::Geography(GeographyColumn(col)) => {
+                Box::new(col.clone().into_inner().with_data_type(arrow_type))
+            }
         }
     }
 }

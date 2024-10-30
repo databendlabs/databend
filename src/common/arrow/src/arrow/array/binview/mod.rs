@@ -531,6 +531,11 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
     pub fn default_data_type() -> &'static DataType {
         T::data_type()
     }
+
+    pub fn with_data_type(mut self, data_type: DataType) -> Self {
+        self.data_type = data_type;
+        self
+    }
 }
 
 pub type BinaryViewArray = BinaryViewArrayGeneric<[u8]>;
