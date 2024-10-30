@@ -179,11 +179,11 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 4.00
+├── estimated rows: 0.16
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 0), is_true(t2.b (#3) > 0)]
-│   ├── estimated rows: 3.00
+│   ├── filters: [is_not_null(t2.a (#2)), is_true(t2.a (#2) > 0), is_true(t2.b (#3) > 0)]
+│   ├── estimated rows: 0.60
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
@@ -192,12 +192,12 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(t2.a (#2) > 0, t2.b (#3) > 0)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(and_filters(t2.b (#3) > 0, is_not_null(t2.a (#2))), t2.a (#2) > 0)], limit: NONE]
 │       └── estimated rows: 3.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.a (#0) > 0)]
-    ├── estimated rows: 4.00
+    ├── filters: [is_not_null(t1.a (#0)), is_true(t1.a (#0) > 0)]
+    ├── estimated rows: 0.80
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
@@ -206,7 +206,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+        ├── push downs: [filters: [and_filters(t1.a (#0) > 0, is_not_null(t1.a (#0)))], limit: NONE]
         └── estimated rows: 4.00
 
 # convert full outer join to inner join, can propagate t2.a > 0
@@ -219,11 +219,11 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 4.00
+├── estimated rows: 0.16
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 3.00
+│   ├── filters: [is_not_null(t2.a (#2)), is_true(t2.a (#2) > 0)]
+│   ├── estimated rows: 0.60
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
@@ -232,12 +232,12 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(t2.a (#2) > 0, is_not_null(t2.a (#2)))], limit: NONE]
 │       └── estimated rows: 3.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.a (#0) > 0), is_true(t1.b (#1) > 0)]
-    ├── estimated rows: 4.00
+    ├── filters: [is_not_null(t1.a (#0)), is_true(t1.a (#0) > 0), is_true(t1.b (#1) > 0)]
+    ├── estimated rows: 0.80
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
@@ -246,7 +246,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [and_filters(t1.a (#0) > 0, t1.b (#1) > 0)], limit: NONE]
+        ├── push downs: [filters: [and_filters(and_filters(is_not_null(t1.a (#0)), t1.b (#1) > 0), t1.a (#0) > 0)], limit: NONE]
         └── estimated rows: 4.00
 
 # full outer join, can not push down t2.a > 0

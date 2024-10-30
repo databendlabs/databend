@@ -1129,7 +1129,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(b.id (#2) = b.id (#2), b.id (#2) = b.id (#2))], limit: NONE]
+│       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
 │       └── estimated rows: 2.00
 └── TableScan(Probe)
     ├── table: default.default.a
