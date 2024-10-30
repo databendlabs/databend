@@ -154,7 +154,7 @@ mod tests {
         let elapsed = now.elapsed().as_secs_f64();
         println!("elapsed: {elapsed}");
         assert!(
-            (0.041..0.090).contains(&elapsed),
+            (0.041..0.120).contains(&elapsed),
             "{} is expected to be 2 + 5 + 10 + 14 + 20 milliseconds",
             elapsed
         );

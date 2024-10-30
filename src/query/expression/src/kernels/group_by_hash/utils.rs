@@ -16,6 +16,7 @@ use ethnum::i256;
 
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::store_advance;
+use crate::set_vec_len_by_ptr;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -32,12 +33,15 @@ pub fn serialize_group_columns(
     serialize_size: usize,
 ) -> BinaryColumn {
     let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
+    let mut data_ptr = builder.data.as_mut_ptr();
+
     for i in 0..num_rows {
         for col in columns.iter() {
             unsafe {
-                serialize_column_binary(col, i, &mut builder.data.as_mut_ptr());
+                serialize_column_binary(col, i, &mut data_ptr);
             }
         }
+        unsafe { set_vec_len_by_ptr(&mut builder.data, data_ptr) };
         builder.commit_row();
     }
     builder.build()
