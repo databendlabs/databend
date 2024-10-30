@@ -11,9 +11,10 @@ doctest = false
 test = true
 
 [dependencies]
-anyerror = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+
+anyerror = { workspace = true }
 hickory-resolver = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
