@@ -34,6 +34,7 @@ pub struct ProcessInfo {
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,
+    pub current_query_id: Option<String>,
 }
 
 #[poem::handler]
@@ -63,6 +64,7 @@ pub async fn processlist_handler() -> poem::Result<impl IntoResponse> {
             mysql_connection_id: process.mysql_connection_id,
             created_time: process.created_time,
             status_info: process.status_info.clone(),
+            current_query_id: process.current_query_id.clone(),
         })
         .collect::<Vec<_>>();
     Ok(Json(processes))

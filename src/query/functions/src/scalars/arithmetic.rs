@@ -984,11 +984,10 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                                         values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
                                         let bytes = &mut values[offset..];
 
-                                        let len = lexical_core::write_with_options_unchecked::<
-                                            _,
-                                            FORMAT,
-                                        >(
-                                            Native::from(*x), bytes, &options
+                                        let len = lexical_core::write_with_options::<_, FORMAT>(
+                                            Native::from(*x),
+                                            bytes,
+                                            &options,
                                         )
                                         .len();
                                         offset += len;
@@ -1019,13 +1018,12 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                                     values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
                                     values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
                                     let bytes = &mut values[offset..];
-                                    let len =
-                                        lexical_core::write_with_options_unchecked::<_, FORMAT>(
-                                            Native::from(*x),
-                                            bytes,
-                                            &options,
-                                        )
-                                        .len();
+                                    let len = lexical_core::write_with_options::<_, FORMAT>(
+                                        Native::from(*x),
+                                        bytes,
+                                        &options,
+                                    )
+                                    .len();
                                     offset += len;
                                     builder.offsets.push(offset as u64);
                                 }

@@ -204,6 +204,7 @@ pub(crate) fn block_to_inverted_index(
     let arrow_schema = Arc::new(table_schema_to_arrow_schema(table_schema));
     let generator = IpcDataGenerator {};
     let write_options = IpcWriteOptions::default();
+    #[allow(deprecated)]
     let encoded = generator.schema_to_bytes(&arrow_schema, &write_options);
     let mut schema_buf = Vec::new();
     let (schema_len, _) = write_message(&mut schema_buf, encoded, &write_options)?;

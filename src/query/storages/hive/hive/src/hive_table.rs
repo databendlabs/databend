@@ -614,6 +614,10 @@ async fn do_list_files_from_dir(
         if path[file_offset..].starts_with('.') || path[file_offset..].starts_with('_') {
             continue;
         }
+        // Ignore the location itself
+        if path.trim_matches('/') == location.trim_matches('/') {
+            continue;
+        }
 
         match meta.mode() {
             EntryMode::FILE => {

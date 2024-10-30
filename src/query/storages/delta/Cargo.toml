@@ -25,6 +25,7 @@ deltalake = { workspace = true }
 fastrace = { workspace = true }
 match-template = "0.0.1"
 object_store_opendal = { workspace = true }
+opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -36,4 +37,4 @@ url = "2.4.1"
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "opendal"]

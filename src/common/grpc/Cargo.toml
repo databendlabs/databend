@@ -11,16 +11,19 @@ doctest = false
 test = true
 
 [dependencies]
-anyerror = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
-hickory-resolver = "0.24"
-hyper = "0.14.20"
-jwt-simple = "0.11.0"
+
+anyerror = { workspace = true }
+hickory-resolver = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+jwt-simple = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+tower-service = { workspace = true }
 
 [build-dependencies]
 

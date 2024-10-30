@@ -1823,12 +1823,20 @@ impl<'a> TypeChecker<'a> {
         lambda: &Lambda,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if func_name.starts_with("json_") && !args.is_empty() {
+            let target_type = if func_name.starts_with("json_array") {
+                TypeName::Array(Box::new(TypeName::Variant))
+            } else {
+                TypeName::Map {
+                    key_type: Box::new(TypeName::String),
+                    val_type: Box::new(TypeName::Variant),
+                }
+            };
             let func_name = &func_name[5..];
             let mut new_args: Vec<Expr> = args.iter().map(|v| (*v).to_owned()).collect();
             new_args[0] = Expr::Cast {
                 span: new_args[0].span(),
                 expr: Box::new(new_args[0].clone()),
-                target_type: TypeName::Array(Box::new(TypeName::Variant)),
+                target_type,
                 pg_style: false,
             };
 
@@ -1866,21 +1874,7 @@ impl<'a> TypeChecker<'a> {
             .map(|param| param.name.to_lowercase())
             .collect::<Vec<_>>();
 
-        // TODO: support multiple params
-        // ARRAY_REDUCE have two params
-        if params.len() != 1 && func_name != "array_reduce" {
-            return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
-                func_name, params.len()
-            ))
-                .set_span(span));
-        } else if func_name == "array_reduce" && params.len() != 2 {
-            return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
-                func_name, params.len()
-            ))
-                .set_span(span));
-        }
+        self.check_lambda_param_count(func_name, params.len(), span)?;
 
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
@@ -1894,10 +1888,11 @@ impl<'a> TypeChecker<'a> {
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
-            DataType::Null | DataType::EmptyArray => DataType::Null,
+            DataType::Map(box inner_ty) => inner_ty.clone(),
+            DataType::Null | DataType::EmptyArray | DataType::EmptyMap => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
-                    "invalid arguments for lambda function, argument data type must be an array"
+                    "invalid arguments for lambda function, argument data type must be an array or map"
                         .to_string(),
                 )
                 .set_span(span));
@@ -1907,6 +1902,17 @@ impl<'a> TypeChecker<'a> {
         let inner_tys = if func_name == "array_reduce" {
             let max_ty = self.transform_to_max_type(&inner_ty)?;
             vec![max_ty.clone(), max_ty.clone()]
+        } else if func_name == "map_filter"
+            || func_name == "map_transform_keys"
+            || func_name == "map_transform_values"
+        {
+            match &inner_ty {
+                DataType::Null => {
+                    vec![DataType::Null, DataType::Null]
+                }
+                DataType::Tuple(t) => t.clone(),
+                _ => unreachable!(),
+            }
         } else {
             vec![inner_ty.clone()]
         };
@@ -1924,12 +1930,12 @@ impl<'a> TypeChecker<'a> {
             &lambda.expr,
         )?;
 
-        let return_type = if func_name == "array_filter" {
+        let return_type = if func_name == "array_filter" || func_name == "map_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
                 arg_type.clone()
             } else {
                 return Err(ErrorCode::SemanticError(
-                    "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
+                    format!("invalid lambda function for `{}`, the result data type of lambda function must be boolean", func_name)
                 )
                 .set_span(span));
             }
@@ -1955,6 +1961,30 @@ impl<'a> TypeChecker<'a> {
                 });
             }
             max_ty.wrap_nullable()
+        } else if func_name == "map_transform_keys" {
+            if arg_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
+                    lambda_type.clone(),
+                    inner_tys[1].clone(),
+                ])))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    lambda_type.clone(),
+                    inner_tys[1].clone(),
+                ])))
+            }
+        } else if func_name == "map_transform_values" {
+            if arg_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
+                    inner_tys[0].clone(),
+                    lambda_type.clone(),
+                ])))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    inner_tys[0].clone(),
+                    lambda_type.clone(),
+                ])))
+            }
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
@@ -1978,6 +2008,14 @@ impl<'a> TypeChecker<'a> {
                 }
                 .into(),
                 DataType::EmptyArray,
+            ),
+            DataType::EmptyMap => (
+                ConstantExpr {
+                    span,
+                    value: Scalar::EmptyMap,
+                }
+                .into(),
+                DataType::EmptyMap,
             ),
             _ => {
                 struct LambdaVisitor<'a> {
@@ -2051,6 +2089,33 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok(Box::new((lambda_func, data_type)))
+    }
+
+    fn check_lambda_param_count(
+        &mut self,
+        func_name: &str,
+        param_count: usize,
+        span: Span,
+    ) -> Result<()> {
+        // json lambda functions are casted to array or map, ignored here.
+        let expected_count = if func_name == "array_reduce" {
+            2
+        } else if func_name.starts_with("array") {
+            1
+        } else if func_name.starts_with("map") {
+            2
+        } else {
+            unreachable!()
+        };
+
+        if param_count != expected_count {
+            return Err(ErrorCode::SemanticError(format!(
+                "incorrect number of parameters in lambda function, {} expects {} parameter(s), but got {}",
+                func_name, expected_count, param_count
+            ))
+            .set_span(span));
+        }
+        Ok(())
     }
 
     fn resolve_score_search_function(

@@ -232,7 +232,7 @@ impl Network {
                 }
                 Err(e) => {
                     warn!(
-                        "Raft NetworkConnection fail to connect: target={}: addr={}: {}",
+                        "Raft NetworkConnection fail to connect: target={}: addr={}: {:?}",
                         self.target, &addr, e
                     );
                     tokio::time::sleep(Duration::from_millis(50)).await;

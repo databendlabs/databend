@@ -64,8 +64,8 @@ impl Display for FileConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, level={}, dir={}, format={}",
-            self.on, self.level, self.dir, self.format
+            "enabled={}, level={}, dir={}, format={}, limit={}, prefix_filter={}",
+            self.on, self.level, self.dir, self.format, self.limit, self.prefix_filter
         )
     }
 }

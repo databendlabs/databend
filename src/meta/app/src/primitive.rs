@@ -127,19 +127,13 @@ mod prost_message_impl {
         T: fmt::Debug + Send + Sync,
         T: From<u64> + Deref<Target = u64> + DerefMut<Target = u64>,
     {
-        fn encode_raw<B>(&self, buf: &mut B)
-        where
-            B: BufMut,
-            Self: Sized,
-        {
+        fn encode_raw(&self, buf: &mut impl BufMut)
+        where Self: Sized {
             serde_json::to_writer(buf.writer(), &self.id.deref()).unwrap();
         }
 
-        fn decode<B>(mut buf: B) -> Result<Self, DecodeError>
-        where
-            B: Buf,
-            Self: Default,
-        {
+        fn decode(mut buf: impl Buf) -> Result<Self, DecodeError>
+        where Self: Default {
             let mut b = [0; 64];
             let len = buf.remaining();
             if len > b.len() {
@@ -156,15 +150,14 @@ mod prost_message_impl {
             Ok(Id::from(id))
         }
 
-        fn merge_field<B>(
+        fn merge_field(
             &mut self,
             _tag: u32,
             _wire_type: WireType,
-            _buf: &mut B,
+            _buf: &mut impl Buf,
             _ctx: DecodeContext,
         ) -> Result<(), DecodeError>
         where
-            B: Buf,
             Self: Sized,
         {
             unimplemented!("`decode()` is implemented so we do not need this")

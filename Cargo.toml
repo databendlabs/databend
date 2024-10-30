@@ -199,20 +199,20 @@ databend-storages-common-table-meta = { path = "src/query/storages/common/table_
 # Crates.io dependencies
 anyerror = { version = "=0.1.10" }
 anyhow = { version = "1.0.65" }
-arrow = { version = "52" }
-arrow-array = { version = "52" }
-arrow-buffer = { version = "52" }
-arrow-cast = { version = "52", features = ["prettyprint"] }
-arrow-data = { version = "52" }
-arrow-flight = { version = "52", features = ["flight-sql-experimental", "tls"] }
+arrow = { version = "53" }
+arrow-array = { version = "53" }
+arrow-buffer = { version = "53" }
+arrow-cast = { version = "53", features = ["prettyprint"] }
+arrow-data = { version = "53" }
+arrow-flight = { version = "53", features = ["flight-sql-experimental", "tls"] }
 arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
-arrow-ipc = { version = "52" }
-arrow-ord = { version = "52" }
-arrow-schema = { version = "52", features = ["serde"] }
-arrow-select = { version = "52" }
-arrow-udf-js = "0.3.1"
-arrow-udf-python = "0.2.1"
-arrow-udf-wasm = "0.2.2"
+arrow-ipc = { version = "53" }
+arrow-ord = { version = "53" }
+arrow-schema = { version = "53", features = ["serde"] }
+arrow-select = { version = "53" }
+arrow-udf-js = "0.5.0"
+arrow-udf-python = "0.4.0"
+arrow-udf-wasm = "0.4.0"
 async-backtrace = "0.2"
 async-trait = { version = "0.1.77" }
 backtrace = "0.3.73"
@@ -222,16 +222,20 @@ borsh = { version = "1.2.1", features = ["derive"] }
 bumpalo = "3.12.0"
 byteorder = "1.4.3"
 bytes = "1.5.0"
+bytesize = "1.1.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
+comfy-table = "7"
 criterion = "0.5"
 ctor = "0.2"
-dashmap = "5.4.0"
+ctrlc = { version = "3.2.3", features = ["termination"] }
+dashmap = "6.1.0"
 deepsize = { version = "0.2.0" }
-deltalake = "0.18"
+deltalake = "0.21"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
-derive_more = "0.99.17"
+derive_more = { version = "1.0.0", features = ["full"] }
+enquote = "1.1.0"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.0" }
 feature-set = { version = "0.1.1" }
@@ -239,24 +243,31 @@ flatbuffers = "24" # Must use the same version with arrow-ipc
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
-geo = { version = "0.27.0", features = ["use-serde"] }
-geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
-hashbrown = { version = "0.14.3", default-features = false }
+geo = { version = "0.28.0", features = ["use-serde"] }
+geos = { version = "9.0.0", features = ["static", "geo", "geo-types"] }
+geozero = { version = "0.14.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+hashbrown = { version = "0.15.0", default-features = false }
+hickory-resolver = "0.24"
 http = "1"
-iceberg = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "a0e74b1412ae7ce4b857c251bcbb3179b7713fb6" }
-iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "a0e74b1412ae7ce4b857c251bcbb3179b7713fb6" }
-iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "a0e74b1412ae7ce4b857c251bcbb3179b7713fb6" }
-itertools = "0.10.5"
+hyper = "1"
+hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
+iceberg = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
+iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
+iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
+itertools = "0.13.0"
 jsonb = "0.4.3"
-jwt-simple = "0.11.0"
+jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
+lenient_semver = "0.4.2"
 libc = { version = "0.2.158" }
 match-template = "0.0.1"
+micromarshal = "0.7.0"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
-object_store_opendal = "0.46"
+num-traits = "0.2.19"
+num_cpus = "1.13.1"
+object_store_opendal = "0.48.1"
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.49.0", features = [
+opendal = { version = "0.50.1", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -280,19 +291,26 @@ openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alp
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
-orc-rust = "0.3"
+orc-rust = "0.5.0"
 ordered-float = { version = "4.1.0", default-features = false }
 ordq = "0.2.0"
 parking_lot = "0.12.1"
-parquet = { version = "52", features = ["async"] }
+parquet = { version = "53", features = ["async"] }
 paste = "1.0.15"
+pin-project-lite = "0.2.9"
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
+pprof = { version = "0.13.0", features = [
+    "flamegraph",
+    "protobuf-codec",
+    "protobuf",
+] }
+procfs = { version = "0.17.0" }
 proj4rs = { version = "0.1.4", features = ["geo-types", "crs-definitions"] }
-prometheus-client = "0.22"
-prost = { version = "0.12.1" }
-prost-build = { version = "0.12.1" }
+prost = { version = "0.13" }
+prost-build = { version = "0.13" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.8.1"
+replace_with = "0.1.7"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "http2",
@@ -301,47 +319,148 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 reqwest-hickory-resolver = "0.1"
 rotbl = { git = "https://github.com/drmingdrmer/rotbl", tag = "v0.1.2-alpha.6", features = [] }
+rustix = "0.38.37"
 semver = "1.0.14"
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
 serde_stacker = { version = "0.1" }
+serde_test = "1.0"
 serde_with = { version = "3.8.1" }
 serfig = "0.1.0"
 sha2 = "0.10.8"
 sled = { version = "0.34", default-features = false }
+state = "0.6.0"
 stream-more = "0.1.3"
 tantivy = "0.22.0"
 tantivy-common = "0.7.0"
 tantivy-jieba = "0.11.0"
 thiserror = { version = "1" }
-tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
+tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
+tikv-jemalloc-sys = "0.6.0"
 tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = "0.1.11"
-tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tonic-build = { version = "0.11" }
-tonic-reflection = { version = "0.11.0" }
+tonic = { version = "0.12.3", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic-build = { version = "0.12.3" }
+tonic-reflection = { version = "0.12.3" }
+tower = "0.5.1"
+tower-service = "0.3.3"
 typetag = "0.2.3"
+unicode-segmentation = "1.10.1"
 uuid = { version = "1.10.0", features = ["serde", "v4", "v7"] }
 walkdir = "2.3.2"
 xorfilter-rs = "0.5"
+# FIXME: failed to upgrade to educe 0.6
+educe = "0.4"
+# FIXME: failed to upgrade to enum-as-inner 0.6
+aho-corasick = { version = "1.0.1" }
+async-channel = "1.7.1"
+async-recursion = "1.1.1"
+async-stream = "0.3.3"
+backon = "1"
+blake3 = "1.3.1"
+bstr = "1"
+buf-list = "1.0.3"
+byte-unit = "4.0.19"
+crc32fast = "1.3.2"
+cron = "0.12.0"
+dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "de0a15b" }
+enum-as-inner = "0.5"
+geo-types = "0.7.13"
+geohash = "0.13.0"
+goldenfile = "1.4"
+h3o = "0.4.0"
+hex = "0.4.3"
+jaq-core = "1.5.1"
+jaq-interpret = "1.5.0"
+jaq-parse = "1.0.3"
+jaq-std = "1.6.0"
+lexical-core = "1"
+libm = "0.2.6"
+maplit = "1.0.2"
+md-5 = "0.10.5"
+memchr = { version = "2", default-features = false }
+naive-cityhash = "0.2.0"
+num = "0.4.0"
+num-bigint = "0.4.6"
+num-derive = "0.3.3"
+pretty_assertions = "1.3.0"
+recursive = "0.1.1"
+rmp-serde = "1.1.1"
+roaring = { version = "0.10.1", features = ["serde"] }
+rust_decimal = "1.26"
+scroll = "0.12.0"
+sha1 = "0.10.5"
+simdutf8 = "0.1.4"
+simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
+siphasher = "0.3"
+strength_reduce = "0.2.4"
+stringslice = "0.2.0"
+tempfile = "3.4.0"
+terminal_size = "0.2.6"
+thrift = "0.17.0"
+twox-hash = "1.6.3"
+wkt = "0.10.3"
+# FIXME: use backon to replace this.
+backoff = "0.4"
+# FIXME: bump to 0.14 or remove.
+config = "0.13.4"
+headers = "0.4.0"
+highway = "1.1"
+humantime = "2.1.0"
+indicatif = "0.17.5"
+lz4 = "1.24.0"
+opensrv-mysql = { version = "0.7.0", features = ["tls"] }
+petgraph = { version = "0.6.2", features = ["serde-1"] }
+# FIXME: we should bump to 0.23
+rustls = "0.22"
+rustls-pemfile = "2"
+rustls-pki-types = "1"
+rustyline = "14"
+serde_urlencoded = "0.7.1"
+socket2 = "0.5.3"
+sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
+sysinfo = "0.30"
+# FIXME: better to replace by chrono
+cidr = { version = "0.2.2" }
+p256 = "0.13"
+passwords = { version = "3.1.16", features = ["common-password"] }
+temp-env = "0.3.0"
+test-harness = "0.1.1"
+time = "0.3.14"
+toml = { version = "0.8", default-features = false }
+url = "2.3.1"
+wiremock = "0.6"
+xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 
 # Observability
-fastrace = { version = "0.7", features = ["enable"] }
-fastrace-opentelemetry = "0.7"
+env_logger = "0.11"
+fastrace = { version = "0.7.4", features = ["enable"] }
+fastrace-opentelemetry = "0.7.4"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.24", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.17", features = [
+opentelemetry = { version = "0.26.0", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.26.0", features = [
     "trace",
     "logs",
     "grpc-tonic",
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.24", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.26.0", features = ["trace", "logs", "rt-tokio"] }
+prometheus-client = "0.22"
+prometheus-parse = "0.2.3"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
+
+# Databend Integration Test
+databend-client = { version = "0.22" }
+databend-driver = { version = "0.22" }
+databend-driver-core = { version = "0.22" }
+msql-srv = "0.11.0"
+mysql_common = "0.32.4"
+sqllogictest = "0.21.0"
+sqlparser = "0.50.0"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
@@ -403,10 +522,7 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
-arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
-arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
-arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
+arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "5502823a" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = [
@@ -414,11 +530,11 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
     "serialize-serde",
 ] }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
-deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
+deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "672e423" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-orc-rust = { git = "https://github.com/datafuse-extras/datafusion-orc", rev = "03372b97" }
+orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
