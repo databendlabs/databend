@@ -4812,7 +4812,6 @@ dependencies = [
 name = "databend-enterprise-background-service"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "async-backtrace",
  "async-trait",
  "databend-common-base",

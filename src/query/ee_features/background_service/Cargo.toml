@@ -12,7 +12,6 @@ doctest = false
 test = true
 
 [dependencies]
-arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
