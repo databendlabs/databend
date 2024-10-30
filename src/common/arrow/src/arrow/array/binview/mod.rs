@@ -598,7 +598,7 @@ impl<T: ViewType + ?Sized> Array for BinaryViewArrayGeneric<T> {
     }
 
     fn data_type(&self) -> &DataType {
-        T::data_type()
+        &self.data_type
     }
 
     fn validity(&self) -> Option<&Bitmap> {
