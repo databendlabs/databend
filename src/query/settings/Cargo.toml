@@ -23,10 +23,10 @@ databend-common-meta-types = { workspace = true }
 databend-common-users = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
-num_cpus = "1.13.1"
+num_cpus = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true }
-sys-info = "0.9"
+sys-info = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }

@@ -12,11 +12,11 @@ test = true
 
 [dependencies]
 anyhow = { workspace = true }
-cargo-license = "0.6.1"
-cargo_metadata = "0.18"
-gix = "0.63.0"
+cargo-license = { workspace = true }
+cargo_metadata = { workspace = true }
+gix = { workspace = true }
 log = { workspace = true }
-vergen = { version = "8.3.1", default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
+vergen = { workspace = true, default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
 
 [lints]
 workspace = true

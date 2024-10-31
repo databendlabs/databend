@@ -12,7 +12,7 @@ test = true
 
 [dependencies]
 async-backtrace = { workspace = true }
-async-channel = "1.7.1"
+async-channel = { workspace = true }
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }

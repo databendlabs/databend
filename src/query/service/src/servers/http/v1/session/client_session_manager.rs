@@ -15,6 +15,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
@@ -37,6 +38,8 @@ use tokio::time::Instant;
 
 use crate::servers::http::v1::session::consts::REFRESH_TOKEN_TTL;
 use crate::servers::http::v1::session::consts::SESSION_TOKEN_TTL;
+use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_MEMORY;
+use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_META;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
@@ -158,7 +161,7 @@ impl ClientSessionManager {
             .upsert_client_session_id(
                 client_session_id,
                 &user_name,
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + STATE_REFRESH_INTERVAL_META,
             )
             .await?;
         Ok(())
@@ -217,7 +220,6 @@ impl ClientSessionManager {
             client_session_api
                 .upsert_token(&old, token_info, TOMBSTONE_TTL, true)
                 .await?;
-            self.refresh_in_memory_states(&client_session_id, &user);
         };
         self.refresh_tokens
             .write()
@@ -305,7 +307,27 @@ impl ClientSessionManager {
         };
         Ok(claim)
     }
-    pub async fn drop_client_session(self: &Arc<Self>, session_token: &str) -> Result<()> {
+
+    pub async fn drop_client_session_state(
+        self: &Arc<Self>,
+        tenant: &Tenant,
+        user_name: &str,
+        session_id: &str,
+    ) -> Result<()> {
+        let client_session_api = UserApiProvider::instance().client_session_api(tenant);
+        client_session_api
+            .drop_client_session_id(session_id, user_name)
+            .await
+            .ok();
+        let state_key = Self::state_key(session_id, user_name);
+        let state = self.session_state.lock().remove(&state_key);
+        if let Some(state) = state {
+            drop_all_temp_tables(session_id, state.temp_tbl_mgr).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn drop_client_session_token(self: &Arc<Self>, session_token: &str) -> Result<()> {
         let (claim, _) = SessionClaim::decode(session_token)?;
         let now = unix_ts().as_secs();
 
@@ -332,20 +354,11 @@ impl ClientSessionManager {
                 .drop_token(&session_token_hash)
                 .await
                 .ok();
-            client_session_api
-                .drop_client_session_id(&claim.session_id, &claim.user)
-                .await
-                .ok();
-            let state_key = Self::state_key(&claim.session_id, &claim.user);
-            let state = self.session_state.lock().remove(&state_key);
-            if let Some(state) = state {
-                drop_all_temp_tables(&claim.session_id, state.temp_tbl_mgr).await?;
-            }
         };
         Ok(())
     }
 
-    pub fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) {
+    fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
         guard.entry(key).and_modify(|e| {
@@ -392,5 +405,24 @@ impl ClientSessionManager {
                 }
             }
         }
+    }
+
+    pub async fn refresh_state(
+        &self,
+        tenant: Tenant,
+        client_session_id: &str,
+        user_name: &str,
+        last_access_time: u64,
+    ) -> Result<()> {
+        let last_access_time = Duration::from_secs(last_access_time);
+        let elapsed = unix_ts() - last_access_time;
+        if elapsed > STATE_REFRESH_INTERVAL_MEMORY {
+            self.refresh_in_memory_states(client_session_id, user_name);
+        }
+        if elapsed > STATE_REFRESH_INTERVAL_META {
+            self.refresh_session_handle(tenant, user_name.to_string(), client_session_id)
+                .await?
+        }
+        Ok(())
     }
 }
