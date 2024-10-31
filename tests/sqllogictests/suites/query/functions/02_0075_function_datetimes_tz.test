@@ -742,9 +742,9 @@ SELECT substr(DATE_ADD(year, 1, now())::String, 1, 4)=substr(now()::String, 1, 4
 ----
 1
 
-# format: -29 11:47:46.704107
+# format: 11:47:46.704107(time)
 query T
-SELECT substr(DATE_ADD(month, 1, now())::String, 8)=substr(now()::String, 8);
+SELECT substr(DATE_ADD(month, 1, now())::String, 11)=substr(now()::String, 11);
 ----
 1
 
@@ -784,9 +784,9 @@ SELECT substr(DATE_ADD(year, 1, now())::String, 1, 4)=substr(now()::String, 1, 4
 ----
 1
 
-# format: -29 11:47:46.704107
+# format: 11:47:46.704107(time)
 query T
-SELECT substr(DATE_ADD(month, 1, now())::String, 8)=substr(now()::String, 8);
+SELECT substr(DATE_ADD(month, 1, now())::String, 11)=substr(now()::String, 11);
 ----
 1
 
