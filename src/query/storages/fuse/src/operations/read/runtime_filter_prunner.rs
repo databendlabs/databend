@@ -59,22 +59,22 @@ pub fn runtime_filter_pruner(
     }
     let part = FuseBlockPartInfo::from_part(part)?;
     let pruned = filters.iter().any(|(_, filter)| {
-        let Some(column_id) = Expr::<String>::column_id(filter) else {
-            return false;
-        };
-        let data_type = filter.data_type();
+        let column_refs = filter.column_refs();
+        // Currently only support filter with one column(probe key).
+        debug_assert!(column_refs.len() == 1);
+        let data_type = column_refs.values().last().unwrap();
+        let column_name = column_refs.keys().last().unwrap();
         if let Some(stats) = &part.columns_stat {
-            let column_ids = table_schema.leaf_columns_of(&column_id);
+            let column_ids = table_schema.leaf_columns_of(column_name);
             if column_ids.len() != 1 {
                 return false;
             }
             if let Some(stat) = stats.get(&column_ids[0]) {
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, data_type);
-                dbg!("domain = {:?}", &domain);
 
                 let mut input_domains = HashMap::new();
-                input_domains.insert(column_id, domain.clone());
+                input_domains.insert(column_name.clone(), domain.clone());
 
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
                     filter,
