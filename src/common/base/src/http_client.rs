@@ -98,7 +98,19 @@ impl HttpClient {
     }
 }
 
-impl HttpFetch for HttpClient {
+pub struct StorageHttpClient {
+    client: reqwest::Client,
+}
+
+impl StorageHttpClient {
+    pub fn new() -> Self {
+        Self {
+            client: GLOBAL_HTTP_CLIENT.inner(),
+        }
+    }
+}
+
+impl HttpFetch for StorageHttpClient {
     async fn fetch(&self, req: Request<Buffer>) -> opendal::Result<Response<HttpBody>> {
         // Uri stores all string alike data in `Bytes` which means
         // the clone here is cheap.
