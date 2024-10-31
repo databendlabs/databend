@@ -35,6 +35,9 @@ crlf = false
 keys = ["dependencies", "dev-dependencies", "build-dependencies", "workspace.dependencies", "patch.crates-io"]
 formatting = { reorder_keys = true }
 
+# This rule is used to enforce all deps to be declared at root.
+#
+# All crates inside `src`, `tests` must use `workspace = true` instead.
 [[rule]]
 schema = { path = ".config/workspace-schema.json" }
 include = ["src/**/Cargo.toml", "tests/**/Cargo.toml"]
