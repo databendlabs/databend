@@ -30,8 +30,8 @@ pub struct StorageHttpClient {
     client: reqwest::Client,
 }
 
-impl StorageHttpClient {
-    pub fn new() -> Self {
+impl Default for StorageHttpClient {
+    fn default() -> Self {
         Self {
             client: GLOBAL_HTTP_CLIENT.inner(),
         }

@@ -180,7 +180,7 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
         // Credential
         .account_name(&cfg.account_name)
         .account_key(&cfg.account_key)
-        .http_client(HttpClient::with(StorageHttpClient::new()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -205,7 +205,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .credential(&cfg.credential)
-        .http_client(HttpClient::with(StorageHttpClient::new()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -302,7 +302,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.enable_virtual_host_style();
     }
 
-    builder = builder.http_client(HttpClient::with(StorageHttpClient::new()));
+    builder = builder.http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -319,7 +319,7 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
         // Credential
         .access_key_id(&cfg.access_key_id)
         .secret_access_key(&cfg.secret_access_key)
-        .http_client(HttpClient::with(StorageHttpClient::new()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -335,7 +335,7 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .root(&cfg.root)
         .server_side_encryption(&cfg.server_side_encryption)
         .server_side_encryption_key_id(&cfg.server_side_encryption_key_id)
-        .http_client(HttpClient::with(StorageHttpClient::new()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -368,7 +368,7 @@ fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
         .secret_key(&cfg.secret_key)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
-        .http_client(HttpClient::with(StorageHttpClient::new()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
