@@ -261,7 +261,7 @@ pub fn build_partition_source_pipeline(
                 ctx.clone(),
                 plan.table_index,
                 table_schema.clone(),
-                read_settings.clone(),
+                read_settings,
                 partitions.clone(),
                 bloom_filter_columns.clone(),
                 column_indices.clone(),

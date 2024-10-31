@@ -21,6 +21,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_channel::Receiver;
+use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Schema;
 use databend_common_arrow::native::read::NativeColumnsReader;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -29,11 +30,15 @@ use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -42,6 +47,7 @@ use databend_common_sql::field_default_value;
 use databend_common_sql::IndexType;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
+use opendal::Operator;
 use xorf::BinaryFuse16;
 
 use crate::fuse_part::FuseBlockPartInfo;
@@ -103,13 +109,8 @@ pub struct PartitionReader {
     read_tasks: Receiver<Arc<DataBlock>>,
 }
 
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_expression::types::DataType;
-use databend_common_expression::ColumnId;
-use databend_common_expression::DataField;
-use databend_common_expression::TableSchemaRef;
-use opendal::Operator;
 impl PartitionReader {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         output: Arc<OutputPort>,
         id: usize,
@@ -273,7 +274,7 @@ impl PartitionReader {
                 for partition in meta.partitions.iter() {
                     let merge_io_read_result = block_reader.sync_read_columns_data_by_merge_io(
                         &self.read_settings,
-                        &partition,
+                        partition,
                         &None,
                     )?;
                     meta.io_results.push_back(merge_io_read_result);
@@ -292,9 +293,10 @@ impl PartitionReader {
         let data_block = match source_block_reader {
             SourceBlockReader::Parquet { block_reader, .. } => {
                 let mut merge_io_read_results = Vec::with_capacity(meta.partitions.len());
-                for partition in meta.partitions.iter().cloned() {
+                for partition in meta.partitions.iter() {
                     let reader = block_reader.clone();
                     let settings = ReadSettings::from_ctx(&self.stealable_partitions.ctx)?;
+                    let partition = partition.clone();
                     merge_io_read_results.push(async move {
                         databend_common_base::runtime::spawn(async move {
                             let part = FuseBlockPartInfo::from_part(&partition)?;
@@ -366,7 +368,7 @@ impl PartitionReader {
                 continue;
             };
 
-            let position = self.schema.index_of(&column_name)?;
+            let position = self.schema.index_of(column_name)?;
             let block_reader = self.create_block_reader(Projection::Columns(vec![position]))?;
             column_positions.push(position);
             filter_readers.push((block_reader, bloom_filter));

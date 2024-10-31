@@ -554,34 +554,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-// Check if enable bloom runtime filter
-async fn adjust_bloom_runtime_filter(
-    ctx: Arc<dyn TableContext>,
-    metadata: &MetadataRef,
-    table_index: Option<IndexType>,
-    s_expr: &SExpr,
-) -> Result<bool> {
-    // The setting of `enable_bloom_runtime_filter` is true by default.
-    if !ctx.get_settings().get_bloom_runtime_filter()? {
-        return Ok(false);
-    }
-    if let Some(table_index) = table_index {
-        let table_entry = metadata.read().table(table_index).clone();
-        let change_type = get_change_type(table_entry.alias_name());
-        let table = table_entry.table();
-        if let Some(stats) = table
-            .table_statistics(ctx.clone(), true, change_type)
-            .await?
-        {
-            if let Some(num_rows) = stats.num_rows {
-                let join_cardinality = RelExpr::with_s_expr(s_expr)
-                    .derive_cardinality()?
-                    .cardinality;
-                // If the filtered data reduces to less than 1/1000 of the original dataset, we will enable bloom runtime filter.
-                return Ok(join_cardinality <= (num_rows / 1000) as f64);
-            }
-        }
-    }
-    Ok(false)
-}

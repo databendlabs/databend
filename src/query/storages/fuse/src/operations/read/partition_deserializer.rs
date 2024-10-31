@@ -39,7 +39,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
 use super::runtime_filter_prunner::update_bitmap_with_bloom_filter;
@@ -95,7 +94,7 @@ impl PartitionDeserializer {
         source_block_reader: &SourceBlockReader,
     ) -> Result<DataBlock> {
         let partition = &meta.partitions[partition_id];
-        let part = FuseBlockPartInfo::from_part(&partition)?;
+        let part = FuseBlockPartInfo::from_part(partition)?;
         let io_result = meta.io_results.pop_front().unwrap();
         let columns_chunks = io_result.columns_chunks()?;
         match source_block_reader {
@@ -196,7 +195,7 @@ impl PartitionDeserializer {
                     }
 
                     if !filter_readers.is_empty() {
-                        columns = Self::reorder_columns(columns, &column_positions);
+                        columns = Self::reorder_columns(columns, column_positions);
                     }
                     let mut data_block = DataBlock::new_with_meta(columns, *num_rows, meta);
                     if let Some(bitmap) = bitmap {
@@ -224,7 +223,7 @@ impl PartitionDeserializer {
         let probe_column = probe_block_entry
             .value
             .convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
-        update_bitmap_with_bloom_filter(probe_column, &bloom_filter, &mut bitmap)?;
+        update_bitmap_with_bloom_filter(probe_column, bloom_filter, &mut bitmap)?;
         Ok(bitmap.into())
     }
 

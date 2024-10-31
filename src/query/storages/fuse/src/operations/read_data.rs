@@ -241,7 +241,7 @@ impl FuseTable {
 
         let mut enable_partition_scan = !runtime_filter_columns.is_empty();
         for (column_name, _) in runtime_filter_columns.iter() {
-            if schema.index_of(&column_name).is_err() {
+            if schema.index_of(column_name).is_err() {
                 enable_partition_scan = false;
             }
         }

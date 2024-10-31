@@ -59,7 +59,7 @@ pub fn runtime_filter_pruner(
     }
     let part = FuseBlockPartInfo::from_part(part)?;
     let pruned = filters.iter().any(|(_, filter)| {
-        let Some(column_id) = Expr::<String>::column_id(&filter) else {
+        let Some(column_id) = Expr::<String>::column_id(filter) else {
             return false;
         };
         let data_type = filter.data_type();
