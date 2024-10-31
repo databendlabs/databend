@@ -385,11 +385,15 @@ fn sort_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>
         .join(", ");
     let limit = op.limit.map_or("NONE".to_string(), |l| l.to_string());
 
-    let children = match op.window_top_n {
-        Some(top_n) => vec![
+    let children = match &op.window_partition {
+        Some(window) => vec![
             FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
             FormatTreeNode::new(format!("limit: [{}]", limit)),
-            FormatTreeNode::new(format!("window top n: {}", top_n)),
+            FormatTreeNode::new(format!(
+                "window top: {}",
+                window.top.map_or("NONE".to_string(), |n| n.to_string())
+            )),
+            FormatTreeNode::new(format!("window function: {:?}", window.func)),
         ],
         None => vec![
             FormatTreeNode::new(format!("sort keys: [{}]", scalars)),

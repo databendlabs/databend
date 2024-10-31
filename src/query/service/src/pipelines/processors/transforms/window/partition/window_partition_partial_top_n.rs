@@ -16,10 +16,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_sql::executor::physical_plans::WindowPartitionTopNFunc;
 
 pub struct TransformWindowPartialTopN {
     partition_indices: Box<[usize]>,
-    limit: usize,
+    top: usize,
+    func: WindowPartitionTopNFunc,
 
     sort_desc: Box<[SortColumnDescription]>,
     indices: Vec<u32>,
@@ -29,9 +31,10 @@ impl TransformWindowPartialTopN {
     pub fn new(
         partition_indices: Vec<usize>,
         order_by: Vec<SortColumnDescription>,
-        limit: usize,
+        top: usize,
+        func: WindowPartitionTopNFunc,
     ) -> Self {
-        assert!(limit > 0);
+        assert!(top > 0);
         let partition_indices = partition_indices.into_boxed_slice();
         let sort_desc = partition_indices
             .iter()
@@ -46,9 +49,10 @@ impl TransformWindowPartialTopN {
 
         Self {
             partition_indices,
-            limit,
+            top,
             sort_desc,
             indices: Vec::new(),
+            func,
         }
     }
 }
@@ -60,14 +64,21 @@ impl Transform for TransformWindowPartialTopN {
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
         let block = DataBlock::sort(&block, &self.sort_desc, None)?;
 
-        let columns = self
+        let partition_columns = self
             .partition_indices
             .iter()
             .filter_map(|i| block.get_by_offset(*i).value.as_column())
             .collect::<Vec<_>>();
 
-        if columns.is_empty() {
-            return Ok(block.slice(0..self.limit.min(block.num_rows())));
+        let sort_columns = self
+            .sort_desc
+            .iter()
+            .skip(self.partition_indices.len())
+            .filter_map(|desc| block.get_by_offset(desc.offset).value.as_column())
+            .collect::<Vec<_>>();
+
+        if partition_columns.is_empty() {
+            return Ok(block.slice(0..self.top.min(block.num_rows())));
         }
 
         let mut start = 0;
@@ -76,14 +87,15 @@ impl Transform for TransformWindowPartialTopN {
 
         while cur < block.num_rows() {
             self.indices.push(start as u32);
-            let start_values = columns
+            let start_values = partition_columns
                 .iter()
                 .map(|col| col.index(start).unwrap())
                 .collect::<Vec<_>>();
 
+            let mut rank = 1; // 0 start
             cur = start + 1;
             while cur < block.num_rows() {
-                if !columns
+                if !partition_columns
                     .iter()
                     .zip(start_values.iter())
                     .all(|(col, value)| col.index(cur).unwrap() == *value)
@@ -92,9 +104,30 @@ impl Transform for TransformWindowPartialTopN {
                     break;
                 }
 
-                if cur - start < self.limit {
-                    self.indices.push(cur as u32)
+                match self.func {
+                    WindowPartitionTopNFunc::RowNumber => {
+                        if cur - start < self.top {
+                            self.indices.push(cur as u32)
+                        }
+                    }
+                    WindowPartitionTopNFunc::Rank | WindowPartitionTopNFunc::DenseRank => {
+                        let dup = sort_columns
+                            .iter()
+                            .all(|col| col.index(cur) == col.index(cur - 1));
+                        if !dup {
+                            if matches!(self.func, WindowPartitionTopNFunc::Rank) {
+                                rank = cur - start
+                            } else {
+                                rank += 1
+                            }
+                        }
+
+                        if rank < self.top {
+                            self.indices.push(cur as u32);
+                        }
+                    }
                 }
+
                 cur += 1;
             }
         }
@@ -117,7 +150,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_top_n() -> Result<()> {
+    fn test_row_number() -> Result<()> {
         let partition_indices = vec![1, 2];
         let order_by = vec![SortColumnDescription {
             offset: 0,
@@ -151,8 +184,12 @@ mod tests {
         data.check_valid()?;
 
         {
-            let mut transform =
-                TransformWindowPartialTopN::new(partition_indices.clone(), order_by.clone(), 3);
+            let mut transform = TransformWindowPartialTopN::new(
+                partition_indices.clone(),
+                order_by.clone(),
+                3,
+                WindowPartitionTopNFunc::RowNumber,
+            );
 
             let got = transform.transform(data.clone())?;
             let want = DataBlock::new_from_columns(vec![
@@ -165,7 +202,12 @@ mod tests {
         }
 
         {
-            let mut transform = TransformWindowPartialTopN::new(partition_indices, order_by, 1);
+            let mut transform = TransformWindowPartialTopN::new(
+                partition_indices,
+                order_by,
+                1,
+                WindowPartitionTopNFunc::RowNumber,
+            );
 
             let got = transform.transform(data.clone())?;
             let want = DataBlock::new_from_columns(vec![
@@ -178,6 +220,50 @@ mod tests {
 
             let want = got;
             let got = transform.transform(want.clone())?;
+            assert_eq!(want.to_string(), got.to_string());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_rank() -> Result<()> {
+        let partition_indices = vec![1];
+        let order_by = vec![SortColumnDescription {
+            offset: 0,
+            asc: true,
+            nulls_first: false,
+        }];
+
+        let data = DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    Int32Type::data_type(),
+                    Value::Column(Int32Type::from_data(vec![1, 1, 1, 2, 2, 4, 0, 3, 3])),
+                ),
+                BlockEntry::new(
+                    Int32Type::data_type(),
+                    Value::Column(Int32Type::from_data(vec![1, 1, 1, 2, 2, 2, 3, 3, 3])),
+                ),
+            ],
+            9,
+        );
+        data.check_valid()?;
+
+        {
+            let mut transform = TransformWindowPartialTopN::new(
+                partition_indices.clone(),
+                order_by.clone(),
+                2,
+                WindowPartitionTopNFunc::Rank,
+            );
+
+            let got = transform.transform(data.clone())?;
+            let want = DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 0, 3, 3]),
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ]);
+            println!("{}", got);
             assert_eq!(want.to_string(), got.to_string());
         }
 

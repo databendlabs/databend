@@ -171,10 +171,15 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if let Some(limit) = window_partition.top_n {
-            if limit > 0 {
+        if let Some(top_n) = &window_partition.top_n {
+            if top_n.top > 0 {
                 self.main_pipeline.add_transformer(|| {
-                    TransformWindowPartialTopN::new(partition_by.clone(), sort_desc.clone(), limit)
+                    TransformWindowPartialTopN::new(
+                        partition_by.clone(),
+                        sort_desc.clone(),
+                        top_n.top,
+                        top_n.func,
+                    )
                 })
             }
         }

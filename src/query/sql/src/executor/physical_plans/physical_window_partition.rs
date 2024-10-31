@@ -27,9 +27,22 @@ pub struct WindowPartition {
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
     pub after_exchange: Option<bool>,
-    pub top_n: Option<usize>,
+    pub top_n: Option<WindowPartitionTopN>,
 
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct WindowPartitionTopN {
+    pub func: WindowPartitionTopNFunc,
+    pub top: usize,
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+pub enum WindowPartitionTopNFunc {
+    RowNumber,
+    Rank,
+    DenseRank,
 }
 
 impl WindowPartition {

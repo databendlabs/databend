@@ -42,6 +42,7 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
+use crate::plans::WindowPartition;
 use crate::BindContext;
 use crate::Binder;
 use crate::ColumnEntry;
@@ -119,8 +120,15 @@ impl Binder {
                 limit: None,
                 after_exchange: None,
                 pre_projection: None,
-                window_partition: window_plan.partition_by.clone(),
-                window_top_n: None,
+                window_partition: if window_plan.partition_by.is_empty() {
+                    None
+                } else {
+                    Some(WindowPartition {
+                        partition_by: window_plan.partition_by.clone(),
+                        top: None,
+                        func: window_plan.function.clone(),
+                    })
+                },
             };
             SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
         } else {

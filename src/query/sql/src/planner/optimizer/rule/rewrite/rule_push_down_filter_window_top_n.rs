@@ -31,12 +31,12 @@ use crate::plans::Sort;
 use crate::plans::Window;
 use crate::plans::WindowFuncType;
 
-pub struct RulePushDownFilterWindowRank {
+pub struct RulePushDownFilterWindowTopN {
     id: RuleID,
     matchers: Vec<Matcher>,
 }
 
-impl RulePushDownFilterWindowRank {
+impl RulePushDownFilterWindowTopN {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownFilterWindowRank,
@@ -54,7 +54,7 @@ impl RulePushDownFilterWindowRank {
     }
 }
 
-impl Rule for RulePushDownFilterWindowRank {
+impl Rule for RulePushDownFilterWindowTopN {
     fn id(&self) -> RuleID {
         self.id
     }
@@ -66,7 +66,7 @@ impl Rule for RulePushDownFilterWindowRank {
         let sort_expr = window_expr.child(0)?;
         let mut sort: Sort = sort_expr.plan().clone().try_into()?;
 
-        if !matches!(window.function, WindowFuncType::Rank) {
+        if !is_ranking_function(&window.function) || sort.window_partition.is_none() {
             return Ok(());
         }
 
@@ -85,7 +85,7 @@ impl Rule for RulePushDownFilterWindowRank {
             return Ok(());
         }
 
-        sort.window_top_n = Some(top_n);
+        sort.window_partition.as_mut().unwrap().top = Some(top_n);
 
         let mut result = SExpr::create_unary(
             s_expr.plan.clone(),
@@ -95,7 +95,6 @@ impl Rule for RulePushDownFilterWindowRank {
             )
             .into(),
         );
-
         result.set_applied_rule(&self.id);
 
         state.add_result(result);
@@ -169,7 +168,14 @@ fn extract_i64(expr: &ConstantExpr) -> Option<i64> {
         NumberScalar::Int8(n) => Some(n as i64),
         NumberScalar::Int16(n) => Some(n as i64),
         NumberScalar::Int32(n) => Some(n as i64),
-        NumberScalar::Int64(n) => Some(n as i64),
+        NumberScalar::Int64(n) => Some(n),
         _ => None,
     })
+}
+
+fn is_ranking_function(func: &WindowFuncType) -> bool {
+    matches!(
+        func,
+        WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank
+    )
 }

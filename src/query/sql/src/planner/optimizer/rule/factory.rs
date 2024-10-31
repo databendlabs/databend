@@ -31,7 +31,7 @@ use super::rewrite::RulePushDownFilterScan;
 use super::rewrite::RulePushDownFilterSort;
 use super::rewrite::RulePushDownFilterUnion;
 use super::rewrite::RulePushDownFilterWindow;
-use super::rewrite::RulePushDownFilterWindowRank;
+use super::rewrite::RulePushDownFilterWindowTopN;
 use super::rewrite::RulePushDownLimit;
 use super::rewrite::RulePushDownLimitEvalScalar;
 use super::rewrite::RulePushDownLimitOuterJoin;
@@ -88,7 +88,7 @@ impl RuleFactory {
             }
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
-            RuleID::PushDownFilterWindowRank => Ok(Box::new(RulePushDownFilterWindowRank::new())),
+            RuleID::PushDownFilterWindowRank => Ok(Box::new(RulePushDownFilterWindowTopN::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new(metadata))),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
