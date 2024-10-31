@@ -1,4 +1,4 @@
-name: "Merge Group Helper"
+name: "Merge Group"
 
 on:
   merge_group:
