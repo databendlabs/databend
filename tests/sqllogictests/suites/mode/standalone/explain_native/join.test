@@ -231,7 +231,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
+│   ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, is_not_null(onecolumn.x (#0)))], limit: NONE]
 │   └── estimated rows: 2.67
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
@@ -241,7 +241,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
+    ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, is_not_null(twocolumn.x (#1)))], limit: NONE]
     └── estimated rows: 3.00
 
 query T
@@ -262,7 +262,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true((onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43))], limit: NONE]
+│   ├── push downs: [filters: [and_filters((onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43), is_not_null(onecolumn.x (#0)))], limit: NONE]
 │   └── estimated rows: 1.33
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
@@ -272,7 +272,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43))], limit: NONE]
+    ├── push downs: [filters: [and_filters((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43), is_not_null(twocolumn.x (#1)))], limit: NONE]
     └── estimated rows: 1.75
 
 query T
@@ -293,7 +293,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
+│   ├── push downs: [filters: [and_filters(and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45), is_not_null(twocolumn.x (#1)))], limit: NONE]
 │   └── estimated rows: 2.67
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
@@ -303,7 +303,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
+    ├── push downs: [filters: [and_filters(and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45), is_not_null(onecolumn.x (#0)))], limit: NONE]
     └── estimated rows: 2.67
 
 # the following cases won't be converted to inner join
