@@ -223,7 +223,7 @@ pub struct NativeDeserializeDataTransform {
 
     // Structures for the bloom runtime filter:
     ctx: Arc<dyn TableContext>,
-    bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+    bloom_runtime_filter: Option<Vec<(FieldIndex, Arc<BinaryFuse16>)>>,
 
     // Structures for aggregating index:
     index_reader: Arc<Option<AggIndexReader>>,

@@ -32,6 +32,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
+use crate::operations::read::build_partition_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
@@ -220,17 +221,64 @@ impl FuseTable {
                 .transpose()?,
         );
 
-        self.build_fuse_source_pipeline(
-            ctx.clone(),
-            pipeline,
-            self.storage_format,
-            block_reader,
-            plan,
-            topk,
-            max_io_requests,
-            index_reader,
-            virtual_reader,
-        )?;
+        let schema = self.schema_with_stream();
+        let projection_column_indices = if let Some(PushDownInfo {
+            projection: Some(projection),
+            ..
+        }) = &plan.push_downs
+        {
+            if let Projection::Columns(indices) = projection {
+                Some(indices.clone())
+            } else {
+                None
+            }
+        } else {
+            let indices = (0..schema.fields().len()).collect::<Vec<usize>>();
+            Some(indices)
+        };
+
+        let runtime_filter_columns = ctx.get_runtime_filter_columns(plan.table_index);
+
+        let mut enable_partition_scan = !runtime_filter_columns.is_empty();
+        for (column_name, _) in runtime_filter_columns.iter() {
+            if schema.index_of(&column_name).is_err() {
+                enable_partition_scan = false;
+            }
+        }
+
+        if enable_partition_scan
+            && let Some(column_indices) = projection_column_indices
+            && index_reader.is_none()
+            && virtual_reader.is_none()
+            && matches!(self.storage_format, FuseStorageFormat::Parquet)
+        {
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            let table_schema = self.schema_with_stream();
+            build_partition_source_pipeline(
+                pipeline,
+                plan,
+                ctx.clone(),
+                table_schema,
+                max_threads,
+                max_io_requests,
+                runtime_filter_columns,
+                column_indices,
+                self.operator.clone(),
+                put_cache,
+            )?;
+        } else {
+            self.build_fuse_source_pipeline(
+                ctx.clone(),
+                pipeline,
+                self.storage_format,
+                block_reader,
+                plan,
+                topk,
+                max_io_requests,
+                index_reader,
+                virtual_reader,
+            )?;
+        }
 
         // replace the column which has data mask if needed
         self.apply_data_mask_policy_if_needed(ctx, plan, pipeline)?;

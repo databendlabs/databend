@@ -22,7 +22,9 @@ mod block_reader_native_deserialize;
 mod block_reader_parquet_deserialize;
 pub mod parquet;
 
+pub use block_reader::inner_project_field_default_values;
 pub use block_reader::BlockReader;
+pub use block_reader_merge_io::DataItem;
 pub use block_reader_merge_io::MergeIOReadResult;
 pub use block_reader_native::NativeReaderExt;
 pub use block_reader_native::NativeSourceData;
