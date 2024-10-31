@@ -8,20 +8,17 @@ edition = { workspace = true }
 
 [dependencies]
 # Temp workaround, should come back to tagged version after https://github.com/Nemo157/async-compression/issues/150 resolved.
-async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
-    "futures-io",
-    "all-algorithms",
-] }
-brotli = { version = "3.3.0", features = ["std"] }
+async-compression = { workspace = true }
+brotli = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
 databend-common-exception = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-pin-project = "1"
+pin-project = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-env_logger = "0.10"
+env_logger = { workspace = true }
 rand = { workspace = true }
 tokio = { workspace = true }
 

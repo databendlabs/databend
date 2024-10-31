@@ -13,8 +13,10 @@ databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+
 parking_lot = { workspace = true }
-serde = { version = "1.0.194", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true }
+
 [lints]
 workspace = true

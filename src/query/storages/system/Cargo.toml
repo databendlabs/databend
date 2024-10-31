@@ -47,8 +47,8 @@ parking_lot = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_repr = "0.1.9"
-snailquote = "0.3.1"
+serde_repr = { workspace = true }
+snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true }
 typetag = { workspace = true }
 
