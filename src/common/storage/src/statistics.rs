@@ -19,6 +19,8 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 
 pub type F64 = OrderedFloat<f64>;
@@ -53,6 +55,123 @@ impl Datum {
             Scalar::String(v) => Some(Datum::Bytes(v.as_bytes().to_vec())),
             _ => None,
         }
+    }
+
+    pub fn to_scalar(&self, data_type: &DataType) -> Result<Option<Scalar>> {
+        let scalar = match self {
+            Datum::Bool(v) => Some(Scalar::Boolean(*v)),
+            Datum::Int(v) => match data_type {
+                DataType::Number(NumberDataType::Int8) => {
+                    Some(Scalar::Number(NumberScalar::Int8(*v as i8)))
+                }
+                DataType::Number(NumberDataType::Int16) => {
+                    Some(Scalar::Number(NumberScalar::Int16(*v as i16)))
+                }
+                DataType::Number(NumberDataType::Int32) => {
+                    Some(Scalar::Number(NumberScalar::Int32(*v as i32)))
+                }
+                DataType::Number(NumberDataType::Int64) => {
+                    Some(Scalar::Number(NumberScalar::Int64(*v)))
+                }
+                DataType::Number(NumberDataType::UInt8) => {
+                    if *v > 0 {
+                        Some(Scalar::Number(NumberScalar::UInt8(*v as u8)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::UInt16) => {
+                    if *v > 0 {
+                        Some(Scalar::Number(NumberScalar::UInt16(*v as u16)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::UInt32) => {
+                    if *v > 0 {
+                        Some(Scalar::Number(NumberScalar::UInt32(*v as u32)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::UInt64) => {
+                    if *v > 0 {
+                        Some(Scalar::Number(NumberScalar::UInt64(*v as u64)))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+            Datum::UInt(v) => match data_type {
+                DataType::Number(NumberDataType::Int8) => {
+                    if *v <= i8::MAX as u64 {
+                        Some(Scalar::Number(NumberScalar::Int8(*v as i8)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::Int16) => {
+                    if *v <= i16::MAX as u64 {
+                        Some(Scalar::Number(NumberScalar::Int16(*v as i16)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::Int32) => {
+                    if *v <= i32::MAX as u64 {
+                        Some(Scalar::Number(NumberScalar::Int32(*v as i32)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::Int64) => {
+                    if *v <= i64::MAX as u64 {
+                        Some(Scalar::Number(NumberScalar::Int64(*v as i64)))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::UInt8) => {
+                    Some(Scalar::Number(NumberScalar::UInt8(*v as u8)))
+                }
+                DataType::Number(NumberDataType::UInt16) => {
+                    Some(Scalar::Number(NumberScalar::UInt16(*v as u16)))
+                }
+                DataType::Number(NumberDataType::UInt32) => {
+                    Some(Scalar::Number(NumberScalar::UInt32(*v as u32)))
+                }
+                DataType::Number(NumberDataType::UInt64) => {
+                    Some(Scalar::Number(NumberScalar::UInt64(*v)))
+                }
+                _ => None,
+            },
+            Datum::Float(v) => match data_type {
+                DataType::Number(NumberDataType::Float32) => {
+                    if v.into_inner() <= f32::MAX as f64 {
+                        Some(Scalar::Number(NumberScalar::Float32(OrderedFloat::from(
+                            v.into_inner() as f32,
+                        ))))
+                    } else {
+                        None
+                    }
+                }
+                DataType::Number(NumberDataType::Float64) => {
+                    Some(Scalar::Number(NumberScalar::Float64(*v)))
+                }
+                _ => None,
+            },
+            Datum::Bytes(v) => match data_type {
+                DataType::String => {
+                    let s = String::from_utf8(v.clone())?;
+                    Some(Scalar::String(s))
+                }
+                DataType::Binary => Some(Scalar::Binary(v.clone())),
+                _ => None,
+            },
+        };
+
+        Ok(scalar)
     }
 
     pub fn is_bytes(&self) -> bool {
@@ -108,6 +227,103 @@ impl Datum {
             (Some(x), None) | (None, Some(x)) => Some(x),
             _ => None,
         }
+    }
+
+    pub fn sub(x: &Datum, y: &Datum) -> Option<Datum> {
+        match (x, y) {
+            (Datum::Int(x), Datum::Int(y)) => Some(Datum::Int(x - y)),
+            (Datum::UInt(x), Datum::UInt(y)) => Some(Datum::UInt(x - y)),
+            (Datum::Float(x), Datum::Float(y)) => {
+                Some(Datum::Float(F64::from(x.into_inner() - y.into_inner())))
+            }
+            _ => None,
+            // (Datum::Bytes(x), Datum::Bytes(y)) => {
+            //     // There are 128 characters in ASCII code and 128^4 = 268435456 < 2^32 < 128^5.
+            //     if x.is_empty() || y.is_empty() || x.len() > 4 || y.len() > 4 {
+            //         return None;
+            //     }
+            //     let mut min_value: u32 = 0;
+            //     let mut max_value: u32 = 0;
+            //     while x.len() != y.len() {
+            //         if y.len() < x.len() {
+            //             y.push(0);
+            //         } else {
+            //             x.push(0);
+            //         }
+            //     }
+            //     for idx in 0..min.len() {
+            //         min_value = min_value * 128 + y[idx] as u32;
+            //         max_value = max_value * 128 + x[idx] as u32;
+            //     }
+            // }
+        }
+    }
+
+    pub fn add(&self, other: &Datum) -> Option<Datum> {
+        match (self, other) {
+            (Datum::Int(x), Datum::Int(y)) => Some(Datum::Int(x + y)),
+            (Datum::UInt(x), Datum::UInt(y)) => Some(Datum::UInt(x + y)),
+            (Datum::Float(x), Datum::Float(y)) => {
+                Some(Datum::Float(F64::from(x.into_inner() + y.into_inner())))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn div(x: &Datum, y: &Datum) -> Option<Datum> {
+        match (x, y) {
+            (Datum::Int(x), Datum::Int(y)) => {
+                if *y == 0 {
+                    return None;
+                }
+                Some(Datum::Int(x / y))
+            }
+            (Datum::UInt(x), Datum::UInt(y)) => {
+                if *y == 0 {
+                    return None;
+                }
+                Some(Datum::UInt(x / y))
+            }
+            (Datum::Float(x), Datum::Float(y)) => {
+                if y.into_inner() == 0.0 {
+                    return None;
+                }
+                Some(Datum::Float(F64::from(x.into_inner() / y.into_inner())))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn build_range_info(
+        min: Datum,
+        max: Datum,
+        num_segments: usize,
+        data_type: &DataType,
+    ) -> Result<Option<Vec<(Scalar, Scalar)>>> {
+        let mut result = Vec::with_capacity(num_segments);
+        let num_segments_datum = match min {
+            Datum::Int(_) => Datum::Int(num_segments as i64),
+            Datum::UInt(_) => Datum::UInt(num_segments as u64),
+            Datum::Float(_) => Datum::Float(OrderedFloat::from(num_segments as f64)),
+            _ => return Ok(None),
+        };
+        if let Some(range) = Self::sub(&max, &min)
+            && let Some(step) = Self::div(&range, &num_segments_datum)
+        {
+            let mut start = min;
+            for _ in 0..num_segments {
+                let end = Self::add(&start, &step).unwrap();
+                if let Some(start) = start.to_scalar(data_type)?
+                    && let Some(end) = end.to_scalar(data_type)?
+                {
+                    result.push((start, end));
+                } else {
+                    return Ok(None);
+                }
+                start = end;
+            }
+        }
+        Ok(Some(result))
     }
 }
 

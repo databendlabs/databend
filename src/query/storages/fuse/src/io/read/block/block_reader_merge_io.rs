@@ -27,6 +27,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use enum_as_inner::EnumAsInner;
 
 type ChunkIndex = usize;
+#[derive(Clone)]
 pub struct OwnerMemory {
     chunks: HashMap<ChunkIndex, Bytes>,
 }
@@ -53,6 +54,7 @@ impl OwnerMemory {
 
 type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+#[derive(Clone)]
 pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (ChunkIndex, Range<usize>)>,

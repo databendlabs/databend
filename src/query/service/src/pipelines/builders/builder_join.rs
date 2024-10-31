@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::Result;
+use databend_common_expression::Expr;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::Sinker;
 use databend_common_sql::executor::physical_plans::HashJoin;
@@ -80,6 +81,7 @@ impl PipelineBuilder {
         right_side_builder.cte_state = self.cte_state.clone();
         right_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         right_side_builder.hash_join_states = self.hash_join_states.clone();
+        right_side_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
 
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
@@ -123,7 +125,7 @@ impl PipelineBuilder {
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
     ) -> Result<Arc<HashJoinState>> {
-        HashJoinState::try_create(
+        HashJoinState::create(
             self.ctx.clone(),
             join.build.output_schema()?,
             &join.build_projections,
@@ -141,6 +143,12 @@ impl PipelineBuilder {
         hash_join_plan: &HashJoin,
         join_state: Arc<HashJoinState>,
     ) -> Result<()> {
+        for (table_index, column_name) in Self::runtime_filter_columns(&join_state) {
+            self.runtime_filter_columns
+                .entry(table_index)
+                .or_insert_with(Vec::new)
+                .push((column_name.clone(), join_state.probe_statistics.clone()));
+        }
         let build_side_context = QueryContext::create_from(self.ctx.clone());
         let mut build_side_builder = PipelineBuilder::create(
             self.func_ctx.clone(),
@@ -151,6 +159,7 @@ impl PipelineBuilder {
         build_side_builder.cte_state = self.cte_state.clone();
         build_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         build_side_builder.hash_join_states = self.hash_join_states.clone();
+        build_side_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -159,6 +168,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             self.func_ctx.clone(),
             &hash_join_plan.build_keys,
+            hash_join_plan.build_key_range_info.clone(),
             &hash_join_plan.build_projections,
             join_state.clone(),
             output_len,
@@ -263,6 +273,7 @@ impl PipelineBuilder {
         materialized_side_builder.cte_state = self.cte_state.clone();
         materialized_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         materialized_side_builder.hash_join_states = self.hash_join_states.clone();
+        materialized_side_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
         let mut materialized_side_pipeline =
             materialized_side_builder.finalize(materialized_side)?;
         assert!(
@@ -291,5 +302,25 @@ impl PipelineBuilder {
         self.pipelines
             .extend(materialized_side_pipeline.sources_pipelines);
         Ok(())
+    }
+
+    pub fn runtime_filter_columns(join_state: &Arc<HashJoinState>) -> Vec<(usize, String)> {
+        let mut columns = Vec::new();
+        for (build_key, probe_key, table_index) in join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .zip(join_state.hash_join_desc.runtime_filter_exprs.iter())
+            .filter_map(|(build_key, runtime_filter_expr)| {
+                runtime_filter_expr
+                    .as_ref()
+                    .map(|(probe_key, table_index)| (build_key, probe_key, table_index))
+            })
+        {
+            if let Some(column_name) = Expr::<String>::column_id(probe_key) {
+                columns.push((*table_index, column_name));
+            }
+        }
+        columns
     }
 }

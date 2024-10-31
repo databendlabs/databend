@@ -404,6 +404,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn into_columns(self) -> Vec<BlockEntry> {
+        self.columns
+    }
+
+    #[inline]
     pub fn add_meta(self, meta: Option<BlockMetaInfoPtr>) -> Result<Self> {
         if self.meta.is_some() {
             return Err(ErrorCode::Internal(

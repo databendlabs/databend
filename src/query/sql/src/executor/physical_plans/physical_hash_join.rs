@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -29,7 +28,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_table_meta::table::get_change_type;
+use databend_common_storage::Datum;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -37,13 +36,12 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::optimizer::StatInfo;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnEntry;
 use crate::IndexType;
-use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
@@ -64,6 +62,7 @@ pub struct HashJoin {
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
     pub is_null_equal: Vec<bool>,
+    pub build_key_range_info: Vec<Option<(Datum, Datum)>>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
@@ -80,7 +79,7 @@ pub struct HashJoin {
     pub stat_info: Option<PlanStatsInfo>,
 
     // probe keys for runtime filter, and record the index of table that used in probe keys.
-    pub probe_keys_rt: Vec<Option<(RemoteExpr<String>, IndexType)>>,
+    pub runtime_filter_exprs: Vec<Option<(RemoteExpr<String>, IndexType)>>,
     // If enable bloom runtime filter
     pub enable_bloom_runtime_filter: bool,
     // Under cluster, mark if the join is broadcast join.
@@ -109,7 +108,8 @@ impl PhysicalPlanBuilder {
         mut others_required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
-        stat_info: PlanStatsInfo,
+        stat_info: Option<Arc<StatInfo>>,
+        plan_stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
@@ -211,10 +211,10 @@ impl PhysicalPlanBuilder {
 
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut build_key_range_info = Vec::new();
         let mut is_null_equal = Vec::new();
-        let mut left_join_conditions_rt = Vec::new();
+        let mut runtime_filter_exprs = Vec::new();
         let mut probe_to_build_index = Vec::new();
-        let mut table_index = None;
         for condition in join.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -225,7 +225,7 @@ impl PhysicalPlanBuilder {
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
-            let left_expr_for_runtime_filter = if left_condition.used_columns().iter().all(|idx| {
+            let runtime_filter_expr = if left_condition.used_columns().iter().all(|idx| {
                 // Runtime filter only support column in base table. It's possible to use a wrong derived column with
                 // the same name as a base table column, so we need to check if the column is a base table column.
                 matches!(
@@ -233,23 +233,29 @@ impl PhysicalPlanBuilder {
                     ColumnEntry::BaseTableColumn(_)
                 )
             }) {
-                if let Some(column_idx) = left_condition.used_columns().iter().next() {
-                    // Safe to unwrap because we have checked the column is a base table column.
-                    if table_index.is_none() {
-                        table_index = Some(
-                            self.metadata
-                                .read()
-                                .column(*column_idx)
-                                .table_index()
-                                .unwrap(),
-                        );
+                if let Some(column_index) = left_condition.used_columns().iter().next() {
+                    if let Some(stat_info) = &stat_info
+                        && let Some(column_stat) =
+                            stat_info.statistics.column_stats.get(column_index)
+                    {
+                        build_key_range_info
+                            .push(Some((column_stat.min.clone(), column_stat.max.clone())));
+                    } else {
+                        build_key_range_info.push(None);
                     }
+                    // Safe to unwrap because we have checked the column is a base table column.
+                    let table_index = self
+                        .metadata
+                        .read()
+                        .column(*column_index)
+                        .table_index()
+                        .unwrap();
                     Some((
                         left_condition
                             .as_raw_expr()
                             .type_check(&*self.metadata.read())?
                             .project_column_ref(|col| col.column_name.clone()),
-                        table_index.unwrap(),
+                        table_index,
                     ))
                 } else {
                     None
@@ -314,7 +320,7 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
+            let runtime_filter_expr = runtime_filter_expr
                 .map(|(expr, idx)| {
                     check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
                         .map(|casted_expr| (casted_expr, idx))
@@ -326,18 +332,18 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|(expr, idx)| {
+            let runtime_filter_expr = runtime_filter_expr.map(|(expr, table_index)| {
                 (
                     ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
-                    idx,
+                    table_index,
                 )
             });
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
-            left_join_conditions_rt
-                .push(left_expr_for_runtime_filter.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
+            runtime_filter_exprs
+                .push(runtime_filter_expr.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
         }
 
         let mut cache_column_map = HashMap::new();
@@ -520,7 +526,8 @@ impl PhysicalPlanBuilder {
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
             is_null_equal,
-            probe_keys_rt: left_join_conditions_rt,
+            build_key_range_info,
+            runtime_filter_exprs,
             non_equi_conditions: join
                 .non_equi_conditions
                 .iter()
@@ -539,16 +546,10 @@ impl PhysicalPlanBuilder {
             probe_to_build,
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
-            stat_info: Some(stat_info),
+            stat_info: Some(plan_stat_info),
             broadcast: is_broadcast,
             single_to_inner: join.single_to_inner.clone(),
-            enable_bloom_runtime_filter: adjust_bloom_runtime_filter(
-                self.ctx.clone(),
-                &self.metadata,
-                table_index,
-                s_expr,
-            )
-            .await?,
+            enable_bloom_runtime_filter: true,
             build_side_cache_info,
         }))
     }

@@ -45,7 +45,7 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>>,
+    pub(crate) runtime_filter_exprs: Vec<Option<(Expr<String>, IndexType)>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
     // If enable bloom runtime filter
@@ -67,13 +67,13 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
-        let probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>> = join
-            .probe_keys_rt
+        let runtime_filter_exprs: Vec<Option<(Expr<String>, IndexType)>> = join
+            .runtime_filter_exprs
             .iter()
-            .map(|probe_key_rt| {
-                probe_key_rt
+            .map(|runtime_filter_expr| {
+                runtime_filter_expr
                     .as_ref()
-                    .map(|(expr, idx)| (expr.as_expr(&BUILTIN_FUNCTIONS), *idx))
+                    .map(|(expr, table_index)| (expr.as_expr(&BUILTIN_FUNCTIONS), *table_index))
             })
             .collect();
 
@@ -88,7 +88,7 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            probe_keys_rt,
+            runtime_filter_exprs,
             broadcast: join.broadcast,
             single_to_inner: join.single_to_inner.clone(),
             enable_bloom_runtime_filter: join.enable_bloom_runtime_filter,

@@ -48,6 +48,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
@@ -1163,10 +1164,37 @@ impl TableContext for QueryContext {
                 for filter in filters.1.get_min_max() {
                     v.get_mut().add_min_max(filter.clone());
                 }
-                for filter in filters.1.blooms() {
-                    v.get_mut().add_bloom(filter);
+                for (column_name, filter) in filters.1.blooms() {
+                    v.get_mut().add_bloom((column_name, filter));
                 }
             }
+        }
+    }
+
+    fn set_runtime_filter_columns(
+        &self,
+        table_index: usize,
+        columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+    ) {
+        let mut runtime_filter_columns = self.shared.runtime_filter_columns.write();
+        match runtime_filter_columns.entry(table_index) {
+            Entry::Vacant(v) => {
+                v.insert(columns);
+            }
+            Entry::Occupied(mut v) => {
+                v.get_mut().extend(columns);
+            }
+        }
+    }
+
+    fn get_runtime_filter_columns(
+        &self,
+        table_index: usize,
+    ) -> Vec<(String, Arc<HashJoinProbeStatistics>)> {
+        let runtime_filter_columns = self.shared.runtime_filter_columns.read();
+        match runtime_filter_columns.get(&table_index) {
+            Some(v) => v.clone(),
+            None => vec![],
         }
     }
 
@@ -1179,7 +1207,7 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, Arc<BinaryFuse16>)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (v.get_bloom()).clone(),
@@ -1187,7 +1215,7 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, Expr<String>)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (v.get_inlist()).clone(),
@@ -1195,7 +1223,7 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, Expr<String>)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (v.get_min_max()).clone(),

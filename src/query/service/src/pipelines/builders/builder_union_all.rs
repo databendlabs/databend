@@ -81,6 +81,7 @@ impl PipelineBuilder {
         pipeline_builder.cte_state = self.cte_state.clone();
         pipeline_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         pipeline_builder.hash_join_states = self.hash_join_states.clone();
+        pipeline_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
 
         let mut build_res = pipeline_builder.finalize(input)?;
 

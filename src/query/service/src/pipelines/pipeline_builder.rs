@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileLabel;
+use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -57,6 +58,7 @@ pub struct PipelineBuilder {
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
+    pub runtime_filter_columns: HashMap<usize, Vec<(String, Arc<HashJoinProbeStatistics>)>>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
     pub(crate) is_exchange_neighbor: bool,
@@ -83,6 +85,7 @@ impl PipelineBuilder {
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
             is_exchange_neighbor: false,
+            runtime_filter_columns: HashMap::new(),
         }
     }
 

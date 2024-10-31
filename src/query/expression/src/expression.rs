@@ -428,12 +428,6 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
-    pub fn runtime_filter_supported_types(&self) -> bool {
-        self.data_type().remove_nullable().is_numeric()
-            || self.data_type().remove_nullable().is_string()
-            || self.data_type().remove_nullable().is_date()
-    }
-
     pub fn data_type(&self) -> &DataType {
         match self {
             Expr::Constant { data_type, .. } => data_type,
@@ -705,6 +699,21 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Cast { expr, .. } => expr.contains_column_ref(),
             Expr::FunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
             Expr::LambdaFunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
+        }
+    }
+
+    pub fn column_id(column_expr: &Expr<String>) -> Option<String> {
+        if let Expr::ColumnRef { id, .. } = column_expr {
+            Some(id.to_string())
+        } else if let Expr::Cast {
+            expr, dest_type, ..
+        } = column_expr
+            && let Expr::ColumnRef { id, .. } = expr.as_ref()
+            && dest_type.is_nullable()
+        {
+            Some(id.to_string())
+        } else {
+            None
         }
     }
 }

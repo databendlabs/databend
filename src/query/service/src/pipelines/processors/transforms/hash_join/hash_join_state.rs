@@ -23,6 +23,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
+use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -130,10 +131,13 @@ pub struct HashJoinState {
     pub(crate) column_map: HashMap<usize, usize>,
     // The index of the next cache block to be read.
     pub(crate) next_cache_block_index: AtomicUsize,
+
+    /// Statistics
+    pub(crate) probe_statistics: Arc<HashJoinProbeStatistics>,
 }
 
 impl HashJoinState {
-    pub fn try_create(
+    pub fn create(
         ctx: Arc<QueryContext>,
         mut build_schema: DataSchemaRef,
         build_projections: &ColumnSet,
@@ -189,6 +193,7 @@ impl HashJoinState {
             },
             column_map,
             next_cache_block_index: AtomicUsize::new(0),
+            probe_statistics: Arc::new(HashJoinProbeStatistics::default()),
         }))
     }
 
