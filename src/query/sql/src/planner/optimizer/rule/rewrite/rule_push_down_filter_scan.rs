@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -185,9 +184,13 @@ impl Rule for RulePushDownFilterScan {
         let add_filters = self.find_push_down_predicates(&filter.predicates, &scan)?;
         match scan.push_down_predicates.as_mut() {
             Some(vs) => {
-                let mut set_vs: HashSet<_> = vs.iter().cloned().collect();
-                set_vs.extend(add_filters);
-                *vs = set_vs.into_iter().collect();
+                // Add `add_filters` to vs if there's not already there.
+                // Keep the order of `vs` to ensure the tests are stable.
+                for filter in add_filters {
+                    if !vs.contains(&filter) {
+                        vs.push(filter);
+                    }
+                }
             }
             None => scan.push_down_predicates = Some(add_filters),
         }

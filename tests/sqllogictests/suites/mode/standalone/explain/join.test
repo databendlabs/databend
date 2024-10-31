@@ -233,78 +233,78 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
 HashJoin
-├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
 ├── join type: INNER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
+├── build keys: [a.x (#0)]
+├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 0.21
+├── estimated rows: 2.67
 ├── Filter(Build)
-│   ├── output columns: [b.x (#1), b.y (#2)]
-│   ├── filters: [is_not_null(b.x (#1)), is_true(b.x (#1) > 42)]
-│   ├── estimated rows: 0.80
+│   ├── output columns: [a.x (#0)]
+│   ├── filters: [is_not_null(a.x (#0)), is_true(a.x (#0) > 42)]
+│   ├── estimated rows: 2.67
 │   └── TableScan
-│       ├── table: default.default.twocolumn
-│       ├── output columns: [x (#1), y (#2)]
+│       ├── table: default.default.onecolumn
+│       ├── output columns: [x (#0)]
 │       ├── read rows: 4
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, is_not_null(twocolumn.x (#1)))], limit: NONE]
+│       ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, is_not_null(onecolumn.x (#0)))], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── output columns: [a.x (#0)]
-    ├── filters: [is_not_null(a.x (#0)), is_true(a.x (#0) > 42)]
-    ├── estimated rows: 0.80
+    ├── output columns: [b.x (#1), b.y (#2)]
+    ├── filters: [is_not_null(b.x (#1)), is_true(b.x (#1) > 42)]
+    ├── estimated rows: 3.00
     └── TableScan
-        ├── table: default.default.onecolumn
-        ├── output columns: [x (#0)]
+        ├── table: default.default.twocolumn
+        ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [and_filters(is_not_null(onecolumn.x (#0)), onecolumn.x (#0) > 42)], limit: NONE]
+        ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, is_not_null(twocolumn.x (#1)))], limit: NONE]
         └── estimated rows: 4.00
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
 ----
 HashJoin
-├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
 ├── join type: INNER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
+├── build keys: [a.x (#0)]
+├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 0.64
+├── estimated rows: 1.17
 ├── Filter(Build)
-│   ├── output columns: [b.x (#1), b.y (#2)]
-│   ├── filters: [is_not_null(b.x (#1)), is_true((b.x (#1) > 44 OR b.x (#1) < 43))]
-│   ├── estimated rows: 0.80
+│   ├── output columns: [a.x (#0)]
+│   ├── filters: [is_not_null(a.x (#0)), is_true((a.x (#0) > 44 OR a.x (#0) < 43))]
+│   ├── estimated rows: 1.33
 │   └── TableScan
-│       ├── table: default.default.twocolumn
-│       ├── output columns: [x (#1), y (#2)]
+│       ├── table: default.default.onecolumn
+│       ├── output columns: [x (#0)]
 │       ├── read rows: 4
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(is_not_null(twocolumn.x (#1)), (twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43))], limit: NONE]
+│       ├── push downs: [filters: [and_filters((onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43), is_not_null(onecolumn.x (#0)))], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── output columns: [a.x (#0)]
-    ├── filters: [is_not_null(a.x (#0)), is_true((a.x (#0) > 44 OR a.x (#0) < 43))]
-    ├── estimated rows: 0.80
+    ├── output columns: [b.x (#1), b.y (#2)]
+    ├── filters: [is_not_null(b.x (#1)), is_true((b.x (#1) > 44 OR b.x (#1) < 43))]
+    ├── estimated rows: 1.75
     └── TableScan
-        ├── table: default.default.onecolumn
-        ├── output columns: [x (#0)]
+        ├── table: default.default.twocolumn
+        ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [and_filters(is_not_null(onecolumn.x (#0)), (onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43))], limit: NONE]
+        ├── push downs: [filters: [and_filters((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43), is_not_null(twocolumn.x (#1)))], limit: NONE]
         └── estimated rows: 4.00
 
 query T
@@ -316,11 +316,11 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 0.32
+├── estimated rows: 3.56
 ├── Filter(Build)
 │   ├── output columns: [b.x (#1), b.y (#2)]
 │   ├── filters: [is_not_null(b.x (#1)), is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-│   ├── estimated rows: 0.80
+│   ├── estimated rows: 2.67
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── output columns: [x (#1), y (#2)]
@@ -334,7 +334,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [a.x (#0)]
     ├── filters: [is_not_null(a.x (#0)), is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
-    ├── estimated rows: 0.80
+    ├── estimated rows: 2.67
     └── TableScan
         ├── table: default.default.onecolumn
         ├── output columns: [x (#0)]
@@ -741,7 +741,7 @@ HashJoin
 ├── build keys: [t.x (#1)]
 ├── probe keys: [o.x (#0)]
 ├── filters: []
-├── estimated rows: 1.40
+├── estimated rows: 1.67
 ├── Filter(Build)
 │   ├── output columns: [t.x (#1), t.y (#2)]
 │   ├── filters: [is_not_null(t.x (#1)), is_true(t.y (#2) = 53)]
@@ -759,7 +759,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [o.x (#0)]
     ├── filters: [is_not_null(o.x (#0))]
-    ├── estimated rows: 1.40
+    ├── estimated rows: 5.00
     └── TableScan
         ├── table: default.default.onecolumn
         ├── output columns: [x (#0)]
