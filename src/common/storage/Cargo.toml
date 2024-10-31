@@ -24,11 +24,13 @@ databend-common-meta-app = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 flagset = "0.4"
 futures = { workspace = true }
+http = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

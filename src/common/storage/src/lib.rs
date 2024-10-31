@@ -35,6 +35,9 @@ mod config;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
 
+mod http_client;
+pub use http_client::StorageHttpClient;
+
 mod operator;
 pub use operator::build_operator;
 pub use operator::init_operator;
