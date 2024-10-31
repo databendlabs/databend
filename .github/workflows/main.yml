@@ -1,4 +1,4 @@
-name: Production
+name: Main
 
 on:
   push:
