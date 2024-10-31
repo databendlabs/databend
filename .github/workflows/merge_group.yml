@@ -1,4 +1,4 @@
-name: "PR Assistant"
+name: "Merge Group Helper"
 
 on:
   merge_group:
