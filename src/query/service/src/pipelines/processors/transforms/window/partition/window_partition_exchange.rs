@@ -38,6 +38,7 @@ impl WindowPartitionExchange {
 }
 
 impl Exchange for WindowPartitionExchange {
+    const NAME: &'static str = "Window";
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let num_rows = data_block.num_rows();
 

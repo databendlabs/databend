@@ -31,6 +31,7 @@ pub enum MultiwayStrategy {
 }
 
 pub trait Exchange: Send + Sync + 'static {
+    const NAME: &'static str;
     const STRATEGY: MultiwayStrategy = MultiwayStrategy::Random;
 
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
@@ -185,7 +186,7 @@ impl<T: Exchange> PartitionProcessor<T> {
 
 impl<T: Exchange> Processor for PartitionProcessor<T> {
     fn name(&self) -> String {
-        String::from("ShufflePartition")
+        format!("ShufflePartition({})", T::NAME)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -287,7 +288,7 @@ impl<T: Exchange> MergePartitionProcessor<T> {
 
 impl<T: Exchange> Processor for MergePartitionProcessor<T> {
     fn name(&self) -> String {
-        String::from("ShuffleMergePartition")
+        format!("ShufflePartition({})", T::NAME)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

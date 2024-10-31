@@ -60,7 +60,7 @@ impl TransformWindowPartialTopN {
 }
 
 impl Transform for TransformWindowPartialTopN {
-    const NAME: &'static str = "Window Partial Top N";
+    const NAME: &'static str = "TransformWindowPartialTopN";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
