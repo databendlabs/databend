@@ -39,6 +39,7 @@ pub use session::login_handler::LoginResponse;
 pub use session::logout_handler::logout_handler;
 pub use session::refresh_handler::refresh_handler;
 pub use session::refresh_handler::RefreshResponse;
+pub(crate) use session::unix_ts;
 pub use session::ClientSessionManager;
 pub(crate) use session::SessionClaim;
 pub use stage::upload_to_stage;

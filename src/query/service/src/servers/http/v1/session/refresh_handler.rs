@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
@@ -27,7 +26,6 @@ use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Deserialize, Clone)]
 struct RefreshRequest {
-    pub session_id: Option<String>,
     // to drop the old token earlier instead of waiting for expiration
     pub session_token: Option<String>,
 }
@@ -36,7 +34,7 @@ struct RefreshRequest {
 pub struct RefreshResponse {
     session_token: Option<String>,
     refresh_token: Option<String>,
-    refresh_interval_in_secs: u64,
+    session_token_ttl_in_secs: u64,
 }
 
 #[poem::handler]
@@ -47,37 +45,19 @@ pub async fn refresh_handler(
 ) -> PoemResult<impl IntoResponse> {
     let mgr = ClientSessionManager::instance();
     match &ctx.credential {
-        Credential::Jwt { .. } => {
-            let session_id = req.session_id.ok_or_else(|| {
-                HttpErrorCode::bad_request(ErrorCode::BadArguments(
-                    "JWT session should provide session_id when refresh session",
-                ))
-            })?;
-            mgr.refresh_in_memory_states(&session_id, &ctx.user_name);
-
-            let tenant = ctx.session.get_current_tenant();
-            mgr.refresh_session_handle(tenant, ctx.user_name.clone(), &session_id)
-                .await
-                .map_err(HttpErrorCode::server_error)?;
-            Ok(Json(RefreshResponse {
-                refresh_interval_in_secs: SESSION_TOKEN_TTL.as_secs(),
-                session_token: None,
-                refresh_token: None,
-            }))
-        }
         Credential::DatabendToken { token, .. } => {
             let (_, token_pair) = mgr
                 .new_token_pair(&ctx.session, Some(token.clone()), req.session_token)
                 .await
                 .map_err(HttpErrorCode::server_error)?;
             Ok(Json(RefreshResponse {
-                refresh_interval_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
                 session_token: Some(token_pair.session.clone()),
                 refresh_token: Some(token_pair.refresh.clone()),
             }))
         }
         _ => {
-            unreachable!("/session/refresh should be authed by databend refresh token or JWT token")
+            unreachable!("/v1/session/refresh should be authed by databend refresh token")
         }
     }
 }

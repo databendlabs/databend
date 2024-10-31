@@ -1,0 +1,26 @@
+statement ok
+CREATE OR REPLACE TABLE twocolumn (x INT NULL, y INT NULL);
+
+statement ok
+INSERT INTO twocolumn(x, y) VALUES (44,51), (NULL,52), (42,53), (45,45);
+
+query T
+explain select * from twocolumn where x is not NULL;
+----
+Filter
+├── output columns: [twocolumn.x (#0), twocolumn.y (#1)]
+├── filters: [is_not_null(twocolumn.x (#0))]
+├── estimated rows: 3.00
+└── TableScan
+    ├── table: default.default.twocolumn
+    ├── output columns: [x (#0), y (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_not_null(twocolumn.x (#0))], limit: NONE]
+    └── estimated rows: 4.00
+
+statement ok
+DROP TABLE twocolumn;

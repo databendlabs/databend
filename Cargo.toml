@@ -286,7 +286,7 @@ opendal = { version = "0.50.1", features = [
     "services-huggingface",
     "services-redis",
 ] }
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
+openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
@@ -298,7 +298,7 @@ parking_lot = "0.12.1"
 parquet = { version = "53", features = ["async"] }
 paste = "1.0.15"
 pin-project-lite = "0.2.9"
-poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
+poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression", "cookie"] }
 pprof = { version = "0.13.0", features = [
     "flamegraph",
     "protobuf-codec",
@@ -318,7 +318,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "native-tls-alpn",
 ] }
 reqwest-hickory-resolver = "0.1"
-rotbl = { git = "https://github.com/drmingdrmer/rotbl", tag = "v0.1.2-alpha.6", features = [] }
+rotbl = { version = "0.1.2", features = [] }
 rustix = "0.38.37"
 semver = "1.0.14"
 serde = { version = "1.0.164", features = ["derive", "rc"] }
@@ -342,7 +342,7 @@ tokio-stream = "0.1.11"
 tonic = { version = "0.12.3", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tonic-build = { version = "0.12.3" }
 tonic-reflection = { version = "0.12.3" }
-tower = "0.5.1"
+tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
@@ -533,6 +533,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.6" }
 orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

@@ -10,6 +10,9 @@ edition = { workspace = true }
 doctest = false
 test = true
 
+[features]
+jemalloc = ["databend-common-base/jemalloc", "tikv-jemalloc-ctl"]
+
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -49,7 +52,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
 snailquote = "0.3.1"
-tikv-jemalloc-ctl = { workspace = true }
+tikv-jemalloc-ctl = { workspace = true, optional = true }
 typetag = { workspace = true }
 
 [build-dependencies]
