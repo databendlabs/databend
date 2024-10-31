@@ -129,8 +129,6 @@ zstd = { workspace = true }
 # used to test async readers
 tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
 tokio-util = { workspace = true, features = ["compat"] }
-# used to run formal property testing
-async-std = { workspace = true }
 env_logger = { workspace = true }
 flate2 = { workspace = true }
 proptest = { workspace = true, default-features = false, features = ["std"] }
