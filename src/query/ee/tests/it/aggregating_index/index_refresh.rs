@@ -40,6 +40,7 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use derive_visitor::DriveMut;
 use futures_util::TryStreamExt;
 
@@ -84,7 +85,9 @@ async fn test_refresh_agg_index() -> Result<()> {
 
     blocks.sort();
     indexes.sort();
-    assert_eq!(blocks, indexes);
+
+    let stripped_block_names = strip_block_names(&blocks);
+    assert_eq!(stripped_block_names, indexes);
 
     // Check aggregating index is correct.
     {
@@ -122,7 +125,8 @@ async fn test_refresh_agg_index() -> Result<()> {
 
         blocks.sort();
         indexes.sort();
-        assert_eq!(blocks, indexes);
+        let stripped_block_names = strip_block_names(&blocks);
+        assert_eq!(stripped_block_names, indexes);
 
         let new_block = {
             blocks.retain(|s| s != &pre_block);
@@ -264,7 +268,9 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+
+    let stripped_block_names = strip_block_names(&blocks);
+    assert_eq!(stripped_block_names, indexes_0);
 
     // Check aggregating index_0 is correct.
     {
@@ -303,7 +309,8 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let stripped_block_names = strip_block_names(&blocks);
+    assert_eq!(stripped_block_names, indexes_0);
 
     // Check aggregating index_0 is correct after update.
     {
@@ -388,7 +395,8 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     blocks.sort();
     indexes_1.sort();
-    assert_eq!(blocks, indexes_1);
+    let stripped_block_names = strip_block_names(&blocks);
+    assert_eq!(stripped_block_names, indexes_0);
 
     // Check aggregating index_0 is correct.
     {
@@ -446,13 +454,14 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let stripped_block_names = strip_block_names(&blocks);
+    assert_eq!(stripped_block_names, indexes_0);
 
     // check index1
     let mut indexes_1 = collect_file_names(&agg_index_path_1)?;
 
     indexes_1.sort();
-    assert_eq!(blocks, indexes_1);
+    assert_eq!(stripped_block_names, indexes_1);
 
     Ok(())
 }
@@ -494,7 +503,8 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let stripped_block_names = strip_block_names(&blocks);
+    assert_eq!(stripped_block_names, indexes_0);
 
     // Check aggregating index_0 is correct.
     {
@@ -652,4 +662,22 @@ fn collect_file_names<P: AsRef<Path>>(dir: P) -> Result<Vec<String>> {
     }
 
     Ok(file_names)
+}
+
+fn strip_block_names(blocks: &[String]) -> Vec<String> {
+    // newly created block's "filename" should start with VACUUM2_OBJECT_KEY_PREFIX
+    assert!(
+        blocks
+            .iter()
+            .all(|v| v.starts_with(VACUUM2_OBJECT_KEY_PREFIX))
+    );
+
+    blocks
+        .iter()
+        .map(|v| {
+            v.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
 }
