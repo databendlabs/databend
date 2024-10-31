@@ -127,12 +127,12 @@ zstd = { workspace = true }
 
 [dev-dependencies]
 # used to test async readers
-tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
-tokio-util = { workspace = true, features = ["compat"] }
 env_logger = { workspace = true }
 flate2 = { workspace = true }
 proptest = { workspace = true, default-features = false, features = ["std"] }
 quanta = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { workspace = true, features = ["compat"] }
 
 [lints]
 workspace = true
