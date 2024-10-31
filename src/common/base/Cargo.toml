@@ -15,7 +15,6 @@ tracing = ["tokio/tracing"]
 jemalloc = ["tikv-jemalloc-sys", "tikv-jemalloc-ctl"]
 disable_initial_exec_tls = ["tikv-jemalloc-sys/disable_initial_exec_tls"]
 memory-profiling = [
-    "jemalloc",
     "tikv-jemalloc-sys/stats",
     "tikv-jemalloc-sys/profiling",
     "tikv-jemalloc-sys/unprefixed_malloc_on_supported_platforms",
