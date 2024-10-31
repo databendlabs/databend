@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::SetType;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::UnsetPlan;
 use databend_common_users::UserApiProvider;
@@ -41,7 +42,7 @@ impl UnSetInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let settings = self.ctx.get_shared_settings();
+        let settings = self.ctx.get_session_settings();
         let session_level = self.unset.unset_type == SetType::SettingsSession;
         settings.load_changes().await?;
 
@@ -93,7 +94,7 @@ impl UnSetInterpreter {
                     match default_val {
                         Some(val) => {
                             let final_val = if global_settings.is_empty() {
-                                self.ctx.get_shared_settings().unset_setting(&var);
+                                self.ctx.get_session_settings().unset_setting(&var);
                                 val.to_string()
                             } else {
                                 global_settings
@@ -101,7 +102,7 @@ impl UnSetInterpreter {
                                     .find(|setting| setting.name.to_lowercase() == setting_key)
                                     .map_or(
                                         {
-                                            self.ctx.get_shared_settings().unset_setting(&var);
+                                            self.ctx.get_session_settings().unset_setting(&var);
                                             val.to_string()
                                         },
                                         |setting| setting.value.to_string(),
@@ -153,11 +154,15 @@ impl Interpreter for UnSetInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match self.unset.unset_type {
-            databend_common_ast::ast::SetType::SettingsSession
-            | databend_common_ast::ast::SetType::SettingsGlobal => {
+            SetType::SettingsSession | SetType::SettingsGlobal => {
                 self.execute_unset_settings().await?
             }
-            databend_common_ast::ast::SetType::Variable => self.execute_unset_variables().await?,
+            SetType::Variable => self.execute_unset_variables().await?,
+            SetType::SettingsQuery => {
+                return Err(ErrorCode::BadArguments(
+                    "Query level setting can not be unset",
+                ));
+            }
         }
         Ok(PipelineBuildResult::create())
     }

@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::others::UdfEchoTable;
 use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
@@ -288,6 +289,11 @@ impl TableFunctionFactory {
         creators.insert(
             "show_variables".to_string(),
             (next_id(), Arc::new(ShowVariables::create)),
+        );
+
+        creators.insert(
+            "udf_echo".to_string(),
+            (next_id(), Arc::new(UdfEchoTable::create)),
         );
 
         creators.insert(

@@ -242,7 +242,7 @@ pub trait TableContext: Send + Sync {
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
-    fn get_shared_settings(&self) -> Arc<Settings>;
+    fn get_session_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
@@ -383,4 +383,5 @@ pub trait TableContext: Send + Sync {
     fn session_state(&self) -> SessionState;
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
+    fn get_shared_settings(&self) -> Arc<Settings>;
 }

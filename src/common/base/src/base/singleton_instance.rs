@@ -15,18 +15,18 @@
 use std::fmt::Debug;
 
 use once_cell::sync::OnceCell;
-use state::Container;
+use state::TypeMap;
 
 /// SINGLETON_TYPE is the global singleton type.
 static SINGLETON_TYPE: OnceCell<SingletonType> = OnceCell::new();
 
 /// GLOBAL is a static type that holding all global data.
-static GLOBAL: OnceCell<Container![Send + Sync]> = OnceCell::new();
+static GLOBAL: OnceCell<TypeMap![Send + Sync]> = OnceCell::new();
 
 #[cfg(debug_assertions)]
 /// LOCAL is a static type that holding all global data only for local tests.
 static LOCAL: OnceCell<
-    parking_lot::RwLock<std::collections::HashMap<String, Container![Send + Sync]>>,
+    parking_lot::RwLock<std::collections::HashMap<String, TypeMap![Send + Sync]>>,
 > = OnceCell::new();
 
 /// Singleton is a wrapper enum for `Container![Send + Sync]`.
@@ -103,7 +103,7 @@ impl GlobalInstance {
     /// Should only be initiated once.
     pub fn init_production() {
         let _ = SINGLETON_TYPE.set(SingletonType::Production);
-        let _ = GLOBAL.set(<Container![Send + Sync]>::new());
+        let _ = GLOBAL.set(<TypeMap![Send + Sync]>::new());
     }
 
     /// init testing global data registry.
@@ -117,7 +117,7 @@ impl GlobalInstance {
         let v = LOCAL
             .wait()
             .write()
-            .insert(thread_name.to_string(), <Container![Send + Sync]>::new());
+            .insert(thread_name.to_string(), <TypeMap![Send + Sync]>::new());
         assert!(
             v.is_none(),
             "thread {thread_name} has been initiated before"

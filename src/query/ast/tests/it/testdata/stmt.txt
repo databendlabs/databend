@@ -7139,6 +7139,290 @@ Query(
 
 
 ---------- Input ----------
+SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;
+---------- Output ---------
+SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
+---------- AST ------------
+StatementWithSettings {
+    settings: Some(
+        Settings {
+            set_type: SettingsQuery,
+            identifiers: [
+                Identifier {
+                    span: Some(
+                        10..20,
+                    ),
+                    name: "max_thread",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        24..32,
+                    ),
+                    name: "timezone",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            values: Expr(
+                [
+                    Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            33..48,
+                        ),
+                        value: String(
+                            "Asia/Shanghai",
+                        ),
+                    },
+                ],
+            ),
+        },
+    ),
+    stmt: Query(
+        Query {
+            span: Some(
+                50..58,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..58,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    57..58,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;
+---------- Output ---------
+SETTINGS (max_thread = 1) SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+---------- AST ------------
+StatementWithSettings {
+    settings: Some(
+        Settings {
+            set_type: SettingsQuery,
+            identifiers: [
+                Identifier {
+                    span: Some(
+                        10..20,
+                    ),
+                    name: "max_thread",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            values: Expr(
+                [
+                    Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ],
+            ),
+        },
+    ),
+    stmt: Query(
+        Query {
+            span: Some(
+                24..64,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        24..64,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        31..32,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Join {
+                            span: Some(
+                                40..49,
+                            ),
+                            join: Join {
+                                op: LeftAnti,
+                                condition: On(
+                                    BinaryOp {
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                        op: Eq,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                55..56,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            55..56,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            57..58,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                61..62,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            61..62,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            63..64,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                ),
+                                left: Table {
+                                    span: Some(
+                                        38..39,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            38..39,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                                right: Table {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            50..51,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            },
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a

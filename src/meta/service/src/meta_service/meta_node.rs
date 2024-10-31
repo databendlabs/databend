@@ -287,7 +287,7 @@ impl MetaNode {
             srv.serve_with_shutdown(socket_addr, async move {
                 let _ = running_rx.changed().await;
                 info!(
-                    "signal received, shutting down: id={} {} ",
+                    "running_rx for Raft server received, shutting down: id={} {} ",
                     node_id, ip_port
                 );
             })
@@ -422,7 +422,10 @@ impl MetaNode {
 
                 if let Err(changed_err) = changed {
                     // Shutting down.
-                    error!("{} when watching metrics_rx", changed_err);
+                    info!(
+                        "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
+                        changed_err
+                    );
                     break;
                 }
 

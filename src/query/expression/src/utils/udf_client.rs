@@ -27,9 +27,11 @@ use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::version::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_grpc::DNSService;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use hyper_util::client::legacy::connect::HttpConnector;
 use tonic::metadata::KeyAndValueRef;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
@@ -78,16 +80,24 @@ impl UDFFlightClient {
             .keep_alive_timeout(Duration::from_secs(UDF_KEEP_ALIVE_TIMEOUT_SEC))
             .keep_alive_while_idle(true);
 
-        let inner = FlightServiceClient::connect(endpoint)
+        let mut connector = HttpConnector::new_with_resolver(DNSService);
+        connector.enforce_http(false);
+        connector.set_nodelay(true);
+        connector.set_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)));
+        connector.set_connect_timeout(Some(Duration::from_secs(conn_timeout)));
+        connector.set_reuse_address(true);
+
+        let channel = endpoint
+            .connect_with_connector(connector)
             .await
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(
                     "Cannot connect to UDF Server {}: {:?}",
                     addr, err
                 ))
-            })?
-            .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
-
+            })?;
+        let inner =
+            FlightServiceClient::new(channel).max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
         Ok(UDFFlightClient {
             inner,
             batch_rows,
@@ -237,5 +247,25 @@ impl UDFFlightClient {
         let schema = batches[0].schema();
         concat_batches(&schema, batches.iter())
             .map_err(|err| ErrorCode::UDFDataError(err.to_string()))
+    }
+}
+
+pub fn error_kind(message: &str) -> &str {
+    let message = message.to_ascii_lowercase();
+    if message.contains("timeout") || message.contains("timedout") {
+        // Error(Connect, Custom)
+        if message.contains("connect,") {
+            "ConnectTimeout"
+        } else {
+            "RequestTimeout"
+        }
+    } else if message.contains("cannot connect") {
+        "ConnectError"
+    } else if message.contains("stream closed because of a broken pipe") {
+        "ServerClosed"
+    } else if message.contains("dns error") || message.contains("lookup address") {
+        "DnsError"
+    } else {
+        "Other"
     }
 }

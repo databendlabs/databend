@@ -246,12 +246,4 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
     fn typetag_name(&self) -> &'static str {
         unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
     }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for AggregateMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone for AggregateMeta")
-    }
 }

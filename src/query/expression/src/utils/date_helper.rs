@@ -357,7 +357,8 @@ macro_rules! impl_interval_year_month {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 let mut ts = NaiveDateTime::new(new_ts, ts.time())
-                    .and_utc()
+                    .and_local_timezone(tz.tz)
+                    .unwrap()
                     .timestamp_micros();
                 clamp_timestamp(&mut ts);
                 Ok(ts)

@@ -16,6 +16,7 @@
 
 [files]
 extend-exclude = [
+    "**/Cargo.toml",
     "scripts/benchmark/",
     "benchmark/",
     "tests/",
