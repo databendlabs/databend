@@ -105,11 +105,11 @@ impl HttpFetch for StorageHttpClient {
 fn to_opendal_unexpected_error(err: reqwest::Error, uri: &http::Uri, desc: &str) -> opendal::Error {
     let mut oe = opendal::Error::new(opendal::ErrorKind::Unexpected, desc)
         .with_operation("http_util::Client::send")
-        .with_context("url", uri.to_string())
-        .set_source(err);
+        .with_context("url", uri.to_string());
     if is_temporary_error(&err) {
         oe = oe.set_temporary();
     }
+    oe = oe.set_source(err);
     oe
 }
 
