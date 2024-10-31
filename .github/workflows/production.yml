@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check Source File Changes
-        uses: tj-actions/changed-files@v39
+        uses: tj-actions/changed-files@v45
         id: src
         with:
           files_ignore: |
