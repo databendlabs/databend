@@ -218,29 +218,34 @@ impl FuseTable {
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
 
-            GlobalIORuntime::instance().try_spawn(async move {
-                match table
-                    .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                    .await
-                {
-                    Ok((_, partitions)) => {
-                        let sender_size = senders.len();
-                        for (i, part) in partitions.partitions.into_iter().enumerate() {
-                            senders[i % sender_size]
-                                .send(Ok(part))
+            GlobalIORuntime::instance().try_spawn(
+                async move {
+                    match table
+                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
+                        .await
+                    {
+                        Ok((_, partitions)) => {
+                            let sender_size = senders.len();
+                            for (i, part) in partitions.partitions.into_iter().enumerate() {
+                                senders[i % sender_size]
+                                    .send(Ok(part))
+                                    .await
+                                    .map_err(|_e| {
+                                        ErrorCode::Internal("Send partition meta failed")
+                                    })?;
+                            }
+                        }
+                        Err(err) => {
+                            senders[0]
+                                .send(Err(err))
                                 .await
                                 .map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
                         }
                     }
-                    Err(err) => {
-                        senders[0]
-                            .send(Err(err))
-                            .await
-                            .map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
-                    }
-                }
-                Ok::<_, ErrorCode>(())
-            })?;
+                    Ok::<_, ErrorCode>(())
+                },
+                Some(String::from("PruneSnapshot")),
+            )?;
         }
 
         Ok(())

@@ -212,14 +212,14 @@ pub fn build_fuse_parquet_source_pipeline(
 
             match is_lazy {
                 true => {
-                    let (pipe, source_senders) = build_lazy_source(max_threads, ctx.clone())?;
+                    let (pipe, source_senders) = build_lazy_source(max_io_requests, ctx.clone())?;
                     senders.extend(source_senders);
                     pipeline.add_pipe(pipe);
                 }
                 false => {
                     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
                     let pipe = build_block_source(
-                        max_threads,
+                        max_io_requests,
                         partitions.clone(),
                         batch_size,
                         ctx.clone(),
