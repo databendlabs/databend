@@ -26,6 +26,7 @@ use log::info;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
 use poem::middleware::CatchPanic;
+use poem::middleware::CookieJarManager;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
 use poem::Endpoint;
@@ -92,13 +93,13 @@ impl HttpHandler {
     #[allow(clippy::let_with_type_underscore)]
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
-        let ep_clickhouse =
-            Route::new()
-                .nest("/", clickhouse_router())
-                .with(HTTPSessionMiddleware::create(
-                    self.kind,
-                    EndpointKind::Clickhouse,
-                ));
+        let ep_clickhouse = Route::new()
+            .nest("/", clickhouse_router())
+            .with(HTTPSessionMiddleware::create(
+                self.kind,
+                EndpointKind::Clickhouse,
+            ))
+            .with(CookieJarManager::new());
 
         let ep_usage = Route::new().at(
             "/",
