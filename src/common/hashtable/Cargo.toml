@@ -14,9 +14,9 @@ test = true
 databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 ## Must disable feature "runtime-rng", it will make the hash results unstable in cluster
-ahash = { version = "0.8.2", features = ["no-rng"] }
+ahash = { workspace = true, features = ["no-rng"] }
 bumpalo = { workspace = true }
-cfg-if = "1.0.0"
+cfg-if = { workspace = true }
 ethnum = { workspace = true }
 
 [dev-dependencies]

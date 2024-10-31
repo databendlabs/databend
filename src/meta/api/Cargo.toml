@@ -30,7 +30,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
-maplit = "1.0.2"
+maplit = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
