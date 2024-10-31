@@ -94,7 +94,11 @@ impl Rule for RuleFilterNulls {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let join: Join = s_expr.plan().clone().try_into()?;
-        if join.join_type != JoinType::Inner || join.is_lateral {
+        if !matches!(
+            join.join_type,
+            JoinType::Inner | JoinType::LeftSemi | JoinType::RightSemi
+        ) || join.is_lateral
+        {
             state.add_result(s_expr.clone());
             return Ok(());
         }
