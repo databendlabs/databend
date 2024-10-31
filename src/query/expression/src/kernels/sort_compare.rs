@@ -36,6 +36,7 @@ pub struct SortCompare {
     current_column_index: usize,
     validity: Option<Bitmap>,
     equality_index: Vec<u8>,
+    force_equality: bool,
 }
 
 macro_rules! do_sorter {
@@ -111,12 +112,12 @@ impl SortCompare {
             current_column_index: 0,
             validity: None,
             equality_index,
+            force_equality: matches!(limit, LimitType::LimitRank(_)),
         }
     }
 
     fn need_update_equality_index(&self) -> bool {
-        self.current_column_index != self.ordering_descs.len() - 1
-            || matches!(self.limit, LimitType::LimitRank(_))
+        self.force_equality || self.current_column_index != self.ordering_descs.len() - 1
     }
 
     pub fn increment_column_index(&mut self) {
@@ -291,6 +292,65 @@ impl ValueVisitor for SortCompare {
             self.validity = Some(column.validity.clone());
         }
         self.visit_column(column.column.clone())
+    }
+}
+
+pub struct SortCompareEquality(SortCompare);
+
+impl SortCompareEquality {
+    pub fn new(ordering_descs: Vec<SortColumnDescription>, rows: usize) -> Self {
+        Self(SortCompare {
+            rows,
+            limit: LimitType::None,
+            permutation: (0..rows as u32).collect(),
+            ordering_descs,
+            current_column_index: 0,
+            validity: None,
+            equality_index: vec![1; rows as _],
+            force_equality: true,
+        })
+    }
+
+    pub fn increment_column_index(&mut self) {
+        self.0.increment_column_index()
+    }
+
+    pub fn take_permutation(self) -> Vec<u32> {
+        self.0.take_permutation()
+    }
+
+    pub fn equality_index(&self) -> &[u8] {
+        &self.0.equality_index
+    }
+
+    pub fn first_change(index: &[u8]) -> Option<usize> {
+        memchr(0, index)
+    }
+}
+
+impl ValueVisitor for SortCompareEquality {
+    fn visit_scalar(&mut self, _scalar: crate::Scalar) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_number<T: Number>(&mut self, column: Buffer<T>) -> Result<()> {
+        self.0.visit_number(column)
+    }
+
+    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.0.visit_timestamp(buffer)
+    }
+
+    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
+        self.0.visit_date(buffer)
+    }
+
+    fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
+        self.0.visit_typed_column::<T>(col)
+    }
+
+    fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
+        self.0.visit_nullable(column)
     }
 }
 

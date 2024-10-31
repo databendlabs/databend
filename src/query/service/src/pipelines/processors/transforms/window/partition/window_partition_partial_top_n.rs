@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortCompareEquality;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::executor::physical_plans::WindowPartitionTopNFunc;
 
@@ -62,44 +64,37 @@ impl Transform for TransformWindowPartialTopN {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
-        let block = DataBlock::sort(&block, &self.sort_desc, None)?;
+        self.indices.clear();
+        let rows = block.num_rows();
+        let mut sort_compare = SortCompareEquality::new(self.sort_desc.to_vec(), rows);
 
-        let partition_columns = self
-            .partition_indices
-            .iter()
-            .filter_map(|i| block.get_by_offset(*i).value.as_column())
-            .collect::<Vec<_>>();
-
-        let sort_columns = self
-            .sort_desc
-            .iter()
-            .skip(self.partition_indices.len())
-            .filter_map(|desc| block.get_by_offset(desc.offset).value.as_column())
-            .collect::<Vec<_>>();
-
-        if partition_columns.is_empty() {
-            return Ok(block.slice(0..self.top.min(block.num_rows())));
+        for &offset in &self.partition_indices {
+            let array = block.get_by_offset(offset).value.clone();
+            sort_compare.visit_value(array)?;
+            sort_compare.increment_column_index();
         }
+
+        let partition_equality = sort_compare.equality_index().to_vec();
+
+        for desc in self.sort_desc.iter().skip(self.partition_indices.len()) {
+            let array = block.get_by_offset(desc.offset).value.clone();
+            sort_compare.visit_value(array)?;
+            sort_compare.increment_column_index();
+        }
+
+        let full_equality = sort_compare.equality_index().to_vec();
+        let permutation = sort_compare.take_permutation();
 
         let mut start = 0;
         let mut cur = 0;
-        self.indices.clear();
 
-        while cur < block.num_rows() {
-            self.indices.push(start as u32);
-            let start_values = partition_columns
-                .iter()
-                .map(|col| col.index(start).unwrap())
-                .collect::<Vec<_>>();
+        while cur < rows {
+            self.indices.push(permutation[start]);
 
             let mut rank = 1; // 0 start
             cur = start + 1;
-            while cur < block.num_rows() {
-                if !partition_columns
-                    .iter()
-                    .zip(start_values.iter())
-                    .all(|(col, value)| col.index(cur).unwrap() == *value)
-                {
+            while cur < rows {
+                if partition_equality[cur] == 0 {
                     start = cur;
                     break;
                 }
@@ -107,14 +102,11 @@ impl Transform for TransformWindowPartialTopN {
                 match self.func {
                     WindowPartitionTopNFunc::RowNumber => {
                         if cur - start < self.top {
-                            self.indices.push(cur as u32)
+                            self.indices.push(permutation[cur])
                         }
                     }
                     WindowPartitionTopNFunc::Rank | WindowPartitionTopNFunc::DenseRank => {
-                        let dup = sort_columns
-                            .iter()
-                            .all(|col| col.index(cur) == col.index(cur - 1));
-                        if !dup {
+                        if full_equality[cur] == 0 {
                             if matches!(self.func, WindowPartitionTopNFunc::Rank) {
                                 rank = cur - start
                             } else {
@@ -123,7 +115,7 @@ impl Transform for TransformWindowPartialTopN {
                         }
 
                         if rank < self.top {
-                            self.indices.push(cur as u32);
+                            self.indices.push(permutation[cur]);
                         }
                     }
                 }
@@ -132,8 +124,7 @@ impl Transform for TransformWindowPartialTopN {
             }
         }
 
-        let mut buf = None;
-        block.take(&self.indices, &mut buf)
+        block.take(&self.indices, &mut None)
     }
 }
 
@@ -263,7 +254,6 @@ mod tests {
                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 0, 3, 3]),
                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
             ]);
-            println!("{}", got);
             assert_eq!(want.to_string(), got.to_string());
         }
 
