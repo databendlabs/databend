@@ -20,8 +20,6 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BinaryState;
-use databend_common_expression::BinaryStateBuilder;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -78,7 +76,7 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
         CommonRowConverter::new(sort_fields)
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryState> {
+    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
         let columns = columns
             .iter()
             .map(|entry| match &entry.value {
