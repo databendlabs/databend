@@ -213,7 +213,6 @@ arrow-select = { version = "53" }
 arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
 arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
 arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
-
 async-backtrace = "0.2"
 async-trait = { version = "0.1.77" }
 backtrace = "0.3.73"
