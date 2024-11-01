@@ -22,6 +22,9 @@ pub trait VecExt<T> {
     /// # Safety
     /// Caller must ensure the array has enough capacity to hold `T`.
     unsafe fn push_unchecked(&mut self, value: T);
+
+    /// # Safety
+    /// Caller must ensure the array has enough capacity to hold `&[T]`.
     unsafe fn extend_from_slice_unchecked(&mut self, val: &[T]);
 }
 
@@ -49,6 +52,8 @@ impl<T> VecExt<T> for Vec<T> {
 }
 
 pub trait VecU8Ext {
+    /// # Safety
+    /// Caller must ensure the array has enough capacity to hold `V`.
     unsafe fn store_value_uncheckd<V>(&mut self, val: &V);
 }
 
