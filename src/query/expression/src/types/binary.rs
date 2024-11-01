@@ -18,8 +18,8 @@ use std::ops::Range;
 
 use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::array::MutableBinaryViewArray;
+use databend_common_arrow::arrow::array::View;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
-use databend_common_arrow::arrow_format::ipc::BinaryViewBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -205,7 +205,7 @@ impl BinaryColumn {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.data.total_buffer_len()
+        self.data.total_buffer_len() + self.len() * View::MAX_INLINE_SIZE
     }
 
     pub fn index(&self, index: usize) -> Option<&[u8]> {

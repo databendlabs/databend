@@ -153,16 +153,15 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
     /// - caller must allocate enough capacity
     /// - caller must ensure the view and buffers match.
     #[inline]
-    pub unsafe fn push_view(&mut self, v: View, buffers: &[(*const u8, usize)]) {
+    pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
         let len = v.length;
         self.total_bytes_len += len as usize;
         if len <= 12 {
             debug_assert!(self.views.capacity() > self.views.len());
-            self.views.push(v);
+            self.views.push(v)
         } else {
             self.total_buffer_len += len as usize;
-            let (data_ptr, data_len) = *buffers.get_unchecked(v.buffer_idx as usize);
-            let data = std::slice::from_raw_parts(data_ptr, data_len);
+            let data = buffers.get_unchecked(v.buffer_idx as usize);
             let offset = v.offset as usize;
             let bytes = data.get_unchecked(offset..offset + len as usize);
             let t = T::from_bytes_unchecked(bytes);

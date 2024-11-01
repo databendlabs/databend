@@ -1445,8 +1445,8 @@ impl Column {
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)
-            | Column::Geometry(col) => col.memory_size(),
-            Column::String(col) => col.memory_size(),
+            | Column::Geometry(col) => col.memory_size() + col.len() * 8,
+            Column::String(col) => col.memory_size() + col.len() * 8,
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
