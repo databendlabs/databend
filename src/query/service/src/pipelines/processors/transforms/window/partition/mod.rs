@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod exchange_window_partition_partial_top_n;
 mod transform_window_partition_collect;
 mod window_partition_buffer;
 mod window_partition_exchange;
