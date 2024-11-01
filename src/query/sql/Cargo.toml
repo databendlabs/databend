@@ -15,17 +15,6 @@ default = []
 storage-hdfs = ["databend-common-config/storage-hdfs"]
 
 [dependencies]
-ahash = { version = "0.8.2", features = ["no-rng"] }
-anyhow = { workspace = true }
-async-backtrace = { workspace = true }
-async-recursion = { workspace = true }
-async-trait = { workspace = true }
-chrono = { workspace = true }
-chrono-tz = { workspace = true }
-cidr = { workspace = true }
-cron = { workspace = true }
-ctor = { workspace = true }
-dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
@@ -48,31 +37,43 @@ databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+
+ahash = { workspace = true, features = ["no-rng"] }
+anyhow = { workspace = true }
+async-backtrace = { workspace = true }
+async-recursion = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+cidr = { workspace = true }
+cron = { workspace = true }
+ctor = { workspace = true }
+dashmap = { workspace = true }
 derive-visitor = { workspace = true }
-educe = "0.4"
-enum-as-inner = "0.5"
+educe = { workspace = true }
+enum-as-inner = { workspace = true }
 fastrace = { workspace = true }
-globiter = "0.1"
-indexmap = "2.0.0"
+globiter = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
-num-derive = "0.3.3"
-num-traits = "0.2.15"
+num-derive = { workspace = true }
+num-traits = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
-percent-encoding = "2"
-prqlc = "0.11.3"
-rand = "0.8.5"
-recursive = "0.1.1"
+percent-encoding = { workspace = true }
+prqlc = { workspace = true }
+rand = { workspace = true }
+recursive = { workspace = true }
 regex = { workspace = true }
-roaring = "0.10.1"
+roaring = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
-simsearch = "0.2"
-time = "0.3.14"
-tokio = "1.39.2"
-url = "2.3.1"
+simsearch = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+url = { workspace = true }
 
 [lints]
 workspace = true
