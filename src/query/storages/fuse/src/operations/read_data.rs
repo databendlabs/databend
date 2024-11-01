@@ -225,25 +225,35 @@ impl FuseTable {
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
             pipeline.set_on_init(move || {
-                table.runtime.clone().spawn(async move {
-                    match table
-                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                        .await
-                    {
-                        Ok((_, partitions)) => {
-                            for part in partitions.partitions {
-                                // ignore the error, the sql may be killed or early stop
-                                let _ = sender.send(Ok(part)).await;
+                ctx.get_runtime()?.try_spawn(
+                    async move {
+                        match table
+                            .prune_snapshot_blocks(
+                                ctx,
+                                push_downs,
+                                table_schema,
+                                lazy_init_segments,
+                                0,
+                            )
+                            .await
+                        {
+                            Ok((_, partitions)) => {
+                                for part in partitions.partitions {
+                                    // ignore the error, the sql may be killed or early stop
+                                    let _ = sender.send(Ok(part)).await;
+                                }
+                            }
+                            Err(err) => {
+                                let _ = sender.send(Err(err)).await;
                             }
                         }
-                        Err(err) => {
-                            let _ = sender.send(Err(err)).await;
-                        }
-                    }
-                    Ok::<_, ErrorCode>(())
-                });
+                        Ok::<_, ErrorCode>(())
+                    },
+                    None,
+                )?;
+
                 Ok(())
-            })
+            });
         }
 
         Ok(())
