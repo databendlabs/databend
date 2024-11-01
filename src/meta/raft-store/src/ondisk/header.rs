@@ -32,19 +32,26 @@ pub struct Header {
     ///
     /// If it is present, the data is upgrading.
     pub upgrading: Option<DataVersion>,
+
+    /// The second part of the upgrading process:
+    /// new version data is ready, and the old version data is cleaning up.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub cleaning: bool,
 }
 
 impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "version: {}, upgrading: {}",
+            "version: {}, upgrading: {}, cleaning: {}",
             self.version,
             if let Some(upgrading) = self.upgrading {
                 upgrading.to_string()
             } else {
                 "None".to_string()
-            }
+            },
+            self.cleaning
         )
     }
 }
@@ -67,6 +74,7 @@ impl Header {
         Self {
             version: DATA_VERSION,
             upgrading: None,
+            cleaning: false,
         }
     }
 }

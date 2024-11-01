@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod raft_log;
+pub mod codec_wrapper;
+pub mod raft_log_2;
 
-pub use raft_log::RaftLog;
-pub use raft_log::TREE_RAFT_LOG;
+pub const TREE_RAFT_LOG: &str = "raft_log";
