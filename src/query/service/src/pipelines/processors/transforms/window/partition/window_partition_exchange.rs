@@ -15,10 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::group_hash_columns_slice;
-use databend_common_expression::ColumnBuilder;
+use databend_common_expression::group_hash_columns;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
+use databend_common_expression::InputColumns;
 use databend_common_pipeline_core::processors::Exchange;
 
 use super::WindowPartitionMeta;
@@ -43,23 +42,12 @@ impl Exchange for WindowPartitionExchange {
         let num_rows = data_block.num_rows();
 
         // Extract the columns used for hash computation.
-        let hash_cols = self
-            .hash_keys
-            .iter()
-            .map(|&offset| {
-                let entry = data_block.get_by_offset(offset);
-                match &entry.value {
-                    Value::Scalar(s) => {
-                        ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
-                    }
-                    Value::Column(c) => c.clone(),
-                }
-            })
-            .collect::<Vec<_>>();
+        let data_block = data_block.consume_convert_to_full();
+        let hash_cols = InputColumns::new_block_proxy(&self.hash_keys, &data_block);
 
         // Compute the hash value for each row.
         let mut hashes = vec![0u64; num_rows];
-        group_hash_columns_slice(&hash_cols, &mut hashes);
+        group_hash_columns(hash_cols, &mut hashes);
 
         // Scatter the data block to different partitions.
         let indices = hashes

@@ -58,10 +58,6 @@ pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
     }
 }
 
-pub fn group_hash_columns_slice(cols: &[Column], values: &mut [u64]) {
-    group_hash_columns(InputColumns::Slice(cols), values)
-}
-
 pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
     match c.data_type() {
         DataType::Null => {}
