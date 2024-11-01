@@ -289,6 +289,7 @@ flagset = "0.4"
 flatbuffers = "24" # Must use the same version with arrow-ipc
 flate2 = "1"
 foreign_vec = "0.1.0"
+fs_extra = "1.3.0"
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
@@ -408,6 +409,7 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
 quanta = "0.11.1"
+raft-log = { version = "0.2.1" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
@@ -617,7 +619,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.6" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
 orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

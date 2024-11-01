@@ -18,6 +18,7 @@
 //!
 //! It is used by raft for log and state machine storage.
 pub use bytes_error::SledBytesError;
+pub use db::drop_sled_db;
 pub use db::get_sled_db;
 pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
