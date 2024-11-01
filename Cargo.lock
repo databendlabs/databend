@@ -3367,7 +3367,6 @@ dependencies = [
  "databend-common-tracing",
  "log",
  "pretty_assertions",
- "semver",
  "serde",
  "serde_with",
  "serfig",
