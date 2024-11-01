@@ -294,13 +294,12 @@ where I: Index
             })
             .collect::<Vec<_>>();
         if IS_FIRST {
-            let mut v = IndexHashVisitor::<true, _>::new(&indices, &mut self.target);
-            v.visit_column(column.column)?;
+            let mut v = IndexHashVisitor::<true, _>::new(&indices, self.target);
+            v.visit_column(column.column)
         } else {
-            let mut v = IndexHashVisitor::<false, _>::new(&indices, &mut self.target);
-            v.visit_column(column.column)?;
+            let mut v = IndexHashVisitor::<false, _>::new(&indices, self.target);
+            v.visit_column(column.column)
         }
-        Ok(())
     }
 
     fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
@@ -500,7 +499,7 @@ mod tests {
     use crate::Value;
 
     fn merge_hash_slice(ls: &[u64]) -> u64 {
-        ls.iter().cloned().reduce(|a, b| merge_hash(a, b)).unwrap()
+        ls.iter().cloned().reduce(merge_hash).unwrap()
     }
 
     #[test]

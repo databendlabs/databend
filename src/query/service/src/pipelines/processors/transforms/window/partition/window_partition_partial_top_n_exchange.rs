@@ -104,17 +104,50 @@ impl Exchange for WindowPartitionTopNExchange {
             group_hash_value_spread(&hash_indices, entry.value.to_owned(), i == 0, &mut hashes)?;
         }
 
+        let partition_permutation = self.partition_permutation(
+            rows,
+            &permutation,
+            &hashes,
+            &partition_equality,
+            &full_equality,
+        );
+
+        // Partition the data blocks to different processors.
+        let mut output_data_blocks = vec![vec![]; n];
+        let mut buf = None;
+        for (partition_id, indices) in partition_permutation.into_iter().enumerate() {
+            output_data_blocks[partition_id % n]
+                .push((partition_id, block.take(&indices, &mut buf)?));
+        }
+
+        // Union data blocks for each processor.
+        Ok(output_data_blocks
+            .into_iter()
+            .map(WindowPartitionMeta::create)
+            .map(DataBlock::empty_with_meta)
+            .collect())
+    }
+}
+
+impl WindowPartitionTopNExchange {
+    fn partition_permutation(
+        &self,
+        rows: usize,
+        permutation: &[u32],
+        hashes: &[u64],
+        partition_equality: &[u8],
+        full_equality: &[u8],
+    ) -> Vec<Vec<u32>> {
         let mut partition_permutation = vec![Vec::new(); self.num_partitions as usize];
 
         let mut start = 0;
         let mut cur = 0;
-
         while cur < rows {
             let partition =
                 &mut partition_permutation[(hashes[start] % self.num_partitions) as usize];
             partition.push(permutation[start]);
 
-            let mut rank = 1; // 0 start
+            let mut rank = 0; // this first value is rank 0
             cur = start + 1;
             while cur < rows {
                 if partition_equality[cur] == 0 {
@@ -142,24 +175,131 @@ impl Exchange for WindowPartitionTopNExchange {
                         }
                     }
                 }
-
                 cur += 1;
             }
         }
+        partition_permutation
+    }
+}
 
-        // Partition the data blocks to different processors.
-        let mut output_data_blocks = vec![vec![]; n];
-        let mut buf = None;
-        for (partition_id, indices) in partition_permutation.into_iter().enumerate() {
-            output_data_blocks[partition_id % n]
-                .push((partition_id, block.take(&indices, &mut buf)?));
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        // Union data blocks for each processor.
-        Ok(output_data_blocks
-            .into_iter()
-            .map(WindowPartitionMeta::create)
-            .map(DataBlock::empty_with_meta)
-            .collect())
+    #[test]
+    fn test_row_number() {
+        let p = WindowPartitionTopNExchange::create(
+            vec![0, 1],
+            vec![SortColumnDescription {
+                offset: 2,
+                asc: true,
+                nulls_first: false,
+            }],
+            3,
+            WindowPartitionTopNFunc::RowNumber,
+            8,
+        );
+
+        let permutation: Vec<u32> = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+        let hashes: Vec<u64> = vec![5, 5, 5, 5, 5, 6, 7, 7, 7, 9, 10];
+        let partition_equality = vec![1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0];
+        let full_equality = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let got = p.partition_permutation(
+            permutation.len(),
+            &permutation,
+            &hashes,
+            &partition_equality,
+            &full_equality,
+        );
+
+        let want = vec![
+            vec![],
+            vec![1],
+            vec![0],
+            vec![],
+            vec![],
+            vec![10, 9, 8],
+            vec![5],
+            vec![4, 3, 2],
+        ];
+        assert_eq!(&want, &got)
+    }
+
+    #[test]
+    fn test_rank() {
+        let p = WindowPartitionTopNExchange::create(
+            vec![0, 1],
+            vec![SortColumnDescription {
+                offset: 2,
+                asc: true,
+                nulls_first: false,
+            }],
+            3,
+            WindowPartitionTopNFunc::Rank,
+            8,
+        );
+
+        let permutation: Vec<u32> = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+        let hashes: Vec<u64> = vec![5, 5, 5, 5, 5, 6, 7, 7, 7, 9, 10];
+        let partition_equality = vec![1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0];
+        let full_equality = vec![1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+        let got = p.partition_permutation(
+            permutation.len(),
+            &permutation,
+            &hashes,
+            &partition_equality,
+            &full_equality,
+        );
+
+        let want = vec![
+            vec![],
+            vec![1],
+            vec![0],
+            vec![],
+            vec![],
+            vec![10, 9, 8, 7],
+            vec![5],
+            vec![4, 3, 2],
+        ];
+        assert_eq!(&want, &got)
+    }
+
+    #[test]
+    fn test_dense_rank() {
+        let p = WindowPartitionTopNExchange::create(
+            vec![0, 1],
+            vec![SortColumnDescription {
+                offset: 2,
+                asc: true,
+                nulls_first: false,
+            }],
+            3,
+            WindowPartitionTopNFunc::DenseRank,
+            8,
+        );
+
+        let permutation: Vec<u32> = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+        let hashes: Vec<u64> = vec![5, 5, 5, 5, 5, 6, 7, 7, 7, 9, 10];
+        let partition_equality = vec![1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0];
+        let full_equality = vec![1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+        let got = p.partition_permutation(
+            permutation.len(),
+            &permutation,
+            &hashes,
+            &partition_equality,
+            &full_equality,
+        );
+
+        let want = vec![
+            vec![],
+            vec![1],
+            vec![0],
+            vec![],
+            vec![],
+            vec![10, 9, 8, 7, 6],
+            vec![5],
+            vec![4, 3, 2],
+        ];
+        assert_eq!(&want, &got)
     }
 }

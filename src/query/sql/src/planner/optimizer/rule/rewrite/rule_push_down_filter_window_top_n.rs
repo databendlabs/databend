@@ -31,6 +31,17 @@ use crate::plans::Sort;
 use crate::plans::Window;
 use crate::plans::WindowFuncType;
 
+/// Input:  Filter
+///           \
+///          Window
+///             \
+///              Sort
+///
+/// Output: Filter
+///           \
+///          Window
+///             \
+///              Sort(top n)
 pub struct RulePushDownFilterWindowTopN {
     id: RuleID,
     matchers: Vec<Matcher>,

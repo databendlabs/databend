@@ -288,7 +288,7 @@ impl<T: Exchange> MergePartitionProcessor<T> {
 
 impl<T: Exchange> Processor for MergePartitionProcessor<T> {
     fn name(&self) -> String {
-        format!("ShufflePartition({})", T::NAME)
+        format!("ShuffleMergePartition({})", T::NAME)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
