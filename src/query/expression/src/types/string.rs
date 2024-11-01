@@ -252,7 +252,7 @@ impl StringColumn {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.data.total_buffer_len() + self.len() * View::MAX_INLINE_SIZE
+        self.data.total_buffer_len() + self.len() * 12
     }
 
     pub fn index(&self, index: usize) -> Option<&str> {
