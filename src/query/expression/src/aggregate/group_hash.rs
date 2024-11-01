@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::types::Index;
 use databend_common_base::base::OrderedFloat;
+use databend_common_exception::Result;
 use ethnum::i256;
 
-use crate::types::decimal::DecimalType;
-use crate::types::geometry::GeometryType;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BinaryType;
@@ -25,16 +26,26 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataType;
+use crate::types::DecimalScalar;
+use crate::types::DecimalType;
+use crate::types::GeographyType;
+use crate::types::GeometryType;
+use crate::types::Number;
 use crate::types::NumberDataType;
+use crate::types::NumberScalar;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::visitor::ValueVisitor;
 use crate::with_number_mapped_type;
+use crate::with_number_type;
 use crate::Column;
 use crate::InputColumns;
+use crate::Scalar;
 use crate::ScalarRef;
+use crate::Value;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
@@ -48,12 +59,7 @@ pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
 }
 
 pub fn group_hash_columns_slice(cols: &[Column], values: &mut [u64]) {
-    debug_assert!(!cols.is_empty());
-    let mut iter = cols.iter();
-    combine_group_hash_column::<true>(iter.next().unwrap(), values);
-    for col in iter {
-        combine_group_hash_column::<false>(col, values);
-    }
+    group_hash_columns(InputColumns::Slice(cols), values)
 }
 
 pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
@@ -82,6 +88,9 @@ pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut 
         DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
         DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
         DataType::Geometry => combine_group_hash_string_column::<IS_FIRST, GeometryType>(c, values),
+        DataType::Geography => {
+            combine_group_hash_string_column::<IS_FIRST, GeographyType>(c, values)
+        }
         DataType::Nullable(_) => {
             let col = c.as_nullable().unwrap();
             if IS_FIRST {
@@ -146,6 +155,190 @@ fn combine_group_hash_string_column<const IS_FIRST: bool, T: ArgType>(
         for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
             *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
         }
+    }
+}
+
+pub fn group_hash_value_spread<I: Index>(
+    indices: &[I],
+    value: Value<AnyType>,
+    first: bool,
+    target: &mut [u64],
+) -> Result<()> {
+    if first {
+        let mut v = IndexHashVisitor::<true, _>::new(indices, target);
+        v.visit_value(value)
+    } else {
+        let mut v = IndexHashVisitor::<false, _>::new(indices, target);
+        v.visit_value(value)
+    }
+}
+
+struct IndexHashVisitor<'a, 'b, const IS_FIRST: bool, I>
+where I: Index
+{
+    indices: &'a [I],
+    target: &'b mut [u64],
+}
+
+impl<'a, 'b, const IS_FIRST: bool, I> IndexHashVisitor<'a, 'b, IS_FIRST, I>
+where I: Index
+{
+    fn new(indices: &'a [I], target: &'b mut [u64]) -> Self {
+        Self { indices, target }
+    }
+}
+
+impl<'a, 'b, const IS_FIRST: bool, I> ValueVisitor for IndexHashVisitor<'a, 'b, IS_FIRST, I>
+where I: Index
+{
+    fn visit_scalar(&mut self, scalar: Scalar) -> Result<()> {
+        let hash = match scalar {
+            Scalar::EmptyArray | Scalar::EmptyMap => return Ok(()),
+            Scalar::Null => NULL_HASH_VAL,
+            Scalar::Number(v) => with_number_type!(|NUM_TYPE| match v {
+                NumberScalar::NUM_TYPE(v) => v.agg_hash(),
+            }),
+            Scalar::Decimal(v) => match v {
+                DecimalScalar::Decimal128(v, _) => v.agg_hash(),
+                DecimalScalar::Decimal256(v, _) => v.agg_hash(),
+            },
+            Scalar::Timestamp(v) => v.agg_hash(),
+            Scalar::Date(v) => v.agg_hash(),
+            Scalar::Boolean(v) => v.agg_hash(),
+            Scalar::Binary(v) => v.agg_hash(),
+            Scalar::String(v) => v.as_bytes().agg_hash(),
+            Scalar::Variant(v) => v.agg_hash(),
+            Scalar::Geometry(v) => v.agg_hash(),
+            Scalar::Geography(v) => v.0.agg_hash(),
+            v => v.as_ref().agg_hash(),
+        };
+        self.visit_indices(|_| hash)
+    }
+
+    fn visit_null(&mut self, _len: usize) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_empty_array(&mut self, _len: usize) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_empty_map(&mut self, _len: usize) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_number<T: Number>(&mut self, buffer: Buffer<T>) -> Result<()> {
+        self.visit_indices(|i| T::upcast_scalar(buffer[i.to_usize()]).agg_hash())
+    }
+
+    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.visit_number(buffer)
+    }
+
+    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
+        self.visit_number(buffer)
+    }
+
+    fn visit_decimal<T: crate::types::Decimal>(
+        &mut self,
+        buffer: Buffer<T>,
+        size: crate::types::DecimalSize,
+    ) -> Result<()> {
+        self.visit_indices(|i| T::to_scalar(buffer[i.to_usize()], size).agg_hash())
+    }
+
+    fn visit_binary(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
+        self.visit_indices(|i| column.index(i.to_usize()).unwrap().agg_hash())
+    }
+
+    fn visit_variant(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
+        self.visit_binary(column)
+    }
+
+    fn visit_bitmap(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
+        self.visit_binary(column)
+    }
+
+    fn visit_string(&mut self, column: crate::types::StringColumn) -> Result<()> {
+        self.visit_indices(|i| column.index(i.to_usize()).unwrap().as_bytes().agg_hash())
+    }
+
+    fn visit_boolean(
+        &mut self,
+        bitmap: databend_common_arrow::arrow::bitmap::Bitmap,
+    ) -> Result<()> {
+        self.visit_indices(|i| bitmap.get(i.to_usize()).unwrap().agg_hash())
+    }
+
+    fn visit_geometry(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
+        self.visit_binary(column)
+    }
+
+    fn visit_geography(&mut self, column: crate::types::GeographyColumn) -> Result<()> {
+        self.visit_binary(column.0)
+    }
+
+    fn visit_nullable(&mut self, column: Box<crate::types::NullableColumn<AnyType>>) -> Result<()> {
+        let indices = self
+            .indices
+            .iter()
+            .cloned()
+            .filter(|&i| {
+                let i = i.to_usize();
+                let ok = column.validity.get(i).unwrap();
+                if !ok {
+                    let val = &mut self.target[i];
+                    if IS_FIRST {
+                        *val = NULL_HASH_VAL;
+                    } else {
+                        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ NULL_HASH_VAL;
+                    }
+                }
+                ok
+            })
+            .collect::<Vec<_>>();
+        if IS_FIRST {
+            let mut v = IndexHashVisitor::<true, _>::new(&indices, &mut self.target);
+            v.visit_column(column.column)?;
+        } else {
+            let mut v = IndexHashVisitor::<false, _>::new(&indices, &mut self.target);
+            v.visit_column(column.column)?;
+        }
+        Ok(())
+    }
+
+    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
+        self.visit_indices(|i| {
+            let x = T::upcast_scalar(T::to_owned_scalar(
+                T::index_column(&column, i.to_usize()).unwrap(),
+            ));
+            x.as_ref().agg_hash()
+        })
+    }
+}
+
+impl<'a, 'b, const IS_FIRST: bool, I> IndexHashVisitor<'a, 'b, IS_FIRST, I>
+where I: Index
+{
+    fn visit_indices<F>(&mut self, do_hash: F) -> Result<()>
+    where F: Fn(&I) -> u64 {
+        self.visit_indices_update(|i, val| {
+            let hash = do_hash(i);
+            if IS_FIRST {
+                *val = hash;
+            } else {
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ hash;
+            }
+        })
+    }
+
+    fn visit_indices_update<F>(&mut self, update: F) -> Result<()>
+    where F: Fn(&I, &mut u64) {
+        for i in self.indices {
+            let val = &mut self.target[i.to_usize()];
+            update(i, val);
+        }
+        Ok(())
     }
 }
 
@@ -261,5 +454,31 @@ impl AggHash for ScalarRef<'_> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
         self.to_string().as_bytes().agg_hash()
+    }
+}
+
+impl AggHash for NumberScalar {
+    fn agg_hash(&self) -> u64 {
+        match self {
+            NumberScalar::UInt8(n) => n.agg_hash(),
+            NumberScalar::UInt16(n) => n.agg_hash(),
+            NumberScalar::UInt32(n) => n.agg_hash(),
+            NumberScalar::UInt64(n) => n.agg_hash(),
+            NumberScalar::Int8(n) => n.agg_hash(),
+            NumberScalar::Int16(n) => n.agg_hash(),
+            NumberScalar::Int32(n) => n.agg_hash(),
+            NumberScalar::Int64(n) => n.agg_hash(),
+            NumberScalar::Float32(n) => n.agg_hash(),
+            NumberScalar::Float64(n) => n.agg_hash(),
+        }
+    }
+}
+
+impl AggHash for DecimalScalar {
+    fn agg_hash(&self) -> u64 {
+        match self {
+            DecimalScalar::Decimal128(n, _) => n.agg_hash(),
+            DecimalScalar::Decimal256(n, _) => n.agg_hash(),
+        }
     }
 }

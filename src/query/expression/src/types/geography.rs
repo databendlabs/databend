@@ -89,6 +89,12 @@ impl<'a> BinaryLike<'a> for GeographyRef<'a> {
     }
 }
 
+impl<'a> AsRef<[u8]> for GeographyRef<'a> {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GeographyType;
 
