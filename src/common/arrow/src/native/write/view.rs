@@ -16,7 +16,9 @@ use std::io::Write;
 
 use super::WriteOptions;
 use crate::arrow::array::BinaryViewArray;
+use crate::arrow::array::View;
 use crate::arrow::error::Result;
+use crate::native::Compression;
 
 pub(crate) fn write_view<W: Write>(
     w: &mut W,
@@ -26,9 +28,15 @@ pub(crate) fn write_view<W: Write>(
 ) -> Result<()> {
     // TODO: adaptive gc and dict by stats
     let array = array.clone().gc();
+
+    let total_size = array.len() * std::mem::size_of::<View>()
+        + array.data_buffers().iter().map(|x| x.len()).sum::<usize>();
+    w.write_all(&[Compression::None as u8])?;
+    w.write_all(&(total_size as u32).to_le_bytes())?;
+    w.write_all(&(total_size as u32).to_le_bytes())?;
+
     let input_buf: &[u8] = bytemuck::cast_slice(array.views().as_slice());
     w.write_all(input_buf)?;
-
     w.write_all(&(array.data_buffers().len() as u32).to_le_bytes())?;
 
     for buffer in array.data_buffers().iter() {

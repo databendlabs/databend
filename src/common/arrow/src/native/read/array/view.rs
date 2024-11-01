@@ -227,6 +227,10 @@ fn read_view_array<R: NativeReadBuf>(
     data_type: DataType,
     validity: Option<Bitmap>,
 ) -> Result<Box<dyn Array>> {
+    let mut scratch = vec![0; 9];
+    let (_compression, _compressed_size, _uncompressed_size) =
+        read_compress_header(reader, &mut scratch)?;
+
     let mut buffer = vec![View::default(); length];
     let temp_data =
         unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr() as *mut u8, length * 16) };
