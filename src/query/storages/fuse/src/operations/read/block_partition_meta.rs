@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 
@@ -37,27 +38,7 @@ impl Debug for BlockPartitionMeta {
     }
 }
 
+local_block_meta_serde!(BlockPartitionMeta);
+
 #[typetag::serde(name = "block_partition_meta")]
-impl BlockMetaInfo for BlockPartitionMeta {
-    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals CompactSegmentMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone_self CompactSegmentMeta")
-    }
-}
-
-impl serde::Serialize for BlockPartitionMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize CompactSegmentMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for BlockPartitionMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize CompactSegmentMeta")
-    }
-}
+impl BlockMetaInfo for BlockPartitionMeta {}
