@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_channel::Receiver;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -26,15 +27,15 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 
 pub struct BlockPartitionReceiverSource {
-    pub meta_receiver: Receiver<databend_common_exception::Result<PartInfoPtr>>,
+    pub meta_receiver: Receiver<Result<PartInfoPtr>>,
 }
 
 impl BlockPartitionReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        receiver: Receiver<databend_common_exception::Result<PartInfoPtr>>,
+        receiver: Receiver<Result<PartInfoPtr>>,
         output_port: Arc<OutputPort>,
-    ) -> databend_common_exception::Result<ProcessorPtr> {
+    ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
             meta_receiver: receiver,
         })
@@ -47,7 +48,7 @@ impl AsyncSource for BlockPartitionReceiverSource {
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_backtrace::framed]
-    async fn generate(&mut self) -> databend_common_exception::Result<Option<DataBlock>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.meta_receiver.recv().await {
             Ok(Ok(part)) => Ok(Some(DataBlock::empty_with_meta(
                 BlockPartitionMeta::create(vec![part]),
