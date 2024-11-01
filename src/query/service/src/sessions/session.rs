@@ -387,7 +387,7 @@ impl Session {
                     id
                 } else {
                     return Err(ErrorCode::BadArguments(
-                        "can not use temp table in http handler if token is not used",
+                        "can not use temp table in http handler if cookie is not enabled",
                     ));
                 }
             }

@@ -63,11 +63,11 @@ futures-util = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-tempfile = "3.4.0"
+tempfile = { workspace = true }
 
 # aws sdk
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.17.0"
+aws-config = { workspace = true, features = ["behavior-version-latest"] }
+aws-sdk-s3 = { workspace = true }
 
 [dev-dependencies]
 jsonb = { workspace = true }

@@ -26,11 +26,11 @@ databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
-tempfile = "3.4.0"
+tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-test-harness = "0.1.1"
+test-harness = { workspace = true }
 
 [lints]
 workspace = true
