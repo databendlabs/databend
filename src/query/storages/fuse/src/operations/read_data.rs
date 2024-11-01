@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -155,12 +154,7 @@ impl FuseTable {
                 });
             }
         }
-        let (tx, rx) = if !lazy_init_segments.is_empty() {
-            let (tx, rx) = async_channel::bounded(1);
-            (Some(tx), Some(rx))
-        } else {
-            (None, None)
-        };
+
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
@@ -203,6 +197,13 @@ impl FuseTable {
                 .transpose()?,
         );
 
+        let (tx, rx) = if !lazy_init_segments.is_empty() {
+            let (tx, rx) = async_channel::bounded(max_io_requests);
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
         self.build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
@@ -223,31 +224,23 @@ impl FuseTable {
             let table = self.clone();
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
-
-            GlobalIORuntime::instance().try_spawn(
-                async move {
-                    match table
-                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                        .await
-                    {
-                        Ok((_, partitions)) => {
-                            for part in partitions.partitions {
-                                sender.send(Ok(part)).await.map_err(|_e| {
-                                    ErrorCode::Internal("Send partition meta failed")
-                                })?;
-                            }
-                        }
-                        Err(err) => {
-                            sender
-                                .send(Err(err))
-                                .await
-                                .map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
+            self.runtime.spawn(async move {
+                match table
+                    .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
+                    .await
+                {
+                    Ok((_, partitions)) => {
+                        for part in partitions.partitions {
+                            // ignore the error, the sql may be killed or early stop
+                            let _ = sender.send(Ok(part)).await;
                         }
                     }
-                    Ok::<_, ErrorCode>(())
-                },
-                Some(String::from("PruneSnapshot")),
-            )?;
+                    Err(err) => {
+                        let _ = sender.send(Err(err)).await;
+                    }
+                }
+                Ok::<_, ErrorCode>(())
+            });
         }
 
         Ok(())

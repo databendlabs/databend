@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -132,6 +133,8 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only returns the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    pub(crate) runtime: Arc<Runtime>,
 }
 
 impl FuseTable {
@@ -224,6 +227,11 @@ impl FuseTable {
         let meta_location_generator =
             TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
 
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            2,
+            Some(String::from("PruneSnapshot")),
+        )?);
+
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator,
@@ -235,6 +243,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            runtime,
         }))
     }
 
