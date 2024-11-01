@@ -17,8 +17,6 @@ use std::sync::Once;
 
 use databend_common_base::base::GlobalSequence;
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_sled_store::get_sled_db;
-use databend_common_meta_sled_store::sled;
 use databend_common_tracing::closure_name;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
@@ -26,7 +24,6 @@ use fastrace::prelude::*;
 
 pub struct RaftTestContext {
     pub raft_config: RaftConfig,
-    pub db: sled::Db,
 }
 
 /// Create a new context for testing sled
@@ -39,7 +36,6 @@ pub fn new_raft_test_context() -> RaftTestContext {
 
     RaftTestContext {
         raft_config: config,
-        db: get_sled_db(),
     }
 }
 

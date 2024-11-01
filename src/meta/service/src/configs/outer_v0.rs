@@ -285,6 +285,12 @@ pub struct ConfigViaEnv {
     pub kvsrv_api_port: u16,
     pub kvsrv_raft_dir: String,
     pub kvsrv_no_sync: bool,
+
+    pub kvsrv_log_cache_max_items: u64,
+    pub kvsrv_log_cache_capacity: u64,
+    pub kvsrv_log_wal_chunk_max_records: u64,
+    pub kvsrv_log_wal_chunk_max_size: u64,
+
     pub kvsrv_snapshot_logs_since_last: u64,
     pub kvsrv_heartbeat_interval: u64,
     pub kvsrv_install_snapshot_timeout: u64,
@@ -338,6 +344,12 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_api_port: cfg.raft_config.raft_api_port,
             kvsrv_raft_dir: cfg.raft_config.raft_dir,
             kvsrv_no_sync: cfg.raft_config.no_sync,
+
+            kvsrv_log_cache_max_items: 1_000_000,
+            kvsrv_log_cache_capacity: 1 * 1024 * 1024 * 1024,
+            kvsrv_log_wal_chunk_max_records: 100_000,
+            kvsrv_log_wal_chunk_max_size: 256 * 1024 * 1024,
+
             kvsrv_snapshot_logs_since_last: cfg.raft_config.snapshot_logs_since_last,
             kvsrv_heartbeat_interval: cfg.raft_config.heartbeat_interval,
             kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
@@ -371,6 +383,12 @@ impl Into<Config> for ConfigViaEnv {
             raft_api_port: self.kvsrv_api_port,
             raft_dir: self.kvsrv_raft_dir,
             no_sync: self.kvsrv_no_sync,
+
+            log_cache_max_items: self.kvsrv_log_cache_max_items,
+            log_cache_capacity: self.kvsrv_log_cache_capacity,
+            log_wal_chunk_max_records: self.kvsrv_log_wal_chunk_max_records,
+            log_wal_chunk_max_size: self.kvsrv_log_wal_chunk_max_size,
+
             snapshot_logs_since_last: self.kvsrv_snapshot_logs_since_last,
             heartbeat_interval: self.kvsrv_heartbeat_interval,
             install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
@@ -470,6 +488,22 @@ pub struct RaftConfig {
     /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
     #[clap(long)]
     pub no_sync: bool,
+
+    /// The maximum number of log entries for log entries cache. Default value is 1_000_000.
+    #[clap(long, default_value = "1000000")]
+    pub log_cache_max_items: u64,
+
+    /// The maximum memory in bytes for the log entries cache. Default value is 1G.
+    #[clap(long, default_value = "1073741824")]
+    pub log_cache_capacity: u64,
+
+    /// Maximum number of records in a chunk of raft-log WAL. Default value is 100_000.
+    #[clap(long, default_value = "100000")]
+    pub log_wal_chunk_max_records: u64,
+
+    /// Maximum size in bytes for a chunk of raft-log WAL. Default value si 256M
+    #[clap(long, default_value = "268435456")]
+    pub log_wal_chunk_max_size: u64,
 
     /// The number of logs since the last snapshot to trigger next snapshot.
     #[clap(long, default_value = "1024")]
@@ -582,6 +616,12 @@ impl From<RaftConfig> for InnerRaftConfig {
             raft_api_port: x.raft_api_port,
             raft_dir: x.raft_dir,
             no_sync: x.no_sync,
+
+            log_cache_max_items: x.log_cache_max_items,
+            log_cache_capacity: x.log_cache_capacity,
+            log_wal_chunk_max_records: x.log_wal_chunk_max_records,
+            log_wal_chunk_max_size: x.log_wal_chunk_max_size,
+
             snapshot_logs_since_last: x.snapshot_logs_since_last,
             heartbeat_interval: x.heartbeat_interval,
             install_snapshot_timeout: x.install_snapshot_timeout,
@@ -615,6 +655,12 @@ impl From<InnerRaftConfig> for RaftConfig {
             raft_api_port: inner.raft_api_port,
             raft_dir: inner.raft_dir,
             no_sync: inner.no_sync,
+
+            log_cache_max_items: inner.log_cache_max_items,
+            log_cache_capacity: inner.log_cache_capacity,
+            log_wal_chunk_max_records: inner.log_wal_chunk_max_records,
+            log_wal_chunk_max_size: inner.log_wal_chunk_max_size,
+
             snapshot_logs_since_last: inner.snapshot_logs_since_last,
             heartbeat_interval: inner.heartbeat_interval,
             install_snapshot_timeout: inner.install_snapshot_timeout,

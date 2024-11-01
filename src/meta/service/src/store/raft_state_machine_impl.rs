@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
@@ -75,7 +75,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     // This method is not used
     #[fastrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<Box<DB>, StorageError> {
-        let ss_store = SnapshotStoreV003::new(self.inner.config.clone());
+        let ss_store = SnapshotStoreV004::new(self.inner.config.clone());
         let db = ss_store
             .new_temp()
             .map_err(|e| StorageError::write_snapshot(None, &e))?;
@@ -98,7 +98,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
 
         let sig = meta.signature();
 
-        let ss_store = SnapshotStoreV003::new(self.inner.config.clone());
+        let ss_store = SnapshotStoreV004::new(self.inner.config.clone());
         let final_path = ss_store
             .snapshot_config()
             .move_to_final_path(&snapshot.path, meta.snapshot_id.clone())

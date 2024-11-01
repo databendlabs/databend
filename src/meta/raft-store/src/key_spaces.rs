@@ -24,6 +24,7 @@ use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::LogIndex;
 use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::SeqNum;
@@ -31,6 +32,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ondisk::Header;
+use crate::ondisk::OnDisk;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 use crate::state_machine::ClientLastRespValue;
@@ -287,6 +289,48 @@ impl RaftStoreEntry {
         );
 
         unreachable!("unknown prefix: {}", prefix);
+    }
+
+    pub fn new_header(header: Header) -> Self {
+        RaftStoreEntry::DataHeader {
+            key: OnDisk::KEY_HEADER.to_string(),
+            value: header,
+        }
+    }
+
+    pub fn new_node_id(node_id: NodeId) -> Self {
+        Self::RaftStateKV {
+            key: RaftStateKey::Id,
+            value: RaftStateValue::NodeId(node_id),
+        }
+    }
+
+    pub fn new_vote(vote: Vote) -> Self {
+        Self::RaftStateKV {
+            key: RaftStateKey::HardState,
+            value: RaftStateValue::HardState(vote),
+        }
+    }
+
+    pub fn new_committed(committed: Option<LogId>) -> Self {
+        Self::RaftStateKV {
+            key: RaftStateKey::Committed,
+            value: RaftStateValue::Committed(committed),
+        }
+    }
+
+    pub fn new_purged(purged: LogId) -> Self {
+        Self::LogMeta {
+            key: LogMetaKey::LastPurged,
+            value: LogMetaValue::LogId(purged),
+        }
+    }
+
+    pub fn new_log_entry(log: Entry) -> Self {
+        Self::Logs {
+            key: log.log_id.index,
+            value: log,
+        }
     }
 }
 

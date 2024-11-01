@@ -36,7 +36,7 @@ pub async fn export_from_dir(args: &ExportArgs) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Export:");
 
-    let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
+    let sto_inn = StoreInner::open_create(&raft_config).await?;
     let mut lines = Arc::new(sto_inn).export();
 
     eprintln!("    From: {}", raft_config.raft_dir);

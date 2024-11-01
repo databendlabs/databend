@@ -22,7 +22,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
+use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v004;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_sled_store::openraft::MessageSummary;
@@ -159,7 +159,7 @@ impl RaftServiceImpl {
             let snapshot_data_v1 =
                 SnapshotData::open_temp(temp_path).map_err(io_err_to_read_snap_err)?;
 
-            let db = upgrade_snapshot_data_v002_to_v003(
+            let db = upgrade_snapshot_data_v002_to_v004(
                 &ss_store,
                 Box::new(snapshot_data_v1),
                 snapshot_id,

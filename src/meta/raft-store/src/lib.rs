@@ -17,6 +17,7 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(try_blocks)]
 #![allow(clippy::diverging_sub_expression)]
+extern crate core;
 
 pub mod applier;
 pub mod config;

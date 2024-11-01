@@ -329,7 +329,7 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = RaftStore::open_create(&config, open, create).await?;
+        let sto = RaftStore::open_create(&config).await?;
 
         // config.id only used for the first time
         let self_node_id = if sto.is_opened() { sto.id } else { config.id };
@@ -448,7 +448,7 @@ impl MetaNode {
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
                 // metrics about server storage
-                server_metrics::set_db_size(meta_node.get_db_size().unwrap_or_default());
+                server_metrics::set_db_size(meta_node.get_db_size().await);
                 server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
 
                 last_leader = mm.current_leader;
@@ -826,11 +826,8 @@ impl MetaNode {
         nodes
     }
 
-    fn get_db_size(&self) -> Result<u64, MetaError> {
-        self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::Damaged(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::StorageError(se)
-        })
+    async fn get_db_size(&self) -> u64 {
+        self.sto.log.read().await.on_disk_size()
     }
 
     async fn get_key_num(&self) -> u64 {
@@ -853,7 +850,7 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let db_size = self.get_db_size()?;
+        let db_size = self.get_db_size().await;
         let key_num = self.get_key_num().await;
 
         let metrics = self.raft.metrics().borrow().clone();

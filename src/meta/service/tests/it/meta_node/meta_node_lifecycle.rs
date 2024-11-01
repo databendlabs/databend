@@ -18,6 +18,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
+use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::raft_types::new_log_id;
@@ -697,7 +698,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.sto.raft_state.read().await.read_vote()?;
+        want_hs = leader.sto.clone().read_vote().await?;
 
         leader.stop().await?;
     }
@@ -729,13 +730,13 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     info!("--- check hard state");
     {
-        let hs = leader.sto.raft_state.read().await.read_vote()?;
+        let hs = leader.sto.clone().read_vote().await?;
         assert_eq!(want_hs, hs);
     }
 
     info!("--- check logs");
     {
-        let logs = leader.sto.log.read().await.range_values(..)?;
+        let logs = leader.sto.clone().try_get_log_entries(..).await?;
         info!("logs: {:?}", logs);
         assert_eq!(log_index as usize + 1, logs.len());
     }

@@ -31,7 +31,7 @@ use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::marked::Marked;
 use crate::sm_v003::write_entry::WriteEntry;
-use crate::sm_v003::SnapshotStoreV003;
+use crate::sm_v003::SnapshotStoreV004;
 use crate::state_machine::StateMachineMetaKey;
 
 /// Convert V002 snapshot lines in json of [`SMEntry`]
@@ -131,8 +131,8 @@ impl ordq::Work for SnapshotUpgradeV002ToV003 {
 /// Upgrade snapshot V002(ndjson) to V003(rotbl).
 ///
 /// After install, the state machine has only one level of data.
-pub async fn upgrade_snapshot_data_v002_to_v003(
-    snapshot_store: &SnapshotStoreV003,
+pub async fn upgrade_snapshot_data_v002_to_v004(
+    snapshot_store: &SnapshotStoreV004,
     data: Box<SnapshotData>,
     snapshot_id: SnapshotId,
 ) -> Result<DB, io::Error> {

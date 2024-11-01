@@ -36,12 +36,8 @@ impl RaftStore {
     }
 
     #[fastrace::trace]
-    pub async fn open_create(
-        config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
-    ) -> Result<Self, MetaStartupError> {
-        let sto = StoreInner::open_create(config, open, create).await?;
+    pub async fn open_create(config: &RaftConfig) -> Result<Self, MetaStartupError> {
+        let sto = StoreInner::open_create(config).await?;
         Ok(Self::new(sto))
     }
 

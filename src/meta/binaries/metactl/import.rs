@@ -20,6 +20,7 @@ use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Lines;
+use std::iter::Peekable;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -32,7 +33,6 @@ use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV003;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
-use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
@@ -108,6 +108,7 @@ async fn import_lines<B: BufRead + 'static>(
         }
         DataVersion::V002 => import_v002(raft_config, it).await?,
         DataVersion::V003 => import_v003(raft_config, it).await?,
+        DataVersion::V004 => crate::import_v004::import_v004(raft_config, it).await?,
     };
 
     Ok(max_log_id)
@@ -308,7 +309,7 @@ async fn init_new_cluster(
     let db = get_sled_db();
     let raft_config: RaftConfig = args.clone().into();
 
-    let mut sto = RaftStore::open_create(&raft_config, Some(()), None).await?;
+    let mut sto = RaftStore::open_create(&raft_config).await?;
 
     let last_applied = {
         let sm2 = sto.get_state_machine().await;
@@ -372,9 +373,9 @@ async fn init_new_cluster(
         }
     }
 
-    // Reset node id
-    let raft_state = RaftState::open_create(&db, &raft_config, Some(()), None).await?;
-    raft_state.set_node_id(args.id).await?;
+    // TODO: Reset node id
+    // let raft_state = RaftState::open_create(&db, &raft_config, Some(()), None).await?;
+    // raft_state.set_node_id(args.id).await?;
 
     Ok(())
 }
