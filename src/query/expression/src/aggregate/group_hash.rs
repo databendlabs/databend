@@ -287,7 +287,7 @@ where I: Index
                     if IS_FIRST {
                         *val = NULL_HASH_VAL;
                     } else {
-                        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ NULL_HASH_VAL;
+                        *val = merge_hash(*val, NULL_HASH_VAL);
                     }
                 }
                 ok
@@ -323,7 +323,7 @@ where I: Index
             if IS_FIRST {
                 *val = hash;
             } else {
-                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ hash;
+                *val = merge_hash(*val, hash);
             }
         })
     }
@@ -336,6 +336,10 @@ where I: Index
         }
         Ok(())
     }
+}
+
+fn merge_hash(a: u64, b: u64) -> u64 {
+    a.wrapping_mul(NULL_HASH_VAL) ^ b
 }
 
 pub trait AggHash {
@@ -476,5 +480,144 @@ impl AggHash for DecimalScalar {
             DecimalScalar::Decimal128(n, _) => n.agg_hash(),
             DecimalScalar::Decimal256(n, _) => n.agg_hash(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_arrow::arrow::bitmap::Bitmap;
+
+    use super::*;
+    use crate::types::ArgType;
+    use crate::types::Int32Type;
+    use crate::types::NullableColumn;
+    use crate::types::NullableType;
+    use crate::types::StringType;
+    use crate::BlockEntry;
+    use crate::DataBlock;
+    use crate::FromData;
+    use crate::Scalar;
+    use crate::Value;
+
+    fn merge_hash_slice(ls: &[u64]) -> u64 {
+        ls.iter().cloned().reduce(|a, b| merge_hash(a, b)).unwrap()
+    }
+
+    #[test]
+    fn test_value_spread() -> Result<()> {
+        let data = DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    Int32Type::data_type(),
+                    Value::Column(Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3])),
+                ),
+                BlockEntry::new(
+                    StringType::data_type(),
+                    Value::Scalar(Scalar::String("a".to_string())),
+                ),
+                BlockEntry::new(
+                    Int32Type::data_type(),
+                    Value::Column(Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3])),
+                ),
+                BlockEntry::new(
+                    StringType::data_type(),
+                    Value::Column(StringType::from_data(vec![
+                        "a", "b", "c", "d", "e", "f", "g", "h", "i",
+                    ])),
+                ),
+            ],
+            9,
+        );
+        data.check_valid()?;
+
+        {
+            let mut target = vec![0; data.num_rows()];
+            for (i, entry) in data.columns().iter().enumerate() {
+                let indices = [0, 3, 8];
+                group_hash_value_spread(&indices, entry.value.to_owned(), i == 0, &mut target)?;
+            }
+
+            assert_eq!(
+                [
+                    merge_hash_slice(&[
+                        3.agg_hash(),
+                        b"a".agg_hash(),
+                        3.agg_hash(),
+                        b"a".agg_hash(),
+                    ]),
+                    0,
+                    0,
+                    merge_hash_slice(&[
+                        2.agg_hash(),
+                        b"a".agg_hash(),
+                        2.agg_hash(),
+                        b"d".agg_hash(),
+                    ]),
+                    0,
+                    0,
+                    0,
+                    0,
+                    merge_hash_slice(&[
+                        3.agg_hash(),
+                        b"a".agg_hash(),
+                        3.agg_hash(),
+                        b"i".agg_hash(),
+                    ]),
+                ]
+                .as_slice(),
+                &target
+            );
+        }
+
+        {
+            let c = Int32Type::from_data(vec![3, 1, 2]);
+            let c = NullableColumn::<AnyType>::new(c, Bitmap::from([true, true, false]));
+            let nc = NullableType::<AnyType>::upcast_column(c);
+
+            let indices = [0, 1, 2];
+            let mut target = vec![0; 3];
+            group_hash_value_spread(
+                &indices,
+                Value::<AnyType>::Column(nc.clone()),
+                true,
+                &mut target,
+            )?;
+
+            assert_eq!(
+                [
+                    merge_hash_slice(&[3.agg_hash()]),
+                    merge_hash_slice(&[1.agg_hash()]),
+                    merge_hash_slice(&[NULL_HASH_VAL]),
+                ]
+                .as_slice(),
+                &target
+            );
+
+            let c = Int32Type::from_data(vec![2, 4, 3]);
+            group_hash_value_spread(&indices, Value::<AnyType>::Column(c), false, &mut target)?;
+
+            assert_eq!(
+                [
+                    merge_hash_slice(&[3.agg_hash(), 2.agg_hash()]),
+                    merge_hash_slice(&[1.agg_hash(), 4.agg_hash()]),
+                    merge_hash_slice(&[NULL_HASH_VAL, 3.agg_hash()]),
+                ]
+                .as_slice(),
+                &target
+            );
+
+            group_hash_value_spread(&indices, Value::<AnyType>::Column(nc), false, &mut target)?;
+
+            assert_eq!(
+                [
+                    merge_hash_slice(&[3.agg_hash(), 2.agg_hash(), 3.agg_hash()]),
+                    merge_hash_slice(&[1.agg_hash(), 4.agg_hash(), 1.agg_hash()]),
+                    merge_hash_slice(&[NULL_HASH_VAL, 3.agg_hash(), NULL_HASH_VAL]),
+                ]
+                .as_slice(),
+                &target
+            );
+        }
+        Ok(())
     }
 }
