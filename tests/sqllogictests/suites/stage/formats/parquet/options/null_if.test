@@ -26,7 +26,7 @@ remove @data/unload/parquet/null_if/
 query
 copy into @data/unload/parquet/null_if from string
 ----
-3 20 365
+3 56 365
 
 statement ok
 drop file format if exists parquet_null_if

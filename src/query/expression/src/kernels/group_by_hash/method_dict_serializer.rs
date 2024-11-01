@@ -17,6 +17,7 @@ use std::ptr::NonNull;
 use databend_common_exception::Result;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;
+use either::Either;
 
 use super::utils::serialize_group_columns;
 use crate::Column;
@@ -46,11 +47,11 @@ impl HashMethod for HashMethodDictionarySerializer {
             match group_column {
                 Column::Binary(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
-                    dictionary_columns.push(v.clone());
+                    dictionary_columns.push(Either::Left(v.clone()));
                 }
                 Column::String(v) => {
                     debug_assert_eq!(v.len(), num_rows);
-                    dictionary_columns.push(v.clone().into());
+                    dictionary_columns.push(Either::Left(v.clone().into()));
                 }
                 _ => serialize_columns.push(group_column.clone()),
             }
@@ -62,11 +63,9 @@ impl HashMethod for HashMethodDictionarySerializer {
             for column in serialize_columns.iter() {
                 serialize_size += column.serialize_size();
             }
-            dictionary_columns.push(serialize_group_columns(
-                (&serialize_columns).into(),
-                num_rows,
-                serialize_size,
-            ));
+            let state =
+                serialize_group_columns((&serialize_columns).into(), num_rows, serialize_size);
+            dictionary_columns.push(Either::Right(state));
         }
 
         let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());
@@ -76,9 +75,11 @@ impl HashMethod for HashMethodDictionarySerializer {
             let start = points.len();
 
             for dictionary_column in &dictionary_columns {
-                points.push(NonNull::from(unsafe {
-                    dictionary_column.index_unchecked(row)
-                }));
+                let data = match dictionary_column {
+                    Either::Left(l) => unsafe { l.index_unchecked(row) },
+                    Either::Right(r) => unsafe { r.index_unchecked(row) },
+                };
+                points.push(NonNull::from(data));
             }
 
             keys.push(DictionaryKeys::create(&points[start..]))

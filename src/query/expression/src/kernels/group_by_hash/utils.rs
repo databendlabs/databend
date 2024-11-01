@@ -17,12 +17,12 @@ use ethnum::i256;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::store_advance;
 use crate::set_vec_len_by_ptr;
-use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
+use crate::BinaryState;
+use crate::BinaryStateBuilder;
 use crate::Column;
 use crate::InputColumns;
 
@@ -31,8 +31,8 @@ pub fn serialize_group_columns(
     columns: InputColumns,
     num_rows: usize,
     serialize_size: usize,
-) -> BinaryColumn {
-    let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
+) -> BinaryState {
+    let mut builder = BinaryStateBuilder::with_capacity(num_rows, serialize_size);
     let mut data_ptr = builder.data.as_mut_ptr();
 
     for i in 0..num_rows {
@@ -44,7 +44,7 @@ pub fn serialize_group_columns(
         unsafe { set_vec_len_by_ptr(&mut builder.data, data_ptr) };
         builder.commit_row();
     }
-    builder.build()
+    builder.build_state()
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.

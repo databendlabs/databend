@@ -30,6 +30,7 @@ use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::BinaryState;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
@@ -409,6 +410,13 @@ impl BinaryColumnBuilder {
         }
         BinaryColumn {
             data: bulider.into(),
+        }
+    }
+
+    pub fn build_state(self) -> BinaryState {
+        BinaryState {
+            data: self.data.into(),
+            offsets: self.offsets.into(),
         }
     }
 

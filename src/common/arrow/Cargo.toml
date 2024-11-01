@@ -99,7 +99,7 @@ bytes = "^1"
 chrono = { workspace = true }
 chrono-tz = { workspace = true, optional = true }
 dyn-clone = "1"
-either = "1.9"
+either = { workspace = true }
 ethnum = { workspace = true }
 fallible-streaming-iterator = { version = "0.1", optional = true }
 foreign_vec = "0.1.0"

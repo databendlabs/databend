@@ -235,6 +235,7 @@ deepsize = { version = "0.2.0" }
 deltalake = "0.21"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
+either = { version = "1.9" }
 enquote = "1.1.0"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.0" }

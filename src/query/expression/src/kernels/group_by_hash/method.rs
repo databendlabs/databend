@@ -20,6 +20,7 @@ use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;
+use either::Either;
 use ethnum::i256;
 use ethnum::u256;
 
@@ -28,6 +29,7 @@ use crate::types::decimal::Decimal;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
+use crate::BinaryState;
 use crate::Column;
 use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
@@ -43,10 +45,11 @@ use crate::InputColumns;
 #[derive(Debug, Clone)]
 pub enum KeysState {
     Column(Column),
+    BinaryState(BinaryState),
     U128(Buffer<u128>),
     U256(Buffer<u256>),
     Dictionary {
-        columns: Vec<BinaryColumn>,
+        columns: Vec<Either<BinaryColumn, BinaryState>>,
         keys_point: Vec<NonNull<[u8]>>,
         dictionaries: Vec<DictionaryKeys>,
     },

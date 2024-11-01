@@ -63,7 +63,7 @@ impl HashMethod for HashMethodSingleBinary {
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => {
                 let data = col.into_inner();
-                Ok(Box::new(BinaryKeyAccessor::new(data)))
+                Ok(Box::new(BinaryViewKeyAccessor::new(data)))
             }
             _ => unreachable!(),
         }
@@ -81,17 +81,17 @@ impl HashMethod for HashMethodSingleBinary {
     }
 }
 
-pub struct BinaryKeyAccessor {
+pub struct BinaryViewKeyAccessor {
     data: BinaryViewArray,
 }
 
-impl BinaryKeyAccessor {
+impl BinaryViewKeyAccessor {
     pub fn new(data: BinaryViewArray) -> Self {
         Self { data }
     }
 }
 
-impl KeyAccessor for BinaryKeyAccessor {
+impl KeyAccessor for BinaryViewKeyAccessor {
     type Key = [u8];
 
     /// # Safety

@@ -3383,6 +3383,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "educe 0.4.23",
+ "either",
  "enum-as-inner 0.5.1",
  "ethnum",
  "futures",
