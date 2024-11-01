@@ -331,6 +331,7 @@ levenshtein_automata = "0.2.1"
 lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
+libmimalloc-sys = { version = "0.1.39" }
 limits-rs = "0.2.0"
 logforth = { version = "0.14", features = [
     'json',

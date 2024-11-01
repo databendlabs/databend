@@ -34,6 +34,7 @@ enquote = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 libc = { workspace = true }
+libmimalloc-sys = { workspace = true, optional = true }
 log = { workspace = true }
 logcall = { workspace = true }
 micromarshal = { workspace = true }
