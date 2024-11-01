@@ -29,7 +29,7 @@ prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = "0.8"
+sqlx = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
