@@ -35,7 +35,7 @@ use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::transforms::TransformWindowPartialTopN;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
-use crate::pipelines::processors::transforms::WindowPartitionExchange;
+use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 use crate::pipelines::processors::transforms::WindowSortDesc;
 use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::PipelineBuilder;
@@ -172,22 +172,22 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         if let Some(top_n) = &window_partition.top_n {
-            if top_n.top > 0 {
-                self.main_pipeline.add_transformer(|| {
-                    TransformWindowPartialTopN::new(
-                        partition_by.clone(),
-                        sort_desc.clone(),
-                        top_n.top,
-                        top_n.func,
-                    )
-                })
-            }
+            self.main_pipeline.exchange(
+                num_processors,
+                WindowPartitionTopNExchange::create(
+                    partition_by.clone(),
+                    sort_desc.clone(),
+                    top_n.top,
+                    top_n.func,
+                    num_partitions,
+                ),
+            )
+        } else {
+            self.main_pipeline.exchange(
+                num_processors,
+                WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+            );
         }
-
-        self.main_pipeline.exchange(
-            num_processors,
-            WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-        );
 
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let temp_dir_manager = TempDirManager::instance();
