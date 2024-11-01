@@ -19,6 +19,7 @@ mod export_from_grpc;
 pub mod admin;
 pub mod export_from_disk;
 pub mod import;
+pub mod import_v004;
 pub(crate) mod reading;
 pub mod upgrade;
 

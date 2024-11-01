@@ -113,3 +113,13 @@ pub fn get_sled_db() -> sled::Db {
 
     panic!("init_sled_db() or init_temp_sled_db() has to be called before using get_sled_db()");
 }
+
+/// Drop the global sled db.
+///
+/// Which means this program will not use sled db anymore.
+pub fn drop_sled_db() {
+    {
+        let mut guard = GLOBAL_SLED.as_ref().lock().unwrap();
+        *guard = None;
+    }
+}

@@ -38,6 +38,14 @@ pub enum LogMetaValue {
     LogId(LogId),
 }
 
+impl LogMetaValue {
+    pub fn log_id(&self) -> LogId {
+        match self {
+            LogMetaValue::LogId(log_id) => *log_id,
+        }
+    }
+}
+
 impl fmt::Display for LogMetaKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
