@@ -15,7 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use async_channel::Sender;
+use async_channel::Receiver;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
@@ -53,8 +53,8 @@ pub fn build_fuse_native_source_pipeline(
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-    is_lazy: bool,
-) -> Result<Vec<Sender<Result<PartInfoPtr>>>> {
+    receiver: Option<Receiver<Result<PartInfoPtr>>>,
+) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
 
@@ -62,7 +62,6 @@ pub fn build_fuse_native_source_pipeline(
         max_threads = max_threads.min(16);
         max_io_requests = max_io_requests.min(16);
     }
-    let mut senders = vec![];
 
     match block_reader.support_blocking_api() {
         true => {
@@ -72,13 +71,12 @@ pub fn build_fuse_native_source_pipeline(
             if topk.is_some() {
                 partitions.disable_steal();
             }
-            match is_lazy {
-                true => {
-                    let (pipe, source_senders) = build_lazy_source(max_threads, ctx.clone())?;
-                    senders.extend(source_senders);
+            match receiver {
+                Some(rx) => {
+                    let pipe = build_receiver_source(max_threads, ctx.clone(), rx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
-                false => {
+                None => {
                     let pipe = build_block_source(max_threads, partitions.clone(), 1, ctx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
@@ -103,14 +101,12 @@ pub fn build_fuse_native_source_pipeline(
             if topk.is_some() {
                 partitions.disable_steal();
             }
-
-            match is_lazy {
-                true => {
-                    let (pipe, source_senders) = build_lazy_source(max_io_requests, ctx.clone())?;
-                    senders.extend(source_senders);
+            match receiver {
+                Some(rx) => {
+                    let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
-                false => {
+                None => {
                     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
                     let pipe = build_block_source(
                         max_io_requests,
@@ -154,7 +150,7 @@ pub fn build_fuse_native_source_pipeline(
 
     pipeline.try_resize(max_threads)?;
 
-    Ok(senders)
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -168,25 +164,22 @@ pub fn build_fuse_parquet_source_pipeline(
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-    is_lazy: bool,
-) -> Result<Vec<Sender<Result<PartInfoPtr>>>> {
+    receiver: Option<Receiver<Result<PartInfoPtr>>>,
+) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
-
-    let mut senders = vec![];
 
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
 
-            match is_lazy {
-                true => {
-                    let (pipe, source_senders) = build_lazy_source(max_threads, ctx.clone())?;
-                    senders.extend(source_senders);
+            match receiver {
+                Some(rx) => {
+                    let pipe = build_receiver_source(max_threads, ctx.clone(), rx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
-                false => {
+                None => {
                     let pipe = build_block_source(max_threads, partitions.clone(), 1, ctx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
@@ -210,13 +203,12 @@ pub fn build_fuse_parquet_source_pipeline(
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
 
-            match is_lazy {
-                true => {
-                    let (pipe, source_senders) = build_lazy_source(max_io_requests, ctx.clone())?;
-                    senders.extend(source_senders);
+            match receiver {
+                Some(rx) => {
+                    let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
-                false => {
+                None => {
                     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
                     let pipe = build_block_source(
                         max_io_requests,
@@ -263,7 +255,7 @@ pub fn build_fuse_parquet_source_pipeline(
         )
     })?;
 
-    Ok(senders)
+    Ok(())
 }
 
 pub fn dispatch_partitions(
@@ -339,22 +331,20 @@ pub fn adjust_threads_and_request(
     (max_threads, max_io_requests)
 }
 
-pub fn build_lazy_source(
+pub fn build_receiver_source(
     max_threads: usize,
     ctx: Arc<dyn TableContext>,
-) -> Result<(Pipe, Vec<Sender<Result<PartInfoPtr>>>)> {
+    rx: Receiver<Result<PartInfoPtr>>,
+) -> Result<Pipe> {
     let mut source_builder = SourcePipeBuilder::create();
-    let mut senders = Vec::with_capacity(max_threads);
     for _i in 0..max_threads {
-        let (tx, rx) = async_channel::bounded(1);
         let output = OutputPort::create();
         source_builder.add_source(
             output.clone(),
-            BlockPartitionReceiverSource::create(ctx.clone(), rx, output)?,
+            BlockPartitionReceiverSource::create(ctx.clone(), rx.clone(), output)?,
         );
-        senders.push(tx);
     }
-    Ok((source_builder.finalize(), senders))
+    Ok(source_builder.finalize())
 }
 
 pub fn build_block_source(

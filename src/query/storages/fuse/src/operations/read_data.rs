@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use async_channel::Sender;
+use async_channel::Receiver;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -155,7 +155,12 @@ impl FuseTable {
                 });
             }
         }
-        let is_lazy = !lazy_init_segments.is_empty();
+        let (tx, rx) = if !lazy_init_segments.is_empty() {
+            let (tx, rx) = async_channel::bounded(1);
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
@@ -197,7 +202,8 @@ impl FuseTable {
                 })
                 .transpose()?,
         );
-        let senders = self.build_fuse_source_pipeline(
+
+        self.build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
             self.storage_format,
@@ -207,13 +213,13 @@ impl FuseTable {
             max_io_requests,
             index_reader,
             virtual_reader,
-            is_lazy,
+            rx,
         )?;
 
         // replace the column which has data mask if needed
         self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
 
-        if is_lazy {
+        if let Some(sender) = tx {
             let table = self.clone();
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
@@ -225,18 +231,14 @@ impl FuseTable {
                         .await
                     {
                         Ok((_, partitions)) => {
-                            let sender_size = senders.len();
-                            for (i, part) in partitions.partitions.into_iter().enumerate() {
-                                senders[i % sender_size]
-                                    .send(Ok(part))
-                                    .await
-                                    .map_err(|_e| {
-                                        ErrorCode::Internal("Send partition meta failed")
-                                    })?;
+                            for part in partitions.partitions {
+                                sender.send(Ok(part)).await.map_err(|_e| {
+                                    ErrorCode::Internal("Send partition meta failed")
+                                })?;
                             }
                         }
                         Err(err) => {
-                            senders[0]
+                            sender
                                 .send(Err(err))
                                 .await
                                 .map_err(|_e| ErrorCode::Internal("Send partition meta failed"))?;
@@ -263,8 +265,8 @@ impl FuseTable {
         max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
-        is_lazy: bool,
-    ) -> Result<Vec<Sender<Result<PartInfoPtr>>>> {
+        receiver: Option<Receiver<Result<PartInfoPtr>>>,
+    ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
         match storage_format {
@@ -279,7 +281,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
-                is_lazy,
+                receiver,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -291,7 +293,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
-                is_lazy,
+                receiver,
             ),
         }
     }
