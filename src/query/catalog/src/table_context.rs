@@ -204,10 +204,6 @@ pub trait TableContext: Send + Sync {
             this: S,
         }
         impl<S: TableContext + ?Sized> CheckAbort for Checker<Arc<S>> {
-            fn is_aborting(&self) -> bool {
-                self.this.check_aborting().is_err()
-            }
-
             fn try_check_aborting(&self) -> Result<()> {
                 self.this.check_aborting().with_context(|| "query aborted")
             }
@@ -387,6 +383,5 @@ pub trait TableContext: Send + Sync {
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
 
 pub trait CheckAbort {
-    fn is_aborting(&self) -> bool;
-    fn try_check_aborting(&self) -> databend_common_exception::Result<()>;
+    fn try_check_aborting(&self) -> Result<()>;
 }
