@@ -33,6 +33,7 @@ use crate::native::read::read_basic::*;
 use crate::native::read::BufReader;
 use crate::native::read::NativeReadBuf;
 use crate::native::read::PageIterator;
+use crate::native::CommonCompression;
 use crate::native::PageMeta;
 
 #[derive(Debug)]
@@ -228,8 +229,7 @@ fn read_view_array<R: NativeReadBuf>(
     validity: Option<Bitmap>,
 ) -> Result<Box<dyn Array>> {
     let mut scratch = vec![0; 9];
-    let (_compression, _compressed_size, _uncompressed_size) =
-        read_compress_header(reader, &mut scratch)?;
+    let (_c, _compressed_size, _uncompressed_size) = read_compress_header(reader, &mut scratch)?;
 
     let mut buffer = vec![View::default(); length];
     let temp_data =
@@ -241,9 +241,18 @@ fn read_view_array<R: NativeReadBuf>(
     let mut buffers = Vec::with_capacity(buffer_len as _);
 
     for _ in 0..buffer_len {
-        let len = reader.read_u32::<LittleEndian>()?;
-        let mut buffer = vec![0u8; len as usize];
-        reader.read_exact(&mut buffer)?;
+        scratch.clear();
+        let (compression, compressed_size, uncompressed_size) =
+            read_compress_header(reader, &mut scratch)?;
+        let c = CommonCompression::try_from(&compression)?;
+        let mut buffer = vec![];
+        c.decompress_common_binary(
+            reader,
+            uncompressed_size,
+            compressed_size,
+            &mut buffer,
+            &mut scratch,
+        )?;
         buffers.push(Buffer::from(buffer));
     }
 
