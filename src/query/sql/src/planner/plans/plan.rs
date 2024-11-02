@@ -373,7 +373,7 @@ pub enum Plan {
     CreateDictionary(Box<CreateDictionaryPlan>),
     DropDictionary(Box<DropDictionaryPlan>),
     ShowCreateDictionary(Box<ShowCreateDictionaryPlan>),
-    RenameDictionary(Box<RenameDictionaryPlan>)
+    RenameDictionary(Box<RenameDictionaryPlan>),
 }
 
 #[derive(Clone, Debug)]

@@ -81,9 +81,7 @@ impl FromToProto for mt::DictionaryIdToName {
     fn from_pb(p: pb::DictionaryIdToName) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let v = Self {
-            dict_id: p.dict_id
-        };
+        let v = Self { dict_id: p.dict_id };
         Ok(v)
     }
 

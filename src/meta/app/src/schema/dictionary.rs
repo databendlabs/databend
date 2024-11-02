@@ -275,7 +275,7 @@ mod kvapi_key_impl {
 
     impl kvapi::Value for DictionaryIdToName {
         type KeyType = DictionaryIdHistoryIdent;
-    
+
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             vec![self.dict_id.to_string()]
         }

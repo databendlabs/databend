@@ -49,13 +49,18 @@ impl Interpreter for RenameDictionaryInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let database = catalog.get_database(&self.plan.tenant, &self.plan.database).await?;
+        let database = catalog
+            .get_database(&self.plan.tenant, &self.plan.database)
+            .await?;
         let _resp = catalog
             .rename_dictionary(RenameDictionaryReq {
                 if_exists: self.plan.if_exists,
                 name_ident: DictionaryNameIdent::new(
                     self.plan.tenant.clone(),
-                    DictionaryIdentity::new(database.get_db_info().database_id.db_id, self.plan.dictionary.clone()),
+                    DictionaryIdentity::new(
+                        database.get_db_info().database_id.db_id,
+                        self.plan.dictionary.clone(),
+                    ),
                 ),
                 new_db_name: self.plan.new_database.clone(),
                 new_dictionary_name: self.plan.new_dictionary.clone(),
