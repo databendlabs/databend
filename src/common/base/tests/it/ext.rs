@@ -23,8 +23,9 @@ fn test_remove_first() {
         let result = vec_clone.remove_first(&item);
         if let Some(pos) = vec.iter().position(|x| x == &item) {
             assert_eq!(result, Some(vec[pos]));
-            vec_clone.remove(pos);
-            vec_clone == vec_clone
+            let mut v = vec.clone();
+            v.remove(pos);
+            vec_clone == v
         } else {
             assert_eq!(result, None);
             vec_clone == vec
