@@ -18,7 +18,6 @@ use super::WriteOptions;
 use crate::arrow::array::BinaryViewArray;
 use crate::arrow::array::View;
 use crate::arrow::error::Result;
-use crate::native::Compression;
 
 pub(crate) fn write_view<W: Write>(
     w: &mut W,
