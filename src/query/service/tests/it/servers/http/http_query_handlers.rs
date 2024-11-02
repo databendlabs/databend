@@ -24,7 +24,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
@@ -187,7 +187,7 @@ impl TestHttpQueryRequest {
             .unwrap();
         assert_eq!(
             resp.header(HEADER_VERSION),
-            Some(QUERY_SEMVER.to_string().as_str())
+            Some(DATABEND_SEMVER.to_string().as_str())
         );
 
         let status_code = resp.status();

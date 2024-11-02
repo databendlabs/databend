@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::Result;
-use itertools::Itertools;
 
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::DataBlock;
 
 impl DataBlock {
@@ -53,18 +51,9 @@ impl DataBlock {
             for num_rows in scatter_num_rows.iter().take(scatter_size) {
                 scatter_indices.push(Vec::with_capacity(*num_rows));
             }
-            let mut scatter_indices_ptrs = scatter_indices
-                .iter_mut()
-                .map(|indices| indices.as_mut_ptr())
-                .collect_vec();
+
             for (i, index) in indices.iter().enumerate() {
-                store_advance_aligned(
-                    i as u32,
-                    scatter_indices_ptrs.get_unchecked_mut(index.to_usize()),
-                );
-            }
-            for i in 0..scatter_size {
-                set_vec_len_by_ptr(&mut scatter_indices[i], scatter_indices_ptrs[i]);
+                scatter_indices[index.to_usize()].push_unchecked(i as u32);
             }
         }
         scatter_indices

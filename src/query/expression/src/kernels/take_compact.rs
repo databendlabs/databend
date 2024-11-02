@@ -14,10 +14,9 @@
 
 use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::Result;
 
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -179,15 +178,14 @@ impl<'a> ValueVisitor for TakeCompactVisitor<'a> {
 
 impl<'a> TakeCompactVisitor<'a> {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
-        let col_ptr = buffer.as_slice().as_ptr();
+        let buffer = buffer.as_slice();
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
-        let mut ptr = builder.as_mut_ptr();
         let mut remain;
 
         unsafe {
             for (index, cnt) in self.indices.iter() {
                 if *cnt == 1 {
-                    copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
+                    builder.push_unchecked(buffer[*index as usize]);
                     continue;
                 }
 
@@ -195,11 +193,12 @@ impl<'a> TakeCompactVisitor<'a> {
                 // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
                 // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
                 let max_segment = 1 << (31 - cnt.leading_zeros());
-                let base_ptr = ptr;
-                copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
+                let base_pos = builder.len();
+                builder.push_unchecked(buffer[*index as usize]);
+
                 let mut cur_segment = 1;
                 while cur_segment < max_segment {
-                    copy_advance_aligned(base_ptr, &mut ptr, cur_segment);
+                    builder.extend_from_within(base_pos..base_pos + cur_segment);
                     cur_segment <<= 1;
                 }
 
@@ -208,10 +207,9 @@ impl<'a> TakeCompactVisitor<'a> {
                 //  ^^^^ ---> ^^^^
                 remain = *cnt as usize - max_segment;
                 if remain > 0 {
-                    copy_advance_aligned(base_ptr, &mut ptr, remain);
+                    builder.extend_from_within(base_pos..base_pos + remain)
                 }
             }
-            set_vec_len_by_ptr(&mut builder, ptr);
         }
 
         builder.into()

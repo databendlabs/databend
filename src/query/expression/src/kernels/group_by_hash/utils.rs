@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ethnum::i256;
+use databend_common_base::vec_ext::VecExt;
+use databend_common_base::vec_ext::VecU8Ext;
 
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::store_advance;
-use crate::set_vec_len_by_ptr;
 use crate::types::decimal::DecimalColumn;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
@@ -33,15 +31,13 @@ pub fn serialize_group_columns(
     serialize_size: usize,
 ) -> BinaryState {
     let mut builder = BinaryStateBuilder::with_capacity(num_rows, serialize_size);
-    let mut data_ptr = builder.data.as_mut_ptr();
 
     for i in 0..num_rows {
         for col in columns.iter() {
             unsafe {
-                serialize_column_binary(col, i, &mut data_ptr);
+                serialize_column_binary(col, i, &mut builder.data);
             }
         }
-        unsafe { set_vec_len_by_ptr(&mut builder.data, data_ptr) };
         builder.commit_row();
     }
     builder.build_state()
@@ -51,53 +47,59 @@ pub fn serialize_group_columns(
 /// # Safety
 ///
 /// * The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
+pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut Vec<u8>) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => {
-                store_advance::<NUM_TYPE>(&v[row], row_space);
+                row_space.store_value_uncheckd(&v[row]);
             }
         }),
         Column::Decimal(v) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(v, _) => {
-                    store_advance::<DECIMAL_TYPE>(&v[row], row_space);
+                    row_space.store_value_uncheckd(&v[row]);
                 }
             })
         }
-        Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
+        Column::Boolean(v) => row_space.push_unchecked(v.get_bit(row) as u8),
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             let value = unsafe { v.index_unchecked(row) };
             let len = value.len();
-            store_advance::<u64>(&(len as u64), row_space);
-            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
+
+            row_space.store_value_uncheckd(&(len as u64));
+            row_space.extend_from_slice_unchecked(value);
         }
         Column::Geography(v) => {
             let value = unsafe { v.index_unchecked(row) };
             let value = borsh::to_vec(&value.0).unwrap();
             let len = value.len();
-            store_advance::<u64>(&(len as u64), row_space);
-            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
+
+            row_space.store_value_uncheckd(&(len as u64));
+            row_space.extend_from_slice_unchecked(&value);
         }
         Column::String(v) => {
             let value = unsafe { v.index_unchecked(row) };
             let len = value.len();
-            store_advance::<u64>(&(len as u64), row_space);
-            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
+
+            row_space.store_value_uncheckd(&(len as u64));
+            row_space.extend_from_slice_unchecked(value.as_bytes());
         }
-        Column::Timestamp(v) => store_advance::<i64>(&v[row], row_space),
-        Column::Date(v) => store_advance::<i32>(&v[row], row_space),
+        Column::Timestamp(v) => row_space.store_value_uncheckd(&v[row]),
+        Column::Date(v) => row_space.store_value_uncheckd(&v[row]),
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
-            store_advance::<u64>(&(data.len() as u64), row_space);
+            row_space.store_value_uncheckd(&(data.len() as u64));
+
             for i in 0..data.len() {
                 serialize_column_binary(&data, i, row_space);
             }
         }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
-            store_advance::<bool>(&valid, row_space);
+
+            row_space.push_unchecked(valid as u8);
+
             if valid {
                 serialize_column_binary(&c.column, row, row_space);
             }
