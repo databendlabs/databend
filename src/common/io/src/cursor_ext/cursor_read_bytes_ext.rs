@@ -112,8 +112,8 @@ where T: AsRef<[u8]>
         if available.is_empty() {
             return 0;
         }
-        for (index, byt) in available.iter().enumerate() {
-            if !f(*byt) {
+        for (index, byte) in available.iter().enumerate() {
+            if !f(*byte) {
                 self.consume(index);
                 return index;
             }
