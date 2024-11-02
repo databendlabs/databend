@@ -84,7 +84,7 @@ pub enum ScriptIR {
         condition: VarRef,
         to_label: LabelRef,
     },
-    /// Uncoditionally jumps to a specified label.
+    /// Unconditionally jumps to a specified label.
     Goto { to_label: LabelRef },
     /// Returns from the script.
     Return,
