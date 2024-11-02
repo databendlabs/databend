@@ -4099,11 +4099,13 @@ dependencies = [
  "databend-enterprise-storage-encryption",
  "flagset",
  "futures",
+ "http 1.1.0",
  "log",
  "opendal",
  "parquet",
  "prometheus-client",
  "regex",
+ "reqwest",
  "serde",
  "thiserror",
 ]
