@@ -86,8 +86,8 @@ table comm\ent
 query T
 select column_comment from information_schema.COLUMNS where table_schema='default' and table_name='t'
 ----
-'tes	'
-'sss'
+tes	
+sss
 
 query T
 select table_type from information_schema.TABLES where table_schema='default' and table_name='v_t'

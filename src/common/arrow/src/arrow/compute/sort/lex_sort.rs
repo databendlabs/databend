@@ -175,7 +175,7 @@ pub fn lexsort_to_indices<I: Index>(
 
 /// Sorts a list of [`SortColumn`] into a non-nullable [`PrimitiveArray`]
 /// representing the indices that would sort the columns.
-/// Implementing custom `build_compare_fn` for unsupportd data types.
+/// Implementing custom `build_compare_fn` for unsupported data types.
 pub fn lexsort_to_indices_impl<I: Index>(
     columns: &[SortColumn],
     limit: Option<usize>,

@@ -491,7 +491,7 @@ pub fn build_comparator<'a>(
 }
 
 /// returns a comparison function between any two arrays of each pair of arrays, according to `SortOptions`.
-/// Implementing custom `build_compare_fn` for unsupportd data types.
+/// Implementing custom `build_compare_fn` for unsupported data types.
 pub fn build_comparator_impl<'a>(
     pairs: &'a [(&'a [&'a dyn Array], &SortOptions)],
     build_compare_fn: &dyn Fn(&dyn Array, &dyn Array) -> Result<DynComparator>,
