@@ -207,6 +207,10 @@ impl<'a> Binder {
                 }
             }
 
+            Statement::StatementWithSettings { settings, stmt } => {
+                self.bind_statement_settings(bind_context, settings, stmt).await?
+            }
+
             Statement::Explain { query, options, kind } => {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
@@ -709,7 +713,9 @@ impl<'a> Binder {
             }
         }
 
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
+        self.ctx
+            .get_settings()
+            .set_batch_settings(&hint_settings, true)
     }
 
     // After the materialized cte was bound, add it to `m_cte_bound_ctx`

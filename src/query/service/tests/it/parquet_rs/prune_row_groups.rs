@@ -46,6 +46,7 @@ async fn test_impl_batch(args: &[(Scenario, &str, Vec<usize>)], prune: bool) {
         let plan = get_data_source_plan(fixture.new_query_ctx().await.unwrap(), &sql)
             .await
             .unwrap();
+        #[allow(deprecated)]
         let parquet_meta = parquet::file::footer::parse_metadata(file.as_file()).unwrap();
         let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
         let leaf_fields = Arc::new(schema.leaf_fields());

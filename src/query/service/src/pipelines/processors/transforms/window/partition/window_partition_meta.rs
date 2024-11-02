@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -30,19 +31,7 @@ impl WindowPartitionMeta {
     }
 }
 
-impl serde::Serialize for WindowPartitionMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unreachable!("WindowPartitionMeta does not support exchanging between multiple nodes")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for WindowPartitionMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unreachable!("WindowPartitionMeta does not support exchanging between multiple nodes")
-    }
-}
+local_block_meta_serde!(WindowPartitionMeta);
 
 impl Debug for WindowPartitionMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -50,20 +39,5 @@ impl Debug for WindowPartitionMeta {
     }
 }
 
-impl BlockMetaInfo for WindowPartitionMeta {
-    fn typetag_deserialize(&self) {
-        unimplemented!("WindowPartitionMeta does not support exchanging between multiple nodes")
-    }
-
-    fn typetag_name(&self) -> &'static str {
-        unimplemented!("WindowPartitionMeta does not support exchanging between multiple nodes")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for WindowPartitionMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone for WindowPartitionMeta")
-    }
-}
+#[typetag::serde(name = "window_partition")]
+impl BlockMetaInfo for WindowPartitionMeta {}

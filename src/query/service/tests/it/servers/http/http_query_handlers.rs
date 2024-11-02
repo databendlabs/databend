@@ -202,7 +202,7 @@ impl TestHttpQueryRequest {
 
 #[derive(Debug, Clone)]
 struct TestHttpQueryFetchReply {
-    resps: Vec<(StatusCode, QueryResponse)>,
+    pub resps: Vec<(StatusCode, QueryResponse)>,
 }
 
 impl TestHttpQueryFetchReply {
@@ -1394,7 +1394,7 @@ async fn test_affect() -> Result<()> {
                 ])),
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
-                need_refresh: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1419,7 +1419,7 @@ async fn test_affect() -> Result<()> {
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
-                need_refresh: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1439,7 +1439,7 @@ async fn test_affect() -> Result<()> {
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
-                need_refresh: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1461,7 +1461,7 @@ async fn test_affect() -> Result<()> {
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
-                need_refresh: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1485,7 +1485,7 @@ async fn test_affect() -> Result<()> {
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
-                need_refresh: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1712,6 +1712,20 @@ async fn test_max_size_per_page() -> Result<()> {
     let target = 10485760; // 10M
     assert!(len < target);
     assert!(len > target - 2000);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_max_size_per_page_total_rows() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    // bytes_limit / rows_limit = 1024 * 1024 * 10 / 10000 = 1048.567
+    let sql = "select repeat('1', 1050) as a from numbers(20000)";
+    let wait_time_secs = 5;
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    assert!(reply.error().is_none(), "{:?}", reply.error());
+    assert_eq!(reply.resps.len(), 3);
+    assert_eq!(reply.data().len(), 20000, "{:?}", reply.error());
     Ok(())
 }
 

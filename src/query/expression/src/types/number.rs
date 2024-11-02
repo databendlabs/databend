@@ -1359,11 +1359,9 @@ impl Number for F32 {
     }
 
     fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
-        unsafe {
-            lexical_core::WriteFloatOptions::builder()
-                .trim_floats(true)
-                .build_unchecked()
-        }
+        lexical_core::WriteFloatOptions::builder()
+            .trim_floats(true)
+            .build_unchecked()
     }
 }
 
@@ -1419,10 +1417,8 @@ impl Number for F64 {
     }
 
     fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
-        unsafe {
-            lexical_core::WriteFloatOptions::builder()
-                .trim_floats(true)
-                .build_unchecked()
-        }
+        lexical_core::WriteFloatOptions::builder()
+            .trim_floats(true)
+            .build_unchecked()
     }
 }

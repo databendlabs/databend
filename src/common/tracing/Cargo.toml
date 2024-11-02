@@ -11,26 +11,20 @@ doctest = false
 test = true
 
 [dependencies]
-anyhow = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
-defer = "0.2"
+defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
-logforth = { version = "0.12", features = [
-    'json',
-    'rolling_file',
-    'opentelemetry',
-    'fastrace',
-] }
+logforth = { workspace = true }
 opentelemetry = { workspace = true }
-opentelemetry-otlp = { workspace = true }
+opentelemetry-otlp = { workspace = true, features = ["reqwest-client"] }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

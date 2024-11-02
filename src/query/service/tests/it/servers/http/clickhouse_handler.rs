@@ -26,6 +26,8 @@ use http::Method;
 use http::StatusCode;
 use http::Uri;
 use poem::error::Result as PoemResult;
+use poem::middleware::CookieJarManager;
+use poem::middleware::CookieJarManagerEndpoint;
 use poem::web::headers::Authorization;
 use poem::Body;
 use poem::Endpoint;
@@ -315,16 +317,18 @@ impl QueryBuilder {
 }
 
 struct Server {
-    endpoint: HTTPSessionEndpoint<Route>,
+    endpoint: CookieJarManagerEndpoint<HTTPSessionEndpoint<Route>>,
 }
 
 impl Server {
     pub async fn new() -> Self {
         let session_middleware =
             HTTPSessionMiddleware::create(HttpHandlerKind::Clickhouse, EndpointKind::Clickhouse);
+
         let endpoint = Route::new()
             .nest("/", clickhouse_router())
-            .with(session_middleware);
+            .with(session_middleware)
+            .with(CookieJarManager::new());
         Server { endpoint }
     }
 

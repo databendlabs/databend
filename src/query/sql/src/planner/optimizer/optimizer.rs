@@ -204,6 +204,41 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
                 Ok(Plan::Explain { config, kind, plan })
             }
+            ExplainKind::Decorrelated => {
+                if let Plan::Query {
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    rewrite_kind,
+                    formatted_ast,
+                    ignore_result,
+                } = *plan
+                {
+                    let mut s_expr = s_expr;
+                    if s_expr.contain_subquery() {
+                        s_expr = Box::new(decorrelate_subquery(
+                            opt_ctx.metadata.clone(),
+                            *s_expr.clone(),
+                        )?);
+                    }
+                    Ok(Plan::Explain {
+                        kind,
+                        config,
+                        plan: Box::new(Plan::Query {
+                            s_expr,
+                            bind_context,
+                            metadata,
+                            rewrite_kind,
+                            formatted_ast,
+                            ignore_result,
+                        }),
+                    })
+                } else {
+                    Err(ErrorCode::BadArguments(
+                        "Cannot use EXPLAIN DECORRELATED with a non-query statement",
+                    ))
+                }
+            }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
                     let memo = get_optimized_memo(opt_ctx, *s_expr.clone()).await?;

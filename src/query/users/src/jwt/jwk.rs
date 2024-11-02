@@ -68,7 +68,7 @@ impl JwkKey {
             // Todo(youngsofun): the "alg" field is optional, maybe we need a config for it
             "RSA" => {
                 let k = RS256PublicKey::from_components(&decode(&self.n)?, &decode(&self.e)?)?;
-                Ok(PubKey::RSA256(k))
+                Ok(PubKey::RSA256(Box::new(k)))
             }
             "EC" => {
                 // borrowed from https://github.com/RustCrypto/traits/blob/master/elliptic-curve/src/jwk.rs#L68

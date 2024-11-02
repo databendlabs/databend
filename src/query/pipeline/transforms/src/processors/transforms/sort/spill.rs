@@ -12,36 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 
 use super::super::SortSpillParams;
 
 /// Mark a partially sorted [`DataBlock`] as a block needs to be spilled.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Debug)]
 pub struct SortSpillMetaWithParams(pub SortSpillParams);
 
-#[typetag::serde(name = "sort_spill")]
-impl BlockMetaInfo for SortSpillMetaWithParams {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals SortSpillMetaWithParams")
-    }
+local_block_meta_serde!(SortSpillMetaWithParams);
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone SortSpillMetaWithParams")
-    }
-}
+#[typetag::serde(name = "sort_spill")]
+impl BlockMetaInfo for SortSpillMetaWithParams {}
 
 /// Mark a partially sorted [`DataBlock`] as a block needs to be spilled.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Debug)]
 pub struct SortSpillMeta {}
 
-#[typetag::serde(name = "sort_spill")]
-impl BlockMetaInfo for SortSpillMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals SortSpillMeta")
-    }
+local_block_meta_serde!(SortSpillMeta);
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone SortSpillMeta")
-    }
-}
+#[typetag::serde(name = "sort_spill")]
+impl BlockMetaInfo for SortSpillMeta {}

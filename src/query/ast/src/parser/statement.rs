@@ -56,7 +56,7 @@ pub enum CreateDatabaseOption {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -74,6 +74,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
                     Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
+                    Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
                     None => ExplainKind::Plan,
@@ -81,6 +82,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 },
                 options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
                 query: Box::new(statement.stmt),
+            })
+        },
+    );
+
+    let query_setting = map_res(
+        rule! {
+            SETTINGS ~ #query_statement_setting? ~ #statement_body
+        },
+        |(_, opt_settings, statement)| {
+            Ok(Statement::StatementWithSettings {
+                settings: opt_settings,
+                stmt: Box::new(statement),
             })
         },
     );
@@ -2398,6 +2411,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
             | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
+            | #query_setting : "SETTINGS ( {<name> = <value> | (<name>, ...) = (<value>, ...)} )  Statement"
         ),
         // catalog
         rule!(
@@ -2805,6 +2819,36 @@ pub fn hint(i: Input) -> IResult<Hint> {
     rule!(#hint|#invalid_hint)(i)
 }
 
+pub fn query_setting(i: Input) -> IResult<(Identifier, Expr)> {
+    map(
+        rule! {
+            #ident ~ "=" ~ #subexpr(0)
+        },
+        |(id, _, value)| (id, value),
+    )(i)
+}
+
+pub fn query_statement_setting(i: Input) -> IResult<Settings> {
+    let query_set = map(
+        rule! {
+            "(" ~ #comma_separated_list0(query_setting) ~ ")"
+        },
+        |(_, query_setting, _)| {
+            let mut ids = Vec::with_capacity(query_setting.len());
+            let mut values = Vec::with_capacity(query_setting.len());
+            for (id, value) in query_setting {
+                ids.push(id);
+                values.push(value);
+            }
+            Settings {
+                set_type: SetType::SettingsQuery,
+                identifiers: ids,
+                values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+            }
+        },
+    );
+    rule!(#query_set: "(SETTING_NAME = VALUE, ...)")(i)
+}
 pub fn top_n(i: Input) -> IResult<u64> {
     map(
         rule! {

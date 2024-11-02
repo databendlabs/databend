@@ -65,15 +65,7 @@ impl BytesBatch {
 }
 
 #[typetag::serde(name = "raw_batch")]
-impl BlockMetaInfo for BytesBatch {
-    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
-        unreachable!("RawBatch as BlockMetaInfo is not expected to be compared.")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unreachable!("RawBatch as BlockMetaInfo is not expected to be cloned.")
-    }
-}
+impl BlockMetaInfo for BytesBatch {}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct RowBatchWithPosition {
@@ -210,12 +202,4 @@ impl CSVRowBatch {
 }
 
 #[typetag::serde(name = "row_batch")]
-impl BlockMetaInfo for RowBatchWithPosition {
-    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
-        unreachable!("RowBatch as BlockMetaInfo is not expected to be compared.")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unreachable!("RowBatch as BlockMetaInfo is not expected to be cloned.")
-    }
-}
+impl BlockMetaInfo for RowBatchWithPosition {}

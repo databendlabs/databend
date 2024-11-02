@@ -42,6 +42,7 @@ pub use runtime::execute_futures_in_parallel;
 pub use runtime::spawn;
 pub use runtime::spawn_blocking;
 pub use runtime::spawn_local;
+pub use runtime::spawn_named;
 pub use runtime::try_block_on;
 pub use runtime::try_spawn_blocking;
 pub use runtime::Dropper;

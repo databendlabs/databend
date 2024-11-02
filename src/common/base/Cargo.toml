@@ -12,7 +12,7 @@ test = true
 
 [features]
 tracing = ["tokio/tracing"]
-jemalloc = []
+jemalloc = ["tikv-jemalloc-sys", "tikv-jemalloc-ctl"]
 disable_initial_exec_tls = ["tikv-jemalloc-sys/disable_initial_exec_tls"]
 memory-profiling = [
     "tikv-jemalloc-sys/stats",
@@ -21,54 +21,53 @@ memory-profiling = [
 ]
 
 [dependencies]
+databend-common-exception = { workspace = true }
+
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 borsh = { workspace = true }
-bytesize = "1.1.0"
+bytesize = { workspace = true }
 chrono = { workspace = true }
-ctrlc = { version = "3.2.3", features = ["termination"] }
-databend-common-exception = { workspace = true }
-enquote = "1.1.0"
+ctrlc = { workspace = true }
+enquote = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
-micromarshal = "0.5.0"
-num-traits = "0.2.19"
-num_cpus = "1.13.1"
+micromarshal = { workspace = true }
+num-traits = { workspace = true }
+num_cpus = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
-pin-project-lite = "0.2.9"
-pprof = { version = "0.11.1", features = [
-    "flamegraph",
-    "protobuf-codec",
-    "protobuf",
-] }
+pin-project-lite = { workspace = true }
+pprof = { workspace = true }
 prometheus-client = { workspace = true }
-prometheus-parse = "0.2.3"
+prometheus-parse = { workspace = true }
 rand = { workspace = true, features = ["serde1"] }
 regex = { workspace = true }
-replace_with = "0.1.7"
-rustix = "0.38.37"
+replace_with = { workspace = true }
+reqwest = { workspace = true }
+reqwest-hickory-resolver = { workspace = true }
+rustix = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-state = "0.5"
-tikv-jemalloc-ctl = { workspace = true }
-tikv-jemalloc-sys = "0.5.2"
+state = { workspace = true }
+tikv-jemalloc-ctl = { workspace = true, optional = true }
+tikv-jemalloc-sys = { workspace = true, optional = true }
 tokio = { workspace = true }
-unicode-segmentation = "1.10.1"
+unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-procfs = { version = "^0.16" }
+procfs = { workspace = true }
 
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
-serde_test = "1.0"
+serde_test = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }
