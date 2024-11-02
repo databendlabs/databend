@@ -23,7 +23,7 @@ use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
@@ -605,7 +605,7 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
             .into_response(),
     };
     resp.headers_mut()
-        .insert(HEADER_VERSION, QUERY_SEMVER.to_string().parse().unwrap());
+        .insert(HEADER_VERSION, DATABEND_SEMVER.to_string().parse().unwrap());
     Ok(resp)
 }
 

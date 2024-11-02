@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_storages_fuse::TableContext;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
@@ -89,7 +89,7 @@ pub async fn login_handler(
     Json(req): Json<LoginRequest>,
     Query(query): Query<LoginQuery>,
 ) -> PoemResult<impl IntoResponse> {
-    let version = QUERY_SEMVER.to_string();
+    let version = DATABEND_SEMVER.to_string();
     check_login(ctx, &req)
         .await
         .map_err(HttpErrorCode::bad_request)?;
