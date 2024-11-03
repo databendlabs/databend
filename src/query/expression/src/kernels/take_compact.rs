@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use binary::BinaryColumnBuilder;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::Result;
@@ -216,16 +217,16 @@ impl<'a> TakeCompactVisitor<'a> {
     }
 
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
-        let num_rows = self.num_rows;
-        let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
-        for (index, cnt) in self.indices.iter() {
-            for _ in 0..*cnt {
-                unsafe {
-                    builder.put_slice(col.index_unchecked(*index as usize));
-                    builder.commit_row();
-                }
-            }
-        }
-        builder.build()
+        let new_views = self.take_primitive_types(col.data.views().clone());
+        let new_col = unsafe {
+            BinaryViewArray::new_unchecked_unknown_md(
+                col.data.data_type().clone(),
+                new_views,
+                col.data.data_buffers().clone(),
+                None,
+                Some(col.data.total_buffer_len()),
+            )
+        };
+        BinaryColumn::new(new_col)
     }
 }

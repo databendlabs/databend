@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use binary::BinaryColumnBuilder;
+use binary::NewBinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
@@ -775,8 +775,9 @@ impl Column {
         builder
     }
 
+    // TODO: reuse the buffer by `SELECTIVITY_THRESHOLD`
     pub fn take_block_vec_binary_types(col: &[BinaryColumn], indices: &[RowPtr]) -> BinaryColumn {
-        let mut builder = BinaryColumnBuilder::with_capacity(indices.len(), 0);
+        let mut builder = NewBinaryColumnBuilder::with_capacity(indices.len());
         for row_ptr in indices {
             unsafe {
                 builder.put_slice(

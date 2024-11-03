@@ -32,7 +32,7 @@ use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
+use crate::types::binary::NewBinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::geography::GeographyColumn;
 use crate::types::nullable::NullableColumn;
@@ -764,7 +764,7 @@ impl Column {
 }
 
 fn binary_array_to_binary_column<O: Offset>(array: &BinaryArray<O>) -> BinaryColumn {
-    let mut builder = BinaryColumnBuilder::with_capacity(array.len(), array.values().len());
+    let mut builder = NewBinaryColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
         builder.put_slice(value);
         builder.commit_row();
@@ -773,7 +773,7 @@ fn binary_array_to_binary_column<O: Offset>(array: &BinaryArray<O>) -> BinaryCol
 }
 
 fn utf8_array_to_binary_column<O: Offset>(array: &Utf8Array<O>) -> BinaryColumn {
-    let mut builder = BinaryColumnBuilder::with_capacity(array.len(), array.values().len());
+    let mut builder = NewBinaryColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
         builder.put_str(value);
         builder.commit_row();
@@ -782,7 +782,7 @@ fn utf8_array_to_binary_column<O: Offset>(array: &Utf8Array<O>) -> BinaryColumn 
 }
 
 fn fixed_size_binary_array_to_binary_column(array: &FixedSizeBinaryArray) -> BinaryColumn {
-    let mut builder = BinaryColumnBuilder::with_capacity(array.len(), array.values().len());
+    let mut builder = NewBinaryColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
         builder.put_slice(value);
         builder.commit_row();

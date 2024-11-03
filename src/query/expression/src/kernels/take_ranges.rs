@@ -14,7 +14,8 @@
 
 use core::ops::Range;
 
-use binary::BinaryColumnBuilder;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -32,6 +33,7 @@ use crate::Value;
 
 impl DataBlock {
     // Generate a new `DataBlock` by the specified indices ranges.
+    // ranges already cover most data
     pub fn take_ranges(self, ranges: &[Range<u32>], num_rows: usize) -> Result<DataBlock> {
         debug_assert_eq!(
             ranges
@@ -202,15 +204,17 @@ impl<'a> TakeRangeVisitor<'a> {
         builder.into()
     }
 
-    fn take_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
-        for range in self.ranges {
-            for index in range.start as usize..range.end as usize {
-                let value = unsafe { values.index_unchecked(index) };
-                builder.put_slice(value);
-                builder.commit_row();
-            }
-        }
-        builder.build()
+    fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
+        let new_views = self.take_primitive_types(col.data.views().clone());
+        let new_col = unsafe {
+            BinaryViewArray::new_unchecked_unknown_md(
+                col.data.data_type().clone(),
+                new_views,
+                col.data.data_buffers().clone(),
+                None,
+                Some(col.data.total_buffer_len()),
+            )
+        };
+        BinaryColumn::new(new_col)
     }
 }

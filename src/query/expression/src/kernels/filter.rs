@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use binary::BinaryColumnBuilder;
+use binary::NewBinaryColumnBuilder;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -114,7 +116,7 @@ pub enum IterationStrategy {
 }
 
 /// based on <https://dl.acm.org/doi/abs/10.1145/3465998.3466009>
-const SELECTIVITY_THRESHOLD: f64 = 0.8;
+pub const SELECTIVITY_THRESHOLD: f64 = 0.8;
 
 impl IterationStrategy {
     fn default_strategy(length: usize, true_count: usize) -> Self {
@@ -335,10 +337,10 @@ impl<'a> FilterVisitor<'a> {
     }
 
     fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        let mut builder = BinaryColumnBuilder::with_capacity(self.filter_rows, 0);
-
         match self.strategy {
             IterationStrategy::IndexIterator => {
+                let mut builder = NewBinaryColumnBuilder::with_capacity(self.filter_rows);
+
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 for i in iter {
                     unsafe {
@@ -346,15 +348,22 @@ impl<'a> FilterVisitor<'a> {
                         builder.commit_row();
                     }
                 }
+                builder.build()
             }
             _ => {
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
-                    builder.append_column(&values.slice(start..start + len));
-                });
+                // reuse the buffers
+                let new_views = self.filter_primitive_types(values.data.views().clone());
+                let new_col = unsafe {
+                    BinaryViewArray::new_unchecked_unknown_md(
+                        values.data.data_type().clone(),
+                        new_views,
+                        values.data.data_buffers().clone(),
+                        None,
+                        Some(values.data.total_buffer_len()),
+                    )
+                };
+                BinaryColumn::new(new_col)
             }
         }
-
-        builder.build()
     }
 }

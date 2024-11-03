@@ -26,6 +26,7 @@ use crate::Expr;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::SelectExprBuilder;
+use crate::SELECTIVITY_THRESHOLD;
 
 // FilterExecutor is used to filter `DataBlock` by `SelectExpr`.
 pub struct FilterExecutor {
@@ -114,7 +115,7 @@ impl FilterExecutor {
         // (3) Otherwise, use `take` to generate a new `DataBlock`.
         if result_count == origin_count {
             Ok(data_block)
-        } else if result_count as f64 > data_block.num_rows() as f64 * 0.8
+        } else if result_count as f64 > data_block.num_rows() as f64 * SELECTIVITY_THRESHOLD
             && data_block.num_columns() > 1
         {
             let range_count = self.build_selection_range(result_count);

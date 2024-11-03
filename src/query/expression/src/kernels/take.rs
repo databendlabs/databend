@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
-use binary::BinaryColumnBuilder;
+use binary::NewBinaryColumnBuilder;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
@@ -28,6 +30,7 @@ use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
+use crate::SELECTIVITY_THRESHOLD;
 
 pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
@@ -234,13 +237,29 @@ where I: databend_common_arrow::arrow::types::Index
 
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
         let num_rows = self.indices.len();
-        let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
-        for index in self.indices.iter() {
-            unsafe {
-                builder.put_slice(col.index_unchecked(index.to_usize()));
-                builder.commit_row();
+
+        if num_rows as f64 > col.len() as f64 * SELECTIVITY_THRESHOLD {
+            // reuse the buffers
+            let new_views = self.take_primitive_types(col.data.views().clone());
+            let new_col = unsafe {
+                BinaryViewArray::new_unchecked_unknown_md(
+                    col.data.data_type().clone(),
+                    new_views,
+                    col.data.data_buffers().clone(),
+                    None,
+                    Some(col.data.total_buffer_len()),
+                )
+            };
+            BinaryColumn::new(new_col)
+        } else {
+            let mut builder = NewBinaryColumnBuilder::with_capacity(num_rows);
+            for index in self.indices.iter() {
+                unsafe {
+                    builder.put_slice(col.index_unchecked(index.to_usize()));
+                    builder.commit_row();
+                }
             }
+            builder.build()
         }
-        builder.build()
     }
 }

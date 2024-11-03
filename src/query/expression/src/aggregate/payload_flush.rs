@@ -21,7 +21,7 @@ use super::payload::Payload;
 use super::probe_state::ProbeState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
+use crate::types::binary::NewBinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
@@ -36,7 +36,6 @@ use crate::types::NumberType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
-use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
@@ -130,10 +129,10 @@ impl Payload {
         if self.flush(state) {
             let row_count = state.row_count;
 
-            let mut state_builders: Vec<BinaryColumnBuilder> = self
+            let mut state_builders: Vec<NewBinaryColumnBuilder> = self
                 .aggrs
                 .iter()
-                .map(|agg| state_serializer(agg, row_count))
+                .map(|_| NewBinaryColumnBuilder::with_capacity(row_count))
                 .collect();
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
@@ -144,7 +143,7 @@ impl Payload {
                     .enumerate()
                 {
                     let arg_place = place.next(*addr_offset);
-                    aggr.serialize(arg_place, &mut state_builders[idx].data)
+                    aggr.serialize(arg_place, &mut state_builders[idx].row_buffer)
                         .unwrap();
                     state_builders[idx].commit_row();
                 }
@@ -300,7 +299,7 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> BinaryColumn {
         let len = state.probe_state.row_count;
-        let mut binary_builder = BinaryColumnBuilder::with_capacity(len, len * 4);
+        let mut binary_builder = NewBinaryColumnBuilder::with_capacity(len);
 
         unsafe {
             for idx in 0..len {
@@ -348,9 +347,4 @@ impl Payload {
         }
         builder.build()
     }
-}
-
-fn state_serializer(func: &AggregateFunctionRef, row: usize) -> BinaryColumnBuilder {
-    let size = func.serialize_size_per_row().unwrap_or(4);
-    BinaryColumnBuilder::with_capacity(row, row * size)
 }
