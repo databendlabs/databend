@@ -417,7 +417,11 @@ impl Debug for DecimalColumn {
 impl Debug for BinaryColumn {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("BinaryColumn")
-            .field("data", &format_args!("{:?}", self.data))
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
             .finish()
     }
 }

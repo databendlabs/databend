@@ -423,10 +423,7 @@ impl StringColumnBuilder {
     pub fn build_scalar(self) -> String {
         let bytes = self.inner.build_scalar();
 
-        #[cfg(debug_assertions)]
-        bytes.check_utf8().unwrap();
-
-        unsafe { String::from_utf8_unchecked(bytes) }
+        String::from_utf8(bytes).unwrap()
     }
 
     #[inline]
@@ -556,7 +553,7 @@ impl NewStringColumnBuilder {
     }
 
     pub fn put_char(&mut self, item: char) {
-        self.row_buffer.push(item)
+        self.row_buffer.push(item);
     }
 
     #[inline]
@@ -566,9 +563,7 @@ impl NewStringColumnBuilder {
 
     pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
         for c in iter {
-            let mut buf = [0; 4];
-            let result = c.encode_utf8(&mut buf);
-            self.row_buffer.push_str(result);
+            self.row_buffer.push(c);
         }
     }
 

@@ -875,15 +875,9 @@ impl PartialOrd for Column {
                 col1.iter().partial_cmp(col2.iter())
             }
             (Column::Tuple(fields1), Column::Tuple(fields2)) => fields1.partial_cmp(fields2),
-            (Column::Variant(col1), Column::Variant(col2)) => {
-                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
-                    if v1 == v2 {
-                        Some(Ordering::Equal)
-                    } else {
-                        jsonb::compare(v1, v2).ok()
-                    }
-                })
-            }
+            (Column::Variant(col1), Column::Variant(col2)) => col1
+                .iter()
+                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
             (Column::Geometry(col1), Column::Geometry(col2)) => {
                 col1.iter().partial_cmp_by(col2.iter(), compare_geometry)
             }
@@ -1177,6 +1171,11 @@ impl Column {
 
     pub fn check_valid(&self) -> Result<()> {
         match self {
+            Column::Binary(x) => x.check_valid(),
+            Column::Variant(x) => x.check_valid(),
+            Column::Geometry(x) => x.check_valid(),
+            Column::Geography(x) => x.check_valid(),
+            Column::Bitmap(x) => x.check_valid(),
             Column::Map(x) => {
                 for y in x.iter() {
                     y.check_valid()?;
@@ -1445,8 +1444,8 @@ impl Column {
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)
-            | Column::Geometry(col) => col.current_buffer_len() + col.len() * 8,
-            Column::String(col) => col.current_buffer_len() + col.len() * 8,
+            | Column::Geometry(col) => col.memory_size(),
+            Column::String(col) => col.memory_size(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
@@ -1665,7 +1664,7 @@ impl ColumnBuilder {
                 builder.len() * 32
             }
             ColumnBuilder::Boolean(c) => c.as_slice().len(),
-            ColumnBuilder::Binary(col) => col.memory_size(),
+            ColumnBuilder::Binary(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::String(col) => col.memory_size(),
             ColumnBuilder::Timestamp(col) => col.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,

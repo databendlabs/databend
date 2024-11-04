@@ -279,6 +279,10 @@ impl GeographyColumn {
             inner: self.0.iter(),
         }
     }
+
+    pub fn check_valid(&self) -> Result<()> {
+        self.0.check_valid()
+    }
 }
 
 pub struct GeographyIterator<'a> {
