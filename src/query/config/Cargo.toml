@@ -28,7 +28,6 @@ databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 log = { workspace = true }
-semver = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }

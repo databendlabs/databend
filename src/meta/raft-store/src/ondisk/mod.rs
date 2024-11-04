@@ -26,7 +26,6 @@ use std::fmt::Debug;
 pub use data_version::DataVersion;
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledTree;
-use databend_common_meta_stoerr::MetaBytesError;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
 use log::info;
@@ -84,8 +83,8 @@ impl OnDisk {
         let ks = tree.key_space::<DataHeader>();
 
         let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {
-            MetaStorageError::BytesError(MetaBytesError {
-                source: AnyError::error(format!(
+            MetaStorageError::Damaged(
+                AnyError::error(format!(
                     "Unable to read meta-service data version from disk; \
                     Possible reasons: opening future version meta-service with old version binary, \
                     or the on-disk data is damaged. \
@@ -93,7 +92,7 @@ impl OnDisk {
                     e
                 ))
                 .add_context(|| "open on-disk data"),
-            })
+            )
         })?;
         info!("Loaded header: {:?}", header);
 
@@ -177,7 +176,7 @@ impl OnDisk {
 
                     let last_snapshot = snapshot_store.load_last_snapshot().await.map_err(|e| {
                         let ae = AnyError::new(&e).add_context(|| "load last snapshot");
-                        MetaStorageError::SnapshotError(ae)
+                        MetaStorageError::Damaged(ae)
                     })?;
 
                     if last_snapshot.is_some() {

@@ -2956,9 +2956,9 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0819048a792e2eac58b455bbbcf6077c81e2780b3cc4f565a6e72e92dde56bd1"
+checksum = "bd8770a1c49fa21e62a768a0de442cc3f77998a357303d56ddd3485cb7c58d3a"
 dependencies = [
  "async-trait",
  "log",
@@ -3109,6 +3109,7 @@ dependencies = [
  "procfs",
  "prometheus-client",
  "prometheus-parse",
+ "quickcheck",
  "rand",
  "regex",
  "replace_with",
@@ -3239,7 +3240,6 @@ dependencies = [
  "databend-common-tracing",
  "log",
  "pretty_assertions",
- "semver",
  "serde",
  "serde_with",
  "serfig",
@@ -3783,7 +3783,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "databend-common-exception",
- "prost",
  "serde_json",
  "sled",
  "thiserror",
@@ -4655,9 +4654,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbea10312fa203003b572b701b6121cecd8eaf260e7ec7687796b552044541c6"
+checksum = "393daaf83f32c5685887103b04bd9762d43298f7820b9f888144877fcf1d89e8"
 dependencies = [
  "arrow",
  "async-compression 0.4.12",
@@ -4680,9 +4679,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-core"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b8f3bf7bb87d0f2fce8a1992eea4a0b442c01165a0d68aab2727a386c945ab"
+checksum = "7dd1abd8ab1c4200648510204cdfcb538af1eca2c9433e12276dee26a1806144"
 dependencies = [
  "arrow",
  "chrono",
@@ -4703,9 +4702,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40bed5c66f36e79baea7c95d2d0dc8433671606ca7152012562c7145e3b909a1"
+checksum = "5038d47b403ce2351b109fb82627959a27a16a53ce16397bf1ca39307e052b5c"
 dependencies = [
  "quote",
  "syn 2.0.58",
@@ -6063,6 +6062,16 @@ name = "env_filter"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
 dependencies = [
  "log",
  "regex",
@@ -8389,9 +8398,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41296eb09f183ac68eec06e03cdbea2e759633d4067b2f6552fc2e009bcad08b"
+checksum = "df2dcfbe0677734ab2f3ffa7fa7bfd4706bfdc1ef393f2ee30184aed67e631b4"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -11887,6 +11896,17 @@ checksum = "96a05e2e8efddfa51a84ca47cec303fac86c8541b686d37cac5efc0e094417bc"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "quickcheck"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
+dependencies = [
+ "env_logger 0.8.4",
+ "log",
+ "rand",
 ]
 
 [[package]]
