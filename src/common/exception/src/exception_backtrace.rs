@@ -63,21 +63,21 @@ fn enable_rust_backtrace() -> bool {
 pub fn capture() -> StackTrace {
     let instance = std::time::Instant::now();
     let stack_trace = StackTrace::capture();
-    log::info!(
-        "capture stack trace elapsed:{:?}, {:?}",
-        instance.elapsed(),
-        std::thread::current().name()
-    );
+    // log::info!(
+    //     "capture stack trace elapsed:{:?}, {:?}",
+    //     instance.elapsed(),
+    //     std::thread::current().name()
+    // );
     stack_trace
 }
 
-#[cfg(target_os = "linux")]
+// #[cfg(target_os = "linux")]
 pub struct ResolvedStackFrame {
     pub virtual_address: usize,
     pub physical_address: usize,
     pub symbol: String,
     pub inlined: bool,
-    pub location: Option<Location>,
+    pub location: Location,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -192,7 +192,7 @@ impl StackTrace {
     #[cfg(target_os = "linux")]
     fn fmt_frames(&self, f: &mut String, address: bool) -> std::fmt::Result {
         let mut idx = 0;
-        crate::exception_backtrace_elf::LibraryManager::instance().resolve_frames(
+        crate::elf::library_manager::LibraryManager::instance().resolve_frames(
             &self.frames,
             address,
             |frame| {
@@ -206,20 +206,20 @@ impl StackTrace {
 
                 #[allow(clippy::writeln_empty_string)]
                 writeln!(f, "")?;
-                if let Some(location) = frame.location {
-                    write!(f, "             at {}", location.file)?;
+                // if let Ok(location) = frame.location {
+                write!(f, "             at {}", frame.location.file)?;
 
-                    if let Some(line) = location.line {
-                        write!(f, ":{}", line)?;
+                if let Some(line) = frame.location.line {
+                    write!(f, ":{}", line)?;
 
-                        if let Some(column) = location.column {
-                            write!(f, ":{}", column)?;
-                        }
+                    if let Some(column) = frame.location.column {
+                        write!(f, ":{}", column)?;
                     }
-
-                    #[allow(clippy::writeln_empty_string)]
-                    writeln!(f, "")?;
                 }
+
+                #[allow(clippy::writeln_empty_string)]
+                writeln!(f, "")?;
+                // }
 
                 idx += 1;
                 Ok(())
@@ -234,6 +234,8 @@ static STACK_CACHE: LazyLock<RwLock<HashMap<Vec<StackFrame>, Arc<Mutex<Option<Ar
 
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !enable_rust_backtrace() {}
+
         let instance = std::time::Instant::now();
 
         let mut display_text = {
@@ -266,11 +268,11 @@ impl Debug for StackTrace {
         drop(display_guard);
 
         writeln!(f, "{}", display_text)?;
-        log::info!(
-            "format stack trace elapsed: {:?}, {:?}",
-            instance.elapsed(),
-            std::thread::current().name()
-        );
+        // log::info!(
+        //     "format stack trace elapsed: {:?}, {:?}",
+        //     instance.elapsed(),
+        //     std::thread::current().name()
+        // );
         Ok(())
     }
 }
