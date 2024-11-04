@@ -28,11 +28,10 @@ use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::v
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
 use databend_query::test_kits::*;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
-use opendal::raw::OpStat;
-use opendal::raw::RpStat;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::OperatorBuilder;
@@ -155,10 +154,14 @@ mod test_accessor {
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
     use opendal::raw::MaybeSend;
+    use opendal::raw::OpBatch;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
+    use opendal::raw::OpStat;
+    use opendal::raw::RpBatch;
     use opendal::raw::RpDelete;
     use opendal::raw::RpList;
+    use opendal::raw::RpStat;
 
     use super::*;
 
@@ -166,6 +169,7 @@ mod test_accessor {
     #[derive(Debug)]
     pub(crate) struct AccessorFaultyDeletion {
         hit_delete: AtomicBool,
+        hit_batch: AtomicBool,
         hit_stat: AtomicBool,
         inject_delete_faulty: bool,
         inject_stat_faulty: bool,
@@ -175,6 +179,7 @@ mod test_accessor {
         pub(crate) fn with_delete_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
+                hit_batch: AtomicBool::new(false),
                 hit_stat: AtomicBool::new(false),
                 inject_delete_faulty: true,
                 inject_stat_faulty: false,
@@ -184,6 +189,7 @@ mod test_accessor {
         pub(crate) fn with_stat_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
+                hit_batch: AtomicBool::new(false),
                 hit_stat: AtomicBool::new(false),
                 inject_delete_faulty: false,
                 inject_stat_faulty: true,
@@ -192,6 +198,10 @@ mod test_accessor {
 
         pub(crate) fn hit_delete_operation(&self) -> bool {
             self.hit_delete.load(Ordering::Acquire)
+        }
+
+        pub(crate) fn hit_batch_operation(&self) -> bool {
+            self.hit_batch.load(Ordering::Acquire)
         }
 
         pub(crate) fn hit_stat_operation(&self) -> bool {
@@ -263,6 +273,21 @@ mod test_accessor {
                 ))
             } else {
                 Ok(RpDelete::default())
+            }
+        }
+
+        async fn batch(&self, _args: OpBatch) -> opendal::Result<RpBatch> {
+            self.hit_delete.store(true, Ordering::Release);
+            self.hit_batch.store(true, Ordering::Release);
+
+            // in our case, there are only batch deletions
+            if self.inject_delete_faulty {
+                Err(opendal::Error::new(
+                    opendal::ErrorKind::Unexpected,
+                    "does not matter (delete)",
+                ))
+            } else {
+                Ok(RpBatch::new(vec![]))
             }
         }
 
@@ -437,6 +462,26 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
 
     // verify that accessor.delete() was called
     assert!(!accessor.hit_delete_operation());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
+    // errors should not be swallowed in remove_file_in_batch
+    let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
+    let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let file_util = Files::create(ctx, operator);
+
+    // files to be deleted does not matter, faulty_accessor will always fail to delete
+    let r = file_util.remove_file_in_batch(vec!["1", "2"]).await;
+    assert!(r.is_err());
+
+    // verify that accessor.delete() was called
+    assert!(faulty_accessor.hit_delete_operation());
+    assert!(faulty_accessor.hit_batch_operation());
 
     Ok(())
 }
