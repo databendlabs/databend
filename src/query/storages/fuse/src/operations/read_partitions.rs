@@ -419,7 +419,7 @@ impl FuseTable {
         }
 
         // Output columns don't have source columns of virtual columns,
-        // which can be ingored if all virtual columns are generated.
+        // which can be ignored if all virtual columns are generated.
         let columns = if let Some(output_columns) = output_columns {
             output_columns.project_column_nodes(column_nodes).unwrap()
         } else {

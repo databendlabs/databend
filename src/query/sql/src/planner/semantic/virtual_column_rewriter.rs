@@ -248,7 +248,7 @@ impl VirtualColumnRewriter {
                         // If this field name does not have a virtual column created,
                         // we can't read this data directly, but we can still generate a virtual column
                         // and push down to the storage layer.
-                        // Those virutal columns can be generated from the source column.
+                        // Those virtual columns can be generated from the source column.
                         // This can be used to reminder user to create it to speed up the query.
                         let is_created =
                             match self.virtual_column_names.get(&base_column.table_index) {
