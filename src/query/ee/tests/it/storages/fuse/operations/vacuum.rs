@@ -32,8 +32,6 @@ use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
-use opendal::raw::OpStat;
-use opendal::raw::RpStat;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::OperatorBuilder;
@@ -156,10 +154,14 @@ mod test_accessor {
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
     use opendal::raw::MaybeSend;
+    use opendal::raw::OpBatch;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
+    use opendal::raw::OpStat;
+    use opendal::raw::RpBatch;
     use opendal::raw::RpDelete;
     use opendal::raw::RpList;
+    use opendal::raw::RpStat;
 
     use super::*;
 
