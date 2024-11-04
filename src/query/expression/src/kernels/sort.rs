@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 
 use crate::types::DataType;
@@ -23,13 +21,6 @@ use crate::DataBlock;
 use crate::Scalar;
 use crate::SortCompare;
 use crate::Value;
-
-pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
-
-pub trait CheckAbort {
-    fn is_aborting(&self) -> bool;
-    fn try_check_aborting(&self) -> Result<()>;
-}
 
 #[derive(Clone)]
 pub struct SortColumnDescription {

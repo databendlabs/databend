@@ -27,9 +27,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -206,10 +204,6 @@ pub trait TableContext: Send + Sync {
             this: S,
         }
         impl<S: TableContext + ?Sized> CheckAbort for Checker<Arc<S>> {
-            fn is_aborting(&self) -> bool {
-                self.this.as_ref().check_aborting().is_err()
-            }
-
             fn try_check_aborting(&self) -> Result<()> {
                 self.this.check_aborting().with_context(|| "query aborted")
             }
@@ -384,4 +378,10 @@ pub trait TableContext: Send + Sync {
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
     fn get_shared_settings(&self) -> Arc<Settings>;
+}
+
+pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
+
+pub trait CheckAbort {
+    fn try_check_aborting(&self) -> Result<()>;
 }

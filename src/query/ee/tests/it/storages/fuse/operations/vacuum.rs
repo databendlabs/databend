@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::CheckAbort;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -125,8 +127,41 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     let size = operator.list_with("test_dir/").recursive(true).await?.len();
     assert!((3..=4).contains(&size));
 
+    struct NoAbort;
+    struct AbortRightNow;
+    impl CheckAbort for NoAbort {
+        fn try_check_aborting(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    impl CheckAbort for AbortRightNow {
+        fn try_check_aborting(&self) -> Result<()> {
+            Err(ErrorCode::AbortedQuery(""))
+        }
+    }
+
+    // check abort
+
+    let r = do_vacuum_temporary_files(
+        Arc::new(AbortRightNow),
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        1,
+    )
+    .await;
+
+    assert!(r.is_err_and(|e| e.code() == ErrorCode::ABORTED_QUERY));
+
+    let no_abort = Arc::new(NoAbort);
     tokio::time::sleep(Duration::from_secs(2)).await;
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), 1).await?;
+    do_vacuum_temporary_files(
+        no_abort.clone(),
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        1,
+    )
+    .await?;
 
     let size = operator.list("test_dir/").await?.len();
     assert!((2..=3).contains(&size));
@@ -137,12 +172,24 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
         .write("test_dir/test5/finished", vec![1, 2])
         .await?;
 
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), 2).await?;
+    do_vacuum_temporary_files(
+        no_abort.clone(),
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        2,
+    )
+    .await?;
     let size = operator.list("test_dir/").await?.len();
     assert!((2..=3).contains(&size));
 
     tokio::time::sleep(Duration::from_secs(3)).await;
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), 1000).await?;
+    do_vacuum_temporary_files(
+        no_abort.clone(),
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(3)),
+        1000,
+    )
+    .await?;
 
     dbg!(operator.list_with("test_dir/").await?);
 
