@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -378,6 +379,8 @@ pub trait TableContext: Send + Sync {
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
     fn get_shared_settings(&self) -> Arc<Settings>;
+
+    fn get_runtime(&self) -> Result<Arc<Runtime>>;
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

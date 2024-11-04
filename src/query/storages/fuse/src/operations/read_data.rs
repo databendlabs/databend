@@ -14,13 +14,16 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::Runtime;
+use async_channel::Receiver;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
@@ -151,32 +154,6 @@ impl FuseTable {
                 });
             }
         }
-        if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-
-            // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_schema = table_schema.clone();
-                let ctx = query_ctx.clone();
-                let push_downs = push_downs.clone();
-                // let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                        .await?;
-
-                    Result::<_>::Ok(partitions)
-                })?;
-
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        }
 
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
@@ -219,6 +196,13 @@ impl FuseTable {
                 .transpose()?,
         );
 
+        let (tx, rx) = if !lazy_init_segments.is_empty() {
+            let (tx, rx) = async_channel::bounded(max_io_requests);
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
         self.build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
@@ -229,10 +213,47 @@ impl FuseTable {
             max_io_requests,
             index_reader,
             virtual_reader,
+            rx,
         )?;
 
         // replace the column which has data mask if needed
-        self.apply_data_mask_policy_if_needed(ctx, plan, pipeline)?;
+        self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
+
+        if let Some(sender) = tx {
+            let table = self.clone();
+            let table_schema = self.schema_with_stream();
+            let push_downs = plan.push_downs.clone();
+            pipeline.set_on_init(move || {
+                ctx.get_runtime()?.try_spawn(
+                    async move {
+                        match table
+                            .prune_snapshot_blocks(
+                                ctx,
+                                push_downs,
+                                table_schema,
+                                lazy_init_segments,
+                                0,
+                            )
+                            .await
+                        {
+                            Ok((_, partitions)) => {
+                                for part in partitions.partitions {
+                                    // ignore the error, the sql may be killed or early stop
+                                    let _ = sender.send(Ok(part)).await;
+                                }
+                            }
+                            Err(err) => {
+                                let _ = sender.send(Err(err)).await;
+                            }
+                        }
+                        Ok::<_, ErrorCode>(())
+                    },
+                    None,
+                )?;
+
+                Ok(())
+            });
+        }
 
         Ok(())
     }
@@ -249,6 +270,7 @@ impl FuseTable {
         max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
+        receiver: Option<Receiver<Result<PartInfoPtr>>>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
@@ -264,6 +286,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -275,6 +298,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
         }
     }
