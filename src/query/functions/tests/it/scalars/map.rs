@@ -410,4 +410,3 @@ fn test_map_pick(file: &mut impl Write) {
         &columns,
     );
 }
-
