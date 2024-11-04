@@ -14,12 +14,13 @@
 
 use std::sync::Arc;
 
-use binary::NewBinaryColumnBuilder;
+use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
 use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
+use string::NewStringColumnBuilder;
 
 use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
@@ -777,7 +778,7 @@ impl Column {
 
     // TODO: reuse the buffer by `SELECTIVITY_THRESHOLD`
     pub fn take_block_vec_binary_types(col: &[BinaryColumn], indices: &[RowPtr]) -> BinaryColumn {
-        let mut builder = NewBinaryColumnBuilder::with_capacity(indices.len());
+        let mut builder = BinaryColumnBuilder::with_capacity(indices.len(), 0);
         for row_ptr in indices {
             unsafe {
                 builder.put_slice(
@@ -789,17 +790,17 @@ impl Column {
         builder.build()
     }
 
-    pub fn take_block_vec_string_types(cols: &[StringColumn], indices: &[RowPtr]) -> StringColumn {
-        let binary_cols = cols
-            .iter()
-            .map(|col| col.clone().into())
-            .collect::<Vec<BinaryColumn>>();
-        unsafe {
-            StringColumn::from_binary_unchecked(Self::take_block_vec_binary_types(
-                &binary_cols,
-                indices,
-            ))
+    pub fn take_block_vec_string_types(col: &[StringColumn], indices: &[RowPtr]) -> StringColumn {
+        let mut builder = NewStringColumnBuilder::with_capacity(indices.len());
+        for row_ptr in indices {
+            unsafe {
+                builder.put_str(
+                    col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize),
+                );
+                builder.commit_row();
+            }
         }
+        builder.build()
     }
 
     pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {

@@ -295,7 +295,11 @@ impl BlockReader {
     ) -> Result<ArrayIter<'static>> {
         let field = ArrowField::new(
             name,
-            ArrowType::Extension("Variant".to_string(), Box::new(ArrowType::BinaryView), None),
+            ArrowType::Extension(
+                "Variant".to_string(),
+                Box::new(ArrowType::LargeBinary),
+                None,
+            ),
             true,
         );
         let schema = ArrowSchema::from(vec![field.clone()]);

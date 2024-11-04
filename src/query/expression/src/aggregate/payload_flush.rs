@@ -21,10 +21,11 @@ use super::payload::Payload;
 use super::probe_state::ProbeState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
-use crate::types::binary::NewBinaryColumnBuilder;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
+use crate::types::string::NewStringColumnBuilder;
 use crate::types::string::StringColumn;
 use crate::types::ArgType;
 use crate::types::BooleanType;
@@ -129,10 +130,10 @@ impl Payload {
         if self.flush(state) {
             let row_count = state.row_count;
 
-            let mut state_builders: Vec<NewBinaryColumnBuilder> = self
+            let mut state_builders: Vec<BinaryColumnBuilder> = self
                 .aggrs
                 .iter()
-                .map(|_| NewBinaryColumnBuilder::with_capacity(row_count))
+                .map(|_| BinaryColumnBuilder::with_capacity(row_count, row_count * 4))
                 .collect();
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
@@ -143,7 +144,7 @@ impl Payload {
                     .enumerate()
                 {
                     let arg_place = place.next(*addr_offset);
-                    aggr.serialize(arg_place, &mut state_builders[idx].row_buffer)
+                    aggr.serialize(arg_place, &mut state_builders[idx].data)
                         .unwrap();
                     state_builders[idx].commit_row();
                 }
@@ -299,7 +300,7 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> BinaryColumn {
         let len = state.probe_state.row_count;
-        let mut binary_builder = NewBinaryColumnBuilder::with_capacity(len);
+        let mut binary_builder = BinaryColumnBuilder::with_capacity(len, len * 4);
 
         unsafe {
             for idx in 0..len {
@@ -321,7 +322,22 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> StringColumn {
-        unsafe { StringColumn::from_binary_unchecked(self.flush_binary_column(col_offset, state)) }
+        let len = state.probe_state.row_count;
+        let mut binary_builder = NewStringColumnBuilder::with_capacity(len);
+
+        unsafe {
+            for idx in 0..len {
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
+
+                let scalar = std::slice::from_raw_parts(data_address, str_len);
+
+                binary_builder.put_str(std::str::from_utf8(scalar).unwrap());
+                binary_builder.commit_row();
+            }
+        }
+        binary_builder.build()
     }
 
     fn flush_generic_column(

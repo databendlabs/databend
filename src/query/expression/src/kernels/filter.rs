@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use binary::NewBinaryColumnBuilder;
+use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::BinaryViewArray;
+use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::bitmap::TrueIdxIter;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
+use string::NewStringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
@@ -303,10 +304,9 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
     }
 
     fn visit_string(&mut self, column: StringColumn) -> Result<()> {
-        let column: BinaryColumn = column.into();
-        self.result = Some(Value::Column(StringType::upcast_column(unsafe {
-            StringColumn::from_binary_unchecked(self.filter_binary_types(&column))
-        })));
+        self.result = Some(Value::Column(StringType::upcast_column(
+            self.filter_string_types(&column),
+        )));
         Ok(())
     }
 
@@ -336,15 +336,15 @@ impl<'a> FilterVisitor<'a> {
         }
     }
 
-    fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
+    fn filter_string_types(&mut self, values: &StringColumn) -> StringColumn {
         match self.strategy {
             IterationStrategy::IndexIterator => {
-                let mut builder = NewBinaryColumnBuilder::with_capacity(self.filter_rows);
+                let mut builder = NewStringColumnBuilder::with_capacity(self.filter_rows);
 
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 for i in iter {
                     unsafe {
-                        builder.put_slice(values.index_unchecked(i));
+                        builder.put_str(values.index_unchecked(i));
                         builder.commit_row();
                     }
                 }
@@ -354,7 +354,7 @@ impl<'a> FilterVisitor<'a> {
                 // reuse the buffers
                 let new_views = self.filter_primitive_types(values.data.views().clone());
                 let new_col = unsafe {
-                    BinaryViewArray::new_unchecked_unknown_md(
+                    Utf8ViewArray::new_unchecked_unknown_md(
                         values.data.data_type().clone(),
                         new_views,
                         values.data.data_buffers().clone(),
@@ -362,8 +362,20 @@ impl<'a> FilterVisitor<'a> {
                         Some(values.data.total_buffer_len()),
                     )
                 };
-                BinaryColumn::new(new_col)
+                StringColumn::new(new_col)
             }
         }
+    }
+
+    fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
+        let mut builder = BinaryColumnBuilder::with_capacity(self.filter_rows, 0);
+        let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+        for i in iter {
+            unsafe {
+                builder.put_slice(values.index_unchecked(i));
+                builder.commit_row();
+            }
+        }
+        builder.build()
     }
 }

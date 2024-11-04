@@ -508,6 +508,8 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
 pub type BinaryViewArray = BinaryViewArrayGeneric<[u8]>;
 pub type Utf8ViewArray = BinaryViewArrayGeneric<str>;
 
+pub type MutableUtf8ViewArray = MutableBinaryViewArray<str>;
+
 impl BinaryViewArray {
     /// Validate the underlying bytes on UTF-8.
     pub fn validate_utf8(&self) -> Result<()> {

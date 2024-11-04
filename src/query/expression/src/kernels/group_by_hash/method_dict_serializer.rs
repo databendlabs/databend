@@ -47,11 +47,11 @@ impl HashMethod for HashMethodDictionarySerializer {
             match group_column {
                 Column::Binary(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
-                    dictionary_columns.push(Either::Left(v.clone()));
+                    dictionary_columns.push(Either::Right(v.clone()));
                 }
                 Column::String(v) => {
                     debug_assert_eq!(v.len(), num_rows);
-                    dictionary_columns.push(Either::Left(v.clone().into()));
+                    dictionary_columns.push(Either::Left(v.clone()));
                 }
                 _ => serialize_columns.push(group_column.clone()),
             }
@@ -76,7 +76,7 @@ impl HashMethod for HashMethodDictionarySerializer {
 
             for dictionary_column in &dictionary_columns {
                 let data = match dictionary_column {
-                    Either::Left(l) => unsafe { l.index_unchecked(row) },
+                    Either::Left(l) => unsafe { l.index_unchecked(row).as_bytes() },
                     Either::Right(r) => unsafe { r.index_unchecked(row) },
                 };
                 points.push(NonNull::from(data));

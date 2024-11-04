@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
@@ -36,13 +35,8 @@ impl HashMethod for HashMethodSingleBinary {
         "SingleBinary".to_string()
     }
 
-    // Convert string column into binary column in build_keys_state
     fn build_keys_state(&self, group_columns: InputColumns, _rows: usize) -> Result<KeysState> {
-        let binary_column = match group_columns[0].clone() {
-            Column::String(c) => Column::Binary(BinaryColumn::from(c)),
-            c => c,
-        };
-        Ok(KeysState::Column(binary_column))
+        Ok(KeysState::Column(group_columns[0].clone()))
     }
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
@@ -61,10 +55,7 @@ impl HashMethod for HashMethodSingleBinary {
         match keys_state {
             KeysState::Column(Column::Binary(col))
             | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => {
-                let data = col.into_inner();
-                Ok(Box::new(BinaryViewKeyAccessor::new(data)))
-            }
+            | KeysState::Column(Column::Bitmap(col)) => Ok(Box::new(col)),
             _ => unreachable!(),
         }
     }
@@ -81,23 +72,15 @@ impl HashMethod for HashMethodSingleBinary {
     }
 }
 
-pub struct BinaryViewKeyAccessor {
-    data: BinaryViewArray,
-}
-
-impl BinaryViewKeyAccessor {
-    pub fn new(data: BinaryViewArray) -> Self {
-        Self { data }
-    }
-}
-
-impl KeyAccessor for BinaryViewKeyAccessor {
+impl KeyAccessor for BinaryColumn {
     type Key = [u8];
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        debug_assert!(index < self.data.len());
-        self.data.value_unchecked(index)
+        debug_assert!(index + 1 < self.offsets.len());
+
+        &self.data[*self.offsets.get_unchecked(index) as usize
+            ..*self.offsets.get_unchecked(index + 1) as usize]
     }
 }

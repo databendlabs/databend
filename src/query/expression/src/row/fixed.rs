@@ -16,9 +16,9 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use ethnum::i256;
 
 use super::row_converter::null_sentinel;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::F32;
 use crate::types::F64;
-use crate::BinaryStateBuilder;
 
 pub trait FixedLengthEncoding: Copy {
     // 1 for null byte
@@ -99,7 +99,7 @@ impl FixedLengthEncoding for F64 {
 }
 
 pub fn encode<T, I>(
-    out: &mut BinaryStateBuilder,
+    out: &mut BinaryColumnBuilder,
     iter: I,
     (all_null, validity): (bool, Option<&Bitmap>),
     asc: bool,

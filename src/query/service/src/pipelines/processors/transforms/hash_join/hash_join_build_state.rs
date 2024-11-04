@@ -515,11 +515,10 @@ impl HashJoinBuildState {
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
+                    KeysState::Column(Column::String(col)) => col.current_buffer_len(),
                     KeysState::Column(
                         Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col),
-                    ) => col.current_buffer_len(),
-                    KeysState::Column(Column::String(col)) => col.current_buffer_len(),
-                    KeysState::BinaryState(state) => state.data.len(),
+                    ) => col.data.len(),
                     _ => unreachable!(),
                 };
                 let valid_num = match &$valids {

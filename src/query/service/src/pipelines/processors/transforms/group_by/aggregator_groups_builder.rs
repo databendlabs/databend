@@ -119,11 +119,7 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         if let Some(builder) = self.single_builder.take() {
             let col = builder.build();
             match self.group_data_types[0] {
-                DataType::String => {
-                    return Ok(vec![Column::String(unsafe {
-                        StringColumn::from_binary_unchecked(col)
-                    })]);
-                }
+                DataType::Binary => return Ok(vec![Column::Binary(col)]),
                 DataType::Variant => return Ok(vec![Column::Variant(col)]),
                 _ => {}
             }
@@ -182,7 +178,7 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
         let mut index = 0;
         let mut res = Vec::with_capacity(self.group_data_types.len());
         for data_type in self.group_data_types.iter() {
-            if data_type.is_string() || data_type.is_variant() {
+            if data_type.is_variant() {
                 let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
 
                 for string_type_keys in &self.string_type_data {
@@ -191,12 +187,7 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
                 }
 
                 index += 1;
-                res.push(match data_type.is_string() {
-                    true => Column::String(unsafe {
-                        StringColumn::from_binary_unchecked(builder.build())
-                    }),
-                    false => Column::Variant(builder.build()),
-                });
+                res.push(Column::Variant(builder.build()));
             } else {
                 let mut column = ColumnBuilder::with_capacity(data_type, rows);
 

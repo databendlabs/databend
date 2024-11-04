@@ -16,13 +16,9 @@
 //! Use this module to convert column-oriented data into row-oriented data.
 //! It's mainly used for sort processors.
 
-mod binary_state;
 mod fixed;
 mod row_converter;
 mod variable;
 
-pub use binary_state::BinaryState;
-pub use binary_state::BinaryStateBuilder;
-pub use binary_state::BinaryStateIterator;
 pub use fixed::FixedLengthEncoding;
 pub use row_converter::RowConverter;

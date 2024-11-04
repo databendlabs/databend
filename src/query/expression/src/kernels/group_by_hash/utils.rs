@@ -15,12 +15,12 @@
 use databend_common_base::vec_ext::VecExt;
 use databend_common_base::vec_ext::VecU8Ext;
 
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::BinaryColumn;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
-use crate::BinaryState;
-use crate::BinaryStateBuilder;
 use crate::Column;
 use crate::InputColumns;
 
@@ -29,8 +29,8 @@ pub fn serialize_group_columns(
     columns: InputColumns,
     num_rows: usize,
     serialize_size: usize,
-) -> BinaryState {
-    let mut builder = BinaryStateBuilder::with_capacity(num_rows, serialize_size);
+) -> BinaryColumn {
+    let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 
     for i in 0..num_rows {
         for col in columns.iter() {
@@ -40,7 +40,7 @@ pub fn serialize_group_columns(
         }
         builder.commit_row();
     }
-    builder.build_state()
+    builder.build()
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.

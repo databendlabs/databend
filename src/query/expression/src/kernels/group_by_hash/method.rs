@@ -29,7 +29,7 @@ use crate::types::decimal::Decimal;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
-use crate::BinaryState;
+use crate::types::StringColumn;
 use crate::Column;
 use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
@@ -45,11 +45,10 @@ use crate::InputColumns;
 #[derive(Debug, Clone)]
 pub enum KeysState {
     Column(Column),
-    BinaryState(BinaryState),
     U128(Buffer<u128>),
     U256(Buffer<u256>),
     Dictionary {
-        columns: Vec<Either<BinaryColumn, BinaryState>>,
+        columns: Vec<Either<StringColumn, BinaryColumn>>,
         keys_point: Vec<NonNull<[u8]>>,
         dictionaries: Vec<DictionaryKeys>,
     },

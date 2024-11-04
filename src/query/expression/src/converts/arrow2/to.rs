@@ -92,7 +92,7 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
             None,
         ),
         TableDataType::Boolean => ArrowDataType::Boolean,
-        TableDataType::Binary => ArrowDataType::BinaryView,
+        TableDataType::Binary => ArrowDataType::LargeBinary,
         TableDataType::String => ArrowDataType::Utf8View,
         TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
             NumberDataType::TYPE => ArrowDataType::TYPE,
@@ -135,7 +135,7 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         }
         TableDataType::Bitmap => ArrowDataType::Extension(
             ARROW_EXT_TYPE_BITMAP.to_string(),
-            Box::new(ArrowDataType::BinaryView),
+            Box::new(ArrowDataType::LargeBinary),
             None,
         ),
         TableDataType::Tuple {
@@ -158,17 +158,17 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         }
         TableDataType::Variant => ArrowDataType::Extension(
             ARROW_EXT_TYPE_VARIANT.to_string(),
-            Box::new(ArrowDataType::BinaryView),
+            Box::new(ArrowDataType::LargeBinary),
             None,
         ),
         TableDataType::Geometry => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOMETRY.to_string(),
-            Box::new(ArrowDataType::BinaryView),
+            Box::new(ArrowDataType::LargeBinary),
             None,
         ),
         TableDataType::Geography => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
-            Box::new(ArrowDataType::BinaryView),
+            Box::new(ArrowDataType::LargeBinary),
             None,
         ),
     }
@@ -315,7 +315,6 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Binary(col) => Box::new(col.clone().into_inner()),
             Column::String(col) => Box::new(col.clone().into_inner()),
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
@@ -386,11 +385,22 @@ impl Column {
                 .unwrap(),
             ),
 
-            Column::Bitmap(col)
+            Column::Binary(col)
+            | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col)
             | Column::Geography(GeographyColumn(col)) => {
-                Box::new(col.clone().into_inner().with_data_type(arrow_type))
+                let offsets: Buffer<i64> =
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
+                Box::new(
+                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                        arrow_type,
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        col.data().clone(),
+                        None,
+                    )
+                    .unwrap(),
+                )
             }
         }
     }

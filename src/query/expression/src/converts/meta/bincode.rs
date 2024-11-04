@@ -15,7 +15,6 @@
 // DO NOT EDIT.
 // This crate keeps some legacy codes for compatibility, it's locked by bincode of meta's v3 version
 
-use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
@@ -113,17 +112,18 @@ impl From<LegacyScalar> for Scalar {
 
 impl From<LegacyBinaryColumn> for BinaryColumn {
     fn from(value: LegacyBinaryColumn) -> Self {
-        let builder = BinaryColumnBuilder::from_data(value.data.to_vec(), value.offsets.to_vec());
-        builder.build()
+        BinaryColumn {
+            data: value.data,
+            offsets: value.offsets,
+        }
     }
 }
 
 impl From<BinaryColumn> for LegacyBinaryColumn {
     fn from(value: BinaryColumn) -> Self {
-        let builder = BinaryColumnBuilder::from_column(value);
         LegacyBinaryColumn {
-            data: builder.data.into(),
-            offsets: builder.offsets.into(),
+            data: value.data,
+            offsets: value.offsets,
         }
     }
 }
@@ -138,7 +138,7 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::Decimal(dec_col) => Column::Decimal(dec_col),
             LegacyColumn::Boolean(bmp) => Column::Boolean(bmp),
             LegacyColumn::String(str_col) => {
-                Column::String(StringColumn::try_from(BinaryColumn::from(str_col)).unwrap())
+                Column::String(StringColumn::try_from_binary(BinaryColumn::from(str_col)).unwrap())
             }
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),

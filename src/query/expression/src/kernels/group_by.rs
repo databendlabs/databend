@@ -52,7 +52,7 @@ impl DataBlock {
         if hash_key_types.len() == 1
             && matches!(
                 hash_key_types[0],
-                DataType::Binary | DataType::String | DataType::Variant | DataType::Bitmap
+                DataType::Binary | DataType::Variant | DataType::Bitmap
             )
         {
             return Ok(HashMethodKind::SingleBinary(

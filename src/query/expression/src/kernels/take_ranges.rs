@@ -14,8 +14,9 @@
 
 use core::ops::Range;
 
+use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::BinaryViewArray;
+use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -179,10 +180,9 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
     }
 
     fn visit_string(&mut self, column: StringColumn) -> Result<()> {
-        let column: BinaryColumn = column.into();
-        self.result = Some(Value::Column(StringType::upcast_column(unsafe {
-            StringColumn::from_binary_unchecked(self.take_binary_types(&column))
-        })));
+        self.result = Some(Value::Column(StringType::upcast_column(
+            self.take_string_types(&column),
+        )));
         Ok(())
     }
 
@@ -204,10 +204,22 @@ impl<'a> TakeRangeVisitor<'a> {
         builder.into()
     }
 
-    fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
+    fn take_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
+        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
+        for range in self.ranges {
+            for index in range.start as usize..range.end as usize {
+                let value = unsafe { values.index_unchecked(index) };
+                builder.put_slice(value);
+                builder.commit_row();
+            }
+        }
+        builder.build()
+    }
+
+    fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
         let new_views = self.take_primitive_types(col.data.views().clone());
         let new_col = unsafe {
-            BinaryViewArray::new_unchecked_unknown_md(
+            Utf8ViewArray::new_unchecked_unknown_md(
                 col.data.data_type().clone(),
                 new_views,
                 col.data.data_buffers().clone(),
@@ -215,6 +227,6 @@ impl<'a> TakeRangeVisitor<'a> {
                 Some(col.data.total_buffer_len()),
             )
         };
-        BinaryColumn::new(new_col)
+        StringColumn::new(new_col)
     }
 }
