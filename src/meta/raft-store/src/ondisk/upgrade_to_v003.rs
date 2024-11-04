@@ -57,7 +57,7 @@ impl OnDisk {
         self.convert_snapshot_v002_to_v003(snapshot_id.clone(), snapshot_data)
             .await
             .map_err(|e| {
-                MetaStorageError::snapshot_error(&e, || {
+                MetaStorageError::damaged(&e, || {
                     format!("convert v002 snapshot to v003 {}", snapshot_id)
                 })
             })?;
@@ -76,7 +76,7 @@ impl OnDisk {
 
         let last_snapshot = loader.load_last_snapshot().await.map_err(|e| {
             let ae = AnyError::new(&e).add_context(|| "load last snapshot");
-            MetaStorageError::SnapshotError(ae)
+            MetaStorageError::Damaged(ae)
         })?;
 
         if last_snapshot.is_some() {
@@ -115,7 +115,7 @@ impl OnDisk {
         let dir = snapshot_config.snapshot_dir();
 
         fs::remove_dir_all(&dir).map_err(|e| {
-            MetaStorageError::snapshot_error(&e, || format!("removing v002 snapshot dir: {}", dir))
+            MetaStorageError::damaged(&e, || format!("removing v002 snapshot dir: {}", dir))
         })?;
         Ok(())
     }
