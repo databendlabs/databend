@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
