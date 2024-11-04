@@ -29,7 +29,7 @@ use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::*;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::string::NewStringColumnBuilder;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
@@ -1953,7 +1953,7 @@ fn get_by_keypath_fn(
     let len = len_opt.unwrap_or(1);
 
     let mut builder = if string_res {
-        ColumnBuilder::String(StringColumnBuilder::with_capacity(len, len * 50))
+        ColumnBuilder::String(NewStringColumnBuilder::with_capacity(len))
     } else {
         ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(len, len * 50))
     };

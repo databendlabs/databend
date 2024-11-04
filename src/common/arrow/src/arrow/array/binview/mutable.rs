@@ -405,6 +405,20 @@ impl MutableBinaryViewArray<[u8]> {
     }
 }
 
+impl MutableBinaryViewArray<str> {
+    pub fn pop(&mut self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+
+        let value = unsafe { self.value_unchecked(self.len() - 1).to_string() };
+
+        self.views.pop();
+
+        Some(value)
+    }
+}
+
 impl<T: ViewType + ?Sized, P: AsRef<T>> Extend<Option<P>> for MutableBinaryViewArray<T> {
     #[inline]
     fn extend<I: IntoIterator<Item = Option<P>>>(&mut self, iter: I) {

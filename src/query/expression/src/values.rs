@@ -20,6 +20,7 @@ use std::ops::Range;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
+use binary::BinaryColumnBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -43,12 +44,12 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use string::NewStringColumnBuilder;
 
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
@@ -76,7 +77,6 @@ use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::TIMESTAMP_MAX;
@@ -206,7 +206,7 @@ pub enum ColumnBuilder {
     Decimal(DecimalColumnBuilder),
     Boolean(MutableBitmap),
     Binary(BinaryColumnBuilder),
-    String(StringColumnBuilder),
+    String(NewStringColumnBuilder),
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
@@ -1532,7 +1532,7 @@ impl ColumnBuilder {
             Column::Decimal(col) => ColumnBuilder::Decimal(DecimalColumnBuilder::from_column(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::Binary(col) => ColumnBuilder::Binary(BinaryColumnBuilder::from_column(col)),
-            Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
+            Column::String(col) => ColumnBuilder::String(NewStringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Array(box col) => {
@@ -1590,7 +1590,7 @@ impl ColumnBuilder {
             }
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
             ScalarRef::Binary(s) => ColumnBuilder::Binary(BinaryColumnBuilder::repeat(s, n)),
-            ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::String(s) => ColumnBuilder::String(NewStringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
             ScalarRef::Array(col) => {
@@ -1742,8 +1742,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::String => {
-                let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::String(NewStringColumnBuilder::with_capacity(capacity))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
             DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
@@ -1828,8 +1827,8 @@ impl ColumnBuilder {
 
             // binary based
             DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
+            DataType::String => ColumnBuilder::String(NewStringColumnBuilder::repeat_default(len)),
             DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
-            DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_default(len)),
             DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geography => {
@@ -2044,15 +2043,14 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::String(builder) => {
-                let builder = builder.as_inner_mut();
                 let offset = reader.read_scalar::<u64>()? as usize;
-                builder.data.resize(offset + builder.data.len(), 0);
-                let last = *builder.offsets.last().unwrap() as usize;
-                reader.read_exact(&mut builder.data[last..last + offset])?;
-                builder.commit_row();
+                builder.row_buffer.resize(offset, 0);
+                reader.read_exact(&mut builder.row_buffer)?;
 
                 #[cfg(debug_assertions)]
-                string::CheckUTF8::check_utf8(&(&builder.data[last..last + offset])).unwrap();
+                string::CheckUTF8::check_utf8(&builder.row_buffer).unwrap();
+
+                builder.commit_row();
             }
             ColumnBuilder::Timestamp(builder) => {
                 let mut value: i64 = reader.read_scalar()?;

@@ -49,8 +49,6 @@ use num_traits::AsPrimitive;
 use twox_hash::XxHash32;
 use twox_hash::XxHash64;
 
-use crate::scalars::string::vectorize_string_to_string;
-
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("siphash64", &["siphash"]);
     registry.register_aliases("sha", &["sha1"]);
@@ -79,63 +77,48 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.current_buffer_len() * 32,
-            |val, output, ctx| {
-                // TODO md5 lib doesn't allow encode into buffer...
-                let old_len = output.as_inner_mut().data.len();
-                output.as_inner_mut().data.resize(old_len + 32, 0);
-                if let Err(err) = hex::encode_to_slice(
-                    Md5Hasher::digest(val).as_slice(),
-                    &mut output.as_inner_mut().data[old_len..],
-                ) {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-                output.commit_row();
-            },
-        ),
+        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
+            // TODO md5 lib doesn't allow encode into buffer...
+            output.row_buffer.resize(32, 0);
+            if let Err(err) =
+                hex::encode_to_slice(Md5Hasher::digest(val).as_slice(), &mut output.row_buffer)
+            {
+                ctx.set_error(output.len(), err.to_string());
+            }
+            output.commit_row();
+        }),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "sha",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.current_buffer_len() * 40,
-            |val, output, ctx| {
-                let old_len = output.as_inner_mut().data.len();
-                output.as_inner_mut().data.resize(old_len + 40, 0);
-                // TODO sha1 lib doesn't allow encode into buffer...
-                let mut m = ::sha1::Sha1::new();
-                sha1::digest::Update::update(&mut m, val.as_bytes());
+        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
+            output.row_buffer.resize(40, 0);
+            // TODO sha1 lib doesn't allow encode into buffer...
+            let mut m = ::sha1::Sha1::new();
+            sha1::digest::Update::update(&mut m, val.as_bytes());
 
-                if let Err(err) = hex::encode_to_slice(
-                    m.finalize().as_slice(),
-                    &mut output.as_inner_mut().data[old_len..],
-                ) {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-                output.commit_row();
-            },
-        ),
+            if let Err(err) = hex::encode_to_slice(m.finalize().as_slice(), &mut output.row_buffer)
+            {
+                ctx.set_error(output.len(), err.to_string());
+            }
+            output.commit_row();
+        }),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "blake3",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.current_buffer_len() * 64,
-            |val, output, ctx| {
-                let old_len = output.as_inner_mut().data.len();
-                output.as_inner_mut().data.resize(old_len + 64, 0);
-                if let Err(err) = hex::encode_to_slice(
-                    blake3::hash(val.as_bytes()).as_bytes(),
-                    &mut output.as_inner_mut().data[old_len..],
-                ) {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-                output.commit_row();
-            },
-        ),
+        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
+            output.row_buffer.resize(64, 0);
+            if let Err(err) = hex::encode_to_slice(
+                blake3::hash(val.as_bytes()).as_bytes(),
+                &mut output.row_buffer,
+            ) {
+                ctx.set_error(output.len(), err.to_string());
+            }
+            output.commit_row();
+        }),
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(

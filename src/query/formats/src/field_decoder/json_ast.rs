@@ -29,7 +29,7 @@ use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::string::NewStringColumnBuilder;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -236,7 +236,7 @@ impl FieldJsonAstDecoder {
         Ok(())
     }
 
-    fn read_string(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
+    fn read_string(&self, column: &mut NewStringColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(s) => {
                 column.put_str(s.as_str());

@@ -45,7 +45,7 @@ impl ValueType for StringType {
     type Column = StringColumn;
     type Domain = StringDomain;
     type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = StringColumnBuilder;
+    type ColumnBuilder = NewStringColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long str) -> &'short str {
@@ -127,7 +127,7 @@ impl ValueType for StringType {
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        StringColumnBuilder::from_column(col)
+        NewStringColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -216,7 +216,7 @@ impl ArgType for StringType {
     }
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
+        NewStringColumnBuilder::with_capacity(capacity)
     }
 }
 
@@ -493,7 +493,7 @@ type MutableUtf8ViewArray = MutableBinaryViewArray<str>;
 #[derive(Debug, Clone)]
 pub struct NewStringColumnBuilder {
     pub data: MutableUtf8ViewArray,
-    pub row_buffer: String,
+    pub row_buffer: Vec<u8>,
 }
 
 impl NewStringColumnBuilder {
@@ -501,7 +501,7 @@ impl NewStringColumnBuilder {
         let data = MutableUtf8ViewArray::with_capacity(len);
         NewStringColumnBuilder {
             data,
-            row_buffer: String::new(),
+            row_buffer: Vec::new(),
         }
     }
 
@@ -509,7 +509,7 @@ impl NewStringColumnBuilder {
         let data = col.data.make_mut();
         NewStringColumnBuilder {
             data,
-            row_buffer: String::new(),
+            row_buffer: Vec::new(),
         }
     }
 
@@ -522,7 +522,7 @@ impl NewStringColumnBuilder {
 
         Ok(NewStringColumnBuilder {
             data,
-            row_buffer: String::new(),
+            row_buffer: Vec::new(),
         })
     }
 
@@ -531,7 +531,7 @@ impl NewStringColumnBuilder {
         data.extend_constant(n, Some(scalar));
         NewStringColumnBuilder {
             data,
-            row_buffer: String::new(),
+            row_buffer: Vec::new(),
         }
     }
 
@@ -540,7 +540,7 @@ impl NewStringColumnBuilder {
         data.extend_constant(n, Some(""));
         NewStringColumnBuilder {
             data,
-            row_buffer: String::new(),
+            row_buffer: Vec::new(),
         }
     }
 
@@ -553,23 +553,30 @@ impl NewStringColumnBuilder {
     }
 
     pub fn put_char(&mut self, item: char) {
-        self.row_buffer.push(item);
+        match item.len_utf8() {
+            1 => self.row_buffer.push(item as u8),
+            _ => self
+                .row_buffer
+                .extend_from_slice(item.encode_utf8(&mut [0; 4]).as_bytes()),
+        }
     }
 
     #[inline]
     pub fn put_str(&mut self, item: &str) {
-        self.row_buffer.push_str(item);
+        self.row_buffer.extend_from_slice(item.as_bytes());
     }
 
     pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
         for c in iter {
-            self.row_buffer.push(c);
+            self.put_char(c);
         }
     }
 
     #[inline]
     pub fn commit_row(&mut self) {
-        self.data.push_value(&self.row_buffer);
+        debug_assert!(std::str::from_utf8(&self.row_buffer).is_ok());
+        let str = unsafe { std::str::from_utf8_unchecked(&self.row_buffer) };
+        self.data.push_value(str);
         self.row_buffer.clear();
     }
 
@@ -598,6 +605,10 @@ impl NewStringColumnBuilder {
 
     pub fn push_repeat(&mut self, item: &str, n: usize) {
         self.data.extend_constant(n, Some(item));
+    }
+
+    pub fn pop(&mut self) -> Option<String> {
+        self.data.pop()
     }
 }
 

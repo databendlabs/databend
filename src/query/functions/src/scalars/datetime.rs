@@ -651,7 +651,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<DateType, StringType>(|val, output, ctx| {
             write!(
-                output.as_inner_mut().data,
+                output.row_buffer,
                 "{}",
                 date_to_string(val, ctx.func_ctx.tz.tz)
             )
@@ -665,7 +665,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<TimestampType, StringType>(|val, output, ctx| {
             write!(
-                output.as_inner_mut().data,
+                output.row_buffer,
                 "{}",
                 timestamp_to_string(val, ctx.func_ctx.tz.tz)
             )
@@ -687,7 +687,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         },
         vectorize_with_builder_1_arg::<DateType, NullableType<StringType>>(|val, output, ctx| {
             write!(
-                output.builder.as_inner_mut().data,
+                output.builder.row_buffer,
                 "{}",
                 date_to_string(val, ctx.func_ctx.tz.tz)
             )
@@ -711,7 +711,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<TimestampType, NullableType<StringType>>(
             |val, output, ctx| {
                 write!(
-                    output.builder.as_inner_mut().data,
+                    output.builder.row_buffer,
                     "{}",
                     timestamp_to_string(val, ctx.func_ctx.tz.tz)
                 )
