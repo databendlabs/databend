@@ -508,6 +508,41 @@ impl Column {
                 ),
                 (
                     DataType::Variant,
+                    ArrowDataType::Extension(name, box ArrowDataType::Binary, None),
+                ) if name == ARROW_EXT_TYPE_VARIANT => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
+                        .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Variant(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                (DataType::Variant, ArrowDataType::Binary) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
+                        .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Variant(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                (
+                    DataType::Variant,
                     ArrowDataType::Extension(name, box ArrowDataType::LargeBinary, None),
                 ) if name == ARROW_EXT_TYPE_VARIANT => {
                     let arrow_col = arrow_col
@@ -516,15 +551,10 @@ impl Column {
                         .expect(
                             "fail to read `Variant` from arrow: array should be `BinaryArray<i64>`",
                         );
-                    let offsets = unsafe {
-                        std::mem::transmute::<Buffer<i64>, Buffer<u64>>(
-                            arrow_col.offsets().clone().into_inner(),
-                        )
-                    };
-                    Column::Variant(BinaryColumn {
-                        data: arrow_col.values().clone(),
-                        offsets,
-                    })
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::Variant(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (DataType::Variant, ArrowDataType::LargeBinary) => {
                     let arrow_col = arrow_col
@@ -533,15 +563,10 @@ impl Column {
                         .expect(
                             "fail to read `Variant` from arrow: array should be `BinaryArray<i64>`",
                         );
-                    let offsets = unsafe {
-                        std::mem::transmute::<Buffer<i64>, Buffer<u64>>(
-                            arrow_col.offsets().clone().into_inner(),
-                        )
-                    };
-                    Column::Variant(BinaryColumn {
-                        data: arrow_col.values().clone(),
-                        offsets,
-                    })
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::Variant(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (DataType::Array(ty), ArrowDataType::List(_)) => {
                     let values_col = arrow_col
