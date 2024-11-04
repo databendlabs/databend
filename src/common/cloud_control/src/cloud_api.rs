@@ -24,11 +24,6 @@ use crate::task_client::TaskClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
-// commonly used metadata
-pub const TENANT_ID: &str = "X-DATABEND-TENANT";
-pub const REQUESTER: &str = "X-DATABEND-USER";
-pub const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
-
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
     pub notification_client: Arc<NotificationClient>,

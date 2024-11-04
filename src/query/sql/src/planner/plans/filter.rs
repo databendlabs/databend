@@ -16,14 +16,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
@@ -52,24 +49,6 @@ impl Operator for Filter {
         RelOp::Filter
     }
 
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        Ok(required.clone())
-    }
-
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns.clone();
@@ -92,12 +71,14 @@ impl Operator for Filter {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 
@@ -106,7 +87,7 @@ impl Operator for Filter {
         let (input_cardinality, mut statistics) =
             (stat_info.cardinality, stat_info.statistics.clone());
         // Derive cardinality
-        let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+        let mut sb = SelectivityEstimator::new(&mut statistics, input_cardinality, HashSet::new());
         let mut selectivity = MAX_SELECTIVITY;
         for pred in self.predicates.iter() {
             // Compute selectivity for each conjunction

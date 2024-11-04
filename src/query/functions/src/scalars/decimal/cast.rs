@@ -15,6 +15,7 @@
 use std::ops::Mul;
 use std::sync::Arc;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -39,7 +40,6 @@ use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use ethnum::i256;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
@@ -461,7 +461,7 @@ pub fn convert_to_decimal_domain(
     })
 }
 
-fn string_to_decimal<T: Decimal>(
+fn string_to_decimal<T>(
     from: ValueRef<StringType>,
     ctx: &mut EvalContext,
     size: DecimalSize,
@@ -475,7 +475,7 @@ where
             {
                 Ok((d, _)) => d,
                 Err(e) => {
-                    ctx.set_error(builder.len(), e.message());
+                    ctx.set_error(builder.len(), e);
                     T::zero()
                 }
             };
@@ -486,13 +486,14 @@ where
     vectorize_with_builder_1_arg::<StringType, DecimalType<T>>(f)(from, ctx)
 }
 
-fn integer_to_decimal<T: Decimal, S: ArgType>(
+fn integer_to_decimal<T, S>(
     from: ValueRef<S>,
     ctx: &mut EvalContext,
     size: DecimalSize,
 ) -> Value<DecimalType<T>>
 where
     T: Decimal + Mul<Output = T>,
+    S: ArgType,
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<i128>,
 {
     let multiplier = T::e(size.scale as u32);

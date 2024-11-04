@@ -15,13 +15,14 @@
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::OptimizeTableInterpreter;
+use databend_query::interpreters::OptimizeCompactBlockInterpreter;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
@@ -148,9 +149,13 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     let compact_task = async move {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
         let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
-        if let Plan::OptimizeTable(plan) = compact_plan {
-            let optimize_interpreter =
-                OptimizeTableInterpreter::try_create(ctx.clone(), *plan.clone())?;
+        if let Plan::OptimizeCompactBlock { s_expr, need_purge } = compact_plan {
+            let optimize_interpreter = OptimizeCompactBlockInterpreter::try_create(
+                ctx.clone(),
+                *s_expr.clone(),
+                LockTableOption::LockWithRetry,
+                need_purge,
+            )?;
             let _ = optimize_interpreter.execute(ctx).await?;
         }
         Ok::<(), ErrorCode>(())

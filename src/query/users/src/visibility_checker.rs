@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::string::ToString;
 
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::BitFlags;
+use itertools::Itertools;
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
 /// database or table.
@@ -35,6 +39,7 @@ pub struct GrantObjectVisibilityChecker {
     granted_tables: HashSet<(String, String, String)>,
     granted_tables_id: HashSet<(String, u64, u64)>,
     extra_databases: HashSet<(String, String)>,
+    sys_databases: HashSet<(String, String)>,
     extra_databases_id: HashSet<(String, u64)>,
     granted_udfs: HashSet<String>,
     granted_write_stages: HashSet<String>,
@@ -42,7 +47,11 @@ pub struct GrantObjectVisibilityChecker {
 }
 
 impl GrantObjectVisibilityChecker {
-    pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
+    pub fn new(
+        user: &UserInfo,
+        available_roles: &Vec<RoleInfo>,
+        ownership_objects: &[OwnershipObject],
+    ) -> Self {
         let mut granted_global_udf = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
@@ -151,6 +160,33 @@ impl GrantObjectVisibilityChecker {
             }
         }
 
+        for ownership_object in ownership_objects {
+            match ownership_object {
+                OwnershipObject::Database {
+                    catalog_name,
+                    db_id,
+                } => {
+                    granted_databases_id.insert((catalog_name.to_string(), *db_id));
+                }
+                OwnershipObject::Table {
+                    catalog_name,
+                    db_id,
+                    table_id,
+                } => {
+                    granted_tables_id.insert((catalog_name.to_string(), *db_id, *table_id));
+                    // if table is visible, the table's database is also treated as visible
+                    extra_databases_id.insert((catalog_name.to_string(), *db_id));
+                }
+                OwnershipObject::Stage { name } => {
+                    granted_write_stages.insert(name.to_string());
+                    granted_read_stages.insert(name.to_string());
+                }
+                OwnershipObject::UDF { name } => {
+                    granted_udfs.insert(name.to_string());
+                }
+            }
+        }
+
         Self {
             granted_global_udf,
             granted_global_db_table,
@@ -165,6 +201,10 @@ impl GrantObjectVisibilityChecker {
             granted_udfs,
             granted_write_stages,
             granted_read_stages,
+            sys_databases: HashSet::from([
+                ("default".to_string(), "information_schema".to_string()),
+                ("default".to_string(), "system".to_string()),
+            ]),
         }
     }
 
@@ -291,5 +331,54 @@ impl GrantObjectVisibilityChecker {
         }
 
         false
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn get_visibility_database(
+        &self,
+    ) -> Option<HashMap<&String, HashSet<(Option<&String>, Option<&u64>)>>> {
+        if self.granted_global_db_table {
+            return None;
+        }
+
+        let capacity = self.granted_databases.len()
+            + self.granted_databases_id.len()
+            + self.extra_databases.len()
+            + self.extra_databases_id.len()
+            + self.sys_databases.len();
+
+        let dbs = self
+            .granted_databases
+            .iter()
+            .map(|(catalog, db)| (catalog, (Some(db), None)))
+            .chain(
+                self.granted_databases_id
+                    .iter()
+                    .map(|(catalog, db_id)| (catalog, (None, Some(db_id)))),
+            )
+            .chain(
+                self.extra_databases
+                    .iter()
+                    .map(|(catalog, db)| (catalog, (Some(db), None))),
+            )
+            .chain(
+                self.sys_databases
+                    .iter()
+                    .map(|(catalog, db)| (catalog, (Some(db), None))),
+            )
+            .chain(
+                self.extra_databases_id
+                    .iter()
+                    .map(|(catalog, db_id)| (catalog, (None, Some(db_id)))),
+            )
+            .into_grouping_map()
+            .fold(
+                HashSet::with_capacity(capacity / 4),
+                |mut set, _key, value| {
+                    set.insert(value);
+                    set
+                },
+            );
+        Some(dbs)
     }
 }

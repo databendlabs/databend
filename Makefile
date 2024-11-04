@@ -48,17 +48,21 @@ run-debug: build
 run-debug-management: build
 	bash ./scripts/ci/deploy/databend-query-management-mode.sh
 
+kill:
+	killall databend-query
+	killall databend-meta
+
 build:
 	bash ./scripts/build/build-debug.sh
 
 build-release:
 	bash ./scripts/build/build-release.sh
-ifeq ($(shell uname),Linux) # Macs don't have objcopy
-	# Reduce binary size by compressing binaries.
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-query
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-meta
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-metactl
-endif
+# ifeq ($(shell uname),Linux) # Macs don't have objcopy
+# 	# Reduce binary size by compressing binaries.
+# 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-query
+# 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-meta
+# 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-metactl
+# endif
 
 build-native:
 	bash ./scripts/build/build-native.sh
@@ -67,7 +71,7 @@ build-in-docker:
 	bash ./scripts/setup/run_build_tool.sh cargo build --target $(TARGET)
 
 unit-test:
-	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
+	ulimit -n 10000; ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
 miri:
 	cargo miri setup
@@ -76,15 +80,15 @@ miri:
 stateless-test: build
 	rm -rf ./_meta*/
 	rm -rf .databend
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -n 10000; ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 sqllogic-test: build
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
+	ulimit -n 10000; ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
 stateless-cluster-test: build
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
+	ulimit -n 10000; ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
 stateless-cluster-test-tls: build
 	rm -rf ./_meta*/
@@ -110,7 +114,7 @@ clean:
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_meta*/ ./_logs*/ ./src/query/service_logs*/ ./src/meta/service/_logs*/ ./stateless_test_data/
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
-	find . \( -type f -name '.z3-trace' -o -type d -name '.databend' \) | xargs rm -rf
+	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
 genproto:
 	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/task.proto

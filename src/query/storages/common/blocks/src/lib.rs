@@ -15,4 +15,5 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod parquet_rs;
-pub use parquet_rs::blocks_to_parquet;
+pub use parquet_rs::*;
+pub mod memory;

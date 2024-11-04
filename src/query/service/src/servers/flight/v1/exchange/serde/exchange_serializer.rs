@@ -16,17 +16,22 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::chunk::Chunk;
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::flight::default_ipc_fields;
-use databend_common_arrow::arrow::io::flight::serialize_batch;
-use databend_common_arrow::arrow::io::flight::WriteOptions;
-use databend_common_arrow::arrow::io::ipc::write::Compression;
-use databend_common_arrow::arrow::io::ipc::IpcField;
+use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
+use arrow_flight::FlightData;
+use arrow_flight::SchemaAsIpc;
+use arrow_ipc::writer::DictionaryTracker;
+use arrow_ipc::writer::IpcDataGenerator;
+use arrow_ipc::writer::IpcWriteOptions;
+use arrow_ipc::CompressionType;
+use arrow_schema::ArrowError;
+use arrow_schema::Schema as ArrowSchema;
+use bytes::Bytes;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -41,8 +46,6 @@ use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
 use databend_common_settings::FlightCompression;
-use serde::Deserializer;
-use serde::Serializer;
 
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
@@ -70,50 +73,27 @@ impl Debug for ExchangeSerializeMeta {
     }
 }
 
-impl serde::Serialize for ExchangeSerializeMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Unimplemented serialize ExchangeSerializeMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for ExchangeSerializeMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize ExchangeSerializeMeta")
-    }
-}
+local_block_meta_serde!(ExchangeSerializeMeta);
 
 #[typetag::serde(name = "exchange_serialize")]
-impl BlockMetaInfo for ExchangeSerializeMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals ExchangeSerializeMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone ExchangeSerializeMeta")
-    }
-}
+impl BlockMetaInfo for ExchangeSerializeMeta {}
 
 pub struct TransformExchangeSerializer {
-    options: WriteOptions,
-    ipc_fields: Vec<IpcField>,
+    options: IpcWriteOptions,
 }
 
 impl TransformExchangeSerializer {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        params: &MergeExchangeParams,
+        _params: &MergeExchangeParams,
         compression: Option<FlightCompression>,
     ) -> Result<ProcessorPtr> {
-        let arrow_schema = ArrowSchema::from(params.schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,
             Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(Compression::LZ4),
-                FlightCompression::Zstd => Some(Compression::ZSTD),
+                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
+                FlightCompression::Zstd => Some(CompressionType::ZSTD),
             },
         };
 
@@ -121,8 +101,7 @@ impl TransformExchangeSerializer {
             input,
             output,
             TransformExchangeSerializer {
-                ipc_fields,
-                options: WriteOptions { compression },
+                options: IpcWriteOptions::default().try_with_compression(compression)?,
             },
         )))
     }
@@ -133,14 +112,13 @@ impl Transform for TransformExchangeSerializer {
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, data_block.num_rows());
-        serialize_block(0, data_block, &self.ipc_fields, &self.options)
+        serialize_block(0, data_block, &self.options)
     }
 }
 
 pub struct TransformScatterExchangeSerializer {
     local_pos: usize,
-    options: WriteOptions,
-    ipc_fields: Vec<IpcField>,
+    options: IpcWriteOptions,
 }
 
 impl TransformScatterExchangeSerializer {
@@ -151,13 +129,11 @@ impl TransformScatterExchangeSerializer {
         params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
-        let arrow_schema = ArrowSchema::from(params.schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,
             Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(Compression::LZ4),
-                FlightCompression::Zstd => Some(Compression::ZSTD),
+                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
+                FlightCompression::Zstd => Some(CompressionType::ZSTD),
             },
         };
 
@@ -165,8 +141,7 @@ impl TransformScatterExchangeSerializer {
             input,
             output,
             TransformScatterExchangeSerializer {
-                ipc_fields,
-                options: WriteOptions { compression },
+                options: IpcWriteOptions::default().try_with_compression(compression)?,
                 local_pos: params
                     .destination_ids
                     .iter()
@@ -181,7 +156,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Error;
     const NAME: &'static str = "TransformScatterExchangeSerializer";
 
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
+    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
         let mut new_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, block) in meta.blocks.into_iter().enumerate() {
             if block.is_empty() {
@@ -191,21 +166,20 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
 
             new_blocks.push(match self.local_pos == index {
                 true => block,
-                false => serialize_block(0, block, &self.ipc_fields, &self.options)?,
+                false => serialize_block(0, block, &self.options)?,
             });
         }
 
-        Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-            new_blocks,
-        )))
+        Ok(vec![DataBlock::empty_with_meta(
+            ExchangeShuffleMeta::create(new_blocks),
+        )])
     }
 }
 
 pub fn serialize_block(
     block_num: isize,
     data_block: DataBlock,
-    ipc_field: &[IpcField],
-    options: &WriteOptions,
+    options: &IpcWriteOptions,
 ) -> Result<DataBlock> {
     if data_block.is_empty() && data_block.get_meta().is_none() {
         return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
@@ -219,22 +193,66 @@ pub fn serialize_block(
     bincode_serialize_into_buf(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
-    let (dict, values) = match data_block.is_empty() {
-        true => serialize_batch(&Chunk::new(vec![]), &[], options)?,
+    let (_, dict, values) = match data_block.is_empty() {
+        true => batches_to_flight_data_with_options(
+            &ArrowSchema::empty(),
+            vec![
+                RecordBatch::try_new_with_options(
+                    Arc::new(ArrowSchema::empty()),
+                    vec![],
+                    &RecordBatchOptions::new().with_row_count(Some(0)),
+                )
+                .unwrap(),
+            ],
+            options,
+        )?,
         false => {
-            let chunks = data_block.try_into()?;
-            serialize_batch(&chunks, ipc_field, options)?
+            let schema = data_block.infer_schema();
+            let arrow_schema = ArrowSchema::from(&schema);
+            let batch = data_block.to_record_batch_with_dataschema(&schema)?;
+            batches_to_flight_data_with_options(&arrow_schema, vec![batch], options)?
         }
     };
 
-    let mut packet = Vec::with_capacity(dict.len() + 1);
-
+    let mut packet = Vec::with_capacity(dict.len() + values.len());
     for dict_flight in dict {
         packet.push(DataPacket::Dictionary(dict_flight));
     }
 
-    packet.push(DataPacket::FragmentData(FragmentData::create(meta, values)));
+    let meta: Bytes = meta.into();
+    for value in values {
+        packet.push(DataPacket::FragmentData(FragmentData::create(
+            meta.clone(),
+            value,
+        )));
+    }
+
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
         block_num, packet,
     )))
+}
+
+/// Convert `RecordBatch`es to wire protocol `FlightData`s
+/// Returns schema, dictionaries and flight data
+pub fn batches_to_flight_data_with_options(
+    schema: &ArrowSchema,
+    batches: Vec<RecordBatch>,
+    options: &IpcWriteOptions,
+) -> std::result::Result<(FlightData, Vec<FlightData>, Vec<FlightData>), ArrowError> {
+    let schema_flight_data: FlightData = SchemaAsIpc::new(schema, options).into();
+    let mut dictionaries = Vec::with_capacity(batches.len());
+    let mut flight_data = Vec::with_capacity(batches.len());
+
+    let data_gen = IpcDataGenerator::default();
+    let mut dictionary_tracker =
+        DictionaryTracker::new_with_preserve_dict_id(false, options.preserve_dict_id());
+
+    for batch in batches.iter() {
+        let (encoded_dictionaries, encoded_batch) =
+            data_gen.encoded_batch(batch, &mut dictionary_tracker, options)?;
+
+        dictionaries.extend(encoded_dictionaries.into_iter().map(Into::into));
+        flight_data.push(encoded_batch.into());
+    }
+    Ok((schema_flight_data, dictionaries, flight_data))
 }

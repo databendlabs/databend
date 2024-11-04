@@ -67,18 +67,18 @@ where K: Eq + Hash
         self.map.retain(|_, v| v.timeout > now)
     }
 
-    pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+    pub fn contains_key<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Eq + Hash,
+        Q: Eq + Hash + ?Sized,
     {
         self.map.contains_key(k)
     }
 
-    pub fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&V>
+    pub fn get<Q>(&mut self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Eq + Hash,
+        Q: Eq + Hash + ?Sized,
     {
         if let CleanPolicy::ReadModify = self.clean_policy {
             self.cleanup()
@@ -87,10 +87,10 @@ where K: Eq + Hash
         self.map.get(k).map(|v| &(v.value))
     }
 
-    pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+    pub fn get_mut<Q>(&mut self, k: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
-        Q: Eq + Hash,
+        Q: Eq + Hash + ?Sized,
     {
         if let CleanPolicy::ReadModify = self.clean_policy {
             self.cleanup()
@@ -111,10 +111,10 @@ where K: Eq + Hash
         ret.map(|v| v.value)
     }
 
-    pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
+    pub fn remove<Q>(&mut self, k: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: Eq + Hash,
+        Q: Eq + Hash + ?Sized,
     {
         match self.clean_policy {
             CleanPolicy::ReadModify | CleanPolicy::Modify => self.cleanup(),

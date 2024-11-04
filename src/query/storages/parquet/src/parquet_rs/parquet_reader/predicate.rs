@@ -107,6 +107,7 @@ pub fn build_predicate(
     table_schema: &TableSchema,
     schema_desc: &SchemaDescriptor,
     partition_columns: &[String],
+    arrow_schema: Option<&arrow_schema::Schema>,
 ) -> Result<(Arc<ParquetPredicate>, Vec<usize>)> {
     let inner_projection = matches!(prewhere.output_columns, Projection::InnerColumns(_));
     let schema = prewhere.prewhere_columns.project_schema(table_schema);
@@ -122,7 +123,11 @@ pub fn build_predicate(
     let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;
-    let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
+    let field_levels = parquet_to_arrow_field_levels(
+        schema_desc,
+        projection.clone(),
+        arrow_schema.map(|s| &s.fields),
+    )?;
 
     Ok((
         Arc::new(ParquetPredicate {

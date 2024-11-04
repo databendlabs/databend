@@ -23,6 +23,7 @@ use crate::leveled_store::map_api::compacted_range;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyEncode;
 use crate::marked::Marked;
 
 /// A readonly leveled map that owns the data.
@@ -60,6 +61,9 @@ impl ImmutableLevels {
     pub(crate) fn len(&self) -> usize {
         self.levels.len()
     }
+    pub(crate) fn levels(&mut self) -> &mut Vec<Immutable> {
+        &mut self.levels
+    }
 }
 
 #[async_trait::async_trait]
@@ -73,14 +77,15 @@ where
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
+        Q: MapKeyEncode,
     {
         let levels = self.iter_immutable_levels();
-        compacted_get(key, levels).await
+        compacted_get::<_, _, _, Immutable>(key, levels, []).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let levels = self.iter_immutable_levels();
-        compacted_range::<_, _, _, Level>(range, None, levels).await
+        compacted_range::<_, _, _, Level, Level>(range, None, levels, []).await
     }
 }

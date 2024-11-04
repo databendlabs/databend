@@ -69,6 +69,7 @@ impl MergeIntoState {
 }
 
 impl HashJoinBuildState {
+    #[allow(unused)]
     pub(crate) fn merge_into_try_build_block_info_index(&self, input: DataBlock, old_size: usize) {
         // merge into target table as build side.
         if self
@@ -242,7 +243,7 @@ impl HashJoinProbeState {
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::Left
         ));
-        let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
+        let old_count = self.wait_probe_counter.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
             // Divide the final scan phase into multiple tasks.
             self.generate_merge_into_final_scan_task()?;

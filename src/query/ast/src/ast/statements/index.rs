@@ -34,7 +34,6 @@ pub struct CreateIndexStmt {
     pub index_name: Identifier,
 
     pub query: Box<Query>,
-    #[drive(skip)]
     pub sync_creation: bool,
 }
 
@@ -79,7 +78,6 @@ impl Display for CreateIndexStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropIndexStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub index: Identifier,
 }
@@ -99,7 +97,6 @@ impl Display for DropIndexStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct RefreshIndexStmt {
     pub index: Identifier,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
@@ -124,9 +121,7 @@ pub struct CreateInvertedIndexStmt {
     pub table: Identifier,
 
     pub columns: Vec<Identifier>,
-    #[drive(skip)]
     pub sync_creation: bool,
-    #[drive(skip)]
     pub index_options: BTreeMap<String, String>,
 }
 
@@ -168,7 +163,6 @@ impl Display for CreateInvertedIndexStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropInvertedIndexStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub index_name: Identifier,
     pub catalog: Option<Identifier>,
@@ -202,7 +196,6 @@ pub struct RefreshInvertedIndexStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 

@@ -32,8 +32,8 @@ runs:
         version=${{ inputs.version }}
         deb_version=${version/-/.}
         deb_version=${deb_version/v/}
-        wget -q https://github.com/datafuselabs/databend/releases/download/${version}/databend_${deb_version}_amd64.deb
-        wget -q https://github.com/datafuselabs/databend/releases/download/${version}/databend_${deb_version}_arm64.deb
+        wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_amd64.deb
+        wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_arm64.deb
         reprepro includedeb stable databend_${deb_version}_amd64.deb
         reprepro includedeb stable databend_${deb_version}_arm64.deb
 
@@ -41,10 +41,10 @@ runs:
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
-        version=$(gh release view --repo datafuselabs/bendsql --json name | jq -r '.name')
+        version=$(gh release view --repo databendlabs/bendsql --json name | jq -r '.name')
         deb_version=${version/v/}
-        wget -q https://github.com/datafuselabs/bendsql/releases/download/${version}/bendsql_${deb_version}_amd64.deb
-        wget -q https://github.com/datafuselabs/bendsql/releases/download/${version}/bendsql_${deb_version}_arm64.deb
+        wget -q https://github.com/databendlabs/bendsql/releases/download/${version}/bendsql_${deb_version}_amd64.deb
+        wget -q https://github.com/databendlabs/bendsql/releases/download/${version}/bendsql_${deb_version}_arm64.deb
         reprepro includedeb stable bendsql_${deb_version}_amd64.deb
         reprepro includedeb stable bendsql_${deb_version}_arm64.deb
 

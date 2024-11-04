@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyerror::AnyError;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::ErrorSubject;
 use databend_common_meta_types::StorageError;
 use openraft::ErrorVerb;
-use openraft::StorageIOError;
 
 /// Convert MetaStorageError to openraft::StorageError;
 pub trait ToStorageError<T> {
@@ -30,9 +28,8 @@ impl<T> ToStorageError<T> for Result<T, MetaStorageError> {
         match self {
             Ok(x) => Ok(x),
             Err(e) => {
-                let ae = AnyError::new(&e);
-                let io_err = StorageIOError::new(subject, verb, ae);
-                Err(io_err.into())
+                let io_err = StorageError::new(subject, verb, &e);
+                Err(io_err)
             }
         }
     }

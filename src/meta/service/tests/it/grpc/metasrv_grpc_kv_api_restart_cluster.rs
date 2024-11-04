@@ -35,7 +35,7 @@ use crate::tests::start_metasrv_with_context;
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
@@ -121,7 +121,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
@@ -160,7 +160,9 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         vec![tcs[0].config.grpc_api_address.clone()],
         "root",
         "xxx",
-        None,
+        // Without timeout, the client will not be able to reconnect.
+        // This is an issue of the http client.
+        Some(Duration::from_secs(1)),
         Some(Duration::from_secs(10)),
         None,
     )?;
@@ -187,7 +189,18 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let tcs = {
         let mut tcs = vec![];
         for mut tc in stopped_tcs {
+            info!(
+                "--- starting metasrv: {:?}",
+                tc.config.raft_config.raft_api_addr().await?
+            );
             start_metasrv_with_context(&mut tc).await?;
+
+            info!(
+                "--- started metasrv: {:?}",
+                tc.config.raft_config.raft_api_addr().await?
+            );
+
+            // sleep(Duration::from_secs(3)).await;
             tcs.push(tc);
         }
 

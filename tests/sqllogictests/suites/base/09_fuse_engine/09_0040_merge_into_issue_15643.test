@@ -1,0 +1,28 @@
+statement ok
+create or replace database m_test;
+
+statement ok
+use m_test;
+
+statement ok
+create table t(a string, b string, c string, d string, k string);
+
+statement ok
+create table s(a string, b string, c string, d string, k string);
+
+statement ok
+insert into t(k) values('k');
+
+statement ok
+insert into s(k) values('k');
+
+
+query II
+merge into t using s on t.k = s.k when matched then update * when not matched then insert *;
+----
+0 1
+
+query TTTTT
+select * from t;
+----
+NULL NULL NULL NULL k

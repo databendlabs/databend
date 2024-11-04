@@ -40,7 +40,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MatchExpr;
 use databend_common_sql::IndexType;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
@@ -394,9 +394,9 @@ impl Processor for MatchedSplitProcessor {
 
             if !current_block.is_empty() {
                 // add updated row_ids
-                self.ctx.add_merge_status(MergeStatus {
+                self.ctx.add_mutation_status(MutationStatus {
                     insert_rows: 0,
-                    update_rows: current_block.num_rows(),
+                    update_rows: current_block.num_rows() as u64,
                     deleted_rows: 0,
                 });
 

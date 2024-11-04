@@ -1,0 +1,15 @@
+name: "Chaos Test meta service"
+description: "Running stateless tests in management mode"
+runs:
+  using: "composite"
+  steps:
+    - name: Meta Service IO Delay tests
+      shell: bash
+      run: |
+        ./scripts/ci/meta-chaos/ci-io-delay-meta-test.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_meta_container_failure
+      with:
+        name: meta-io-delay-chaos

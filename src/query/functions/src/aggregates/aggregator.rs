@@ -31,6 +31,7 @@ use super::aggregate_covariance::aggregate_covariance_sample_desc;
 use super::aggregate_min_max_any::aggregate_any_function_desc;
 use super::aggregate_min_max_any::aggregate_max_function_desc;
 use super::aggregate_min_max_any::aggregate_min_function_desc;
+use super::aggregate_mode::aggregate_mode_function_desc;
 use super::aggregate_stddev::aggregate_stddev_pop_function_desc;
 use super::aggregate_stddev::aggregate_stddev_samp_function_desc;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
@@ -41,6 +42,8 @@ use crate::aggregates::aggregate_array_agg_function_desc;
 use crate::aggregates::aggregate_array_moving_avg_function_desc;
 use crate::aggregates::aggregate_array_moving_sum_function_desc;
 use crate::aggregates::aggregate_histogram_function_desc;
+use crate::aggregates::aggregate_json_array_agg_function_desc;
+use crate::aggregates::aggregate_json_object_agg_function_desc;
 use crate::aggregates::aggregate_kurtosis_function_desc;
 use crate::aggregates::aggregate_median_function_desc;
 use crate::aggregates::aggregate_median_tdigest_function_desc;
@@ -109,6 +112,8 @@ impl Aggregators {
             "group_array_moving_sum",
             aggregate_array_moving_sum_function_desc(),
         );
+        factory.register("json_array_agg", aggregate_json_array_agg_function_desc());
+        factory.register("json_object_agg", aggregate_json_object_agg_function_desc());
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());
@@ -137,6 +142,8 @@ impl Aggregators {
         );
 
         factory.register("histogram", aggregate_histogram_function_desc());
+
+        factory.register("mode", aggregate_mode_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

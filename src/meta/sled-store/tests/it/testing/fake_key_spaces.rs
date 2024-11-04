@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_meta_sled_store::SledKeySpace;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::LogIndex;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
-use databend_common_meta_types::SeqV;
 
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;

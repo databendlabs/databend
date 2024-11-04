@@ -1,0 +1,25 @@
+
+statement ok
+drop table if exists nested
+
+statement ok
+create table nested (map map(string not null,int), nest tuple(float32, bool), value array(int32));
+
+query error 1010.*missing column
+copy into nested from @data/orc/nested file_format = (type = orc)  RETURN_FAILED_ONLY=TRUE
+
+query ?
+select count(*) from nested
+----
+0
+
+
+query 
+copy into nested from @data/orc/nested file_format = (type = orc missing_field_as=field_default)  RETURN_FAILED_ONLY=TRUE
+----
+
+
+query ?
+select count(*) from nested
+----
+14

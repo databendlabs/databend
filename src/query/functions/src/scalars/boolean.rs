@@ -17,6 +17,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -42,7 +43,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use ordered_float::OrderedFloat;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("and_filters", |_, args_type| {

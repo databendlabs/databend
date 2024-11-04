@@ -18,6 +18,8 @@ use chrono::Utc;
 use databend_common_ast::ast::AuthOption;
 use databend_common_ast::ast::AuthType;
 use databend_common_base::base::tokio;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
@@ -31,6 +33,14 @@ use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_password_policy() -> Result<()> {
+    // Init.
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+
+    // Init with default.
+    {
+        GlobalConfig::init(&InnerConfig::default()).unwrap();
+    }
     let conf = RpcClientConf::default();
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
@@ -213,7 +223,7 @@ async fn test_password_policy() -> Result<()> {
     assert!(res.is_err());
 
     // verify user change password
-    let auth_info1 = AuthInfo::create2(&None, &Some(pwd1.to_string())).unwrap();
+    let auth_info1 = AuthInfo::create2(&None, &Some(pwd1.to_string()), false).unwrap();
     let mut user_info = UserInfo::new(username, hostname, auth_info1.clone());
     let mut option = UserOption::empty();
     option = option.with_password_policy(Some(policy_name.clone()));
@@ -232,7 +242,7 @@ async fn test_password_policy() -> Result<()> {
     // change the password before the `min_age_days` reached.
     user_info.update_auth_option(Some(auth_info1.clone()), None);
     user_info.update_auth_history(Some(auth_info1));
-    let auth_info2 = AuthInfo::create2(&None, &Some(pwd2.to_string())).unwrap();
+    let auth_info2 = AuthInfo::create2(&None, &Some(pwd2.to_string()), false).unwrap();
     let res = user_mgr
         .verify_password(
             &tenant,
@@ -260,7 +270,7 @@ async fn test_password_policy() -> Result<()> {
     // password cannot repeat
     user_info.update_auth_option(Some(auth_info2.clone()), None);
     user_info.update_auth_history(Some(auth_info2));
-    let new_auth_info1 = AuthInfo::create2(&None, &Some(pwd1.to_string())).unwrap();
+    let new_auth_info1 = AuthInfo::create2(&None, &Some(pwd1.to_string()), false).unwrap();
     let res = user_mgr
         .verify_password(
             &tenant,
@@ -273,16 +283,16 @@ async fn test_password_policy() -> Result<()> {
     assert!(res.is_err());
 
     // change the password 6 times with different values
-    let auth_info3 = AuthInfo::create2(&None, &Some(pwd3.to_string())).unwrap();
+    let auth_info3 = AuthInfo::create2(&None, &Some(pwd3.to_string()), false).unwrap();
     user_info.update_auth_option(Some(auth_info3.clone()), None);
     user_info.update_auth_history(Some(auth_info3));
-    let auth_info4 = AuthInfo::create2(&None, &Some(pwd4.to_string())).unwrap();
+    let auth_info4 = AuthInfo::create2(&None, &Some(pwd4.to_string()), false).unwrap();
     user_info.update_auth_option(Some(auth_info4.clone()), None);
     user_info.update_auth_history(Some(auth_info4));
-    let auth_info5 = AuthInfo::create2(&None, &Some(pwd5.to_string())).unwrap();
+    let auth_info5 = AuthInfo::create2(&None, &Some(pwd5.to_string()), false).unwrap();
     user_info.update_auth_option(Some(auth_info5.clone()), None);
     user_info.update_auth_history(Some(auth_info5));
-    let auth_info6 = AuthInfo::create2(&None, &Some(pwd6.to_string())).unwrap();
+    let auth_info6 = AuthInfo::create2(&None, &Some(pwd6.to_string()), false).unwrap();
     user_info.update_auth_option(Some(auth_info6.clone()), None);
     user_info.update_auth_history(Some(auth_info6));
     // the first password can use again
@@ -304,6 +314,9 @@ async fn test_password_policy() -> Result<()> {
         .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
     assert!(res.is_ok());
+    // user login success, don't need change password
+    let need_change = res.unwrap();
+    assert!(!need_change);
 
     // login fail 3 times
     for _ in 0..3 {
@@ -331,11 +344,15 @@ async fn test_password_policy() -> Result<()> {
     user_info.clear_login_fail_history();
     // set last change password time as 31 days ago for test
     user_info.password_update_on = Some(Utc::now().checked_sub_signed(Duration::days(31)).unwrap());
-    // user can't log in because of not change password more than max allowed days
+    // user have not change password more than max allowed days
+    // user can login, but must change password first
     let res = user_mgr
         .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
-    assert!(res.is_err());
+    assert!(res.is_ok());
+    // user login failed, need change password
+    let need_change = res.unwrap();
+    assert!(need_change);
 
     // update password policy
     let res = user_mgr

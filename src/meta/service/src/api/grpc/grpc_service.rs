@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow_format::flight::data::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
-use databend_common_base::future::TimingFutureExt;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingGuard;
 use databend_common_grpc::GrpcClaim;
@@ -41,23 +41,23 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
+use fastrace::func_name;
+use fastrace::func_path;
+use fastrace::prelude::*;
 use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
 use log::info;
-use minitrace::full_name;
-use minitrace::func_name;
-use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -106,7 +106,7 @@ impl MetaServiceImpl {
         Ok(claim)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
         info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
@@ -116,28 +116,28 @@ impl MetaServiceImpl {
             MetaGrpcReq::UpsertKV(a) => {
                 let res = m
                     .upsert_kv(a.clone())
-                    .info_elapsed(format!("UpsertKV: {:?}", a))
+                    .log_elapsed_info(format!("UpsertKV: {:?}", a))
                     .await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::GetKV(a) => {
                 let res = m
                     .get_kv(&a.key)
-                    .info_elapsed(format!("GetKV: {:?}", a))
+                    .log_elapsed_info(format!("GetKV: {:?}", a))
                     .await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::MGetKV(a) => {
                 let res = m
                     .mget_kv(&a.keys)
-                    .info_elapsed(format!("MGetKV: {:?}", a))
+                    .log_elapsed_info(format!("MGetKV: {:?}", a))
                     .await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::ListKV(a) => {
                 let res = m
                     .prefix_list_kv(&a.prefix)
-                    .info_elapsed(format!("ListKV: {:?}", a))
+                    .log_elapsed_info(format!("ListKV: {:?}", a))
                     .await;
                 RaftReply::from(res)
             }
@@ -148,7 +148,7 @@ impl MetaServiceImpl {
         Ok(reply)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_kv_read_v1(
         &self,
         request: Request<RaftRequest>,
@@ -162,7 +162,7 @@ impl MetaServiceImpl {
         let res = self
             .meta_node
             .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
-            .info_elapsed(format!("ReadRequest: {:?}", req))
+            .log_elapsed_info(format!("ReadRequest: {:?}", req))
             .await
             .map_err(GrpcHelper::internal_err);
 
@@ -170,7 +170,7 @@ impl MetaServiceImpl {
         res
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_txn(
         &self,
         request: Request<TxnRequest>,
@@ -186,7 +186,7 @@ impl MetaServiceImpl {
         let forward_res = self
             .meta_node
             .handle_forwardable_request(forward_req)
-            .info_elapsed(format!("TxnRequest: {}", txn))
+            .log_elapsed_info(format!("TxnRequest: {}", txn))
             .await;
 
         let (endpoint, txn_reply) = match forward_res {
@@ -223,7 +223,7 @@ impl MetaService for MetaServiceImpl {
     type HandshakeStream = BoxStream<HandshakeResponse>;
 
     // rpc handshake first
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -289,7 +289,7 @@ impl MetaService for MetaServiceImpl {
             let _guard = RequestInFlight::guard();
 
             let root =
-                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
             let reply = self.handle_kv_api(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -311,7 +311,7 @@ impl MetaService for MetaServiceImpl {
         ThreadTracker::tracking_future(async move {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
             let root =
-                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
             let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
 
@@ -336,7 +336,7 @@ impl MetaService for MetaServiceImpl {
             let _guard = RequestInFlight::guard();
 
             let root =
-                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
             let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -406,7 +406,7 @@ impl MetaService for MetaServiceImpl {
 
     type WatchStream = Pin<Box<dyn Stream<Item = Result<WatchResponse, Status>> + Send + 'static>>;
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn watch(
         &self,
         request: Request<WatchRequest>,

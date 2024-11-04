@@ -11,11 +11,16 @@ statement ok
 create table t2(a int, b int);
 
 query T
+explain select * from t1 where a = 1 and a = 2;
+----
+EmptyResultScan
+
+query T
 explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 1 and b > 2) or (a = 1 and b < 100);
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [is_true(t1.a (#0) = 1), is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)]
+├── filters: [is_true(t1.a (#0) = 1), is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -24,7 +29,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) = 1, (t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -32,7 +37,7 @@ explain select * from t1 where b > 2 or b > 2 or b < 100;
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)]
+├── filters: [is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -41,62 +46,5 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
+    ├── push downs: [filters: [is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
     └── estimated rows: 0.00
-
-# Constant Folding
-statement ok
-drop table if exists t;
-
-statement ok
-drop table if exists t1;
-
-statement ok
-create table t(a int);
-
-statement ok
-create table t1(a int);
-
-statement ok
-insert into t select number from numbers(50);
-
-statement ok
-insert into t1 select number from numbers(10) where number >4;
-
-query I
-explain select t1.a, t2.action as action from (select a,'INSERT' as action from t where a>1) t2 left join t1 on t2.a=t1.a where action != 'INSERT';
-----
-HashJoin
-├── output columns: [t1.a (#2), action (#1)]
-├── join type: RIGHT OUTER
-├── build keys: [t2.a (#0)]
-├── probe keys: [t1.a (#2)]
-├── filters: []
-├── estimated rows: 0.00
-├── EvalScalar(Build)
-│   ├── output columns: [t.a (#0), action (#1)]
-│   ├── expressions: ['INSERT']
-│   ├── estimated rows: 0.00
-│   └── Filter
-│       ├── output columns: [t.a (#0)]
-│       ├── filters: [is_true(t.a (#0) > 1), false]
-│       ├── estimated rows: 0.00
-│       └── TableScan
-│           ├── table: default.default.t
-│           ├── output columns: [a (#0)]
-│           ├── read rows: 0
-│           ├── read size: 0
-│           ├── partitions total: 0
-│           ├── partitions scanned: 0
-│           ├── push downs: [filters: [false], limit: NONE]
-│           └── estimated rows: 50.00
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [a (#2)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 5.00

@@ -12,27 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_settings::Settings;
+use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::TruncateTableInterpreter;
-use crate::servers::flight::v1::packets::TruncateTablePacket;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
+use crate::servers::flight::v1::actions::create_session;
 
 pub static TRUNCATE_TABLE: &str = "/actions/truncate_table";
 
-pub async fn truncate_table(req: TruncateTablePacket) -> Result<()> {
-    let config = GlobalConfig::instance();
-    let session_manager = SessionManager::instance();
-    let settings = Settings::create(config.query.tenant_id.clone());
-    let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
-    let session = session_manager.register_session(session)?;
-    let ctx = session.create_query_context().await?;
-
-    let interpreter = TruncateTableInterpreter::from_flight(ctx, req)?;
-    interpreter.execute2().await?;
-    Ok(())
+pub async fn truncate_table(plan: TruncateTablePlan) -> Result<()> {
+    let session = create_session()?;
+    let query_context = session.create_query_context().await?;
+    let interpreter = TruncateTableInterpreter::from_flight(query_context, plan)?;
+    interpreter.execute2().await.map(|_| ())
 }

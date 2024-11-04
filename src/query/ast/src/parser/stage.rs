@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom_rule::rule;
 
 use crate::ast::FileFormatOptions;
 use crate::ast::FileFormatValue;
@@ -23,11 +24,11 @@ use crate::ast::FileLocation;
 use crate::ast::SelectStageOption;
 use crate::ast::UriLocation;
 use crate::parser::common::*;
+use crate::parser::copy::literal_string_or_variable;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
-use crate::rule;
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
@@ -77,7 +78,7 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
     let option_type = map(
         rule! {
-            TYPE ~ "=" ~ ( TSV | CSV | NDJSON | PARQUET | JSON )
+            TYPE ~ "=" ~ ( TSV | CSV | NDJSON | PARQUET | JSON | ORC)
         },
         |(_, _, v)| {
             (
@@ -190,21 +191,6 @@ pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
     )(i)
 }
 
-// parse: (k = v ...)* into a map
-pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    map(
-        rule! {
-            "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string ~ ","? )* ~ ^")"
-        },
-        |(_, opts, _)| {
-            BTreeMap::from_iter(
-                opts.iter()
-                    .map(|(k, _, v, _)| (k.name.to_lowercase(), v.clone())),
-            )
-        },
-    )(i)
-}
-
 pub fn file_location(i: Input) -> IResult<FileLocation> {
     alt((
         string_location,
@@ -235,15 +221,11 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
         rule! {
             #literal_string
             ~ (CONNECTION ~ ^"=" ~ ^#connection_options ~ ","?)?
-            ~ (CREDENTIALS ~ ^"=" ~ ^#connection_options ~ ","?)?
             ~ (LOCATION_PREFIX ~ ^"=" ~ ^#literal_string ~ ","?)?
         },
-        |(location, connection_opts, credentials_opts, location_prefix)| {
+        |(location, connection_opts, location_prefix)| {
             if let Some(stripped) = location.strip_prefix('@') {
-                if location_prefix.is_none()
-                    && connection_opts.is_none()
-                    && credentials_opts.is_none()
-                {
+                if location_prefix.is_none() && connection_opts.is_none() {
                     Ok(FileLocation::Stage(stripped.to_string()))
                 } else {
                     Err(nom::Err::Failure(ErrorKind::Other(
@@ -258,9 +240,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 };
                 // fs location is not a valid url, let's check it in advance.
 
-                // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
-                let mut conns = connection_opts.map(|v| v.2).unwrap_or_default();
-                conns.extend(credentials_opts.map(|v| v.2).unwrap_or_default());
+                let conns = connection_opts.map(|v| v.2).unwrap_or_default();
 
                 let uri = UriLocation::from_uri(location, part_prefix, conns)
                     .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid uri")))?;
@@ -277,7 +257,7 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             |(_, _, _, files, _)| SelectStageOption::Files(files),
         ),
         map(
-            rule! { PATTERN ~ ^"=>" ~ ^#literal_string },
+            rule! { PATTERN ~ ^"=>" ~ ^#literal_string_or_variable },
             |(_, _, pattern)| SelectStageOption::Pattern(pattern),
         ),
         map(

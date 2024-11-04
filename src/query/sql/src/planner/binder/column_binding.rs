@@ -19,11 +19,10 @@ use crate::IndexType;
 use crate::Visibility;
 
 // Please use `ColumnBindingBuilder` to construct a new `ColumnBinding`
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Hash)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
     pub database_name: Option<String>,
-    /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
     /// Column Position of this `ColumnBinding` in current context
     pub column_position: Option<usize>,
@@ -39,6 +38,50 @@ pub struct ColumnBinding {
     pub visibility: Visibility,
 
     pub virtual_computed_expr: Option<String>,
+}
+
+const DUMMY_INDEX: usize = usize::MAX;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u64)]
+pub enum DummyColumnType {
+    WindowFunction = 1,
+    AggregateFunction = 2,
+    Subquery = 3,
+    UDF = 4,
+    AsyncFunction = 5,
+    Other = 6,
+}
+
+impl DummyColumnType {
+    fn type_identifier(&self) -> usize {
+        DUMMY_INDEX - (*self) as usize
+    }
+}
+
+impl ColumnBinding {
+    pub fn new_dummy_column(
+        name: String,
+        data_type: Box<DataType>,
+        dummy_type: DummyColumnType,
+    ) -> Self {
+        let index = dummy_type.type_identifier();
+        ColumnBinding {
+            database_name: None,
+            table_name: None,
+            column_position: None,
+            table_index: None,
+            column_name: name,
+            index,
+            data_type,
+            visibility: Visibility::Visible,
+            virtual_computed_expr: None,
+        }
+    }
+
+    pub fn is_dummy(&self) -> bool {
+        self.index >= DummyColumnType::Other.type_identifier()
+    }
 }
 
 impl ColumnIndex for ColumnBinding {}

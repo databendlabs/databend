@@ -34,7 +34,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
@@ -54,22 +54,9 @@ use crate::Visibility;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
-    /// Real read_plan to access partitions/push_downs
-    #[async_backtrace::framed]
     async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        dry_run: bool,
-    ) -> Result<DataSourcePlan> {
-        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None, false, dry_run)
-            .await
-    }
-
-    async fn read_plan_with_catalog(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
         update_stream_columns: bool,
@@ -80,17 +67,14 @@ pub trait ToReadDataSourcePlan {
 #[async_trait::async_trait]
 impl ToReadDataSourcePlan for dyn Table {
     #[async_backtrace::framed]
-    async fn read_plan_with_catalog(
+    async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
         update_stream_columns: bool,
         dry_run: bool,
     ) -> Result<DataSourcePlan> {
-        let catalog_info = ctx.get_catalog(&catalog).await?.info();
-
         let start = std::time::Instant::now();
 
         let (statistics, mut parts) = if let Some(PushDownInfo {
@@ -189,11 +173,10 @@ impl ToReadDataSourcePlan for dyn Table {
             let tenant = ctx.get_tenant();
 
             if let Some(column_mask_policy) = &table_meta.column_mask_policy {
-                let license_manager = get_license_manager();
-                let ret = license_manager
-                    .manager
-                    .check_enterprise_enabled(ctx.get_license_key(), DataMask);
-                if ret.is_err() {
+                if LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(ctx.get_license_key(), DataMask)
+                    .is_err()
+                {
                     None
                 } else {
                     let mut mask_policy_map = BTreeMap::new();
@@ -257,7 +240,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                     &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
                                     start.elapsed())
                                 );
-                                let scalar = type_checker.resolve(&ast_expr).await?;
+                                let scalar = type_checker.resolve(&ast_expr)?;
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
                                 mask_policy_map.insert(i, expr.as_remote_expr());
                             } else {
@@ -282,10 +265,8 @@ impl ToReadDataSourcePlan for dyn Table {
             "build physical plan - built data source plan, time used {:?}",
             start.elapsed()
         ));
-        // TODO pass in catalog name
 
         Ok(DataSourcePlan {
-            catalog_info,
             source_info,
             output_schema,
             parts,

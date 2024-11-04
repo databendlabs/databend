@@ -1,0 +1,26 @@
+
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1 ( int8 int8, boolean boolean );
+
+query 
+copy into t1 from @data/orc/alltypes.zstd.orc file_format = (type = orc)
+----
+orc/alltypes.zstd.orc 11 0 NULL NULL
+
+query 
+select * from t1
+----
+NULL NULL
+0 1
+1 0
+-1 0
+127 1
+-128 1
+50 1
+51 1
+52 1
+53 0
+NULL NULL

@@ -14,6 +14,7 @@
 
 use nom::combinator::consumed;
 use nom::combinator::map;
+use nom_rule::rule;
 
 use crate::ast::*;
 use crate::parser::common::*;
@@ -21,7 +22,6 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::statement::*;
 use crate::parser::token::*;
-use crate::rule;
 
 pub fn script_block(i: Input) -> IResult<ScriptBlock> {
     map(

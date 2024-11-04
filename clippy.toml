@@ -37,3 +37,4 @@ disallowed-macros = [
 avoid-breaking-exported-api = true
 too-many-arguments-threshold = 10
 upper-case-acronyms-aggressive = false
+enum-variant-size-threshold = 200

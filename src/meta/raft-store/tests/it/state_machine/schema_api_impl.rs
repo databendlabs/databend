@@ -18,7 +18,6 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
-use databend_common_meta_api::ShareApiTestSuite;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_raft_store::state_machine::StateMachine;
 use test_harness::test;
@@ -51,14 +50,13 @@ impl kvapi::ApiBuilder<StateMachine> for StateMachineBuilder {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_embedded_single() -> anyhow::Result<()> {
     let builder = StateMachineBuilder {
         test_context: Default::default(),
     };
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
-    ShareApiTestSuite::test_single_node_share(builder.clone()).await?;
     BackgroundApiTestSuite::test_single_node(builder).await?;
 
     Ok(())

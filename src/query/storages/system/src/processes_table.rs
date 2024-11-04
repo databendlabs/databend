@@ -46,7 +46,7 @@ pub struct ProcessesTable {
 impl SyncSystemTable for ProcessesTable {
     const NAME: &'static str = "system.processes";
 
-    const IS_LOCAL: bool = false;
+    const DATA_IN_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -74,6 +74,7 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_time = Vec::with_capacity(processes_info.len());
         let mut processes_created_time = Vec::with_capacity(processes_info.len());
         let mut processes_status = Vec::with_capacity(processes_info.len());
+        let mut processes_current_query_id = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             let data_metrics = &process_info.data_metrics;
@@ -104,7 +105,6 @@ impl SyncSystemTable for ProcessesTable {
             processes_mysql_connection_id.push(process_info.mysql_connection_id);
             processes_time.push(time);
             processes_created_time.push(created_time);
-
             if let Some(data_metrics) = data_metrics {
                 processes_data_read_bytes.push(data_metrics.get_read_bytes() as u64);
                 processes_data_write_bytes.push(data_metrics.get_write_bytes() as u64);
@@ -115,6 +115,12 @@ impl SyncSystemTable for ProcessesTable {
 
             // Status info.
             processes_status.push(process_info.status_info.clone().unwrap_or("".to_owned()));
+            processes_current_query_id.push(
+                process_info
+                    .current_query_id
+                    .clone()
+                    .unwrap_or("".to_owned()),
+            );
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -135,6 +141,7 @@ impl SyncSystemTable for ProcessesTable {
             UInt64Type::from_data(processes_time),
             TimestampType::from_data(processes_created_time),
             StringType::from_data(processes_status),
+            StringType::from_data(processes_current_query_id),
         ]))
     }
 }
@@ -177,6 +184,7 @@ impl ProcessesTable {
             TableField::new("time", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("created_time", TableDataType::Timestamp),
             TableField::new("status", TableDataType::String),
+            TableField::new("current_query_id", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

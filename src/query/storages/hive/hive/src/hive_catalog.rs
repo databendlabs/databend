@@ -25,38 +25,42 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -66,6 +70,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -85,37 +90,41 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
 use hive_metastore::ThriftHiveMetastoreClient;
 use hive_metastore::ThriftHiveMetastoreClientBuilder;
-use hive_metastore::ThriftHiveMetastoreGetTableException;
 use volo_thrift::transport::pool;
+use volo_thrift::MaybeException;
 
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
-
-pub const HIVE_CATALOG: &str = "hive";
+use crate::utils::from_thrift_error;
+use crate::utils::from_thrift_exception;
 
 #[derive(Debug)]
 pub struct HiveCreator;
 
 impl CatalogCreator for HiveCreator {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        _conf: InnerConfig,
+        _meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(opt) => opt,
             _ => unreachable!(
@@ -135,7 +144,7 @@ impl CatalogCreator for HiveCreator {
 
 #[derive(Clone)]
 pub struct HiveCatalog {
-    info: CatalogInfo,
+    info: Arc<CatalogInfo>,
 
     /// storage params for this hive catalog
     ///
@@ -160,7 +169,7 @@ impl Debug for HiveCatalog {
 
 impl HiveCatalog {
     pub fn try_create(
-        info: CatalogInfo,
+        info: Arc<CatalogInfo>,
         sp: Option<StorageParams>,
         hms_address: impl Into<String>,
     ) -> Result<HiveCatalog> {
@@ -210,10 +219,11 @@ impl HiveCatalog {
                 partition_names.into_iter().map(FastStr::new).collect(),
             )
             .await
-            .map_err(from_thrift_error)
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)?
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn get_partition_names(
         &self,
@@ -225,7 +235,8 @@ impl HiveCatalog {
             .client
             .get_partition_names(FastStr::new(db), FastStr::new(table), max_parts)
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         Ok(partition_names.into_iter().map(|v| v.to_string()).collect())
     }
@@ -252,14 +263,6 @@ impl HiveCatalog {
     }
 }
 
-fn from_thrift_error<T>(error: volo_thrift::error::ResponseError<T>) -> ErrorCode
-where T: Debug {
-    ErrorCode::Internal(format!(
-        "thrift error: {:?}, please check your thrift client config",
-        error
-    ))
-}
-
 #[async_trait::async_trait]
 impl Catalog for HiveCatalog {
     fn as_any(&self) -> &dyn Any {
@@ -270,18 +273,19 @@ impl Catalog for HiveCatalog {
         self.info.name_ident.catalog_name.clone()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.info.clone()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db = self
             .client
             .get_database(FastStr::new(db_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let hive_database: HiveDatabase = db.into();
         let res: Arc<dyn Database> = Arc::new(hive_database);
@@ -289,14 +293,15 @@ impl Catalog for HiveCatalog {
     }
 
     // Get all the databases.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
             .client
             .get_all_databases()
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let mut dbs = Vec::with_capacity(db_names.len());
 
@@ -305,7 +310,8 @@ impl Catalog for HiveCatalog {
                 .client
                 .get_database(name)
                 .await
-                .map_err(from_thrift_error)?;
+                .map(from_thrift_exception)
+                .map_err(from_thrift_error)??;
 
             let hive_database: HiveDatabase = db.into();
             let res: Arc<dyn Database> = Arc::new(hive_database);
@@ -366,9 +372,26 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in HIVE catalog",
+        ))
+    }
+
     async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",
+        ))
+    }
+
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        _db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot mget databases in HIVE catalog",
         ))
     }
 
@@ -383,7 +406,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Get one table by db and table name.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,
@@ -396,13 +419,9 @@ impl Catalog for HiveCatalog {
             .get_table(FastStr::new(db_name), FastStr::new(table_name))
             .await
         {
-            Ok(meta) => meta,
-            Err(volo_thrift::ResponseError::UserException(
-                ThriftHiveMetastoreGetTableException::O2(e),
-            )) => {
-                return Err(ErrorCode::TableInfoError(
-                    e.message.clone().unwrap_or_default(),
-                ));
+            Ok(MaybeException::Ok(meta)) => meta,
+            Ok(MaybeException::Exception(exception)) => {
+                return Err(ErrorCode::TableInfoError(format!("{exception:?}")));
             }
             Err(e) => {
                 return Err(from_thrift_error(e));
@@ -415,22 +434,28 @@ impl Catalog for HiveCatalog {
             .client
             .get_schema(FastStr::new(db_name), FastStr::new(table_name))
             .await
-            .map_err(from_thrift_error)?;
-        let table_info: TableInfo =
-            super::converters::try_into_table_info(self.sp.clone(), table_meta, fields)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
+        let table_info: TableInfo = super::converters::try_into_table_info(
+            self.info.clone(),
+            self.sp.clone(),
+            table_meta,
+            fields,
+        )?;
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
 
         Ok(res)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self
             .client
             .get_all_tables(FastStr::new(db_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let mut tables = Vec::with_capacity(table_names.len());
 
@@ -440,6 +465,17 @@ impl Catalog for HiveCatalog {
         }
 
         Ok(tables)
+    }
+
+    async fn get_table_history(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table history in HIVE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
@@ -468,9 +504,16 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop table in HIVE catalog",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot commit_table_meta in HIVE catalog",
         ))
     }
 
@@ -506,17 +549,6 @@ impl Catalog for HiveCatalog {
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot upsert table option in HIVE catalog",
-        ))
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        _table_info: &TableInfo,
-        _req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot update table meta in HIVE catalog",
         ))
     }
 
@@ -575,12 +607,12 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -590,7 +622,7 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -623,26 +655,17 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -690,6 +713,41 @@ impl Catalog for HiveCatalog {
     }
 
     async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
+        unimplemented!()
+    }
+
+    /// Dictionary
+    #[async_backtrace::framed]
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_dictionary(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_dictionary(
+        &self,
+        _req: DictionaryNameIdent,
+    ) -> Result<Option<GetDictionaryReply>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_dictionaries(
+        &self,
+        _req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
         unimplemented!()
     }
 }

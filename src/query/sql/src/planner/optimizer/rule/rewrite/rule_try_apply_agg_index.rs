@@ -85,13 +85,10 @@ impl RuleTryApplyAggIndex {
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::Aggregate,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
+                            op_type: RelOp::EvalScalar,
                             children: vec![Matcher::MatchOp {
-                                op_type: RelOp::EvalScalar,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Scan,
-                                    children: vec![],
-                                }],
+                                op_type: RelOp::Scan,
+                                children: vec![],
                             }],
                         }],
                     }],
@@ -115,15 +112,12 @@ impl RuleTryApplyAggIndex {
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::Aggregate,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
+                            op_type: RelOp::EvalScalar,
                             children: vec![Matcher::MatchOp {
-                                op_type: RelOp::EvalScalar,
+                                op_type: RelOp::Filter,
                                 children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Filter,
-                                    children: vec![Matcher::MatchOp {
-                                        op_type: RelOp::Scan,
-                                        children: vec![],
-                                    }],
+                                    op_type: RelOp::Scan,
+                                    children: vec![],
                                 }],
                             }],
                         }],
@@ -172,13 +166,10 @@ impl RuleTryApplyAggIndex {
                 children: vec![Matcher::MatchOp {
                     op_type: RelOp::Aggregate,
                     children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
+                        op_type: RelOp::EvalScalar,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
+                            op_type: RelOp::Scan,
+                            children: vec![],
                         }],
                     }],
                 }],
@@ -197,15 +188,12 @@ impl RuleTryApplyAggIndex {
                 children: vec![Matcher::MatchOp {
                     op_type: RelOp::Aggregate,
                     children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
+                        op_type: RelOp::EvalScalar,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
+                            op_type: RelOp::Filter,
                             children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Filter,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Scan,
-                                    children: vec![],
-                                }],
+                                op_type: RelOp::Scan,
+                                children: vec![],
                             }],
                         }],
                     }],
@@ -253,9 +241,10 @@ impl Rule for RuleTryApplyAggIndex {
         }
 
         let base_columns = metadata.columns_by_table_index(table_index);
+        let table_name = metadata.table(table_index).name();
 
         if let Some(mut result) =
-            agg_index::try_rewrite(table_index, &base_columns, s_expr, index_plans)?
+            agg_index::try_rewrite(table_index, table_name, &base_columns, s_expr, index_plans)?
         {
             result.set_applied_rule(&self.id);
             state.add_result(result);

@@ -1,3 +1,5 @@
+create index should fail
+Error: APIError: ResponseError with 1601: Table test_json_read_only is read-only, creating inverted index not allowed
 create virtual column should fail
 Error: APIError: ResponseError with 3905: Modification not permitted: Table 'test_json_read_only' is READ ONLY, preventing any changes or updates.
 alter virtual column should fail

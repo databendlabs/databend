@@ -30,10 +30,20 @@ INSERT INTO employees VALUES
     (3, 'Charlie', 'Finance'),
     (4, 'David', 'HR');
 
+query I
+select count(*) from fuse_snapshot('test_txn_merge_into','employees');
+----
+1
+
 statement ok
 INSERT INTO salaries VALUES
     (1, 50000.00),
     (2, 60000.00);
+
+query I
+select count(*) from fuse_snapshot('test_txn_merge_into','salaries');
+----
+1
 
 statement ok
 MERGE INTO salaries
@@ -49,6 +59,11 @@ MERGE INTO salaries
         INSERT (employee_id, salary)
             VALUES (employees.employee_id, 55000.00);
 
+query I
+select count(*) from fuse_snapshot('test_txn_merge_into','salaries');
+----
+1
+
 query IF
 SELECT employee_id, salary FROM salaries order by employee_id;
 ----
@@ -59,6 +74,16 @@ SELECT employee_id, salary FROM salaries order by employee_id;
 
 statement ok
 COMMIT;
+
+query I
+select count(*) from fuse_snapshot('test_txn_merge_into','salaries');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_txn_merge_into','employees');
+----
+1
 
 query IF
 SELECT employee_id, salary FROM salaries order by employee_id;

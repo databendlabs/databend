@@ -16,6 +16,7 @@
 #![allow(internal_features)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::uninlined_format_args)]
+#![feature(iter_map_windows)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
@@ -29,14 +30,13 @@
 #![feature(iterator_try_reduce)]
 #![feature(cursor_remaining)]
 #![feature(vec_into_raw_parts)]
-#![feature(associated_type_bounds)]
 #![feature(hash_extract_if)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(iterator_try_collect)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
-#![feature(lazy_cell)]
 #![feature(variant_count)]
+#![feature(duration_constructors)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 
@@ -58,6 +58,7 @@ pub mod stream;
 pub mod table_functions;
 pub mod test_kits;
 
+mod builtin;
 mod global_services;
 
 pub use databend_common_sql as sql;

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -22,10 +23,12 @@ use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
+use super::interpreter_dictionary_create::CreateDictionaryInterpreter;
+use super::interpreter_dictionary_drop::DropDictionaryInterpreter;
+use super::interpreter_dictionary_show_create::ShowCreateDictionaryInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
-use super::interpreter_merge_into::MergeIntoInterpreter;
-use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
 use super::interpreter_table_index_refresh::RefreshTableIndexInterpreter;
@@ -48,10 +51,15 @@ use crate::interpreters::interpreter_notification_create::CreateNotificationInte
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
 use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
+use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
+use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
+use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
 use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
 use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
@@ -63,14 +71,11 @@ use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
-use crate::interpreters::CreateShareEndpointInterpreter;
-use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
-use crate::interpreters::DropShareInterpreter;
+use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
-use crate::interpreters::UpdateInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -119,24 +124,36 @@ impl InterpreterFactory {
                 *plan.clone(),
                 kind.clone(),
                 config.clone(),
+                false,
+                false,
             )?)),
             Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Ast(formatted_string.clone()),
                 ExplainConfig::default(),
+                false,
+                false,
             )?)),
             Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Syntax(formatted_sql.clone()),
                 ExplainConfig::default(),
+                false,
+                false,
             )?)),
-            Plan::ExplainAnalyze { plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+            Plan::ExplainAnalyze {
+                graphical,
+                partial,
+                plan,
+            } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
                 ExplainConfig::default(),
+                *partial,
+                *graphical,
             )?)),
 
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
@@ -205,6 +222,10 @@ impl InterpreterFactory {
                 ctx,
                 *set_options.clone(),
             )?)),
+            Plan::UnsetOptions(targets) => Ok(Arc::new(UnsetOptionsInterpreter::try_create(
+                ctx,
+                *targets.clone(),
+            )?)),
             Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
                 ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,
             )),
@@ -226,15 +247,32 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
-            Plan::ReclusterTable(recluster_table) => Ok(Arc::new(
-                ReclusterTableInterpreter::try_create(ctx, *recluster_table.clone())?,
-            )),
+            Plan::ReclusterTable { s_expr, is_final } => {
+                Ok(Arc::new(ReclusterTableInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    LockTableOption::LockWithRetry,
+                    *is_final,
+                )?))
+            }
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
-                OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
+            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
+                ctx,
+                *purge.clone(),
+            )?)),
+            Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
+                OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
+            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+                Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    LockTableOption::LockWithRetry,
+                    *need_purge,
+                )?))
+            }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
@@ -335,22 +373,17 @@ impl InterpreterFactory {
                 ctx,
                 *alter_user.clone(),
             )?)),
+            Plan::DescUser(desc_user) => Ok(Arc::new(DescUserInterpreter::try_create(
+                ctx,
+                *desc_user.clone(),
+            )?)),
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::MergeInto(merge_into) => {
-                MergeIntoInterpreter::try_create(ctx, *merge_into.clone())
-            }
-            Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
-                ctx,
-                *delete.clone(),
-            )?)),
-
-            Plan::Update(update) => Ok(Arc::new(UpdateInterpreter::try_create(
-                ctx,
-                *update.clone(),
-            )?)),
+            Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
+                MutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
+            )),
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
@@ -428,11 +461,11 @@ impl InterpreterFactory {
                 *presign.clone(),
             )?)),
 
-            Plan::SetVariable(set_variable) => Ok(Arc::new(SettingInterpreter::try_create(
+            Plan::Set(set_variable) => Ok(Arc::new(SetInterpreter::try_create(
                 ctx,
                 *set_variable.clone(),
             )?)),
-            Plan::UnSetVariable(unset_variable) => Ok(Arc::new(UnSettingInterpreter::try_create(
+            Plan::Unset(unset_variable) => Ok(Arc::new(UnSetInterpreter::try_create(
                 ctx,
                 *unset_variable.clone(),
             )?)),
@@ -442,43 +475,6 @@ impl InterpreterFactory {
             )?)),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 
-            // share plans
-            Plan::CreateShareEndpoint(p) => Ok(Arc::new(
-                CreateShareEndpointInterpreter::try_create(ctx, *p.clone())?,
-            )),
-            Plan::ShowShareEndpoint(p) => Ok(Arc::new(ShowShareEndpointInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::DropShareEndpoint(p) => Ok(Arc::new(DropShareEndpointInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::DropShare(p) => Ok(Arc::new(DropShareInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::GrantShareObject(p) => Ok(Arc::new(GrantShareObjectInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::RevokeShareObject(p) => Ok(Arc::new(RevokeShareObjectInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::AlterShareTenants(p) => Ok(Arc::new(AlterShareTenantsInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::ShowShares(_) => Ok(Arc::new(ShowSharesInterpreter::try_create(ctx)?)),
-            Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
-                ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
-            )),
-            Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
-                ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
-            )),
             Plan::RevertTable(p) => Ok(Arc::new(RevertTableInterpreter::try_create(
                 ctx,
                 *p.clone(),
@@ -596,6 +592,39 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::System(p) => Ok(Arc::new(SystemActionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            // Dictionary
+            Plan::CreateDictionary(create_dictionary) => Ok(Arc::new(
+                CreateDictionaryInterpreter::try_create(ctx, *create_dictionary.clone())?,
+            )),
+            Plan::ShowCreateDictionary(show_create_table) => Ok(Arc::new(
+                ShowCreateDictionaryInterpreter::try_create(ctx, *show_create_table.clone())?,
+            )),
+            Plan::DropDictionary(drop_dict) => Ok(Arc::new(DropDictionaryInterpreter::try_create(
+                ctx,
+                *drop_dict.clone(),
+            )?)),
+            Plan::CreateProcedure(p) => Ok(Arc::new(CreateProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropProcedure(p) => Ok(Arc::new(DropProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            // Plan::ShowCreateProcedure(_) => {}
+            //
+            // Plan::RenameProcedure(p) => Ok(Arc::new(RenameProcedureInterpreter::try_create(
+            // ctx,
+            // p.clone(),
+            // )?)),
         }
     }
 }

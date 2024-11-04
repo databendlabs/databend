@@ -17,12 +17,14 @@ mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
+pub mod query_executor;
 mod semantic;
 
 pub mod binder;
 pub mod dataframe;
 mod expression_parser;
 pub mod optimizer;
+mod planner_cache;
 pub mod plans;
 mod stream_column;
 mod udf_validator;
@@ -42,7 +44,7 @@ pub use metadata::*;
 pub use planner::get_query_kind;
 pub use planner::PlanExtras;
 pub use planner::Planner;
-pub use plans::insert::InsertInputSource;
+pub use plans::InsertInputSource;
 pub use plans::ScalarExpr;
 pub use plans::DELETE_NAME;
 pub use plans::INSERT_NAME;

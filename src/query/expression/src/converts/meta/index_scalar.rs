@@ -15,6 +15,7 @@
 // DO NOT EDIT.
 // This crate keeps some Index codes for compatibility, it's locked by bincode of meta's v3 version
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -36,29 +37,40 @@ pub enum IndexScalar {
     #[serde(alias = "String", alias = "Binary")]
     String(Vec<u8>),
     Tuple(Vec<IndexScalar>),
+    BinaryV2(Vec<u8>),
+    Variant(Vec<u8>),
 }
 
-impl From<IndexScalar> for Scalar {
-    fn from(value: IndexScalar) -> Self {
-        match value {
+impl TryFrom<IndexScalar> for Scalar {
+    type Error = ErrorCode;
+
+    fn try_from(value: IndexScalar) -> Result<Self> {
+        Ok(match value {
             IndexScalar::Null => Scalar::Null,
             IndexScalar::Number(num_scalar) => Scalar::Number(num_scalar),
             IndexScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
-            IndexScalar::String(s) => Scalar::String(unsafe { String::from_utf8_unchecked(s) }),
-            IndexScalar::Tuple(tuple) => {
-                Scalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
-            }
-        }
+            IndexScalar::String(s) => Scalar::String(String::from_utf8(s).map_err(|e| {
+                ErrorCode::InvalidUtf8String(format!("invalid utf8 data for string type: {}", e))
+            })?),
+            IndexScalar::BinaryV2(s) => Scalar::Binary(s),
+            IndexScalar::Variant(s) => Scalar::Variant(s),
+            IndexScalar::Tuple(tuple) => Scalar::Tuple(
+                tuple
+                    .into_iter()
+                    .map(|c| c.try_into())
+                    .collect::<Result<_>>()?,
+            ),
+        })
     }
 }
 
 impl TryFrom<Scalar> for IndexScalar {
-    type Error = ();
+    type Error = ErrorCode;
 
-    fn try_from(value: Scalar) -> Result<Self, ()> {
+    fn try_from(value: Scalar) -> Result<Self> {
         Ok(match value {
             Scalar::Null => IndexScalar::Null,
             Scalar::Number(num_scalar) => IndexScalar::Number(num_scalar),
@@ -67,20 +79,22 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
-            Scalar::Binary(s) => IndexScalar::String(s),
+            Scalar::Binary(s) => IndexScalar::BinaryV2(s),
             Scalar::Tuple(tuple) => IndexScalar::Tuple(
                 tuple
                     .into_iter()
                     .map(|c| c.try_into())
-                    .collect::<Result<_, _>>()?,
+                    .collect::<Result<_>>()?,
             ),
             Scalar::Array(_)
             | Scalar::Map(_)
-            | Scalar::Bitmap(_)
+            // we only support variant read only
             | Scalar::Variant(_)
+            | Scalar::Bitmap(_)
             | Scalar::Geometry(_)
+            | Scalar::Geography(_)
             | Scalar::EmptyArray
-            | Scalar::EmptyMap => return Err(()),
+            | Scalar::EmptyMap => return Err(ErrorCode::Unimplemented("Unsupported scalar type")),
         })
     }
 }

@@ -19,13 +19,13 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_proto_conv::FromToProto;
 
 use crate::serde::Quota;
@@ -71,7 +71,7 @@ where
 /// it will just convert the data but do not write to backend storage.
 pub async fn check_and_upgrade_to_pb<T>(
     quota: &mut Quota,
-    key: String,
+    key: &String,
     seq_value: &SeqV,
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
 ) -> std::result::Result<SeqV<T>, MetaError>
@@ -103,7 +103,7 @@ where
 
     let res = kv_api
         .upsert_kv(UpsertKVReq::new(
-            &key,
+            key,
             MatchSeq::Exact(seq_value.seq),
             Operation::Update(value),
             None,

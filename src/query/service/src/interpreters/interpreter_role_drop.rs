@@ -22,6 +22,7 @@ use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use log::debug;
+use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -50,7 +51,7 @@ impl Interpreter for DropRoleInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_role_execute");
@@ -73,6 +74,10 @@ impl Interpreter for DropRoleInterpreter {
         let session = self.ctx.get_current_session();
         if let Some(current_role) = session.get_current_role() {
             if current_role.name == role_name {
+                warn!(
+                    "Will drop session current role {}, session current role will be set public role",
+                    role_name
+                );
                 session.unset_current_role().await?;
             }
         }

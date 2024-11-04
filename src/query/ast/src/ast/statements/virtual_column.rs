@@ -61,7 +61,6 @@ impl Display for CreateVirtualColumnStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterVirtualColumnStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -92,7 +91,6 @@ impl Display for AlterVirtualColumnStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropVirtualColumnStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

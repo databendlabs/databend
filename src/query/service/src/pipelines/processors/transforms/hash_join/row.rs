@@ -84,6 +84,6 @@ impl RowSpace {
     pub fn reset(&self) {
         let mut buffer = self.buffer.write();
         buffer.clear();
-        self.buffer_row_size.store(0, Ordering::Relaxed);
+        self.buffer_row_size.store(0, Ordering::Release);
     }
 }

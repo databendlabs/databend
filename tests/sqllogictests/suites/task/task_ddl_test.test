@@ -137,6 +137,15 @@ select run_id from system.task_history where name = 'MockTask' limit 6;
 1ftx4
 1ftx5
 
+query I
+select run_id from task_history(task_name => 'MockTask', result_limit => 6);
+----
+1ftx0
+1ftx1
+1ftx2
+1ftx3
+1ftx4
+1ftx5
 
 statement ok
 DROP TASK mytask

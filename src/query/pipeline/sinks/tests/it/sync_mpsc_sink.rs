@@ -22,7 +22,6 @@ use databend_common_pipeline_core::processors::connect;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_sinks::SyncMpscSink;
 use databend_common_pipeline_sinks::SyncMpscSinker;
 

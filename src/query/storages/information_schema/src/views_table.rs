@@ -30,7 +30,7 @@ impl ViewsTable {
             catalog AS table_catalog,
             database AS table_schema,
             name AS table_name,
-            NULL AS view_definition,
+            view_query AS view_definition,
             'NONE' AS check_option,
             0 AS is_updatable,
             engine = 'MaterializedView' AS is_insertable_into,

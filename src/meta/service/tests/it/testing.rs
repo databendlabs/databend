@@ -19,7 +19,7 @@ use databend_common_base::base::tokio;
 use databend_common_tracing::closure_name;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
-use minitrace::prelude::*;
+use fastrace::prelude::*;
 
 pub fn meta_service_test_harness<F, Fut>(test: F)
 where
@@ -40,6 +40,7 @@ where
     shutdown_test();
 }
 
+#[allow(dead_code)]
 pub fn meta_service_test_harness_sync<F>(test: F)
 where F: FnOnce() -> anyhow::Result<()> + 'static {
     setup_test();
@@ -67,5 +68,5 @@ fn setup_test() {
 }
 
 fn shutdown_test() {
-    minitrace::flush();
+    fastrace::flush();
 }

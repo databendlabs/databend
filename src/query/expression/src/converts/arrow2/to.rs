@@ -23,9 +23,11 @@ use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
@@ -81,12 +83,12 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         TableDataType::Null => ArrowDataType::Null,
         TableDataType::EmptyArray => ArrowDataType::Extension(
             ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
-            Box::new(ArrowDataType::Null),
+            Box::new(ArrowDataType::Boolean),
             None,
         ),
         TableDataType::EmptyMap => ArrowDataType::Extension(
             ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
-            Box::new(ArrowDataType::Null),
+            Box::new(ArrowDataType::Boolean),
             None,
         ),
         TableDataType::Boolean => ArrowDataType::Boolean,
@@ -147,7 +149,8 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
                     ArrowField::new(
                         name.as_str(),
                         table_type_to_arrow_type(ty),
-                        ty.is_nullable(),
+                        // null in tuple must be nullable
+                        ty.is_nullable_or_null(),
                     )
                 })
                 .collect();
@@ -160,6 +163,11 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         ),
         TableDataType::Geometry => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOMETRY.to_string(),
+            Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geography => ArrowDataType::Extension(
+            ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
             Box::new(ArrowDataType::LargeBinary),
             None,
         ),
@@ -178,10 +186,20 @@ impl Column {
                 databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
             ),
             Column::EmptyArray { len } => Box::new(
-                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    Bitmap::new_constant(true, *len),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::EmptyMap { len } => Box::new(
-                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    Bitmap::new_constant(true, *len),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::UInt8(col)) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
@@ -276,7 +294,12 @@ impl Column {
                 .unwrap(),
             ),
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
-                let values = unsafe { std::mem::transmute(col.clone()) };
+                let values = unsafe {
+                    std::mem::transmute::<
+                        Buffer<ethnum::I256>,
+                        Buffer<databend_common_arrow::arrow::types::i256>,
+                    >(col.clone())
+                };
                 Box::new(
                     databend_common_arrow::arrow::array::PrimitiveArray::<
                         databend_common_arrow::arrow::types::i256,
@@ -386,7 +409,10 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Bitmap(col) | Column::Variant(col) | Column::Geometry(col) => {
+            Column::Bitmap(col)
+            | Column::Variant(col)
+            | Column::Geometry(col)
+            | Column::Geography(GeographyColumn(col)) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(

@@ -36,7 +36,6 @@ use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
@@ -50,7 +49,6 @@ use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
 use databend_common_storages_fuse::statistics::StatisticsAccumulator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_query::locks::LockManager;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -155,7 +153,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
     let table_statistics = latest_fuse_table
-        .table_statistics(ctx.clone(), None)
+        .table_statistics(ctx.clone(), true, None)
         .await?
         .unwrap();
 
@@ -262,10 +260,8 @@ async fn build_mutator(
         num_block_limit: None,
     };
 
-    let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
     let mut segment_mutator = SegmentCompactMutator::try_create(
         ctx.clone(),
-        table_lock,
         compact_params,
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
@@ -643,7 +639,7 @@ pub struct CompactSegmentTestFixture {
 impl CompactSegmentTestFixture {
     fn try_new(ctx: &Arc<QueryContext>, block_per_seg: u64) -> Result<Self> {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-        let data_accessor = ctx.get_data_operator()?;
+        let data_accessor = ctx.get_application_level_data_operator()?;
         Ok(Self {
             ctx: ctx.clone(),
             threshold: block_per_seg,
@@ -667,13 +663,13 @@ impl CompactSegmentTestFixture {
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_theads = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(
             block_per_seg,
             cluster_key_id,
             max_theads,
             &fuse_segment_io,
-            segment_writer.clone(),
+            data_accessor,
+            location_gen,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -684,6 +680,7 @@ impl CompactSegmentTestFixture {
             BlockThresholds::default(),
             cluster_key_id,
             block_per_seg as usize,
+            false,
         )
         .await?;
         let mut summary = Statistics::default();
@@ -707,9 +704,10 @@ impl CompactSegmentTestFixture {
         thresholds: BlockThresholds,
         cluster_key_id: Option<u32>,
         block_per_seg: usize,
+        unclustered: bool,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-        let data_accessor = ctx.get_data_operator()?.operator();
+        let data_accessor = ctx.get_application_level_data_operator()?.operator();
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
         let mut tasks = vec![];
@@ -731,7 +729,7 @@ impl CompactSegmentTestFixture {
 
                     let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                    let cluster_stats = if num_blocks % 5 == 0 {
+                    let cluster_stats = if unclustered && num_blocks % 4 == 0 {
                         None
                     } else {
                         cluster_key_id.map(|v| {
@@ -775,6 +773,7 @@ impl CompactSegmentTestFixture {
                         location,
                         None,
                         0,
+                        None,
                         Compression::Lz4Raw,
                         Some(Utc::now()),
                     );
@@ -857,7 +856,7 @@ impl CompactCase {
     ) -> Result<()> {
         // setup & run
         let compact_segment_reader = MetaReaders::segment_info_reader(
-            ctx.get_data_operator()?.operator(),
+            ctx.get_application_level_data_operator()?.operator(),
             TestFixture::default_table_schema(),
         );
         let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
@@ -967,14 +966,13 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-    let data_accessor = ctx.get_data_operator()?.operator();
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();
 
     let settings = ctx.get_settings();
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
     let compact_segment_reader =
         MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
     let fuse_segment_io = SegmentsIO::create(ctx.clone(), data_accessor.clone(), schema);
@@ -1013,6 +1011,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             BlockThresholds::default(),
             Some(cluster_key_id),
             block_per_seg as usize,
+            false,
         )
         .await?;
         let mut summary = Statistics::default();
@@ -1026,7 +1025,8 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             Some(cluster_key_id),
             chunk_size,
             &fuse_segment_io,
-            segment_writer.clone(),
+            &data_accessor,
+            &location_gen,
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

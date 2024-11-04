@@ -8,6 +8,21 @@ statement ok
 INSERT INTO math_sample_numbers VALUES ('1', '-1'), ('2', '-2'), ('3', '3')
 
 query F
+SELECT 'inf'::float
+----
+Infinity
+
+query F
+SELECT '-inf'::float
+----
+-Infinity
+
+query F
+SELECT 'nan'::float
+----
+NaN
+
+query F
 SELECT pi()
 ----
 3.141592653589793

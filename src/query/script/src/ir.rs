@@ -84,7 +84,7 @@ pub enum ScriptIR {
         condition: VarRef,
         to_label: LabelRef,
     },
-    /// Uncoditionally jumps to a specified label.
+    /// Unconditionally jumps to a specified label.
     Goto { to_label: LabelRef },
     /// Returns from the script.
     Return,
@@ -184,7 +184,7 @@ impl StatementTemplate {
             }
 
             fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole {
+                if ident.is_hole() {
                     let index = ident.name.parse::<usize>().unwrap();
                     let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {

@@ -17,14 +17,12 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::connect;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_sinks::AsyncMpscSink;
 use databend_common_pipeline_sinks::AsyncMpscSinker;
 
@@ -52,7 +50,6 @@ impl AsyncMpscSink for TestSink {
         Ok(())
     }
 
-    #[unboxed_simple]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         self.count
             .fetch_add(data_block.num_rows(), Ordering::SeqCst);

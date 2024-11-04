@@ -21,30 +21,28 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::base::tokio;
+use databend_common_base::headers::HEADER_VERSION;
+use databend_common_config::UserAuthConfig;
+use databend_common_config::UserConfig;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
-use databend_query::auth::AuthMgr;
-use databend_query::servers::http::middleware::get_client_ip;
-use databend_query::servers::http::middleware::HTTPSessionEndpoint;
-use databend_query::servers::http::middleware::HTTPSessionMiddleware;
-use databend_query::servers::http::v1::make_final_uri;
+use databend_query::servers::http::error::QueryError;
+use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::make_page_uri;
-use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
-use databend_query::servers::http::v1::QueryError;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_txn::TxnState;
+use databend_storages_common_session::TxnState;
 use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
@@ -65,7 +63,6 @@ use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
 use serde_json::json;
-use serde_json::Value;
 use tokio::time::sleep;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -75,7 +72,20 @@ use wiremock::ResponseTemplate;
 
 use crate::tests::tls_constants::*;
 
-type EndpointType = HTTPSessionEndpoint<Route>;
+type EndpointType = Route;
+
+fn unwrap_data<'a>(data: &'a [Vec<Option<String>>], null_as: &'a str) -> Vec<Vec<&'a str>> {
+    data.iter()
+        .map(|x| {
+            x.iter()
+                .map(|y| match y {
+                    Some(y) => y.as_str(),
+                    None => null_as,
+                })
+                .collect()
+        })
+        .collect()
+}
 
 struct TestHttpQueryRequest {
     ep: EndpointType,
@@ -87,12 +97,7 @@ struct TestHttpQueryRequest {
 
 impl TestHttpQueryRequest {
     fn new(json: serde_json::Value) -> Self {
-        let session_middleware =
-            HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-        let ep = Route::new()
-            .nest("/v1/query", query_route())
-            .with(session_middleware);
+        let ep = create_endpoint().unwrap();
 
         let root_auth_header = {
             let mut headers = HeaderMap::new();
@@ -180,6 +185,10 @@ impl TestHttpQueryRequest {
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))
             .unwrap();
+        assert_eq!(
+            resp.header(HEADER_VERSION),
+            Some(DATABEND_SEMVER.to_string().as_str())
+        );
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
@@ -193,7 +202,7 @@ impl TestHttpQueryRequest {
 
 #[derive(Debug, Clone)]
 struct TestHttpQueryFetchReply {
-    resps: Vec<(StatusCode, QueryResponse)>,
+    pub resps: Vec<(StatusCode, QueryResponse)>,
 }
 
 impl TestHttpQueryFetchReply {
@@ -201,7 +210,7 @@ impl TestHttpQueryFetchReply {
         self.resps.last().unwrap().clone()
     }
 
-    fn data(&self) -> Vec<Vec<Value>> {
+    fn data(&self) -> Vec<Vec<Option<String>>> {
         let mut result = vec![];
         for (_, resp) in &self.resps {
             result.extend(resp.data.clone());
@@ -269,22 +278,22 @@ async fn test_simple_sql() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "select * from system.tables limit 10";
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let (status, result) =
         post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
 
     let query_id = &result.id;
-    let final_uri = make_final_uri(query_id);
+    let final_uri = result.final_uri.clone().unwrap();
 
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 19, "{:?}", result);
+    assert_eq!(result.schema.len(), 22, "{:?}", result);
 
     // get state
-    let uri = make_state_uri(query_id);
+    let uri = result.stats_uri.unwrap();
     let (status, result) = get_uri_checked(&ep, &uri).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
@@ -320,7 +329,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 2"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 2"}}"#
     );
 
     // final
@@ -346,7 +355,7 @@ async fn test_show_databases() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "show databases";
-    let (status, result) = post_sql(sql, 1).await?;
+    let (status, result) = post_sql(sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     // has only one field: name
@@ -368,7 +377,7 @@ async fn test_return_when_finish() -> Result<()> {
 
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let (status, result) =
         post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -403,7 +412,7 @@ async fn test_client_query_id() -> Result<()> {
 
     let wait_time_secs = 5;
     let sql = "select * from numbers(1)";
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let mut headers = HeaderMap::new();
     headers.insert("x-databend-query-id", "test-query-id".parse().unwrap());
     let (status, result) =
@@ -466,7 +475,7 @@ async fn test_active_sessions() -> Result<()> {
         .max_active_sessions(max_active_sessions)
         .build();
     let _fixture = TestFixture::setup_with_config(&conf).await?;
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let sql = "select sleep(1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
 
@@ -490,7 +499,7 @@ async fn test_active_sessions() -> Result<()> {
 async fn test_wait_time_secs() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let sql = "select sleep(0.001)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
@@ -564,9 +573,9 @@ async fn test_buffer_size() -> Result<()> {
 async fn test_pagination() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {}}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 6   , "max_rows_per_page": 2}, "session": { "settings": {}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -584,7 +593,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 6"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 6"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
@@ -597,7 +606,7 @@ async fn test_pagination() -> Result<()> {
         assert!(!result.schema.is_empty(), "{:?}", result);
         if page == 5 {
             // get state
-            let uri = make_state_uri(query_id);
+            let uri = result.stats_uri.clone().unwrap();
             let (status, _state_result) = get_uri_checked(&ep, &uri).await?;
             assert_eq!(status, StatusCode::OK);
 
@@ -608,44 +617,6 @@ async fn test_pagination() -> Result<()> {
             next_uri = result.next_uri.clone().unwrap();
         }
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_http_session() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
-
-    let ep = create_endpoint().await?;
-    let json =
-        serde_json::json!({"sql":  "use system", "session": {"keep_server_session_secs": 10}});
-
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert!(result.next_uri.is_some(), "{:?}", result);
-    assert!(result.schema.is_empty(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-    let session_id = &result.session_id.unwrap();
-
-    let json = serde_json::json!({"sql": "select database()", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert_eq!(result.data.len(), 1, "{:?}", result);
-    assert_eq!(result.data[0][0], "system", "{:?}", result);
-
-    let json = serde_json::json!({"sql": "select * from x", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_some(), "{:?}", result);
-
-    let json = serde_json::json!({"sql": "select 1", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert_eq!(result.data.len(), 1, "{:?}", result);
 
     Ok(())
 }
@@ -687,24 +658,16 @@ async fn test_result_timeout() -> Result<()> {
 async fn test_system_tables() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let sql = "select name from system.tables where database='system' order by name";
 
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(!result.data.is_empty(), "{:?}", result);
+    assert!(!data.is_empty(), "{:?}", result);
 
-    let table_names = result
-        .data
-        .iter()
-        .flatten()
-        .map(|j| j.as_str().unwrap().to_string())
-        .collect::<Vec<_>>();
+    let table_names = data.into_iter().flatten().collect::<Vec<_>>();
 
     let skipped = [
         "credits", // slow for ci (> 1s) and maybe flaky
@@ -716,7 +679,7 @@ async fn test_system_tables() -> Result<()> {
         "tracing",      // Could be very large.
     ];
     for table_name in table_names {
-        if skipped.contains(&table_name.as_str()) {
+        if skipped.contains(&table_name) {
             continue;
         };
         let sql = format!("select * from system.{}", table_name);
@@ -743,7 +706,7 @@ async fn test_system_tables() -> Result<()> {
 async fn test_insert() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let route = create_endpoint().await?;
+    let route = create_endpoint()?;
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0, 0),
@@ -771,13 +734,7 @@ async fn test_insert() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 async fn test_query_log() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
-
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
@@ -795,42 +752,35 @@ async fn test_query_log() -> Result<()> {
 
     let sql = "select query_text, query_duration_ms from system.query_log where log_type=2";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(
-        result.data[0][1].as_str().unwrap(),
+        data[0][1].to_string(),
         result_type_2.stats.running_time_ms.to_string(),
     );
 
     let sql = "select query_text, exception_code, exception_text, stack_trace, query_duration_ms from system.query_log where log_type=3";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert!(
-        result.data[0][0]
-            .as_str()
-            .unwrap()
+        data[0][0]
+            .to_string()
             .to_lowercase()
             .contains("create table"),
         "{:?}",
         result
     );
-    assert!(
-        result.data[0][2]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("exist"),
-        "{:?}",
-        result
-    );
+    assert!(data[0][2].to_lowercase().contains("exist"), "{:?}", result);
     assert_eq!(
-        result.data[0][1].as_str().unwrap(),
+        data[0][1],
         ErrorCode::TABLE_ALREADY_EXISTS.to_string(),
         "{:?}",
         result
     );
     assert_eq!(
-        result.data[0][4].as_str().unwrap(),
+        data[0][4],
         result_type_3.stats.running_time_ms.to_string(),
         "{:?}",
         result
@@ -845,12 +795,7 @@ async fn test_query_log() -> Result<()> {
 async fn test_query_log_killed() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -863,24 +808,13 @@ async fn test_query_log_killed() -> Result<()> {
 
     let sql = "select query_text, exception_code, exception_text, stack_trace, query_duration_ms from system.query_log where log_type=4";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
-    assert!(
-        result.data[0][0].as_str().unwrap().contains("sleep"),
-        "{:?}",
-        result
-    );
-    assert!(
-        result.data[0][2]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("killed"),
-        "{:?}",
-        result
-    );
+    assert!(data[0][0].contains("sleep"), "{:?}", result);
+    assert!(data[0][2].to_lowercase().contains("killed"), "{:?}", result);
     assert_eq!(
-        result.data[0][1].as_str().unwrap(),
+        data[0][1],
         ErrorCode::ABORTED_QUERY.to_string(),
         "{:?}",
         result
@@ -925,17 +859,12 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
     post_json(&json).await
 }
 
-pub async fn create_endpoint() -> Result<EndpointType> {
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    Ok(Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware))
+pub fn create_endpoint() -> Result<EndpointType> {
+    Ok(Route::new().nest("/v1", query_route().around(json_response)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     post_json_to_endpoint(&ep, json, HeaderMap::default()).await
 }
 
@@ -1012,12 +941,7 @@ async fn test_auth_jwt() -> Result<()> {
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let now = Clock::now_since_epoch();
     let claims = JWTClaims {
@@ -1094,7 +1018,7 @@ async fn assert_auth_current_user(
         .unwrap();
 
     let (_, resp) = check_response(response).await?;
-    let v = resp.data;
+    let v = unwrap_data(&resp.data, "");
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
     assert_eq!(
@@ -1131,7 +1055,7 @@ async fn assert_auth_current_role(
         .unwrap();
 
     let (_, resp) = check_response(response).await?;
-    let v = resp.data;
+    let v = unwrap_data(&resp.data, "");
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
     assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
@@ -1166,7 +1090,7 @@ async fn assert_auth_current_role_with_role(
         .unwrap();
 
     let (_, resp) = check_response(response).await?;
-    let v = resp.data;
+    let v = unwrap_data(&resp.data, "");
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
     assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
@@ -1203,11 +1127,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let now = Clock::now_since_epoch();
     let claims = JWTClaims {
@@ -1307,6 +1227,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     Ok(())
 }
 
+#[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let config = ConfigBuilder::create()
@@ -1357,6 +1278,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 }
 
 // cannot connect with server unless it have CA signed identity
+#[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let config = ConfigBuilder::create()
@@ -1471,8 +1393,11 @@ async fn test_affect() -> Result<()> {
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
                 ])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1493,8 +1418,11 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1510,8 +1438,11 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1529,8 +1460,11 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1550,8 +1484,11 @@ async fn test_affect() -> Result<()> {
                     "Asia/Shanghai".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
     ];
@@ -1581,7 +1518,7 @@ async fn test_affect() -> Result<()> {
 async fn test_session_secondary_roles() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let route = create_endpoint().await?;
+    let route = create_endpoint()?;
 
     // failed input: only ALL or NONE is allowed
     let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
@@ -1618,18 +1555,23 @@ async fn test_auth_configured_user() -> Result<()> {
     let hash_method = PasswordHashMethod::DoubleSha1;
     let hash_value = hash_method.hash(pass_word.as_bytes());
 
-    let auth_info = AuthInfo::Password {
-        hash_value,
-        hash_method,
+    let user_config = UserConfig {
+        name: user_name.to_string(),
+        auth: UserAuthConfig {
+            auth_type: "double_sha1_password".to_string(),
+            auth_string: Some(hex::encode(hash_value)),
+        },
     };
+
     let config = ConfigBuilder::create()
-        .add_user(user_name, auth_info)
+        .add_user(user_name, user_config)
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);
-    let v = req.fetch_total().await?.data();
+    let resp = req.fetch_total().await?.data();
+    let v = unwrap_data(&resp, "");
 
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
@@ -1655,7 +1597,7 @@ async fn test_txn_error() -> Result<()> {
     {
         let mut session = session.clone();
         session.last_server_info = None;
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1673,7 +1615,7 @@ async fn test_txn_error() -> Result<()> {
         if let Some(s) = &mut session.last_server_info {
             s.id = "abc".to_string()
         }
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1688,7 +1630,7 @@ async fn test_txn_error() -> Result<()> {
         if let Some(s) = &mut session.last_server_info {
             s.start_time = "abc".to_string()
         }
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1714,7 +1656,7 @@ async fn test_txn_timeout() -> Result<()> {
 
     let session = session.clone();
     let last_query_id = session.last_query_ids.first().unwrap().to_string();
-    let json = serde_json::json! ({
+    let json = serde_json::json!({
         "sql": "select 1",
         "session": session,
         "pagination": {"wait_time_secs": wait_time_secs}
@@ -1728,16 +1670,6 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
-    Ok(())
-}
-
-#[test]
-fn test_parse_ip() -> Result<()> {
-    let req = poem::Request::builder()
-        .header("X-Forwarded-For", "1.2.3.4")
-        .finish();
-    let ip = get_client_ip(&req);
-    assert_eq!(ip, Some("1.2.3.4".to_string()));
     Ok(())
 }
 
@@ -1762,6 +1694,65 @@ async fn test_has_result_set() -> Result<()> {
             "SQL '{sql}' not finish after {wait_time_secs} secs"
         );
         assert_eq!(reply.last().1.has_result_set, Some(has_result_set));
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_max_size_per_page() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let sql = "select repeat('1', 1000) as a, repeat('2', 1000) from numbers(10000)";
+    let wait_time_secs = 5;
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    let (_, reply, body) = TestHttpQueryRequest::new(json).fetch_begin().await?;
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let len = body.len() as i32;
+    let target = 10485760; // 10M
+    assert!(len < target);
+    assert!(len > target - 2000);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_max_size_per_page_total_rows() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    // bytes_limit / rows_limit = 1024 * 1024 * 10 / 10000 = 1048.567
+    let sql = "select repeat('1', 1050) as a from numbers(20000)";
+    let wait_time_secs = 5;
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    assert!(reply.error().is_none(), "{:?}", reply.error());
+    assert_eq!(reply.resps.len(), 3);
+    assert_eq!(reply.data().len(), 20000, "{:?}", reply.error());
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_null_response() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    {
+        let sql = "select NULL";
+        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": "1"}}});
+        let mut req = TestHttpQueryRequest::new(json);
+        let resp = req.fetch_total().await?.data();
+
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].len(), 1);
+        assert_eq!(resp[0][0].clone().unwrap_or_default(), "NULL");
+    }
+
+    {
+        let sql = "select NULL";
+        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": "0"}}});
+        let mut req = TestHttpQueryRequest::new(json);
+        let resp = req.fetch_total().await?.data();
+
+        assert_eq!(resp[0].len(), 1);
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0][0], None);
     }
 
     Ok(())

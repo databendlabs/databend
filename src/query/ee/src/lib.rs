@@ -13,9 +13,11 @@
 // limitations under the License.
 
 pub mod aggregating_index;
+pub mod attach_table;
 pub mod background_service;
 pub mod data_mask;
 pub mod enterprise_services;
+pub mod fail_safe;
 pub mod inverted_index;
 pub mod license;
 pub mod storage_encryption;

@@ -262,6 +262,19 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
 }
 
 #[test]
+fn test_tracking_histogram_inf() -> Result<()> {
+    let uniq_metric_name = GlobalUniqName::unique();
+    let histogram = register_histogram_in_seconds(&uniq_metric_name);
+    // observe a value that exceed the max bucket of the histogram
+    histogram.observe(3600.0 * 355.0);
+
+    let output = GLOBAL_METRICS_REGISTRY.render_metrics()?;
+    let expected = format!("{}_bucket{{le=\"+Inf\"}} 1", uniq_metric_name);
+    assert!(output.contains(&expected));
+    Ok(())
+}
+
+#[test]
 fn test_tracking_scoped_family_counter_metrics() -> Result<()> {
     let uniq_metric_name = GlobalUniqName::unique();
     let counter = register_counter_family::<Vec<(&'static str, u64)>>(&uniq_metric_name);

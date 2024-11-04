@@ -1,0 +1,28 @@
+name: "Test old metasrv is compatible with new query; new meta is compatible with old query"
+description: "Download old binaries and current binaries, run stateless test with old `meta` and latest `query`"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        path: ./bins/current
+        artifacts: sqllogictests,meta,query
+
+    - name: Test compatibility
+      shell: bash
+      run: |
+        bash ./tests/compat/test-compat.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-compat

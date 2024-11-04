@@ -79,8 +79,7 @@ impl<'a> ScalarBinder<'a> {
         self.forbid_udf = true;
     }
 
-    #[async_backtrace::framed]
-    pub async fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
+    pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::try_create(
             self.bind_context,
             self.ctx.clone(),
@@ -91,7 +90,7 @@ impl<'a> ScalarBinder<'a> {
         )?;
         type_checker.set_m_cte_bound_ctx(self.m_cte_bound_ctx.clone());
         type_checker.set_ctes_map(self.ctes_map.clone());
-        Ok(*type_checker.resolve(expr).await?)
+        Ok(*type_checker.resolve(expr)?)
     }
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
@@ -106,7 +105,7 @@ impl<'a> ScalarBinder<'a> {
         if let Some(default_expr) = field.default_expr() {
             let tokens = tokenize_sql(default_expr)?;
             let ast = parse_expr(&tokens, self.dialect)?;
-            let (mut scalar, _) = self.bind(&ast).await?;
+            let (mut scalar, _) = self.bind(&ast)?;
             scalar = wrap_cast(&scalar, field.data_type());
 
             let expr = scalar

@@ -1,0 +1,68 @@
+statement ok
+drop stage if exists s1
+
+statement ok
+create stage s1
+
+statement ok
+create or replace table tt(a string, b string)
+
+statement ok
+create or replace table ff(a float, b float)
+
+## test load ##
+
+statement ok
+insert into tt values ('1.0', '2'), ('naN', 'inF'), ('Nan', 'infinity')
+
+query error Invalid CSV option value
+copy into @s1 from tt file_format = (type = CSV nan_display='may_nan')
+
+# nan_display is unload only, not affect load
+query 
+copy into @s1 from tt file_format = (type = CSV nan_display='null')
+----
+3 39 39
+
+query 
+copy into ff from @s1 file_format = (type = CSV) return_failed_only=true
+----
+
+query 
+select * from ff order by a
+----
+1.0 2.0
+NaN Infinity
+NaN Infinity
+
+## test unload ##
+
+statement ok
+remove @s1
+
+query 
+copy into @s1 from ff file_format = (type = CSV)
+----
+3 34 34
+
+query 
+select $1, $2 from @s1 (file_format=>'csv') order by $1
+----
+1.0 2.0
+NaN Infinity
+NaN Infinity
+
+statement ok
+remove @s1
+
+query 
+copy into @s1 from ff file_format = (type = CSV nan_display='null')
+----
+3 36 36
+
+query 
+select $1, $2 from @s1 (file_format=>'csv') order by $1
+----
+1.0 2.0
+null Infinity
+null Infinity

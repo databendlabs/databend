@@ -27,11 +27,11 @@ use databend_common_catalog::plan::StreamTablePart;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -295,6 +295,7 @@ impl FuseTable {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
+            None,
         )?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;
@@ -401,15 +402,10 @@ impl FuseTable {
         Ok((del_blocks, add_blocks))
     }
 
-    pub fn check_changes_valid(
-        &self,
-        database_name: &str,
-        table_name: &str,
-        seq: u64,
-    ) -> Result<()> {
+    pub fn check_changes_valid(&self, desc: &str, seq: u64) -> Result<()> {
         if !self.change_tracking_enabled() {
             return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled on table '{database_name}.{table_name}'",
+                "Change tracking is not enabled on table {desc}",
             )));
         }
 
@@ -421,7 +417,7 @@ impl FuseTable {
             let begin_version = value.parse::<u64>()?;
             if begin_version > seq {
                 return Err(ErrorCode::IllegalStream(format!(
-                    "Change tracking has been missing for the time range requested on table '{database_name}.{table_name}'",
+                    "Change tracking has been missing for the time range requested on table {desc}",
                 )));
             }
         }
@@ -435,7 +431,7 @@ impl FuseTable {
         change_type: ChangeType,
     ) -> Result<Option<TableStatistics>> {
         let Some(base_location) = base_location else {
-            return self.table_statistics(ctx, None).await;
+            return self.table_statistics(ctx, true, None).await;
         };
 
         let (base_snapshot, _) =

@@ -146,6 +146,8 @@ pub enum FileParseError {
         next_char: String,
         column_data: String,
     },
+    #[error("Unexpected: {message}")]
+    Unexpected { message: String },
 }
 
 impl FileParseError {

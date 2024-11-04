@@ -41,6 +41,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use ethnum::i256;
@@ -413,7 +414,7 @@ where State: SumState
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -425,13 +426,13 @@ where State: SumState
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         State::accumulate_keys(places, offset, &columns[0])
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
     }
@@ -607,7 +608,7 @@ where State: SumState
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -619,13 +620,13 @@ where State: SumState
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         State::accumulate_keys(places, offset, &columns[0])
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
     }

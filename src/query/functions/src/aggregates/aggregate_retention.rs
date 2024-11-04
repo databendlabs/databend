@@ -25,8 +25,8 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
@@ -81,7 +81,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         _validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -104,7 +104,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let new_columns = columns
@@ -123,7 +123,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let new_columns = columns
             .iter()

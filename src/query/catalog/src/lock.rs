@@ -20,15 +20,20 @@ use databend_common_pipeline_core::LockGuard;
 
 use crate::table_context::TableContext;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LockTableOption {
+    NoLock,
+    LockWithRetry,
+    LockNoRetry,
+}
+
 #[async_trait::async_trait]
 pub trait Lock: Sync + Send {
     fn lock_type(&self) -> LockType;
 
-    fn get_catalog(&self) -> &str;
-
-    fn get_table_id(&self) -> u64;
-
-    fn tenant_name(&self) -> &str;
-
-    async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
+    async fn try_lock(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        should_retry: bool,
+    ) -> Result<Option<Arc<LockGuard>>>;
 }

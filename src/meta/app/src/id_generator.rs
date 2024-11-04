@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-
 use databend_common_meta_kvapi::kvapi;
 
+pub(crate) const ID_GEN_GENERIC: &str = "generic";
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
 pub(crate) const ID_GEN_TABLE_LOCK: &str = "table_lock_id";
 pub(crate) const ID_GEN_INDEX: &str = "index_id";
+pub(crate) const ID_GEN_DICTIONARY: &str = "dictionary_id";
 
 pub(crate) const ID_GEN_CATALOG: &str = "catalog_id";
 
@@ -28,6 +28,8 @@ pub(crate) const ID_GEN_SHARE_ENDPOINT: &str = "share_endpoint_id";
 
 pub(crate) const ID_GEN_DATA_MASK: &str = "data_mask";
 pub(crate) const ID_GEN_BACKGROUND_JOB: &str = "background_job";
+
+pub(crate) const ID_GEN_PROCEDURE: &str = "procedure_id";
 
 /// Key for resource id generator
 ///
@@ -40,6 +42,13 @@ pub struct IdGenerator {
 }
 
 impl IdGenerator {
+    /// Create a key for generating generic id
+    pub fn generic() -> Self {
+        Self {
+            resource: ID_GEN_GENERIC.to_string(),
+        }
+    }
+
     /// Create a key for generating table id with kvapi::KVApi
     pub fn table_id() -> Self {
         Self {
@@ -51,6 +60,13 @@ impl IdGenerator {
     pub fn database_id() -> Self {
         Self {
             resource: ID_GEN_DATABASE.to_string(),
+        }
+    }
+
+    /// Create a key for generating dictionary id with kvapi::KVApi
+    pub fn dictionary_id() -> Self {
+        Self {
+            resource: ID_GEN_DICTIONARY.to_string(),
         }
     }
 
@@ -97,6 +113,13 @@ impl IdGenerator {
             resource: ID_GEN_CATALOG.to_string(),
         }
     }
+
+    /// Create a key for generating procedure id with kvapi::KVApi
+    pub fn procedure_id() -> Self {
+        Self {
+            resource: ID_GEN_PROCEDURE.to_string(),
+        }
+    }
 }
 
 impl kvapi::KeyCodec for IdGenerator {
@@ -116,10 +139,21 @@ impl kvapi::KeyCodec for IdGenerator {
 impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = "__fd_id_gen";
 
-    type ValueType = Infallible;
+    type ValueType = IdGeneratorValue;
 
     fn parent(&self) -> Option<String> {
         None
+    }
+}
+
+#[derive(Debug)]
+pub struct IdGeneratorValue;
+
+impl kvapi::Value for IdGeneratorValue {
+    type KeyType = IdGenerator;
+
+    fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+        []
     }
 }
 
@@ -198,6 +232,16 @@ mod t {
 
             let g2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g1, g2);
+        }
+
+        // Procedure id generator
+        {
+            let g = IdGenerator::procedure_id();
+            let k = g.to_string_key();
+            assert_eq!("__fd_id_gen/procedure_id", k);
+
+            let t2 = IdGenerator::from_str_key(&k)?;
+            assert_eq!(g, t2);
         }
 
         Ok(())

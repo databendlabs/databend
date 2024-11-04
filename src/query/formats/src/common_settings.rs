@@ -21,12 +21,11 @@ pub struct InputCommonSettings {
     pub true_bytes: Vec<u8>,
     pub false_bytes: Vec<u8>,
     pub null_if: Vec<Vec<u8>>,
-    pub nan_bytes: Vec<u8>,
-    pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
     pub disable_variant_check: bool,
     pub binary_format: BinaryFormat,
     pub is_rounding_mode: bool,
+    pub enable_dst_hour_fix: bool,
 }
 
 #[derive(Clone)]

@@ -20,15 +20,14 @@ use crate::plans::ScalarExpr;
 
 pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
     Ok(join
-        .left_conditions
+        .equi_conditions
         .iter()
-        .zip(join.right_conditions.iter())
-        .map(|(left_cond, right_cond)| {
+        .map(|equi_condition| {
             Ok(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "eq".to_string(),
                 params: vec![],
-                arguments: vec![left_cond.clone(), right_cond.clone()],
+                arguments: vec![equi_condition.left.clone(), equi_condition.right.clone()],
             }))
         })
         .collect::<Result<Vec<_>>>()?

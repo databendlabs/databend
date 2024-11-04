@@ -44,10 +44,10 @@ impl Interpreter for ShowFileFormatsInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "show_file_formats_execute");

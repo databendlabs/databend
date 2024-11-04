@@ -20,8 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncMpscSink;
@@ -56,7 +56,6 @@ pub struct WriteResultCacheSink {
 impl AsyncMpscSink for WriteResultCacheSink {
     const NAME: &'static str = "WriteResultCacheSink";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, block: DataBlock) -> Result<bool> {
         if self.terminated {
@@ -84,11 +83,11 @@ impl AsyncMpscSink for WriteResultCacheSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        if self.terminated {
+        if self.terminated || self.cache_writer.num_rows() == 0 {
             return Ok(());
         }
 
-        // 1. Write the result cache to the storage.
+        // 1. Write the result cache to the storage, blocks must be !empty.
         let location = self.cache_writer.write_to_storage().await?;
 
         // 2. Set result cache key-value pair to meta.
@@ -138,7 +137,7 @@ impl WriteResultCacheSink {
         let cache_writer =
             ResultCacheWriter::create(schema, location, operator, max_bytes, min_execute_secs);
 
-        Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
+        Ok(ProcessorPtr::create(AsyncMpscSinker::create(
             inputs,
             WriteResultCacheSink {
                 ctx,
@@ -151,6 +150,6 @@ impl WriteResultCacheSink {
                 consumed_one_block: false,
                 terminated: false,
             },
-        ))))
+        )))
     }
 }

@@ -1,0 +1,150 @@
+query I
+select c_bool      FROM fuse_compat_table;
+----
+0
+
+query I
+select c_bool      FROM fuse_compat_table where c_bool = false;
+----
+0
+
+query I
+select c_tinyint   FROM fuse_compat_table;
+----
+127
+
+query I
+select c_tinyint   FROM fuse_compat_table where c_tinyint = 127;
+----
+127
+
+query I
+select c_smallint  FROM fuse_compat_table;
+----
+3267
+
+query I
+select c_smallint  FROM fuse_compat_table where c_smallint = 3267;
+----
+3267
+
+query I
+select c_int       FROM fuse_compat_table;
+----
+2147483647
+
+query I
+select c_int       FROM fuse_compat_table where c_int = 2147483647;
+----
+2147483647
+
+query I
+select c_bigint    FROM fuse_compat_table;
+----
+9223372036854775807
+
+query I
+select c_bigint    FROM fuse_compat_table where c_bigint = 9223372036854775807;
+----
+9223372036854775807
+
+
+query F
+select c_float     FROM fuse_compat_table;
+----
+3.4
+
+query F
+select c_float     FROM fuse_compat_table where c_float >= 3.4;
+----
+3.4
+
+query F
+select c_double    FROM fuse_compat_table;
+----
+1.7
+
+query F
+select c_double    FROM fuse_compat_table where c_double = 1.7;
+----
+1.7
+
+query T
+select c_date      FROM fuse_compat_table;
+----
+9999-12-31
+
+query T
+select c_date      FROM fuse_compat_table where c_date = '9999-12-31';
+----
+9999-12-31
+
+query T
+select c_timestamp FROM fuse_compat_table;
+----
+1991-01-01 00:00:00.000000
+
+query T
+select c_timestamp FROM fuse_compat_table where c_timestamp = '1991-01-01 00:00:00.000000';
+----
+1991-01-01 00:00:00.000000
+
+query T
+select c_varchar   FROM fuse_compat_table;
+----
+varchar
+
+query T
+select c_varchar   FROM fuse_compat_table where c_varchar = 'varchar';
+----
+varchar
+
+query T
+select c_array     FROM fuse_compat_table;
+----
+[1,2,3,["a","b","c"]]
+
+query T
+select c_object    FROM fuse_compat_table;
+----
+{"a":1,"b":{"c":2}}
+
+query T
+select c_variant   FROM fuse_compat_table;
+----
+[1,{"a":1,"b":{"c":2}}]
+
+
+# Modify columns, but keep the version table [meta]data as it is
+statement ok
+ALTER TABLE fuse_compat_table DROP COLUMN c_int;
+
+statement ok
+ALTER TABLE fuse_compat_table_2 DROP COLUMN c_int;
+
+statement ok
+ALTER TABLE fuse_compat_table ADD COLUMN brand_new uint64;
+
+statement ok
+ALTER TABLE fuse_compat_table_2 ADD COLUMN brand_new uint64;
+
+
+# Let's see if nothing broken
+query T
+select count() FROM fuse_compat_table where brand_new = 100;
+----
+0
+
+query T
+select * FROM fuse_compat_table ignore_result;
+----
+
+
+query T
+select count() FROM fuse_compat_table_2 where brand_new = 100;
+----
+0
+
+query T
+select * FROM fuse_compat_table_2 ignore_result;
+----

@@ -27,7 +27,6 @@ mod configs;
 mod databases;
 mod distributed;
 mod frame;
-mod interpreters;
 mod metrics;
 mod parquet_rs;
 mod pipelines;

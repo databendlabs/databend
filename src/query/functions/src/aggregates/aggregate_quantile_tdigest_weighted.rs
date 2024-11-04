@@ -26,10 +26,10 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
@@ -86,7 +86,7 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -112,7 +112,7 @@ where
 
         Ok(())
     }
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
         let weighted = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
         let value = unsafe { column.get_unchecked(row) };
@@ -126,7 +126,7 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();

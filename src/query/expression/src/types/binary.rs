@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
+use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -140,6 +142,10 @@ impl ValueType for BinaryType {
         builder.commit_row();
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.commit_row();
     }
@@ -162,6 +168,11 @@ impl ValueType for BinaryType {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         col.data().len() + col.offsets().len() * 8
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(rhs)
     }
 }
 
@@ -192,6 +203,10 @@ impl BinaryColumn {
 
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
+    }
+
+    pub fn current_buffer_len(&self) -> usize {
+        (*self.offsets().last().unwrap() - *self.offsets().first().unwrap()) as _
     }
 
     pub fn data(&self) -> &Buffer<u8> {
@@ -241,6 +256,7 @@ impl BinaryColumn {
         BinaryIterator {
             data: &self.data,
             offsets: self.offsets.windows(2),
+            _t: PhantomData,
         }
     }
 
@@ -270,18 +286,33 @@ impl BinaryColumn {
     }
 }
 
-pub struct BinaryIterator<'a> {
-    pub(crate) data: &'a [u8],
-    pub(crate) offsets: std::slice::Windows<'a, u64>,
+pub type BinaryIterator<'a> = BinaryLikeIterator<'a, &'a [u8]>;
+
+pub trait BinaryLike<'a> {
+    fn from(value: &'a [u8]) -> Self;
 }
 
-impl<'a> Iterator for BinaryIterator<'a> {
-    type Item = &'a [u8];
+impl<'a> BinaryLike<'a> for &'a [u8] {
+    fn from(value: &'a [u8]) -> Self {
+        value
+    }
+}
+
+pub struct BinaryLikeIterator<'a, T>
+where T: BinaryLike<'a>
+{
+    pub(crate) data: &'a [u8],
+    pub(crate) offsets: std::slice::Windows<'a, u64>,
+    pub(crate) _t: PhantomData<T>,
+}
+
+impl<'a, T: BinaryLike<'a>> Iterator for BinaryLikeIterator<'a, T> {
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.offsets
             .next()
-            .map(|range| &self.data[(range[0] as usize)..(range[1] as usize)])
+            .map(|range| T::from(&self.data[(range[0] as usize)..(range[1] as usize)]))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -289,9 +320,9 @@ impl<'a> Iterator for BinaryIterator<'a> {
     }
 }
 
-unsafe impl<'a> TrustedLen for BinaryIterator<'a> {}
+unsafe impl<'a, T: BinaryLike<'a>> TrustedLen for BinaryLikeIterator<'a, T> {}
 
-unsafe impl<'a> std::iter::TrustedLen for BinaryIterator<'a> {}
+unsafe impl<'a, T: BinaryLike<'a>> std::iter::TrustedLen for BinaryLikeIterator<'a, T> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinaryColumnBuilder {
@@ -332,16 +363,21 @@ impl BinaryColumnBuilder {
 
     pub fn repeat(scalar: &[u8], n: usize) -> Self {
         let len = scalar.len();
-        let mut data = Vec::with_capacity(len * n);
-        for _ in 0..n {
-            data.extend_from_slice(scalar);
-        }
+        let data = scalar.repeat(n);
         let offsets = once(0)
             .chain((0..n).map(|i| (len * (i + 1)) as u64))
             .collect();
         BinaryColumnBuilder {
             data,
             offsets,
+            need_estimated: false,
+        }
+    }
+
+    pub fn repeat_default(n: usize) -> Self {
+        BinaryColumnBuilder {
+            data: vec![],
+            offsets: vec![0; n + 1],
             need_estimated: false,
         }
     }
@@ -446,6 +482,24 @@ impl BinaryColumnBuilder {
         let start = *self.offsets.get_unchecked(row) as usize;
         let end = *self.offsets.get_unchecked(row + 1) as usize;
         self.data.get_unchecked(start..end)
+    }
+
+    pub fn push_repeat(&mut self, item: &[u8], n: usize) {
+        self.data.reserve(item.len() * n);
+        if self.need_estimated && self.offsets.len() - 1 < 64 {
+            for _ in 0..n {
+                self.data.extend_from_slice(item);
+                self.commit_row();
+            }
+        } else {
+            let start = self.data.len();
+            let len = item.len();
+            for _ in 0..n {
+                self.data.extend_from_slice(item)
+            }
+            self.offsets
+                .extend((1..=n).map(|i| (start + len * i) as u64));
+        }
     }
 
     pub fn pop(&mut self) -> Option<Vec<u8>> {

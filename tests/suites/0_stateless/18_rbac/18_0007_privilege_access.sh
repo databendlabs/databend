@@ -26,6 +26,10 @@ echo 'create role `test-role2`' | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t20_0012" | $BENDSQL_CLIENT_CONNECT
 echo "create table t20_0012(c int not null)" | $BENDSQL_CLIENT_CONNECT
 
+echo "=== check list user's local stage ==="
+echo "list @~" | $TEST_USER_CONNECT
+echo "=== no err ==="
+
 ## show tables
 echo "show databases" | $TEST_USER_CONNECT
 
@@ -174,6 +178,9 @@ echo "use grant_db" | $USER_A_CONNECT
 echo "select 'test -- show columns from one from system'" | $BENDSQL_CLIENT_CONNECT
 echo "show columns from one from system" | $USER_A_CONNECT
 echo "show columns from t from grant_db" | $USER_A_CONNECT
+echo "grant select on system.clusters to a" | $BENDSQL_CLIENT_CONNECT
+echo "show columns from clusters from system" | $USER_A_CONNECT | echo $?
+echo "show columns from tasks from system" | $USER_A_CONNECT
 
 ### will return err
 echo "show columns from tables from system" | $USER_A_CONNECT
@@ -181,6 +188,9 @@ echo "show tables from nogrant" | $USER_A_CONNECT
 
 echo "select count(1) from information_schema.columns where table_schema in ('grant_db');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.columns where table_schema in ('nogrant');" | $USER_A_CONNECT
+
+echo "show columns from clusters from system" | $BENDSQL_CLIENT_CONNECT | echo $?
+echo "show columns from tasks from system" | $BENDSQL_CLIENT_CONNECT | echo $?
 
 #DML privilege check
 export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"

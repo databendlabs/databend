@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -30,12 +29,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
@@ -43,17 +41,18 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
+use crate::io::block_to_inverted_index;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
-use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -107,8 +106,11 @@ impl FuseTable {
             MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
 
         // If no segment locations are specified, iterates through all segments
-        let segment_locs = if let Some(segment_locs) = &segment_locs {
-            segment_locs.clone()
+        let segment_locs = if let Some(segment_locs) = segment_locs {
+            segment_locs
+                .into_iter()
+                .filter(|s| snapshot.segments.contains(s))
+                .collect()
         } else {
             snapshot.segments.clone()
         };
@@ -169,17 +171,15 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
-        let _ = pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(InvertedIndexTransform::try_create(
-                input,
-                output,
+        pipeline.add_async_transformer(|| {
+            InvertedIndexTransform::new(
                 index_name.clone(),
                 index_version.clone(),
                 index_options.clone(),
                 data_schema.clone(),
                 index_schema.clone(),
                 operator.clone(),
-            )?))
+            )
         });
 
         pipeline.try_resize(1)?;
@@ -219,7 +219,6 @@ impl InvertedIndexSource {
 impl AsyncSource for InvertedIndexSource {
     const NAME: &'static str = "InvertedIndexSource";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
@@ -254,24 +253,22 @@ pub struct InvertedIndexTransform {
 }
 
 impl InvertedIndexTransform {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
+    pub fn new(
         index_name: String,
         index_version: String,
         index_options: BTreeMap<String, String>,
         data_schema: DataSchemaRef,
         source_schema: TableSchemaRef,
         operator: Operator,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(AsyncTransformer::create(input, output, Self {
+    ) -> Self {
+        Self {
             index_name,
             index_version,
             index_options,
             data_schema,
             source_schema,
             operator,
-        }))
+        }
     }
 }
 
@@ -297,7 +294,10 @@ impl AsyncTransform for InvertedIndexTransform {
         let mut writer =
             InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
         writer.add_block(&self.source_schema, &data_block)?;
-        let data = writer.finalize()?;
+
+        let (index_schema, index_block) = writer.finalize()?;
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = block_to_inverted_index(&index_schema, index_block, &mut data)?;
         let index_size = data.len() as u64;
         write_data(data, &self.operator, &index_location).await?;
 
@@ -331,7 +331,6 @@ impl InvertedIndexSink {
 impl AsyncSink for InvertedIndexSink {
     const NAME: &'static str = "InvertedIndexSink";
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
         let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);

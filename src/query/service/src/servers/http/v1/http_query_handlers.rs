@@ -13,21 +13,26 @@
 // limitations under the License.
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
+use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
+use fastrace::func_path;
+use fastrace::prelude::*;
 use highway::HighwayHash;
 use http::StatusCode;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
+use poem::middleware::CookieJarManager;
 use poem::post;
+use poem::put;
 use poem::web::Json;
 use poem::web::Path;
 use poem::EndpointExt;
@@ -35,23 +40,30 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::error::HttpErrorCode;
+use crate::servers::http::error::QueryError;
+use crate::servers::http::middleware::EndpointKind;
+use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::v1::discovery_nodes;
+use crate::servers::http::v1::list_suggestions;
+use crate::servers::http::v1::login_handler;
+use crate::servers::http::v1::logout_handler;
+use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
+use crate::servers::http::v1::refresh_handler;
+use crate::servers::http::v1::upload_to_stage;
+use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
-use crate::servers::http::v1::JsonBlock;
+use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
-
-const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
-const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
-const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -67,23 +79,6 @@ pub fn make_final_uri(query_id: &str) -> String {
 
 pub fn make_kill_uri(query_id: &str) -> String {
     format!("/v1/query/{}/kill", query_id)
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct QueryError {
-    pub code: u16,
-    pub message: String,
-    pub detail: String,
-}
-
-impl QueryError {
-    pub(crate) fn from_error_code(e: ErrorCode) -> Self {
-        QueryError {
-            code: e.code(),
-            message: e.display_text(),
-            detail: e.detail(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -128,7 +123,7 @@ pub struct QueryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<JsonValue>>,
+    pub data: Vec<Vec<Option<String>>>,
     pub affect: Option<QueryAffect>,
 
     pub stats: QueryStats,
@@ -148,11 +143,11 @@ impl QueryResponse {
     ) -> impl IntoResponse {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
-            (JsonBlock::empty(), None)
+            (StringBlock::empty(), None)
         } else {
             match state.state {
                 ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
-                    None => (JsonBlock::empty(), Some(make_state_uri(&id))),
+                    None => (StringBlock::empty(), Some(make_state_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -161,9 +156,9 @@ impl QueryResponse {
                         (d.page.data, uri)
                     }
                 },
-                ExecuteStateKind::Failed => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                ExecuteStateKind::Failed => (StringBlock::empty(), Some(make_final_uri(&id))),
                 ExecuteStateKind::Succeeded => match r.data {
-                    None => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                    None => (StringBlock::empty(), Some(make_final_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -225,25 +220,30 @@ async fn query_final_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    ctx.check_node_id(&query_id)?;
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         info!(
-            "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
-            query_id, query_id
+            "{}: got {} request, this query is going to be finally completed.",
+            query_id,
+            make_final_uri(&query_id)
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
             .remove_query(
                 &query_id,
+                &ctx.client_session_id,
                 RemoveReason::Finished,
                 ErrorCode::ClosedQuery("closed by client"),
             )
-            .await
+            .await?
         {
             Some(query) => {
-                let mut response = query.get_response_state_only().await;
+                let mut response = query
+                    .get_response_state_only()
+                    .await
+                    .map_err(HttpErrorCode::server_error)?;
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
@@ -262,22 +262,24 @@ async fn query_cancel_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    ctx.check_node_id(&query_id)?;
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         info!(
-            "{}: got /v1/query/{}/kill request, cancel the query",
-            query_id, query_id
+            "{}: got {} request, cancel the query",
+            query_id,
+            make_kill_uri(&query_id)
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
             .remove_query(
                 &query_id,
+                &ctx.client_session_id,
                 RemoveReason::Canceled,
                 ErrorCode::AbortedQuery("canceled by client"),
             )
-            .await
+            .await?
         {
             Some(_) => Ok(StatusCode::OK),
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -292,16 +294,21 @@ async fn query_state_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    ctx.check_node_id(&query_id)?;
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
-                    let response = query.get_response_state_only().await;
+                    let response = query
+                        .get_response_state_only()
+                        .await
+                        .map_err(HttpErrorCode::server_error)?;
                     Ok(QueryResponse::from_internal(query_id, response, false))
                 }
             }
@@ -317,13 +324,24 @@ async fn query_page_handler(
     ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    ctx.check_node_id(&query_id)?;
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                if query.user_name != ctx.user_name {
+                    return Err(poem::error::Error::from_string(
+                        format!(
+                            "wrong user, query {} expect {}, got {}",
+                            query_id, query.user_name, ctx.user_name
+                        ),
+                        StatusCode::UNAUTHORIZED,
+                    ));
+                }
+                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
@@ -348,11 +366,13 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(full_name!(), ctx, &ctx.query_id);
+    let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
+        let agent_info = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
+        let client_session_id_info = ctx.client_session_id.as_ref().map(|s|(format!("(client_session_id={s})"))).unwrap_or("".to_string());
+        info!("http query new request{}{}: {}", agent_info, client_session_id_info, mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 
@@ -393,25 +413,80 @@ pub(crate) async fn query_handler(
         .await
 }
 
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn heartbeat_handler() -> poem::error::Result<impl IntoResponse> {
+    // work is already done in session manager
+    Ok(())
+}
+
 pub fn query_route() -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
-        ("/", post(query_handler)),
-        ("/:id", get(query_state_handler)),
-        ("/:id/page/:page_no", get(query_page_handler)),
+        ("/query", post(query_handler), EndpointKind::StartQuery),
         (
-            "/:id/kill",
-            get(query_cancel_handler).post(query_cancel_handler),
+            "/query/:id",
+            get(query_state_handler),
+            EndpointKind::PollQuery,
         ),
         (
-            "/:id/final",
+            "/query/:id/page/:page_no",
+            get(query_page_handler),
+            EndpointKind::PollQuery,
+        ),
+        (
+            "/query/:id/kill",
+            get(query_cancel_handler).post(query_cancel_handler),
+            EndpointKind::PollQuery,
+        ),
+        (
+            "/query/:id/final",
             get(query_final_handler).post(query_final_handler),
+            EndpointKind::PollQuery,
+        ),
+        ("/session/login", post(login_handler), EndpointKind::Login),
+        (
+            "/session/logout",
+            post(logout_handler),
+            EndpointKind::Logout,
+        ),
+        (
+            "/session/refresh",
+            post(refresh_handler),
+            EndpointKind::Refresh,
+        ),
+        (
+            "/session/heartbeat",
+            post(heartbeat_handler),
+            EndpointKind::HeartBeat,
+        ),
+        ("/verify", post(verify_handler), EndpointKind::Verify),
+        (
+            "/upload_to_stage",
+            put(upload_to_stage),
+            EndpointKind::UploadToStage,
+        ),
+        (
+            "/suggested_background_tasks",
+            get(list_suggestions),
+            EndpointKind::SystemInfo,
+        ),
+        (
+            "/discovery_nodes",
+            get(discovery_nodes),
+            EndpointKind::SystemInfo,
         ),
     ];
 
     let mut route = Route::new();
-    for (path, endpoint) in rules.into_iter() {
-        route = route.at(path, endpoint.with(MetricsMiddleware::new(path)));
+    for (path, endpoint, kind) in rules.into_iter() {
+        route = route.at(
+            path,
+            endpoint
+                .with(MetricsMiddleware::new(path))
+                .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind))
+                .with(CookieJarManager::new()),
+        );
     }
     route
 }
@@ -436,7 +511,7 @@ fn query_id_to_trace_id(query_id: &str) -> TraceId {
 }
 
 /// The HTTP query endpoints are expected to be responses within 60 seconds.
-/// If it exceeds far of 60 seconds, there might be something wrong, we should
+/// If it exceeds far from 60 seconds, there might be something wrong, we should
 /// log it.
 struct SlowRequestLogTracker {
     started_at: std::time::Instant,
@@ -478,7 +553,7 @@ fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &
         match SpanContext::decode_w3c_traceparent(trace) {
             Some(span_context) => {
                 return Span::root(name, span_context)
-                    .with_properties(|| ctx.to_minitrace_properties());
+                    .with_properties(|| ctx.to_fastrace_properties());
             }
             None => {
                 warn!("failed to decode trace parent: {}", trace);
@@ -488,5 +563,5 @@ fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &
 
     let trace_id = query_id_to_trace_id(query_id);
     Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
-        .with_properties(|| ctx.to_minitrace_properties())
+        .with_properties(|| ctx.to_fastrace_properties())
 }

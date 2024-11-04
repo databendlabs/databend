@@ -53,30 +53,19 @@ pub struct CopyIntoTableStmt {
     pub file_format: FileFormatOptions,
 
     // files to load
-    #[drive(skip)]
     pub files: Option<Vec<String>>,
-    #[drive(skip)]
-    pub pattern: Option<String>,
-    #[drive(skip)]
+    pub pattern: Option<LiteralStringOrVariable>,
     pub force: bool,
 
     // copy options
     /// TODO(xuanwo): parse into validation_mode directly.
-    #[drive(skip)]
     pub validation_mode: String,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub max_files: usize,
-    #[drive(skip)]
     pub split_size: usize,
-    #[drive(skip)]
     pub purge: bool,
-    #[drive(skip)]
     pub disable_variant_check: bool,
-    #[drive(skip)]
     pub return_failed_only: bool,
-    #[drive(skip)]
     pub on_error: String,
 }
 
@@ -121,7 +110,7 @@ impl Display for CopyIntoTableStmt {
         }
 
         if let Some(pattern) = &self.pattern {
-            write!(f, " PATTERN = '{}'", pattern)?;
+            write!(f, " PATTERN = {}", pattern)?;
         }
 
         if !self.file_format.is_empty() {
@@ -148,8 +137,32 @@ impl Display for CopyIntoTableStmt {
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
         write!(f, " ON_ERROR = {}", self.on_error)?;
+        write!(f, " RETURN_FAILED_ONLY = {}", self.return_failed_only)?;
 
         Ok(())
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq)]
+pub struct CopyIntoLocationOptions {
+    pub single: bool,
+    pub max_file_size: usize,
+    pub detailed_output: bool,
+    pub use_raw_path: bool,
+    pub include_query_id: bool,
+    pub overwrite: bool,
+}
+
+impl Default for CopyIntoLocationOptions {
+    fn default() -> Self {
+        Self {
+            single: Default::default(),
+            max_file_size: Default::default(),
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+            overwrite: false,
+        }
     }
 }
 
@@ -160,14 +173,8 @@ pub struct CopyIntoLocationStmt {
     pub hints: Option<Hint>,
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
-    #[drive(skip)]
     pub file_format: FileFormatOptions,
-    #[drive(skip)]
-    pub single: bool,
-    #[drive(skip)]
-    pub max_file_size: usize,
-    #[drive(skip)]
-    pub detailed_output: bool,
+    pub options: CopyIntoLocationOptions,
 }
 
 impl Display for CopyIntoLocationStmt {
@@ -185,9 +192,12 @@ impl Display for CopyIntoLocationStmt {
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
-        write!(f, " SINGLE = {}", self.single)?;
-        write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
-        write!(f, " DETAILED_OUTPUT = {}", self.detailed_output)?;
+        write!(f, " SINGLE = {}", self.options.single)?;
+        write!(f, " MAX_FILE_SIZE = {}", self.options.max_file_size)?;
+        write!(f, " DETAILED_OUTPUT = {}", self.options.detailed_output)?;
+        write!(f, " INCLUDE_QUERY_ID = {}", self.options.include_query_id)?;
+        write!(f, " USE_RAW_PATH = {}", self.options.use_raw_path)?;
+        write!(f, " OVERWRITE = {}", self.options.overwrite)?;
 
         Ok(())
     }
@@ -197,9 +207,12 @@ impl CopyIntoLocationStmt {
     pub fn apply_option(&mut self, opt: CopyIntoLocationOption) {
         match opt {
             CopyIntoLocationOption::FileFormat(v) => self.file_format = v,
-            CopyIntoLocationOption::Single(v) => self.single = v,
-            CopyIntoLocationOption::MaxFileSize(v) => self.max_file_size = v,
-            CopyIntoLocationOption::DetailedOutput(v) => self.detailed_output = v,
+            CopyIntoLocationOption::Single(v) => self.options.single = v,
+            CopyIntoLocationOption::MaxFileSize(v) => self.options.max_file_size = v,
+            CopyIntoLocationOption::DetailedOutput(v) => self.options.detailed_output = v,
+            CopyIntoLocationOption::IncludeQueryID(v) => self.options.include_query_id = v,
+            CopyIntoLocationOption::UseRawPath(v) => self.options.use_raw_path = v,
+            CopyIntoLocationOption::OverWrite(v) => self.options.overwrite = v,
         }
     }
 }
@@ -247,7 +260,6 @@ impl Display for CopyIntoLocationSource {
 pub struct Connection {
     #[drive(skip)]
     visited_keys: HashSet<String>,
-    #[drive(skip)]
     pub conns: BTreeMap<String, String>,
 }
 
@@ -327,13 +339,9 @@ fn mask_string(s: &str, unmask_len: usize) -> String {
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UriLocation {
-    #[drive(skip)]
     pub protocol: String,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub path: String,
-    #[drive(skip)]
     pub part_prefix: String,
     pub connection: Connection,
 }
@@ -434,12 +442,13 @@ impl Display for UriLocation {
 ///
 /// - internal stage: `@internal_stage/path/to/dir/`
 /// - external stage: `@s3_external_stage/path/to/dir/`
+///
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileLocation {
-    Stage(#[drive(skip)] String),
+    Stage(String),
     Uri(UriLocation),
 }
 
@@ -456,9 +465,34 @@ impl Display for FileLocation {
     }
 }
 
+/// Used when we want to allow use variable for options etc.
+/// Other expr is not necessary, because
+/// 1. we can always create a variable that can be used directly.
+/// 2. columns can not be referred.
+///
+/// Can extend to all type of Literals if needed later.
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum LiteralStringOrVariable {
+    Literal(String),
+    Variable(String),
+}
+
+impl Display for LiteralStringOrVariable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralStringOrVariable::Literal(s) => {
+                write!(f, "'{s}'")
+            }
+            LiteralStringOrVariable::Variable(s) => {
+                write!(f, "${s}")
+            }
+        }
+    }
+}
+
 pub enum CopyIntoTableOption {
     Files(Vec<String>),
-    Pattern(String),
+    Pattern(LiteralStringOrVariable),
     FileFormat(FileFormatOptions),
     ValidationMode(String),
     SizeLimit(usize),
@@ -475,12 +509,14 @@ pub enum CopyIntoLocationOption {
     FileFormat(FileFormatOptions),
     MaxFileSize(usize),
     Single(bool),
+    IncludeQueryID(bool),
+    UseRawPath(bool),
     DetailedOutput(bool),
+    OverWrite(bool),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct FileFormatOptions {
-    #[drive(skip)]
     pub options: BTreeMap<String, FileFormatValue>,
 }
 
@@ -496,7 +532,7 @@ impl Display for FileFormatOptions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileFormatValue {
     Keyword(String),
     Bool(bool),

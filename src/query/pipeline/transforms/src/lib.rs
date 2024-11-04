@@ -16,7 +16,8 @@
 #![allow(clippy::unconditional_recursion)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
-#![feature(binary_heap_as_slice)]
 #![feature(let_chains)]
+#![feature(iter_map_windows)]
 
 pub mod processors;
+pub use processors::*;

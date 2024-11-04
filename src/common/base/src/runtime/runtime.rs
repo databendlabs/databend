@@ -15,20 +15,25 @@
 use std::backtrace::Backtrace;
 use std::future::Future;
 use std::panic::Location;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use futures::future;
+use futures::FutureExt;
+use log::info;
 use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
-use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::drop_guard;
@@ -37,13 +42,53 @@ use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 use crate::runtime::ThreadTracker;
 
+pub struct JoinHandle<Output> {
+    inner: tokio::task::JoinHandle<Output>,
+}
+
+impl<Output> JoinHandle<Output> {
+    pub fn create(inner: tokio::task::JoinHandle<Output>) -> Self {
+        Self { inner }
+    }
+
+    pub fn abort(&self) {
+        self.inner.abort();
+    }
+}
+
+impl<Output> Future for JoinHandle<Output> {
+    type Output = Result<Output>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.poll_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(res) => match res {
+                Ok(res) => Poll::Ready(Ok(res)),
+                Err(error) => match error.is_panic() {
+                    true => {
+                        let cause = error.into_panic();
+                        Poll::Ready(Err(match cause.downcast_ref::<&'static str>() {
+                            None => match cause.downcast_ref::<String>() {
+                                None => ErrorCode::PanicError("Sorry, unknown panic message"),
+                                Some(message) => ErrorCode::PanicError(message.to_string()),
+                            },
+                            Some(message) => ErrorCode::PanicError(message.to_string()),
+                        }))
+                    }
+                    false => Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled"))),
+                },
+            },
+        }
+    }
+}
+
 /// Methods to spawn tasks.
 pub trait TrySpawn {
     /// Tries to spawn a new asynchronous task, returning a tokio::JoinHandle for it.
     ///
     /// It allows to return an error before spawning the task.
     #[track_caller]
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static;
@@ -57,18 +102,18 @@ pub trait TrySpawn {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.try_spawn(task).unwrap()
+        self.try_spawn(task, None).unwrap()
     }
 }
 
 impl<S: TrySpawn> TrySpawn for Arc<S> {
     #[track_caller]
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.as_ref().try_spawn(task)
+        self.as_ref().try_spawn(task, name)
     }
 
     #[track_caller]
@@ -104,10 +149,14 @@ impl Runtime {
 
         let handle = runtime.handle().clone();
 
+        let n = name.clone();
         // Block the runtime to shutdown.
         let join_handler = Thread::spawn(move || {
-            // We ignore channel is closed.
             let _ = runtime.block_on(recv_stop);
+            info!(
+                "Runtime({:?}) received shutdown signal, start to shut down",
+                n
+            );
 
             match !cfg!(debug_assertions) {
                 true => false,
@@ -206,13 +255,18 @@ impl Runtime {
     }
 
     #[track_caller]
-    pub fn block_on<T, F>(&self, future: F) -> F::Output
-    where F: Future<Output = Result<T>> + Send + 'static {
+    pub fn block_on<T, C, F>(&self, future: F) -> F::Output
+    where F: Future<Output = Result<T, C>> {
         let future = CatchUnwindFuture::create(future);
         #[allow(clippy::disallowed_methods)]
         tokio::task::block_in_place(|| {
             self.handle
-                .block_on(location_future(future, std::panic::Location::caller()))
+                .block_on(location_future(
+                    future,
+                    std::panic::Location::caller(),
+                    None,
+                ))
+                .with_context(|| "failed to block on future".to_string())
                 .flatten()
         })
     }
@@ -277,7 +331,7 @@ impl Runtime {
                     fut(permit).await
                 }),
             ));
-            handlers.push(handler)
+            handlers.push(JoinHandle::create(handler))
         }
 
         Ok(handlers)
@@ -292,32 +346,40 @@ impl Runtime {
         R: Send + 'static,
     {
         #[allow(clippy::disallowed_methods)]
-        match_join_handle(
+        let handle = JoinHandle::create(
             self.handle
                 .spawn_blocking(ThreadTracker::tracking_function(f)),
-        )
-        .await
+        );
+        handle.await.flatten()
     }
 }
 
 impl TrySpawn for Runtime {
     #[track_caller]
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
         let task = ThreadTracker::tracking_future(task);
-        let task = match ThreadTracker::query_id() {
-            None => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
-            Some(query_id) => {
-                async_backtrace::location!(format!("Running query {} spawn task", query_id))
-                    .frame(task)
+
+        let location_name = {
+            if let Some(name) = name {
+                name
+            } else {
+                match ThreadTracker::query_id() {
+                    None => String::from(GLOBAL_TASK_DESC),
+                    Some(query_id) => {
+                        format!("Running query {} spawn task", query_id)
+                    }
+                }
             }
         };
 
+        let task = async_backtrace::location!(location_name).frame(task);
+
         #[expect(clippy::disallowed_methods)]
-        Ok(self.handle.spawn(task))
+        Ok(JoinHandle::create(self.handle.spawn(task)))
     }
 }
 
@@ -334,6 +396,7 @@ impl Drop for Dropper {
             // Send a signal to say i am dropping.
             if let Some(close_sender) = self.close.take() {
                 if close_sender.send(()).is_ok() {
+                    info!("close_sender to shutdown Runtime is sent");
                     match self.join_handler.take().unwrap().join() {
                         Err(e) => warn!("Runtime dropper panic, {:?}", e),
                         Ok(true) => {
@@ -350,26 +413,6 @@ impl Drop for Dropper {
                 }
             }
         })
-    }
-}
-
-pub async fn match_join_handle<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
-    match handle.await {
-        Ok(Ok(res)) => Ok(res),
-        Ok(Err(cause)) => Err(cause),
-        Err(join_error) => match join_error.is_cancelled() {
-            true => Err(ErrorCode::TokioError("Tokio error is cancelled.")),
-            false => {
-                let panic_error = join_error.into_panic();
-                match panic_error.downcast_ref::<&'static str>() {
-                    None => match panic_error.downcast_ref::<String>() {
-                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
-                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                    },
-                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                }
-            }
-        },
     }
 }
 
@@ -397,9 +440,7 @@ where
     let join_handlers = runtime.try_spawn_batch(semaphore, futures).await?;
 
     // 3. get all the result.
-    future::try_join_all(join_handlers)
-        .await
-        .map_err(|e| ErrorCode::Internal(format!("try join all futures failure, {}", e)))
+    future::try_join_all(join_handlers).await
 }
 
 pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";
@@ -412,7 +453,25 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(location_future(future, std::panic::Location::caller()))
+    tokio::spawn(location_future(
+        future,
+        std::panic::Location::caller(),
+        None,
+    ))
+}
+
+#[track_caller]
+pub fn spawn_named<F>(future: F, name: String) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    #[expect(clippy::disallowed_methods)]
+    tokio::spawn(location_future(
+        future,
+        std::panic::Location::caller(),
+        Some(name),
+    ))
 }
 
 #[track_caller]
@@ -422,7 +481,11 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::task::spawn_local(location_future(future, std::panic::Location::caller()))
+    tokio::task::spawn_local(location_future(
+        future,
+        std::panic::Location::caller(),
+        None,
+    ))
 }
 
 #[track_caller]
@@ -436,7 +499,7 @@ where
 }
 
 #[track_caller]
-pub fn try_spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
+pub fn try_spawn_blocking<F, R>(f: F) -> std::result::Result<tokio::task::JoinHandle<R>, F>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
@@ -452,25 +515,33 @@ where
 pub fn block_on<F: Future>(future: F) -> F::Output {
     #[expect(clippy::disallowed_methods)]
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current()
-            .block_on(location_future(future, std::panic::Location::caller()))
+        tokio::runtime::Handle::current().block_on(location_future(
+            future,
+            std::panic::Location::caller(),
+            None,
+        ))
     })
 }
 
 #[track_caller]
-pub fn try_block_on<F: Future>(future: F) -> Result<F::Output, F> {
+pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(future),
         #[expect(clippy::disallowed_methods)]
         Ok(handler) => Ok(tokio::task::block_in_place(|| {
-            handler.block_on(location_future(future, std::panic::Location::caller()))
+            handler.block_on(location_future(
+                future,
+                std::panic::Location::caller(),
+                None,
+            ))
         })),
     }
 }
 
-fn location_future<F: Future>(
+fn location_future<F>(
     future: F,
     frame_location: &'static Location,
+    frame_name: Option<String>,
 ) -> impl Future<Output = F::Output>
 where
     F: Future,
@@ -482,9 +553,13 @@ where
     // TODO: tracking payload
     let future = ThreadTracker::tracking_future(future);
 
-    let frame_name = std::any::type_name::<F>()
-        .trim_end_matches("::{{closure}}")
-        .to_string();
+    let frame_name = if let Some(n) = frame_name {
+        n
+    } else {
+        std::any::type_name::<F>()
+            .trim_end_matches("::{{closure}}")
+            .to_string()
+    };
 
     async_backtrace::location!(
         frame_name,

@@ -6,10 +6,9 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
-meta_json_v001="$SCRIPT_PATH/meta_v001.txt"
 meta_json_v002="$SCRIPT_PATH/meta_v002.txt"
-want_exported="$SCRIPT_PATH/want_exported_v002"
-want_snapshot_v002="$SCRIPT_PATH/want_snapshot_v002"
+want_exported_v003="$SCRIPT_PATH/want_exported_v003"
+want_snapshot_v003="$SCRIPT_PATH/want_snapshot_v003"
 
 exported="$SCRIPT_PATH/exported"
 grpc_exported="$SCRIPT_PATH/grpc_exported"
@@ -33,7 +32,7 @@ metactl_import_export () {
 
     echo " === import into $meta_dir"
     cat $src |
-        ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
+        ./target/${BUILD_PROFILE}/databend-metactl import --raft-dir "$meta_dir"
 
     sleep 1
 
@@ -41,7 +40,7 @@ metactl_import_export () {
     echo " === ${title} 1.1. Check snapshot data"
     echo " === "
 
-    snapshot_path="$(ls $meta_dir/df_meta/V002/snapshot/1-0-83-*.snap)"
+    snapshot_path="$(ls $meta_dir/df_meta/V003/snapshot/1-0-83-*.snap)"
     echo "=== snapshot path:"
     ls $snapshot_path
 
@@ -54,7 +53,7 @@ metactl_import_export () {
     echo " === "
 
     echo " === export from $meta_dir"
-    ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
+    ./target/${BUILD_PROFILE}/databend-metactl export --raft-dir "$meta_dir" >$exported
 
     echo " === check backup date: $want_exported and exported: $exported"
     diff $want_exported $exported
@@ -73,7 +72,7 @@ metactl_import_export () {
     sleep 10
 
     echo " === export from running databend-meta to $grpc_exported"
-    ./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$grpc_exported
+    ./target/${BUILD_PROFILE}/databend-metactl export --grpc-api-address "localhost:9191" >$grpc_exported
 
     echo " === grpc_exported file data start..."
     cat $grpc_exported
@@ -84,8 +83,7 @@ metactl_import_export () {
     sleep 1
 }
 
-metactl_import_export 'V001' "$meta_json_v001" "$want_exported" "$want_snapshot_v002"
-metactl_import_export 'V002' "$meta_json_v002" "$want_exported" "$want_snapshot_v002"
+metactl_import_export 'V003' "$meta_json_v002" "$want_exported_v003" "$want_snapshot_v003"
 
 
 echo " === "
@@ -103,7 +101,7 @@ echo $METASRV_PID
 sleep 10
 
 echo " === export data from a running databend-meta to $grpc_exported"
-./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$grpc_exported
+./target/${BUILD_PROFILE}/databend-metactl export --grpc-api-address "localhost:9191" >$grpc_exported
 
 echo " === grpc_exported file data start..."
 cat $grpc_exported
@@ -118,7 +116,7 @@ else
 fi
 
 echo " === check if there is a header record in it"
-if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}]' $grpc_exported; then
+if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V003","upgrading":null}}}]' $grpc_exported; then
     echo " === Header record found, good!"
 else
     echo " === No Header record found!!!"
@@ -139,6 +137,6 @@ echo '["header",{"DataHeader":{"key":"header","value":{"version":"V100","upgradi
 
 echo " === import into $meta_dir"
 cat $grpc_exported |
-    ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"  \
+    ./target/${BUILD_PROFILE}/databend-metactl import --raft-dir "$meta_dir"  \
     && { echo " === expect error when importing incompatible header"; exit 1; } \
     || echo " === error is expected. OK";

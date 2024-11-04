@@ -115,7 +115,7 @@ SQL
 for t in customer lineitem nation orders partsupp part region supplier; do
 	echo "loading into $t ..."
 	cat <<SQL | bendsql
-COPY INTO $t FROM 's3://repo.databend.rs/datasets/tpch10/${t}/' connection=(connection_name='repo') pattern ='${t}.*'
+COPY INTO $t FROM 's3://repo.databend.com/datasets/tpch10/${t}/' connection=(connection_name='repo') pattern ='${t}.*'
 file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=0);
 ANALYZE TABLE "${t}";
 SELECT count(*) as count_${t} FROM "${t}";

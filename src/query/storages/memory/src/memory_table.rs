@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -28,7 +26,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -50,19 +47,14 @@ use databend_common_pipeline_sinks::Sinker;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
+use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::memory_part::MemoryPartInfo;
-
-/// Shared store to support memory tables.
-///
-/// Indexed by table id etc.
-pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
-
-static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
-    LazyLock::new(|| Arc::new(Default::default()));
 
 #[derive(Clone)]
 pub struct MemoryTable {
@@ -74,13 +66,18 @@ pub struct MemoryTable {
 
 impl MemoryTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let table_id = &table_info.ident.table_id;
+        let table_id = table_info.ident.table_id;
+        let temp_prefix = table_info.options().get(OPT_KEY_TEMP_PREFIX).cloned();
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();
-            let x = in_mem_data.get(table_id);
+            let key = InMemoryDataKey {
+                temp_prefix,
+                table_id,
+            };
+            let x = in_mem_data.get(&key);
             x.cloned().unwrap_or_else(|| {
                 let blocks = Arc::new(RwLock::new(vec![]));
-                in_mem_data.insert(*table_id, blocks.clone());
+                in_mem_data.insert(key, blocks.clone());
                 blocks
             })
         };
@@ -99,6 +96,21 @@ impl MemoryTable {
             comment: "MEMORY Storage Engine".to_string(),
             ..Default::default()
         }
+    }
+
+    pub fn get_blocks(&self) -> Vec<DataBlock> {
+        let data_blocks = self.blocks.read();
+        data_blocks.iter().cloned().collect()
+    }
+
+    pub fn truncate(&self) {
+        let mut blocks = self.blocks.write();
+        blocks.clear();
+    }
+
+    pub fn update(&self, new_blocks: Vec<DataBlock>) {
+        let mut blocks = self.blocks.write();
+        *blocks = new_blocks;
     }
 
     fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<DataBlock>>> {
@@ -234,12 +246,7 @@ impl Table for MemoryTable {
         )
     }
 
-    fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _pipeline: &mut Pipeline,
-        _: AppendMode,
-    ) -> Result<()> {
+    fn append_data(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         Ok(())
     }
 
@@ -267,8 +274,7 @@ impl Table for MemoryTable {
 
     #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
-        let mut blocks = self.blocks.write();
-        blocks.clear();
+        self.truncate();
         Ok(())
     }
 }

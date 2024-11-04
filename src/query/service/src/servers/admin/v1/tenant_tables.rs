@@ -14,17 +14,20 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
-use databend_storages_common_txn::TxnManager;
-use minitrace::func_name;
+use fastrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::interpreters::ShowCreateQuerySettings;
+use crate::interpreters::ShowCreateTableInterpreter;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TenantTablesResponse {
@@ -36,9 +39,12 @@ pub struct TenantTablesResponse {
 pub struct TenantTableInfo {
     pub table: String,
     pub database: String,
+    pub database_id: String,
     pub engine: String,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+    pub is_local: bool,
+    pub is_external: bool,
     pub rows: u64,
     pub data_bytes: u64,
     pub compressed_data_bytes: u64,
@@ -46,16 +52,25 @@ pub struct TenantTableInfo {
     pub number_of_blocks: Option<u64>,
     pub number_of_segments: Option<u64>,
     pub table_id: u64,
+    pub create_query: String,
 }
 
 async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
+    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
 
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];
     let mut warnings: Vec<String> = vec![];
+
+    let settings = ShowCreateQuerySettings {
+        sql_dialect: Dialect::PostgreSQL,
+        quoted_ident_case_sensitive: true,
+        hide_options_in_show_create_table: false,
+    };
+
     for database in databases {
+        let database_info = database.get_db_info();
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
             Err(err) => {
@@ -69,14 +84,35 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
             }
         };
         for table in tables {
+            let create_query = ShowCreateTableInterpreter::show_create_query(
+                catalog.as_ref(),
+                database.name(),
+                table.as_ref(),
+                &settings,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "show create query of {}.{}.{} failed(ignored): {}",
+                    catalog.name(),
+                    database.name(),
+                    table.name(),
+                    e
+                );
+                "".to_owned()
+            });
+
             let table_id = table.get_table_info().ident.table_id;
             let stats = &table.get_table_info().meta.statistics;
             table_infos.push(TenantTableInfo {
                 table: table.name().to_string(),
                 database: database.name().to_string(),
+                database_id: format!("{}", database_info.database_id),
                 engine: table.engine().to_string(),
                 created_on: table.get_table_info().meta.created_on,
                 updated_on: table.get_table_info().meta.updated_on,
+                is_local: table.is_local(),
+                is_external: table.get_table_info().meta.storage_params.is_some(),
                 rows: stats.number_of_rows,
                 data_bytes: stats.data_bytes,
                 compressed_data_bytes: stats.compressed_data_bytes,
@@ -84,6 +120,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 number_of_blocks: stats.number_of_blocks,
                 number_of_segments: stats.number_of_segments,
                 table_id,
+                create_query,
             });
         }
     }

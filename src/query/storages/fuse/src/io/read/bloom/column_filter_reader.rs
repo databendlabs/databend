@@ -19,24 +19,23 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
 use databend_storages_common_cache::CacheKey;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
-use databend_storages_common_cache_manager::BloomIndexFilterMeter;
-use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
-use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet_rs::arrow::parquet_to_arrow_field_levels;
-use parquet_rs::arrow::ProjectionMask;
-use parquet_rs::basic::Compression as ParquetCompression;
-use parquet_rs::schema::types::SchemaDescPtr;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::arrow::ProjectionMask;
+use parquet::basic::Compression as ParquetCompression;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 
-type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader, BloomIndexFilterMeter>;
+type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader>;
 
 /// Load the filter of a given bloom index column. Also
 /// - generates the proper cache key

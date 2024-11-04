@@ -17,6 +17,7 @@ use std::f64::consts::E;
 use std::f64::consts::PI;
 use std::marker::PhantomData;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::NumberDataType;
@@ -33,7 +34,6 @@ use databend_common_expression::Value;
 use num_traits::AsPrimitive;
 use num_traits::Float;
 use num_traits::Pow;
-use ordered_float::OrderedFloat;
 
 use crate::scalars::decimal::register_decimal_math;
 

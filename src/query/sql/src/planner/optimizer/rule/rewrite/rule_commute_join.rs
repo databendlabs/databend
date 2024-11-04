@@ -57,6 +57,11 @@ impl Rule for RuleCommuteJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut join: Join = s_expr.plan().clone().try_into()?;
+
+        if join.build_side_cache_info.is_some() {
+            return Ok(());
+        }
+
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
         let left_rel_expr = RelExpr::with_s_expr(left_child);
@@ -90,8 +95,10 @@ impl Rule for RuleCommuteJoin {
         };
         if need_commute {
             // Swap the join conditions side
-            (join.left_conditions, join.right_conditions) =
-                (join.right_conditions, join.left_conditions);
+            for condition in join.equi_conditions.iter_mut() {
+                (condition.left, condition.right) =
+                    (condition.right.clone(), condition.left.clone());
+            }
             join.join_type = join.join_type.opposite();
             let mut result = SExpr::create_binary(
                 Arc::new(join.into()),

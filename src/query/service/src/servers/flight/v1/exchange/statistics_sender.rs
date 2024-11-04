@@ -16,17 +16,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::PlanProfile;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
 
+use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::servers::flight::FlightExchange;
@@ -35,16 +35,17 @@ use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
-    shutdown_flag_sender: Sender<(Option<ErrorCode>, Vec<PlanProfile>)>,
+    shutdown_flag_sender: Sender<Option<ErrorCode>>,
     join_handle: Option<JoinHandle<()>>,
 }
 
 impl StatisticsSender {
-    pub fn spawn_sender(
+    pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
         exchange: FlightExchange,
-    ) -> StatisticsSender {
+        executor: Arc<PipelineExecutor>,
+    ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
@@ -53,20 +54,19 @@ impl StatisticsSender {
             let query_id = query_id.to_string();
 
             async move {
+                let mut cnt = 0;
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
-                let mut query_profiles = vec![];
                 loop {
                     match futures::future::select(sleep_future, notified).await {
                         Either::Right((Err(_), _)) => {
                             break;
                         }
-                        Either::Right((Ok((None, profiles)), _)) => {
-                            query_profiles = profiles;
+                        Either::Right((Ok(None), _)) => {
                             break;
                         }
-                        Either::Right((Ok((Some(error_code), _profiles)), _recv)) => {
+                        Either::Right((Ok(Some(error_code)), _recv)) => {
                             let data = DataPacket::ErrorCode(error_code);
                             if let Err(error_code) = tx.send(data).await {
                                 warn!(
@@ -81,15 +81,25 @@ impl StatisticsSender {
                             notified = right;
                             sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                            if let Err(_cause) = Self::send_statistics(&ctx, &tx).await {
+                            if let Err(_cause) = Self::send_progress(&ctx, &tx).await {
                                 ctx.get_exchange_manager().shutdown_query(&query_id);
                                 return;
+                            }
+
+                            cnt += 1;
+
+                            if cnt % 5 == 0 {
+                                // send profiles per 500 millis
+                                if let Err(error) = Self::send_profile(&executor, &tx, false).await
+                                {
+                                    warn!("Profiles send has error, cause: {:?}.", error);
+                                }
                             }
                         }
                     }
                 }
 
-                if let Err(error) = Self::send_profile(query_profiles, &tx).await {
+                if let Err(error) = Self::send_profile(&executor, &tx, true).await {
                     warn!("Profiles send has error, cause: {:?}.", error);
                 }
 
@@ -97,11 +107,11 @@ impl StatisticsSender {
                     warn!("CopyStatus send has error, cause: {:?}.", error);
                 }
 
-                if let Err(error) = Self::send_merge_status(&ctx, &tx).await {
-                    warn!("MergeStatus send has error, cause: {:?}.", error);
+                if let Err(error) = Self::send_mutation_status(&ctx, &tx).await {
+                    warn!("MutationStatus send has error, cause: {:?}.", error);
                 }
 
-                if let Err(error) = Self::send_statistics(&ctx, &tx).await {
+                if let Err(error) = Self::send_progress(&ctx, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
                 }
             }
@@ -114,12 +124,12 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(&mut self, error: Option<ErrorCode>, profiles: Vec<PlanProfile>) {
+    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
         futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send((error, profiles)).await {
+            if let Err(error_code) = shutdown_flag_sender.send(error).await {
                 warn!(
                     "Cannot send data via flight exchange, cause: {:?}",
                     error_code
@@ -135,11 +145,10 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_statistics(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
-        let progress = Self::fetch_progress(ctx)?;
+    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
+        let progress = Self::fetch_progress(ctx);
         let data_packet = DataPacket::SerializeProgress(progress);
-
-        flight_sender.send(data_packet).await
+        tx.send(data_packet).await
     }
 
     #[async_backtrace::framed]
@@ -153,31 +162,34 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_merge_status(
+    async fn send_mutation_status(
         ctx: &Arc<QueryContext>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
-        let merge_status = {
-            let binding = ctx.get_merge_status();
+        let mutation_status = {
+            let binding = ctx.get_mutation_status();
             let status = binding.read();
-            MergeStatus {
+            MutationStatus {
                 insert_rows: status.insert_rows,
                 deleted_rows: status.deleted_rows,
                 update_rows: status.update_rows,
             }
         };
-        let data_packet = DataPacket::MergeStatus(merge_status);
+        let data_packet = DataPacket::MutationStatus(mutation_status);
         flight_sender.send(data_packet).await?;
         Ok(())
     }
 
     async fn send_profile(
-        plans_profile: Vec<PlanProfile>,
-        flight_sender: &FlightSender,
+        executor: &PipelineExecutor,
+        tx: &FlightSender,
+        collect_metrics: bool,
     ) -> Result<()> {
+        let plans_profile = executor.fetch_profiling(collect_metrics);
+
         if !plans_profile.is_empty() {
             let data_packet = DataPacket::QueryProfiles(plans_profile);
-            flight_sender.send(data_packet).await?;
+            tx.send(data_packet).await?;
         }
 
         Ok(())
@@ -193,7 +205,7 @@ impl StatisticsSender {
         flight_sender.send(data_packet).await
     }
 
-    fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
+    fn fetch_progress(ctx: &Arc<QueryContext>) -> Vec<ProgressInfo> {
         let mut progress_info = vec![];
 
         let scan_progress = ctx.get_scan_progress();
@@ -217,6 +229,10 @@ impl StatisticsSender {
             progress_info.push(ProgressInfo::ResultProgress(result_progress_values));
         }
 
-        Ok(progress_info)
+        progress_info
     }
+
+    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
+    //     // ctx.get_exchange_manager()
+    // }
 }

@@ -22,6 +22,8 @@ use crate::planner::format::display::IdHumanizer;
 use crate::planner::format::display::TreeHumanizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
+use crate::plans::AsyncFunction;
+use crate::plans::ConstantTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Filter;
@@ -32,6 +34,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::Udf;
 use crate::plans::Window;
 use crate::IndexType;
 
@@ -110,7 +113,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::UDFLambdaCall(udf) => {
             format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
         }
-        ScalarExpr::AsyncFunctionCall(table_func) => table_func.display_name.to_string(),
+        ScalarExpr::AsyncFunctionCall(async_func) => async_func.display_name.clone(),
     }
 }
 
@@ -144,13 +147,12 @@ pub(super) fn to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = Inde
         RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
         RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
+        RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
+        RelOperator::AsyncFunction(op) => async_func_to_format_tree(id_humanizer, op),
         RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
         RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
         RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
-        RelOperator::AsyncFunction(op) => {
-            FormatTreeNode::with_children(format!("AsyncFunction: {}", op.display_name), vec![])
-        }
-
+        RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(id_humanizer, op),
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
 }
@@ -219,15 +221,15 @@ fn join_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>
     op: &Join,
 ) -> FormatTreeNode {
     let build_keys = op
-        .right_conditions
+        .equi_conditions
         .iter()
-        .map(format_scalar)
+        .map(|condition| format_scalar(&condition.right))
         .collect::<Vec<String>>()
         .join(", ");
     let probe_keys = op
-        .left_conditions
+        .equi_conditions
         .iter()
-        .map(format_scalar)
+        .map(|condition| format_scalar(&condition.left))
         .collect::<Vec<String>>()
         .join(", ");
     let join_filters = op
@@ -294,6 +296,44 @@ fn window_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexTyp
     ])
 }
 
+fn udf_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
+    op: &Udf,
+) -> FormatTreeNode {
+    let scalars = op
+        .items
+        .iter()
+        .sorted_by(|a, b| a.index.cmp(&b.index))
+        .map(|item| format!("{} AS (#{})", format_scalar(&item.scalar), item.index))
+        .collect::<Vec<String>>()
+        .join(", ");
+    let name = if op.script_udf {
+        "UdfScript".to_string()
+    } else {
+        "UdfServer".to_string()
+    };
+    FormatTreeNode::with_children(name, vec![FormatTreeNode::new(format!(
+        "scalars: [{}]",
+        scalars
+    ))])
+}
+
+fn async_func_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
+    op: &AsyncFunction,
+) -> FormatTreeNode {
+    let scalars = op
+        .items
+        .iter()
+        .sorted_by(|a, b| a.index.cmp(&b.index))
+        .map(|item| format!("{} AS (#{})", format_scalar(&item.scalar), item.index))
+        .collect::<Vec<String>>()
+        .join(", ");
+    FormatTreeNode::with_children("AsyncFunction".to_string(), vec![FormatTreeNode::new(
+        format!("scalars: [{}]", scalars),
+    )])
+}
+
 fn filter_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
     _id_humanizer: &I,
     op: &Filter,
@@ -351,11 +391,31 @@ fn sort_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>
     ])
 }
 
+fn constant_scan_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    id_humanizer: &I,
+    plan: &ConstantTableScan,
+) -> FormatTreeNode {
+    if plan.num_rows == 0 {
+        return FormatTreeNode::new(plan.name().to_string());
+    }
+
+    FormatTreeNode::with_children(plan.name().to_string(), vec![
+        FormatTreeNode::new(format!(
+            "columns: [{}]",
+            plan.columns
+                .iter()
+                .map(|col| id_humanizer.humanize_column_id(*col))
+                .join(", ")
+        )),
+        FormatTreeNode::new(format!("num_rows: [{}]", plan.num_rows)),
+    ])
+}
+
 fn limit_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
     _id_humanizer: &I,
     op: &Limit,
 ) -> FormatTreeNode {
-    let limit = if let Some(val) = op.limit { val } else { 0 };
+    let limit = op.limit.unwrap_or_default();
     FormatTreeNode::with_children("Limit".to_string(), vec![
         FormatTreeNode::new(format!("limit: [{}]", limit)),
         FormatTreeNode::new(format!("offset: [{}]", op.offset)),

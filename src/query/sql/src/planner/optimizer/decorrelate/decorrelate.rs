@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
@@ -34,6 +33,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -53,12 +53,8 @@ use crate::MetadataRef;
 /// Correlated exists subquery -> Marker join
 ///
 /// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(
-    ctx: Arc<dyn TableContext>,
-    metadata: MetadataRef,
-    s_expr: SExpr,
-) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(ctx, metadata);
+pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
+    let mut rewriter = SubqueryRewriter::new(metadata, None);
     rewriter.rewrite(&s_expr)
 }
 
@@ -186,8 +182,11 @@ impl SubqueryRewriter {
         }
 
         let join = Join {
-            left_conditions,
-            right_conditions,
+            equi_conditions: JoinEquiCondition::new_conditions(
+                left_conditions,
+                right_conditions,
+                vec![],
+            ),
             non_equi_conditions,
             join_type: match &subquery.typ {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
@@ -201,6 +200,7 @@ impl SubqueryRewriter {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
         };
 
         // Rewrite plan to semi-join.
@@ -282,8 +282,11 @@ impl SubqueryRewriter {
                 }
 
                 let join_plan = Join {
-                    left_conditions,
-                    right_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        left_conditions,
+                        right_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions: vec![],
                     join_type,
                     marker_index: None,
@@ -291,13 +294,14 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
                     Arc::new(left.clone()),
                     Arc::new(flatten_plan),
                 );
-                Ok((s_expr, UnnestResult::SingleJoin { output_index: None }))
+                Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {
@@ -332,8 +336,11 @@ impl SubqueryRewriter {
                     )
                 };
                 let join_plan = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        right_conditions,
+                        left_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions: vec![],
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
@@ -341,6 +348,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -397,8 +405,11 @@ impl SubqueryRewriter {
                     )
                 };
                 let mark_join = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        right_conditions,
+                        left_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
@@ -406,6 +417,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into();
                 Ok((
@@ -428,6 +440,8 @@ impl SubqueryRewriter {
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
+        let mut correlated_columns = correlated_columns.clone().into_iter().collect::<Vec<_>>();
+        correlated_columns.sort();
         for correlated_column in correlated_columns.iter() {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);

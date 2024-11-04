@@ -1,0 +1,20 @@
+statement ok
+create or replace table t1(a int);
+
+statement ok
+insert into t1 values(1), (2), (2), (3);
+
+statement ok
+create or replace table t2(b int);
+
+statement ok
+insert into t2 values(1), (2), (3);
+
+query error 1001.*Scalar subquery can't return more than one row
+select count(distinct a) over (partition by (select b from t2)) from t1;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod algorithm;
 mod cursor;
+mod k_way_merge_sort_partition;
+mod list_domain;
+mod loser_tree;
 mod merger;
 mod rows;
 mod spill;
 pub mod utils;
 
 pub use cursor::*;
+pub use k_way_merge_sort_partition::KWaySortPartitioner;
+pub use k_way_merge_sort_partition::SortTaskMeta;
 pub use merger::*;
 pub use rows::*;
 pub use spill::*;

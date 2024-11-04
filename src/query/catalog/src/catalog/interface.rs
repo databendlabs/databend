@@ -16,40 +16,44 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
-use databend_common_meta_app::schema::GcDroppedTableResp;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -59,6 +63,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -80,22 +85,28 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
@@ -111,7 +122,12 @@ pub struct StorageDescription {
 }
 
 pub trait CatalogCreator: Send + Sync + Debug {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        conf: InnerConfig,
+        meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]
@@ -121,7 +137,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the name of the catalog.
     fn name(&self) -> String;
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo;
+    fn info(&self) -> Arc<CatalogInfo>;
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "{} not implemented",
+            func_name!()
+        )))
+    }
 
     /// Database.
 
@@ -140,7 +163,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply>;
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
 
@@ -155,20 +178,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>>;
 
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply>;
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()>;
 
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply>;
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()>;
 
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply>;
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()>;
 
     async fn list_virtual_columns(
         &self,
@@ -197,24 +211,34 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
     /// Get the table meta by table id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>>;
+    async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
-    // List the tables name by meta ids.
+    /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>>;
+    ) -> Result<Vec<Option<String>>>;
 
-    // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_ids: MetaId) -> Result<String>;
+
+    // Mget dbs by DatabaseNameIdent.
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>>;
 
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
         tenant: &Tenant,
         db_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>>;
+    ) -> Result<Vec<Option<String>>>;
+
+    /// Get the table name by meta id.
+    async fn get_table_name_by_id(&self, table_id: u64) -> Result<Option<String>>;
 
     // Get one table by db and table name.
     async fn get_table(
@@ -224,7 +248,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    // Get one table identified as dropped by db and table name.
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>>;
+
+    /// List all tables in a database.This will not list temporary tables.
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "'list_temporary_tables' not implemented",
+        ))
+    }
+
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
@@ -240,7 +280,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         ))
     }
 
-    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<()> {
         Err(ErrorCode::Unimplemented("'gc_drop_tables' not implemented"))
     }
 
@@ -248,9 +288,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply>;
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply>;
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()>;
 
-    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<()> {
+        unimplemented!("TODO")
+    }
+
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         unimplemented!("TODO")
     }
 
@@ -271,6 +315,36 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         }
     }
 
+    // Check a db.dictionary is exists or not.
+    #[async_backtrace::framed]
+    async fn exists_dictionary(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        dict_name: &str,
+    ) -> Result<bool> {
+        let db_id = self
+            .get_database(tenant, db_name)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id;
+        let req = DictionaryNameIdent::new(
+            tenant,
+            DictionaryIdentity::new(db_id, dict_name.to_string()),
+        );
+        match self.get_dictionary(req).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UNKNOWN_DICTIONARY {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+
     async fn upsert_table_option(
         &self,
         tenant: &Tenant,
@@ -278,13 +352,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply>;
-
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
@@ -293,14 +361,69 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         ))
     }
 
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
+        self.retryable_update_multi_table_meta(req)
+            .await?
+            .map_err(|e| {
+                ErrorCode::TableVersionMismatched(format!(
+                    "Fail to update table metas, conflict tables: {:?}",
+                    e.iter()
+                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
+                        .collect::<Vec<_>>()
+                ))
+            })
+    }
+
+    // update stream metas, currently used by "copy into location form stream"
+    async fn update_stream_metas(
+        &self,
+        update_stream_metas: Vec<UpdateStreamMetaReq>,
+    ) -> Result<()> {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_stream_metas,
+            ..Default::default()
+        })
+        .await
+        .map(|_| ())
+    }
+
+    async fn update_single_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+        table_info: &TableInfo,
+    ) -> Result<UpdateTableMetaReply> {
+        let mut update_table_metas = vec![];
+        let mut update_temp_tables = vec![];
+        if table_info.meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            let req = UpdateTempTableReq {
+                table_id: req.table_id,
+                desc: table_info.desc.clone(),
+                new_table_meta: req.new_table_meta,
+                copied_files: Default::default(),
+            };
+            update_temp_tables.push(req);
+        } else {
+            update_table_metas.push((req, table_info.clone()));
+        }
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_table_metas,
+            update_temp_tables,
+            ..Default::default()
+        })
+        .await
+    }
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply>;
 
-    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply>;
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<()>;
 
-    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply>;
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<()>;
 
     async fn get_table_copied_file_info(
         &self,
@@ -354,13 +477,22 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    fn get_stream_source_table(
+        &self,
+        _stream_desc: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
             "'get_stream_source_table' not implemented",
         ))
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        _stream: TableInfo,
+        _source: TableInfo,
+        _max_batch_size: Option<u64>,
+    ) {
         unimplemented!()
     }
 
@@ -373,4 +505,25 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
+
+    fn set_session_state(&self, _state: SessionState) -> Arc<dyn Catalog> {
+        unimplemented!()
+    }
+
+    /// Dictionary
+    async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply>;
+
+    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply>;
+
+    async fn drop_dictionary(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>>;
+
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>>;
+
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>>;
 }

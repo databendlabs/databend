@@ -32,8 +32,10 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
@@ -41,7 +43,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
-use crate::plans::SrfItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::BaseTableColumn;
@@ -103,7 +104,7 @@ impl SubqueryRewriter {
                     scan_columns.insert(derived_col);
                 }
             }
-            let mut logical_get = SExpr::create_leaf(Arc::new(
+            let mut scan = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: scan_columns,
@@ -112,55 +113,49 @@ impl SubqueryRewriter {
                 .into(),
             ));
             if !scalar_items.is_empty() {
-                // Wrap `EvalScalar` to `logical_get`.
-                logical_get = SExpr::create_unary(
+                // Wrap `EvalScalar` to `scan`.
+                scan = SExpr::create_unary(
                     Arc::new(
                         EvalScalar {
                             items: scalar_items,
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
-            if self.ctx.get_cluster().is_empty() {
-                // Wrap logical get with distinct to eliminate duplicates rows.
-                let mut group_items = Vec::with_capacity(self.derived_columns.len());
-                for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
-                    group_items.push(ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ColumnBindingBuilder::new(
-                                "".to_string(),
-                                column_index,
-                                Box::new(data_types[index].clone()),
-                                Visibility::Visible,
-                            )
-                            .table_index(Some(table_index))
-                            .build(),
-                        }),
-                        index: column_index,
-                    });
-                }
-                logical_get = SExpr::create_unary(
-                    Arc::new(
-                        Aggregate {
-                            mode: AggregateMode::Initial,
-                            group_items,
-                            aggregate_functions: vec![],
-                            from_distinct: false,
-                            limit: None,
-                            grouping_sets: None,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(logical_get),
-                );
+            // Wrap logical get with distinct to eliminate duplicates rows.
+            let mut group_items = Vec::with_capacity(self.derived_columns.len());
+            for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
+                group_items.push(ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBindingBuilder::new(
+                            "".to_string(),
+                            column_index,
+                            Box::new(data_types[index].clone()),
+                            Visibility::Visible,
+                        )
+                        .table_index(Some(table_index))
+                        .build(),
+                    }),
+                    index: column_index,
+                });
             }
+            scan = SExpr::create_unary(
+                Arc::new(
+                    Aggregate {
+                        mode: AggregateMode::Initial,
+                        group_items,
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                Arc::new(scan),
+            );
 
             let cross_join = Join {
-                left_conditions: vec![],
-                right_conditions: vec![],
+                equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
                 non_equi_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
@@ -168,12 +163,13 @@ impl SubqueryRewriter {
                 need_hold_hash_table: false,
                 is_lateral: false,
                 single_to_inner: None,
+                build_side_cache_info: None,
             }
             .into();
 
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(logical_get),
+                Arc::new(scan),
                 Arc::new(plan.clone()),
             ));
         }
@@ -228,6 +224,10 @@ impl SubqueryRewriter {
 
             RelOperator::Window(op) => {
                 self.flatten_window(plan, op, correlated_columns, flatten_info)
+            }
+
+            RelOperator::ExpressionScan(scan) => {
+                self.flatten_expression_scan(plan, scan, correlated_columns)
             }
 
             _ => Err(ErrorCode::Internal(
@@ -318,7 +318,7 @@ impl SubqueryRewriter {
         )?;
         let mut srfs = Vec::with_capacity(project_set.srfs.len());
         for item in project_set.srfs.iter() {
-            let new_item = SrfItem {
+            let new_item = ScalarItem {
                 scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
                 index: item.index,
             };
@@ -398,10 +398,16 @@ impl SubqueryRewriter {
     ) -> Result<SExpr> {
         // Helper function to check if conditions need a cross join
         fn needs_cross_join(
-            conditions: &[ScalarExpr],
+            conditions: &[JoinEquiCondition],
             correlated_columns: &HashSet<IndexType>,
+            left_side: bool,
         ) -> bool {
             conditions.iter().any(|condition| {
+                let condition = if left_side {
+                    &condition.left
+                } else {
+                    &condition.right
+                };
                 condition
                     .used_columns()
                     .iter()
@@ -437,9 +443,10 @@ impl SubqueryRewriter {
             }
         }
 
-        let mut left_need_cross_join = needs_cross_join(&join.left_conditions, correlated_columns);
+        let mut left_need_cross_join =
+            needs_cross_join(&join.equi_conditions, correlated_columns, true);
         let mut right_need_cross_join =
-            needs_cross_join(&join.right_conditions, correlated_columns);
+            needs_cross_join(&join.equi_conditions, correlated_columns, false);
 
         let join_rel_expr = RelExpr::with_s_expr(plan);
         let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
@@ -470,14 +477,24 @@ impl SubqueryRewriter {
             right_need_cross_join,
         )?;
 
+        let left_conditions = join
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.left.clone())
+            .collect::<Vec<_>>();
         let left_conditions = process_conditions(
-            &join.left_conditions,
+            &left_conditions,
             correlated_columns,
             &self.derived_columns,
             left_need_cross_join,
         )?;
+        let right_conditions = join
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.right.clone())
+            .collect::<Vec<_>>();
         let right_conditions = process_conditions(
-            &join.right_conditions,
+            &right_conditions,
             correlated_columns,
             &self.derived_columns,
             right_need_cross_join,
@@ -492,8 +509,11 @@ impl SubqueryRewriter {
         Ok(SExpr::create_binary(
             Arc::new(
                 Join {
-                    left_conditions,
-                    right_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        left_conditions,
+                        right_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions,
                     join_type: join.join_type.clone(),
                     marker_index: join.marker_index,
@@ -501,6 +521,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into(),
             ),
@@ -597,7 +618,7 @@ impl SubqueryRewriter {
                     group_items,
                     aggregate_functions: agg_items,
                     from_distinct: aggregate.from_distinct,
-                    limit: aggregate.limit,
+                    rank_limit: aggregate.rank_limit.clone(),
                     grouping_sets: aggregate.grouping_sets.clone(),
                 }
                 .into(),
@@ -763,5 +784,22 @@ impl SubqueryRewriter {
             Arc::new(left_flatten_plan),
             Arc::new(right_flatten_plan),
         ))
+    }
+
+    fn flatten_expression_scan(
+        &mut self,
+        plan: &SExpr,
+        scan: &ExpressionScan,
+        correlated_columns: &ColumnSet,
+    ) -> Result<SExpr> {
+        let binder = self.binder.as_ref().unwrap();
+        for correlated_column in correlated_columns.iter() {
+            let derived_column_index = binder
+                .expression_scan_context
+                .get_derived_column(scan.expression_scan_index, *correlated_column);
+            self.derived_columns
+                .insert(*correlated_column, derived_column_index);
+        }
+        Ok(plan.clone())
     }
 }

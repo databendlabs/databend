@@ -12,14 +12,15 @@ doctest = false
 test = true
 
 [dependencies]
-# Workspace dependencies
-databend-common-base = { path = "../../../common/base" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-storages-fuse = { path = "../../storages/fuse" }
-
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-storages-fuse = { workspace = true }
 
 [build-dependencies]
+
+[lints]
+workspace = true

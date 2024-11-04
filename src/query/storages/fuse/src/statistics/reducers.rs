@@ -130,13 +130,12 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
 }
 
 pub fn merge_statistics(
-    l: &Statistics,
+    mut l: Statistics,
     r: &Statistics,
     default_cluster_key_id: Option<u32>,
 ) -> Statistics {
-    let mut new = l.clone();
-    merge_statistics_mut(&mut new, r, default_cluster_key_id);
-    new
+    merge_statistics_mut(&mut l, r, default_cluster_key_id);
+    l
 }
 
 pub fn merge_statistics_mut(
@@ -211,6 +210,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
+        index_size += b.inverted_index_size.unwrap_or_default();
         if thresholds.check_large_enough(b.row_count as usize, b.block_size as usize)
             || b.cluster_stats.as_ref().is_some_and(|v| v.level != 0)
         {

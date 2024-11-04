@@ -15,14 +15,14 @@ test = true
 io-uring = ["databend-common-meta-embedded/io-uring"]
 
 [dependencies]
-# Workspace dependencies
-databend-common-grpc = { path = "../../common/grpc" }
-databend-common-meta-client = { path = "../client" }
-databend-common-meta-embedded = { path = "../embedded" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-types = { path = "../types" }
-
-# Crates.io dependencies
 async-trait = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-meta-client = { workspace = true }
+databend-common-meta-embedded = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-types = { workspace = true }
 log = { workspace = true }
 tokio-stream = { workspace = true }
+
+[lints]
+workspace = true

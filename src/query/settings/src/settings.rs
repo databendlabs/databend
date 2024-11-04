@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use dashmap::DashMap;
@@ -23,13 +25,15 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
 use itertools::Itertools;
+use serde::Deserializer;
+use serde::Serializer;
 
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
 use crate::settings_default::SettingRange;
 use crate::SettingMode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum ScopeLevel {
     Default,
     Local,
@@ -56,7 +60,7 @@ impl Debug for ScopeLevel {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
 pub struct ChangeValue {
     pub level: ScopeLevel,
     pub value: UserSettingValue,
@@ -67,6 +71,50 @@ pub struct Settings {
     pub(crate) tenant: Tenant,
     pub(crate) changes: Arc<DashMap<String, ChangeValue>>,
     pub(crate) configs: HashMap<String, UserSettingValue>,
+    pub(crate) query_level_change: Arc<AtomicBool>,
+}
+
+impl serde::Serialize for Settings {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        #[derive(serde::Serialize)]
+        struct SerializeSettings<'a> {
+            tenant: &'a String,
+            changes: &'a DashMap<String, ChangeValue>,
+        }
+
+        let serialize_settings = SerializeSettings {
+            tenant: &self.tenant.tenant,
+            changes: &self.changes,
+        };
+
+        serialize_settings.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Settings {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        #[derive(serde::Deserialize)]
+        struct DeserializeSettings {
+            tenant: String,
+            changes: DashMap<String, ChangeValue>,
+        }
+
+        let deserialize_settings =
+            <DeserializeSettings as serde::Deserialize>::deserialize(deserializer)?;
+        let configs = match GlobalConfig::try_get_instance() {
+            None => HashMap::new(),
+            Some(config) => config.query.settings.clone(),
+        };
+
+        Ok(Settings {
+            configs,
+            tenant: Tenant::new_literal(&deserialize_settings.tenant),
+            changes: Arc::new(deserialize_settings.changes),
+            query_level_change: Arc::new(AtomicBool::new(false)),
+        })
+    }
 }
 
 impl Settings {
@@ -79,6 +127,7 @@ impl Settings {
             tenant,
             changes: Arc::new(DashMap::new()),
             configs,
+            query_level_change: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -98,11 +147,18 @@ impl Settings {
         self.changes.remove(k);
     }
 
-    pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
+    pub fn set_batch_settings(
+        &self,
+        settings: &HashMap<String, String>,
+        query_level_change: bool,
+    ) -> Result<()> {
         for (k, v) in settings.iter() {
             if self.has_setting(k.as_str())? {
                 self.set_setting(k.to_string(), v.to_string())?;
             }
+        }
+        if !settings.is_empty() {
+            self.set_query_level_change(query_level_change);
         }
 
         Ok(())
@@ -110,6 +166,15 @@ impl Settings {
 
     pub fn is_changed(&self) -> bool {
         !self.changes.is_empty()
+    }
+
+    pub fn set_query_level_change(&self, query_level_change: bool) {
+        self.query_level_change
+            .store(query_level_change, Ordering::Relaxed);
+    }
+
+    pub fn query_level_change(&self) -> bool {
+        self.query_level_change.load(Ordering::Relaxed)
     }
 
     pub fn changes(&self) -> &Arc<DashMap<String, ChangeValue>> {
@@ -206,5 +271,44 @@ impl<'a> IntoIterator for &'a Settings {
 
     fn into_iter(self) -> Self::IntoIter {
         SettingsIter::<'a>::create(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    use dashmap::DashMap;
+    use databend_common_exception::Result;
+    use databend_common_meta_app::principal::UserSettingValue;
+    use databend_common_meta_app::tenant::Tenant;
+
+    use crate::ChangeValue;
+    use crate::ScopeLevel;
+    use crate::Settings;
+
+    #[test]
+    fn test_serialize_and_deserialize_settings() -> Result<()> {
+        let changes = DashMap::new();
+        changes.insert("test_key_1".to_string(), ChangeValue {
+            level: ScopeLevel::Default,
+            value: UserSettingValue::String("test_value".to_string()),
+        });
+
+        let settings = Settings {
+            tenant: Tenant::new_literal("test_tenant"),
+            changes: Arc::new(changes),
+            configs: HashMap::new(),
+            query_level_change: Arc::new(AtomicBool::new(false)),
+        };
+
+        let settings =
+            serde_json::from_str::<Settings>(&serde_json::to_string(&settings).unwrap()).unwrap();
+
+        assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
+        assert_eq!(settings.changes.len(), 1);
+        Ok(())
     }
 }

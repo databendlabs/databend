@@ -120,6 +120,10 @@ impl ValueType for AnyType {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(&item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push_default();
     }
@@ -145,7 +149,7 @@ impl ValueType for AnyType {
     }
 
     #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(lhs.cmp(&rhs))
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 }

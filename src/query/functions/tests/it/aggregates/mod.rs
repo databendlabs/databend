@@ -187,7 +187,6 @@ pub fn simulate_two_groups_group_by(
 ) -> databend_common_exception::Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments: Vec<DataType> = columns.iter().map(|c| c.data_type()).collect();
-    let cols: Vec<Column> = columns.to_owned();
 
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
@@ -210,7 +209,7 @@ pub fn simulate_two_groups_group_by(
         })
         .collect::<Vec<_>>();
 
-    func.accumulate_keys(&places, 0, &cols, rows)?;
+    func.accumulate_keys(&places, 0, columns.into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(addr1.into(), &mut builder)?;

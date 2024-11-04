@@ -20,12 +20,10 @@ RUN ln -s ${MUSL_TARGET}-gcc /usr/local/bin/musl-gcc
 
 RUN rustup target add ${MUSL_RUST_TARGET}
 
-# needed by z3
+# needed by geos-sys
 RUN ln -s ${MUSL_TARGET}-g++ /usr/local/bin/musl-g++
 RUN ln -s ${MUSL_TARGET}-ar /usr/local/bin/musl-ar
 
-# HACK: something wrong with python detection in cmake for z3
-RUN ln -s python3.9 /usr/bin/python3.10
 
 # HACK: to link with libstdc++ statically
 # ref: https://github.com/rust-lang/rust/issues/36710#issuecomment-364623950

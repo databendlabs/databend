@@ -17,8 +17,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoLocationOptions;
 use databend_common_exception::Result;
-use databend_common_expression::Scalar;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
@@ -29,7 +30,7 @@ use databend_common_storage::StageFilesInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: TableSchemaRef,
-    pub default_values: Option<Vec<Scalar>>,
+    pub default_values: Option<Vec<RemoteExpr>>,
     pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
@@ -40,6 +41,7 @@ pub struct StageTableInfo {
     // - may need to be purged as well (depends on the copy options)
     pub duplicated_files_detected: Vec<String>,
     pub is_select: bool,
+    pub copy_into_location_options: CopyIntoLocationOptions,
 }
 
 impl StageTableInfo {

@@ -56,7 +56,7 @@ impl TablesTable {
             database AS table_catalog,
             database AS table_schema,
             name AS table_name,
-            'BASE TABLE' AS table_type,
+            table_type AS table_type,
             engine AS engine,
             created_on AS create_time,
             dropped_on AS drop_time,
@@ -67,7 +67,7 @@ impl TablesTable {
             NULL AS table_collation,
             NULL AS data_free,
             comment AS table_comment
-        FROM system.tables;";
+        FROM system.tables ORDER BY table_schema;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());

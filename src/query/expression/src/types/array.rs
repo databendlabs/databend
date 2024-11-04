@@ -160,6 +160,10 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(&item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push_default();
     }
@@ -360,6 +364,20 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         T::append_column(&mut self.builder, &item);
         let len = T::builder_len(&self.builder);
         self.offsets.push(len as u64);
+    }
+
+    pub fn push_repeat(&mut self, item: &T::Column, n: usize) {
+        if n == 0 {
+            return;
+        }
+        let before = T::builder_len(&self.builder);
+        T::append_column(&mut self.builder, item);
+        let len = T::builder_len(&self.builder) - before;
+        for _ in 1..n {
+            T::append_column(&mut self.builder, item);
+        }
+        self.offsets
+            .extend((1..=n).map(|i| (before + len * i) as u64));
     }
 
     pub fn push_default(&mut self) {

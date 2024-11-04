@@ -85,8 +85,6 @@ impl ParquetRSPruner {
                                 partition_columns
                                     .iter()
                                     .position(|c| c.eq_ignore_ascii_case(&name))
-                                    .unwrap();
-                                None
                             })
                     })
                     .collect::<Vec<_>>();
@@ -202,7 +200,7 @@ impl ParquetRSPruner {
                     let mut sel_of_different_cols = Vec::with_capacity(column_index.len());
                     for col_idx in self.predicate_columns.iter() {
                         let index = &column_index[*col_idx];
-                        let page_locations = &offset_index[*col_idx];
+                        let page_locations = offset_index[*col_idx].page_locations();
                         let pages_num_rows = compute_pages_num_rows(page_locations, rg.num_rows());
                         let stats = convert_index_to_column_statistics(
                             index,

@@ -18,22 +18,15 @@ use std::io::Write;
 
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::QuotedIdent;
-use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
-use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Backtrace;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::IResult;
-use databend_common_ast::parser::Input;
-use databend_common_ast::parser::ParseMode;
-use databend_common_ast::rule;
+use databend_common_ast::parser::*;
 use goldenfile::Mint;
+use nom_rule::rule;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
@@ -91,7 +84,7 @@ fn run_parser_with_dialect<P, O>(
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("statement.txt").unwrap();
+    let file = &mut mint.new_goldenfile("stmt.txt").unwrap();
     let cases = &[
         r#"show databases"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
@@ -112,7 +105,9 @@ fn test_statement() {
         r#"show processlist where database='default' limit 2;"#,
         r#"show create table a.b;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
+        r#"replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from b;"#,
+        r#"explain replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
         r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
         r#"describe a;"#,
@@ -127,6 +122,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
+        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
         r#"create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );"#,
         r#"create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');"#,
@@ -147,7 +143,6 @@ fn test_statement() {
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
-        r#"create database t FROM SHARE a.s;"#,
         r#"CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';"#,
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
@@ -205,6 +200,8 @@ fn test_statement() {
         r#"select * from a semi join b on a.a = b.a;"#,
         r#"select * from a left anti join b on a.a = b.a;"#,
         r#"select * from a anti join b on a.a = b.a;"#,
+        r#"SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;"#,
+        r#"SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;"#,
         r#"select * from a right semi join b on a.a = b.a;"#,
         r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
@@ -226,14 +223,23 @@ fn test_statement() {
         r#"select * FROM t where ((a));"#,
         r#"select * FROM t where ((select 1) > 1);"#,
         r#"select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));"#,
+        r#"select * from t sample row (99);"#,
+        r#"select * from t sample block (99);"#,
+        r#"select * from t sample row (10 rows);"#,
+        r#"select * from numbers(1000) sample row (99);"#,
+        r#"select * from numbers(1000) sample block (99);"#,
+        r#"select * from numbers(1000) sample row (10 rows);"#,
+        r#"select * from numbers(1000) sample block (99) row (10 rows);"#,
+        r#"select * from numbers(1000) sample block (99) row (10);"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"SELECT avg((number > 314)::UInt32);"#,
+        r#"SELECT 1 - (2 + 3);"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
@@ -436,7 +442,7 @@ fn test_statement() {
         r#"
             COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
-                CREDENTIALS = (
+                CONNECTION = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
                 )
@@ -540,14 +546,6 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
-        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
-        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
-        r#"CREATE SHARE t COMMENT='share comment';"#,
-        r#"CREATE SHARE IF NOT EXISTS t;"#,
-        r#"DROP SHARE a;"#,
-        r#"DROP SHARE IF EXISTS a;"#,
-        r#"GRANT USAGE ON DATABASE db1 TO SHARE a;"#,
-        r#"GRANT SELECT ON TABLE db1.tb1 TO SHARE a;"#,
         r#"GRANT all ON stage s1 TO a;"#,
         r#"GRANT read ON stage s1 TO a;"#,
         r#"GRANT write ON stage s1 TO a;"#,
@@ -556,24 +554,23 @@ fn test_statement() {
         r#"GRANT usage ON UDF a TO 'test-grant';"#,
         r#"REVOKE usage ON UDF a FROM 'test-grant';"#,
         r#"REVOKE all ON UDF a FROM 'test-grant';"#,
-        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE a;"#,
-        r#"REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;"#,
-        r#"ALTER SHARE a ADD TENANTS = b,c;"#,
-        r#"ALTER SHARE IF EXISTS a ADD TENANTS = b,c;"#,
-        r#"ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;"#,
-        r#"DESC SHARE b;"#,
-        r#"DESCRIBE SHARE b;"#,
-        r#"SHOW SHARES;"#,
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
-        r#"SHOW GRANTS OF SHARE t;"#,
         r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
+        r#"select $abc + 3"#,
+        r#"select IDENTIFIER($abc)"#,
         r#"SET max_threads = 10;"#,
         r#"SET max_threads = 10*2;"#,
+        r#"SET global (max_threads, max_memory_usage) = (10*2, 10*4);"#,
         r#"UNSET max_threads;"#,
         r#"UNSET session max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
         r#"UNSET session (max_threads, sql_dialect);"#,
+        r#"SET variable a = 3"#,
+        r#"show variables"#,
+        r#"show variables like 'v%'"#,
+        r#"SET variable a = select 3"#,
+        r#"SET variable a = (select max(number) from numbers(10))"#,
         r#"select $1 FROM '@my_stage/my data/'"#,
         r#"
             SELECT t.c1 FROM @stage1/dir/file
@@ -755,6 +752,10 @@ fn test_statement() {
         "-- xxxxx\n  select 34343;",
         r#"REMOVE @t;"#,
         r#"SELECT sum(d) OVER (w) FROM e;"#,
+        r#"SELECT first_value(d) OVER (w) FROM e;"#,
+        r#"SELECT first_value(d) ignore nulls OVER (w) FROM e;"#,
+        r#"SELECT first_value(d) respect nulls OVER (w) FROM e;"#,
+        r#"SELECT sum(d) IGNORE NULLS OVER (w) FROM e;"#,
         r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
@@ -765,6 +766,9 @@ fn test_statement() {
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE file format my_orc type = orc"#,
+        r#"CREATE file format my_orc type = orc missing_field_as=field_default"#,
+        r#"CREATE file format my_orc type = orc missing_field_as='field_default'"#,
         r#"CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');"#,
         r#"
             create or replace function addone(int)
@@ -787,7 +791,7 @@ fn test_statement() {
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"
-            EXECUTE IMMEDIATE 
+            EXECUTE IMMEDIATE
             $$
             BEGIN
                 LOOP
@@ -808,6 +812,69 @@ fn test_statement() {
             )
             select * from abc;
         "#,
+        // dictionary
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            )
+            PRIMARY KEY username
+            SOURCE (mysql(host='localhost' username='root' password='1234'))
+            COMMENT 'This is a comment';"#,
+        // Stored Procedure
+        r#"describe PROCEDURE p1()"#,
+        r#"describe PROCEDURE p1(string, timestamp)"#,
+        r#"drop PROCEDURE p1()"#,
+        r#"drop PROCEDURE if exists p1()"#,
+        r#"drop PROCEDURE p1(int, string)"#,
+        r#"call PROCEDURE p1()"#,
+        r#"call PROCEDURE p1(1, 'x', '2022-02-02'::Date)"#,
+        r#"show PROCEDURES like 'p1%'"#,
+        r#"create or replace PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE if not exists p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE p1(a int, b string) returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE p1() returns table(a string not null, b int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
     ];
 
     for case in cases {
@@ -832,7 +899,7 @@ fn test_statement() {
 #[test]
 fn test_statement_error() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("statement-error.txt").unwrap();
+    let file = &mut mint.new_goldenfile("stmt-error.txt").unwrap();
 
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
@@ -841,7 +908,6 @@ fn test_statement_error() {
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
-        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
@@ -863,8 +929,8 @@ fn test_statement_error() {
         r#"GRANT select ON UDF a TO 'test-grant';"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
-        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
-        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#,
+        r#"COPY INTO mytable FROM @mystage CONNECTION = ();"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
@@ -913,6 +979,44 @@ fn test_statement_error() {
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
         r#"SHOW GRANTS ON task t1;"#,
+        // dictionary
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            );"#,
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+        (
+            user_name tuple(),
+            age Int16
+        )
+        PRIMARY KEY username
+        SOURCE ()
+        COMMENT 'This is a comment';"#,
+        // Stored Procedure
+        r#"desc procedure p1"#,
+        r#"desc procedure p1(array, c int)"#,
+        r#"drop procedure p1"#,
+        r#"drop procedure p1(a int)"#,
+        r#"call procedure p1"#,
+        r#"create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE p1(int, string) returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
     ];
 
     for case in cases {
@@ -932,7 +1036,6 @@ fn test_raw_insert_stmt() {
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
-        r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
     ];
 
@@ -991,7 +1094,11 @@ fn test_query() {
         r#"SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo"#,
         r#"SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from monthly_sales pivot(sum(amount) for month in (select distinct month from monthly_sales)) order by empid"#,
+        r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ((select distinct month from monthly_sales))) order by empid"#,
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
+        r#"select * from (select * from monthly_sales_1) unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
         r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
@@ -1120,6 +1227,9 @@ fn test_expr() {
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
         r#"(current_timestamp, current_timestamp(), now())"#,
         r#"ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)"#,
+        r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
+        r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
+        r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
     ];
 
     for case in cases {
@@ -1139,6 +1249,7 @@ fn test_expr_error() {
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"a.add(b)"#,
+        r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
         r#"
             G.E.B IS NOT NULL

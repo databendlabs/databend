@@ -1,0 +1,31 @@
+statement ok
+create or replace database test_15669;
+
+statement ok
+use test_15669;
+
+statement ok
+create table t (c int) as select * from numbers(1000);
+
+statement ok
+merge into t using (select  99  c ) s on t.c = s.c when matched then delete;
+
+
+# expects that bloom pruning prunes 1 block: "bloom pruning: 1 to 0"
+query T
+explain select * from t where c = 99;
+----
+Filter
+├── output columns: [t.c (#0)]
+├── filters: [is_true(t.c (#0) = 99)]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_15669.t
+    ├── output columns: [c (#0)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+    ├── push downs: [filters: [is_true(t.c (#0) = 99)], limit: NONE]
+    └── estimated rows: 999.00

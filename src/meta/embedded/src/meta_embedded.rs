@@ -72,7 +72,7 @@ impl MetaEmbedded {
     /// Creates a kvapi::KVApi impl with a random and unique name.
     pub async fn new_temp() -> Result<MetaEmbedded, MetaStorageError> {
         let temp_dir =
-            tempfile::tempdir().map_err(|e| MetaStorageError::SledError(AnyError::new(&e)))?;
+            tempfile::tempdir().map_err(|e| MetaStorageError::Damaged(AnyError::new(&e)))?;
 
         init_temp_sled_db(temp_dir);
 
@@ -92,7 +92,7 @@ impl MetaEmbedded {
     /// Initialize a global embedded meta store.
     /// The data in `path` won't be removed after program exit.
     pub async fn init_global_meta_store(path: String) -> Result<(), MetaStorageError> {
-        databend_common_meta_sled_store::init_sled_db(path);
+        databend_common_meta_sled_store::init_sled_db(path, 64 * 1024 * 1024 * 1024);
 
         {
             let mut m = GLOBAL_META_EMBEDDED.as_ref().lock().await;

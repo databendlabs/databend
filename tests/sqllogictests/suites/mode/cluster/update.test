@@ -30,7 +30,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── UpdateSource
+    └── Mutation Source
 (empty)
 (empty)
 Fragment 1:
@@ -49,4 +49,17 @@ SELECT * FROM t1 ORDER BY b
 query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
-Nothing to update
+Fragment 0:
+  DataExchange: Merge
+    ExchangeSink
+    ├── output columns: []
+    ├── destination fragment: [1]
+    └── Mutation Source
+(empty)
+(empty)
+Fragment 1:
+    CommitSink
+    └── ExchangeSource
+        ├── output columns: []
+        └── source fragment: [0]
+(empty)

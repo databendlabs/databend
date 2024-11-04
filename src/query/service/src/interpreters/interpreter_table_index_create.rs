@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::CreateTableIndexPlan;
 use databend_common_storages_fuse::TableContext;
@@ -49,9 +49,7 @@ impl Interpreter for CreateTableIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
         let index_name = self.plan.index_name.clone();
@@ -59,9 +57,11 @@ impl Interpreter for CreateTableIndexInterpreter {
         let sync_creation = self.plan.sync_creation;
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
 
         let create_index_req = CreateTableIndexReq {
             create_option: self.plan.create_option,
+            tenant,
             table_id,
             name: index_name,
             column_ids,

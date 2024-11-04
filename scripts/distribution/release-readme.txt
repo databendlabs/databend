@@ -10,8 +10,8 @@ NOTE: If you deploy Databend with a self-hosted S3-compatible object storage,
 set the environment variable STORAGE_S3_ENABLE_VIRTUAL_HOST_STYLE to 'true' before starting Databend.
 
 You might need these links to proceed:
-- Deployment Instructions: https://databend.rs/doc/deploy
-- Documentation: https://databend.rs/doc
+- Deployment Instructions: https://docs.databend.com/guides/deploy
+- Documentation: https://docs.databend.com
 - Code Browser: https://github.com/datafuselabs/databend
 
 We'd love to hear from you. If you have any questions about Databend or want to suggest a feature, reach out to us on GitHub:
@@ -20,5 +20,5 @@ We'd love to hear from you. If you have any questions about Databend or want to 
 
 Follow us on social media and stay tuned for more exciting updates on Databend:
 - Twitter：https://twitter.com/DatabendLabs
-- Slack：https://link.databend.rs/join-slack
+- Slack：https://link.databend.com/join-slack
 - WeChat：Databend

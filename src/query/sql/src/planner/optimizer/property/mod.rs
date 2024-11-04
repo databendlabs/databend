@@ -15,9 +15,6 @@
 mod builder;
 mod column_stat;
 
-#[cfg(feature = "z3-prove")]
-mod constraint;
-
 mod enforcer;
 mod histogram;
 #[allow(clippy::module_inception)]
@@ -28,17 +25,11 @@ pub use builder::RelExpr;
 pub use column_stat::ColumnStat;
 pub use column_stat::ColumnStatSet;
 pub use column_stat::NewStatistic;
-#[cfg(feature = "z3-prove")]
-pub use constraint::ConstraintSet;
 pub use enforcer::require_property;
 pub use enforcer::DistributionEnforcer;
 pub use enforcer::Enforcer;
 pub use histogram::histogram_from_ndv;
-pub use histogram::Histogram;
-pub use histogram::HistogramBucket;
-pub use histogram::InterleavedBucket;
 pub use histogram::UniformSampleSet;
-pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
 pub use property::ColumnSet;
 pub use property::Distribution;
 pub use property::PhysicalProperty;

@@ -12,29 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 
+use databend_common_base::runtime::defer;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::info;
 use petgraph::matrix_graph::Zero;
 
+use crate::finished_chain::Callback;
+use crate::finished_chain::ExecutionInfo;
+use crate::finished_chain::FinishedCallbackChain;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::DuplicateProcessor;
+use crate::processors::Exchange;
 use crate::processors::InputPort;
+use crate::processors::MergePartitionProcessor;
 use crate::processors::OutputPort;
+use crate::processors::PartitionProcessor;
 use crate::processors::PlanScope;
 use crate::processors::PlanScopeGuard;
 use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;
-use crate::PlanProfile;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -61,8 +70,9 @@ pub struct Pipeline {
     max_threads: usize,
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
-    on_finished: Option<FinishedCallback>,
-    lock_guards: Vec<LockGuard>,
+    lock_guards: Vec<Arc<LockGuard>>,
+
+    on_finished_chain: FinishedCallbackChain,
 
     plans_scope: Vec<PlanScope>,
     scope_size: Arc<AtomicUsize>,
@@ -76,9 +86,6 @@ impl Debug for Pipeline {
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback =
-    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
-
 pub type DynTransformBuilder = Box<dyn Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>>;
 
 impl Pipeline {
@@ -87,9 +94,9 @@ impl Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
             on_init: None,
-            on_finished: None,
             lock_guards: vec![],
             plans_scope: vec![],
+            on_finished_chain: FinishedCallbackChain::create(),
             scope_size: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -101,8 +108,8 @@ impl Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
             on_init: None,
-            on_finished: None,
             lock_guards: vec![],
+            on_finished_chain: FinishedCallbackChain::create(),
             plans_scope: scope,
         }
     }
@@ -202,13 +209,13 @@ impl Pipeline {
         }
     }
 
-    pub fn add_lock_guard(&mut self, guard: Option<LockGuard>) {
+    pub fn add_lock_guard(&mut self, guard: Option<Arc<LockGuard>>) {
         if let Some(guard) = guard {
             self.lock_guards.push(guard);
         }
     }
 
-    pub fn take_lock_guards(&mut self) -> Vec<LockGuard> {
+    pub fn take_lock_guards(&mut self) -> Vec<Arc<LockGuard>> {
         std::mem::take(&mut self.lock_guards)
     }
 
@@ -440,10 +447,73 @@ impl Pipeline {
         }
     }
 
+    pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) {
+        if let Some(pipe) = self.pipes.last() {
+            if pipe.output_length < 1 {
+                return;
+            }
+
+            let input_len = pipe.output_length;
+            let mut items = Vec::with_capacity(input_len);
+
+            for _index in 0..input_len {
+                let input = InputPort::create();
+                let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
+                items.push(PipeItem::create(
+                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+                    vec![input],
+                    outputs,
+                ));
+            }
+
+            // partition data block
+            self.add_pipe(Pipe::create(input_len, input_len * n, items));
+
+            let mut reorder_edges = Vec::with_capacity(input_len * n);
+            for index in 0..input_len * n {
+                reorder_edges.push((index % n) * input_len + (index / n));
+            }
+
+            self.reorder_inputs(reorder_edges);
+
+            let mut items = Vec::with_capacity(input_len);
+            for _index in 0..n {
+                let output = OutputPort::create();
+                let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
+                items.push(PipeItem::create(
+                    MergePartitionProcessor::create(
+                        inputs.clone(),
+                        output.clone(),
+                        exchange.clone(),
+                    ),
+                    inputs,
+                    vec![output],
+                ));
+            }
+
+            // merge partition
+            self.add_pipe(Pipe::create(input_len * n, n, items))
+        }
+    }
+
+    #[track_caller]
     pub fn set_on_init<F: FnOnce() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
+        let location = std::panic::Location::caller();
         if let Some(old_on_init) = self.on_init.take() {
             self.on_init = Some(Box::new(move || {
                 old_on_init()?;
+                let instants = Instant::now();
+
+                let _guard = defer(move || {
+                    info!(
+                        "OnFinished callback elapsed: {:?} while in {}:{}:{}",
+                        instants.elapsed(),
+                        location.file(),
+                        location.line(),
+                        location.column()
+                    );
+                });
+
                 f()
             }));
 
@@ -453,40 +523,18 @@ impl Pipeline {
         self.on_init = Some(Box::new(f));
     }
 
-    pub fn set_on_finished<
-        F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
-    >(
-        &mut self,
-        f: F,
-    ) {
-        if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |(profiles, may_error)| {
-                on_finished((profiles, may_error))?;
-                f((profiles, may_error))
-            }));
-
-            return;
-        }
-
-        self.on_finished = Some(Box::new(f));
+    // Set param into last
+    #[track_caller]
+    pub fn set_on_finished<F: Callback>(&mut self, f: F) {
+        let location = std::panic::Location::caller();
+        self.on_finished_chain.push_back(location, Box::new(f));
     }
 
-    pub fn push_front_on_finished_callback<
-        F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
-    >(
-        &mut self,
-        f: F,
-    ) {
-        if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |(profiles, may_error)| {
-                f((profiles, may_error))?;
-                on_finished((profiles, may_error))
-            }));
-
-            return;
-        }
-
-        self.on_finished = Some(Box::new(f));
+    // Lift current and set param into first
+    #[track_caller]
+    pub fn lift_on_finished<F: Callback>(&mut self, f: F) {
+        let location = std::panic::Location::caller();
+        self.on_finished_chain.push_front(location, Box::new(f));
     }
 
     pub fn take_on_init(&mut self) -> InitCallback {
@@ -496,11 +544,10 @@ impl Pipeline {
         }
     }
 
-    pub fn take_on_finished(&mut self) -> FinishedCallback {
-        match self.on_finished.take() {
-            None => Box::new(|_may_error| Ok(())),
-            Some(on_finished) => on_finished,
-        }
+    pub fn take_on_finished(&mut self) -> FinishedCallbackChain {
+        let mut chain = FinishedCallbackChain::create();
+        std::mem::swap(&mut self.on_finished_chain, &mut chain);
+        chain
     }
 
     pub fn add_plan_scope(&mut self, scope: PlanScope) -> PlanScopeGuard {
@@ -522,13 +569,13 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         drop_guard(move || {
             // An error may have occurred before the executor was created.
-            if let Some(on_finished) = self.on_finished.take() {
-                let cause = Err(ErrorCode::Internal(
-                    "Pipeline illegal state: not successfully shutdown.",
-                ));
+            let cause = Err(ErrorCode::Internal(
+                "Pipeline illegal state: not successfully shutdown.",
+            ));
 
-                let _ = (on_finished)((&vec![], &cause));
-            }
+            let _ = self
+                .on_finished_chain
+                .apply(ExecutionInfo::create(cause, HashMap::new()));
         })
     }
 }

@@ -76,6 +76,9 @@ impl Binder {
         inner: &Statement,
     ) -> Result<Plan> {
         let mut builder = ExplainConfigBuilder::new();
+        if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = inner {
+            return Err(ErrorCode::SyntaxException("Invalid statement"));
+        }
 
         // Rewrite `EXPLAIN RAW` to `EXPLAIN(LOGICAL)`
         if matches!(kind, ExplainKind::Raw) {

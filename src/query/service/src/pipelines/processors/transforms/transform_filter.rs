@@ -18,9 +18,9 @@ use std::sync::Arc;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
 use databend_common_expression::filter::FilterExecutor;
-use databend_common_expression::filter::SelectExpr;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::BlockingTransform;
@@ -43,16 +43,14 @@ impl TransformFilter {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        select_expr: SelectExpr,
-        has_or: bool,
+        expr: Expr,
         projections: ColumnSet,
         func_ctx: FunctionContext,
         max_block_size: usize,
     ) -> Box<dyn Processor> {
         let filter = FilterExecutor::new(
-            select_expr,
+            expr,
             func_ctx,
-            has_or,
             max_block_size,
             Some(projections.clone()),
             &BUILTIN_FUNCTIONS,

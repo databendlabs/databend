@@ -40,7 +40,7 @@ SELECT * FROM t1 ORDER BY b
 statement ok
 UPDATE t1 SET a = 3 WHERE false
 
-query B
+query T
 select count(*) = 0 from t1 WHERE a = 3
 ----
 1
@@ -48,7 +48,7 @@ select count(*) = 0 from t1 WHERE a = 3
 statement ok
 UPDATE t1 SET a = 3 WHERE true
 
-query B
+query T
 select count(*) = 2 from t1 WHERE a = 3
 ----
 1
@@ -75,20 +75,20 @@ statement ok
 insert into t3 values(-5),(3),(2)
 
 query I
-select a from t3
+select a from t3 order by a
 ----
+-5
 2
 3
--5
 
 statement ok
 UPDATE t3 SET a = 6 WHERE a = 3
 
 query I
-select a from t3
+select a from t3 order by a
 ----
-2
 -5
+2
 6
 
 statement ok
@@ -179,9 +179,6 @@ onlyif mysql
 statement ok
 truncate table system.metrics
 
-statement error 1006
-update t1 set id1=2 where to_timestamp(8472945773481)
-
 statement ok
 update t1 set val1 = '10' where id1 = any(select id2 from t2 where t1.id1 = t2.id2) or id1 < any(select id2 from t2);
 
@@ -192,13 +189,13 @@ select * from t1 order by id1;
 2 10
 
 onlyif mysql
-query B
+query T
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'created_lock_nums_total'
 ----
 1
 
 onlyif mysql
-query B
+query T
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'acquired_lock_nums_total'
 ----
 1

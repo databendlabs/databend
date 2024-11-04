@@ -48,7 +48,6 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         engine: Engine::Fuse,
         engine_options: Default::default(),
         storage_params: None,
-        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             // database id is required for FUSE
@@ -72,6 +71,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         cluster_keys: vec!["id".to_string()],
+        cluster_type: "linear".to_string(),
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;

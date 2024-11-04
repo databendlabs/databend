@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app as mt;
@@ -21,7 +22,7 @@ use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 
@@ -72,8 +73,8 @@ fn test_decode_v71_user() -> anyhow::Result<()> {
         quota: Default::default(),
         option: Default::default(),
         history_auth_infos: vec![
-            AuthInfo::create2(&None, &Some("1234".to_string())).unwrap(),
-            AuthInfo::create2(&None, &Some("abcd".to_string())).unwrap(),
+            AuthInfo::create2(&None, &Some("1234".to_string()), false).unwrap(),
+            AuthInfo::create2(&None, &Some("abcd".to_string()), false).unwrap(),
         ],
         password_fails: vec![
             Utc.with_ymd_and_hms(2023, 12, 25, 1, 0, 0).unwrap(),
@@ -81,6 +82,8 @@ fn test_decode_v71_user() -> anyhow::Result<()> {
         ],
         password_update_on: Some(Utc.with_ymd_and_hms(2023, 12, 25, 10, 0, 0).unwrap()),
         lockout_time: Some(Utc.with_ymd_and_hms(2023, 12, 28, 12, 0, 9).unwrap()),
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), user_info_v71.as_slice(), 71, want())?;

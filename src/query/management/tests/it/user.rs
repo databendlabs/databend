@@ -29,10 +29,10 @@ use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use mockall::predicate::*;
@@ -76,6 +76,7 @@ fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {
         hash_value: Vec::from("test_password"),
         hash_method: PasswordHashMethod::DoubleSha1,
+        need_change: false,
     }
 }
 
@@ -121,7 +122,7 @@ mod add {
                 .return_once(|_u| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, &Tenant::new_literal("tenant1"));
-            let res = user_mgr.add_user(user_info, &CreateOption::Create);
+            let res = user_mgr.add_user(user_info.clone(), &CreateOption::Create);
 
             assert!(res.await.is_ok());
         }
@@ -147,10 +148,9 @@ mod add {
 
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, &Tenant::new_literal("tenant1"));
-
-            let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-
-            let res = user_mgr.add_user(user_info, &CreateOption::Create).await;
+            let res = user_mgr
+                .add_user(user_info.clone(), &CreateOption::Create)
+                .await;
 
             assert_eq!(res.unwrap_err().code(), ErrorCode::USER_ALREADY_EXISTS);
         }
@@ -465,6 +465,7 @@ mod update {
             } else {
                 PasswordHashMethod::DoubleSha1
             },
+            need_change: false,
         }
     }
 
@@ -502,7 +503,8 @@ mod update {
         }
 
         // and then, update_kv should be called
-        let new_user_info = UserInfo::new(test_user_name, test_hostname, new_test_auth_info(full));
+        let mut new_user_info = user_info.clone();
+        new_user_info.auth_info = new_test_auth_info(full);
         let new_value_with_old_salt =
             serialize_struct(&new_user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 

@@ -23,12 +23,10 @@ use crate::ast::write_dot_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
-use crate::ast::ShareNameIdent;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowDatabasesStmt {
     pub catalog: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }
@@ -72,7 +70,6 @@ pub struct CreateDatabaseStmt {
     pub database: DatabaseRef,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
-    pub from_share: Option<ShareNameIdent>,
 }
 
 impl Display for CreateDatabaseStmt {
@@ -91,9 +88,6 @@ impl Display for CreateDatabaseStmt {
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
         }
-        if let Some(from_share) = &self.from_share {
-            write!(f, " FROM SHARE {from_share}",)?;
-        }
 
         // TODO(leiysky): display rest information
         Ok(())
@@ -102,7 +96,6 @@ impl Display for CreateDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropDatabaseStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -136,7 +129,6 @@ impl Display for UndropDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterDatabaseStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -182,8 +174,6 @@ impl Display for DatabaseEngine {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct SQLProperty {
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub value: String,
 }

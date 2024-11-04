@@ -1,0 +1,34 @@
+statement ok
+create or replace database db;
+
+statement ok
+use db;
+
+query I
+with recursive t(x) as (select 1 union all select x+1 from t where x < 3) select * from t order by x
+----
+1
+2
+3
+
+# test some aliases
+query I
+with recursive t(x) as (select 1 union all select x+1 from t where x < 3) select zz from t t1(zz) order by zz
+----
+1
+2
+3
+
+query I
+with recursive t(x) as (select 1 union all select zzz+1 from t t1(zzz) where zzz < 3) select zz from t t1(zz) order by zz
+----
+1
+2
+3
+
+query I
+with recursive t as (select 1 as x union all select x+1 from t as m where m.x < 3) select * from t order by x
+----
+1
+2
+3

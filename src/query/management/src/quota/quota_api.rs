@@ -14,8 +14,8 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait QuotaApi: Sync + Send {

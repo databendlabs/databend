@@ -73,6 +73,8 @@ fn test_length(file: &mut impl Write) {
     run_ast(file, "length([1, 2, 3])", &[]);
     run_ast(file, "length([true, false])", &[]);
     run_ast(file, "length(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "array_size(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "array_length(['a', 'b', 'c', 'd'])", &[]);
 }
 
 fn test_range(file: &mut impl Write) {

@@ -40,6 +40,8 @@ default_compression = 'zstd'
 
 enable_udf_server = true
 udf_server_allow_list = ['http://0.0.0.0:8815']
+udf_server_allow_insecure = true
+
 cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 
 [[query.users]]
@@ -66,6 +68,11 @@ auth_type = "no_password"
 # #  echo -n "datafuselabs" | sha256sum
 # auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
 
+# This for test
+[[query.udfs]]
+name = "ping"
+definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815'"
+
 [query.settings]
 aggregate_spilling_memory_ratio = 60
 join_spilling_memory_ratio = 60
@@ -77,6 +84,9 @@ level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
+
+[log.query]
+on = true
 
 [log.structlog]
 on = true

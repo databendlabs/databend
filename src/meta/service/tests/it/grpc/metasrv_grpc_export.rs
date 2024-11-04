@@ -26,7 +26,7 @@ use tokio_stream::StreamExt;
 
 use crate::testing::meta_service_test_harness;
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Write some data
@@ -86,10 +86,9 @@ async fn test_export() -> anyhow::Result<()> {
         r#"["test-29000-raft_log",{"Logs":{"key":4,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":4},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"foo","seq":{"GE":0},"value":{"Update":[102,111,111]},"value_meta":null}}}}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":5,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":5},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"bar","seq":{"GE":0},"value":{"Update":[98,97,114]},"value_meta":null}}}}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":6,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":6},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"wow","seq":{"GE":0},"value":{"Update":[119,111,119]},"value_meta":null}}}}}}}]"#,
-        r#"["state_machine/0",{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}]"#,
+        r#"["state_machine/0",{"Sequences":{"key":"generic-kv","value":3}}]"#,
         r#"["state_machine/0",{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":1,"node_id":0},"index":6}}}}]"#,
         r#"["state_machine/0",{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":3},"membership":{"configs":[[0]],"nodes":{"0":{}}}}}}}]"#,
-        r#"["state_machine/0",{"Sequences":{"key":"generic-kv","value":3}}]"#,
         r#"["state_machine/0",{"Nodes":{"key":0,"value":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"}}}]"#,
         r#"["state_machine/0",{"GenericKV":{"key":"bar","value":{"seq":2,"meta":null,"data":[98,97,114]}}}]"#,
         r#"["state_machine/0",{"GenericKV":{"key":"foo","value":{"seq":1,"meta":null,"data":[102,111,111]}}}]"#,

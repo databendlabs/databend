@@ -319,9 +319,10 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             temporal,
-            consume,
+            with_options,
             pivot,
             unpivot,
+            sample,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {
@@ -338,8 +339,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if consume {
-            RcDoc::text(" WITH CONSUME")
+        .append(if let Some(with_options) = with_options {
+            RcDoc::text(format!(" {with_options}"))
         } else {
             RcDoc::nil()
         })
@@ -353,6 +354,11 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
+        .append(if let Some(sample) = sample {
+            RcDoc::text(format!(" {sample}"))
+        } else {
+            RcDoc::nil()
+        })
         .append(if let Some(alias) = alias {
             RcDoc::text(format!(" AS {alias}"))
         } else {
@@ -363,6 +369,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             lateral,
             subquery,
             alias,
+            pivot,
+            unpivot,
         } => (if lateral {
             RcDoc::text("LATERAL")
         } else {
@@ -373,6 +381,16 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::text(format!(" AS {alias}"))
         } else {
             RcDoc::nil()
+        })
+        .append(if let Some(pivot) = pivot {
+            RcDoc::text(format!(" {pivot}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(unpivot) = unpivot {
+            RcDoc::text(format!(" {unpivot}"))
+        } else {
+            RcDoc::nil()
         }),
         TableReference::TableFunction {
             span: _,
@@ -381,6 +399,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             params,
             named_params,
             alias,
+            sample,
         } => {
             let separator = if !named_params.is_empty() && !params.is_empty() {
                 RcDoc::text(", ")
@@ -402,6 +421,11 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
                     .append(pretty_expr(v))
             })))
             .append(RcDoc::text(")"))
+            .append(if let Some(sample) = sample {
+                RcDoc::text(format!(" {sample}"))
+            } else {
+                RcDoc::nil()
+            })
             .append(if let Some(alias) = alias {
                 RcDoc::text(format!(" AS {alias}"))
             } else {

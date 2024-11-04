@@ -28,28 +28,14 @@ use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
+use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
-use crate::types::AnyType;
-use crate::types::ArgType;
-use crate::types::ArrayType;
-use crate::types::BinaryType;
-use crate::types::BooleanType;
-use crate::types::DataType;
-use crate::types::DateType;
-use crate::types::MapType;
-use crate::types::NumberColumnVec;
-use crate::types::NumberType;
-use crate::types::StringType;
-use crate::types::TimestampType;
-use crate::types::ValueType;
-use crate::types::VariantType;
-use crate::types::F32;
-use crate::types::F64;
+use crate::types::*;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
@@ -149,16 +135,19 @@ impl DataBlock {
         slice: (usize, usize),
         limit: Option<usize>,
     ) -> Self {
-        let columns = block
-            .columns()
-            .iter()
-            .map(|entry| {
-                Self::take_column_by_slices_limit(&[entry.clone()], &[(0, slice.0, slice.1)], limit)
-            })
-            .collect::<Vec<_>>();
+        let (start, len) = slice;
+        let num_rows = limit.unwrap_or(usize::MAX).min(len);
+        let result_size = num_rows.min(block.num_rows());
 
-        let num_rows = block.num_rows().min(slice.1.min(limit.unwrap_or(slice.1)));
-        DataBlock::new(columns, num_rows)
+        let mut builders = Self::builders(block, num_rows);
+
+        let len = len.min(num_rows);
+        let block_columns = block.columns();
+        for (col_index, builder) in builders.iter_mut().enumerate() {
+            Self::push_to_builder(builder, start, len, &block_columns[col_index].value);
+        }
+
+        Self::build_block(builders, result_size)
     }
 
     pub fn take_by_slices_limit_from_blocks(
@@ -167,24 +156,44 @@ impl DataBlock {
         limit: Option<usize>,
     ) -> Self {
         debug_assert!(!blocks.is_empty());
-        let total_num_rows: usize = blocks.iter().map(|c| c.num_rows()).sum();
-        let result_size: usize = slices.iter().map(|(_, _, c)| *c).sum();
-        let result_size = total_num_rows.min(result_size.min(limit.unwrap_or(result_size)));
+        let num_rows = limit
+            .unwrap_or(usize::MAX)
+            .min(slices.iter().map(|(_, _, c)| *c).sum());
+        let result_size = num_rows.min(blocks.iter().map(|c| c.num_rows()).sum());
 
-        let mut result_columns = Vec::with_capacity(blocks[0].num_columns());
+        let mut builders = Self::builders(&blocks[0], num_rows);
 
-        for index in 0..blocks[0].num_columns() {
-            let cols = blocks
-                .iter()
-                .map(|c| c.get_by_offset(index).clone())
-                .collect::<Vec<_>>();
+        let mut remain = num_rows;
+        for (block_index, start, len) in slices {
+            let block_columns = blocks[*block_index].columns();
+            let len = (*len).min(remain);
+            remain -= len;
 
-            let merged_col = Self::take_column_by_slices_limit(&cols, slices, limit);
-
-            result_columns.push(merged_col);
+            for (col_index, builder) in builders.iter_mut().enumerate() {
+                Self::push_to_builder(builder, *start, len, &block_columns[col_index].value);
+            }
+            if remain == 0 {
+                break;
+            }
         }
 
-        DataBlock::new(result_columns, result_size)
+        Self::build_block(builders, result_size)
+    }
+
+    fn builders(block: &DataBlock, num_rows: usize) -> Vec<ColumnBuilder> {
+        block
+            .columns()
+            .iter()
+            .map(|col| ColumnBuilder::with_capacity(&col.data_type, num_rows))
+            .collect::<Vec<_>>()
+    }
+
+    fn build_block(builders: Vec<ColumnBuilder>, num_rows: usize) -> DataBlock {
+        let result_columns = builders
+            .into_iter()
+            .map(|b| BlockEntry::new(b.data_type(), Value::Column(b.build())))
+            .collect::<Vec<_>>();
+        DataBlock::new(result_columns, num_rows)
     }
 
     pub fn take_column_by_slices_limit(
@@ -205,17 +214,7 @@ impl DataBlock {
             let len = (*len).min(remain);
             remain -= len;
 
-            let col = &columns[*index];
-            match &col.value {
-                Value::Scalar(scalar) => {
-                    let other = ColumnBuilder::repeat(&scalar.as_ref(), len, &col.data_type);
-                    builder.append_column(&other.build());
-                }
-                Value::Column(c) => {
-                    let c = c.slice(*start..(*start + len));
-                    builder.append_column(&c);
-                }
-            }
+            Self::push_to_builder(&mut builder, *start, len, &columns[*index].value);
             if remain == 0 {
                 break;
             }
@@ -224,6 +223,23 @@ impl DataBlock {
         let col = builder.build();
 
         BlockEntry::new(ty.clone(), Value::Column(col))
+    }
+
+    fn push_to_builder(
+        builder: &mut ColumnBuilder,
+        start: usize,
+        len: usize,
+        value: &Value<AnyType>,
+    ) {
+        match value {
+            Value::Scalar(scalar) => {
+                builder.push_repeat(&scalar.as_ref(), len);
+            }
+            Value::Column(c) => {
+                let c = c.slice(start..(start + len));
+                builder.append_column(&c);
+            }
+        }
     }
 }
 
@@ -344,10 +360,10 @@ impl Column {
                     result_size,
                 );
 
-                Column::Nullable(Box::new(NullableColumn {
-                    column: inner_column,
-                    validity: BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                }))
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             Column::Tuple { .. } => {
                 let inner_ty = datatype.as_tuple().unwrap();
@@ -380,6 +396,10 @@ impl Column {
             Column::Geometry(_) => {
                 let builder = GeometryType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<GeometryType>(columns, builder, indices)
+            }
+            Column::Geography(_) => {
+                let builder = GeographyType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<GeographyType>(columns, builder, indices)
             }
         }
     }
@@ -596,6 +616,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Geometry(columns)
             }
+            Column::Geography(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| GeographyType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Geography(columns)
+            }
         }
     }
 
@@ -707,10 +734,10 @@ impl Column {
                     binary_items_buf,
                 );
 
-                Column::Nullable(Box::new(NullableColumn {
-                    column: inner_column,
-                    validity: BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                }))
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             ColumnVec::Tuple(columns) => {
                 let inner_data_type = data_type.as_tuple().unwrap();
@@ -736,6 +763,14 @@ impl Column {
             ColumnVec::Geometry(columns) => GeometryType::upcast_column(
                 Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
+            ColumnVec::Geography(columns) => {
+                let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
+                GeographyType::upcast_column(GeographyColumn(Self::take_block_vec_binary_types(
+                    &columns,
+                    indices,
+                    binary_items_buf.as_mut(),
+                )))
+            }
         }
     }
 
@@ -774,6 +809,8 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
             *offsets.get_unchecked_mut(0) = 0;
             for (i, row_ptr) in indices.iter().enumerate() {
                 let item =
@@ -782,8 +819,6 @@ impl Column {
                 *items.get_unchecked_mut(i) = (item.as_ptr() as u64, item.len());
                 *offsets.get_unchecked_mut(i + 1) = data_size;
             }
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
         }
 
         // Build [`data`].
@@ -842,30 +877,27 @@ impl Column {
 
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_len = 0;
         let mut unset_bits = 0;
         let mut value = 0;
         let mut i = 0;
 
+        for row_ptr in indices.iter() {
+            if col[row_ptr.chunk_index as usize].get_bit(row_ptr.row_index as usize) {
+                value |= BIT_MASK[i % 8];
+            } else {
+                unset_bits += 1;
+            }
+            i += 1;
+            if i % 8 == 0 {
+                builder.push(value);
+                value = 0;
+            }
+        }
+        if i % 8 != 0 {
+            builder.push(value);
+        }
+
         unsafe {
-            for row_ptr in indices.iter() {
-                if col[row_ptr.chunk_index as usize].get_bit_unchecked(row_ptr.row_index as usize) {
-                    value |= BIT_MASK[i % 8];
-                } else {
-                    unset_bits += 1;
-                }
-                i += 1;
-                if i % 8 == 0 {
-                    *builder.get_unchecked_mut(builder_len) = value;
-                    builder_len += 1;
-                    value = 0;
-                }
-            }
-            if i % 8 != 0 {
-                *builder.get_unchecked_mut(builder_len) = value;
-                builder_len += 1;
-            }
-            builder.set_len(builder_len);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()

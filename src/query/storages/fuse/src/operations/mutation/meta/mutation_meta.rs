@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
+use crate::BlockReadResult;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SerializeDataMeta {
@@ -53,5 +58,25 @@ pub struct SerializeBlock {
 impl SerializeBlock {
     pub fn create(index: BlockMetaIndex, stats_type: ClusterStatsGenType) -> Self {
         SerializeBlock { index, stats_type }
+    }
+}
+
+pub enum CompactSourceMeta {
+    Concat {
+        read_res: Vec<BlockReadResult>,
+        metas: Vec<Arc<BlockMeta>>,
+        index: BlockMetaIndex,
+    },
+    Extras(CompactExtraInfo),
+}
+
+local_block_meta_serde!(CompactSourceMeta);
+
+#[typetag::serde(name = "compact_data_source")]
+impl BlockMetaInfo for CompactSourceMeta {}
+
+impl std::fmt::Debug for CompactSourceMeta {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("CompactSourceMeta").finish()
     }
 }

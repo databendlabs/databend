@@ -1,0 +1,7 @@
+#statement ok
+#set enable_distributed_replace_into = 1;
+
+#include ./09_0023_replace_into.test
+
+#statement ok
+#set enable_distributed_replace_into = 0;

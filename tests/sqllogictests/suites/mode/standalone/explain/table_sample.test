@@ -1,0 +1,50 @@
+statement ok
+create or replace table t as select number as a from numbers(1000);
+
+statement ok
+set random_function_seed = 1;
+
+query T
+explain optimized select * from t sample row (10 rows);
+----
+Filter
+├── filters: [lte(rand(), 0.01)]
+└── Scan
+    ├── table: default.t
+    ├── filters: [lte(rand(), 0.01)]
+    ├── order by: []
+    └── limit: NONE
+
+query T
+explain optimized select * from t sample row (99.1);
+----
+Filter
+├── filters: [lte(rand(), 0.991)]
+└── Scan
+    ├── table: default.t
+    ├── filters: [lte(rand(), 0.991)]
+    ├── order by: []
+    └── limit: NONE
+
+
+statement ok
+drop table t;
+
+statement ok
+create or replace table t as select number as a from numbers(10000000);
+
+query I
+select count(a) < 10000000 from t sample block(50);
+----
+1
+
+query I
+select count(a) < 10000000 from t sample block(50) row(10);
+----
+1
+
+statement ok
+drop table t;
+
+statement ok
+set random_function_seed = 0;

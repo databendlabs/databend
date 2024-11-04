@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -28,8 +27,7 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableAlias;
 use crate::ast::TableReference;
-use crate::ParseError;
-use crate::Result;
+use crate::ast::WithOptions;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeUpdateExpr {
@@ -52,7 +50,6 @@ impl Display for MergeUpdateExpr {
 pub enum MatchOperation {
     Update {
         update_list: Vec<MergeUpdateExpr>,
-        #[drive(skip)]
         is_star: bool,
     },
     Delete,
@@ -68,7 +65,6 @@ pub struct MatchedClause {
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: Vec<Expr>,
-    #[drive(skip)]
     pub is_star: bool,
 }
 
@@ -170,57 +166,11 @@ impl Display for MergeIntoStmt {
     }
 }
 
-impl MergeIntoStmt {
-    pub fn split_clauses(&self) -> (Vec<MatchedClause>, Vec<UnmatchedClause>) {
-        let mut match_clauses = Vec::with_capacity(self.merge_options.len());
-        let mut unmatch_clauses = Vec::with_capacity(self.merge_options.len());
-        for merge_operation in &self.merge_options {
-            match merge_operation {
-                MergeOption::Match(match_clause) => match_clauses.push(match_clause.clone()),
-                MergeOption::Unmatch(unmatch_clause) => {
-                    unmatch_clauses.push(unmatch_clause.clone())
-                }
-            }
-        }
-        (match_clauses, unmatch_clauses)
-    }
-
-    pub fn check_multi_match_clauses_semantic(clauses: &[MatchedClause]) -> Result<()> {
-        // check match_clauses
-        if clauses.len() > 1 {
-            for (idx, clause) in clauses.iter().enumerate() {
-                if clause.selection.is_none() && idx < clauses.len() - 1 {
-                    return Err(ParseError(None,
-                        "when there are multi matched clauses, we must have a condition for every one except the last one".to_string(),
-                    ));
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn check_multi_unmatch_clauses_semantic(clauses: &[UnmatchedClause]) -> Result<()> {
-        // check unmatch_clauses
-        if clauses.len() > 1 {
-            for (idx, clause) in clauses.iter().enumerate() {
-                if clause.selection.is_none() && idx < clauses.len() - 1 {
-                    return Err(ParseError(None,
-                        "when there are multi unmatched clauses, we must have a condition for every one except the last one".to_string(),
-                    ));
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MergeSource {
     StreamingV2 {
         settings: FileFormatOptions,
-        #[drive(skip)]
         on_error_mode: Option<String>,
-        #[drive(skip)]
         start: usize,
     },
 
@@ -233,17 +183,8 @@ pub enum MergeSource {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
+        with_options: Option<WithOptions>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct StreamingSource {
-    #[drive(skip)]
-    settings: BTreeMap<String, String>,
-    #[drive(skip)]
-    on_error_mode: Option<String>,
-    #[drive(skip)]
-    start: usize,
 }
 
 impl MergeSource {
@@ -263,11 +204,14 @@ impl MergeSource {
                 lateral: false,
                 subquery: query.clone(),
                 alias: Some(source_alias.clone()),
+                pivot: None,
+                unpivot: None,
             },
             Self::Table {
                 catalog,
                 database,
                 table,
+                with_options,
                 alias,
             } => TableReference::Table {
                 span: None,
@@ -276,9 +220,10 @@ impl MergeSource {
                 table: table.clone(),
                 alias: alias.clone(),
                 temporal: None,
-                consume: false,
+                with_options: with_options.clone(),
                 pivot: None,
                 unpivot: None,
+                sample: None,
             },
         }
     }
@@ -309,12 +254,16 @@ impl Display for MergeSource {
                 catalog,
                 database,
                 table,
+                with_options,
                 alias,
             } => {
                 write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
+                }
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }

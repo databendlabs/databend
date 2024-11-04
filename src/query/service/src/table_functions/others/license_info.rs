@@ -39,7 +39,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -191,7 +191,10 @@ impl LicenseInfoSource {
                     DataType::String,
                     Value::Scalar(Scalar::String(human_readable_available_time)),
                 ),
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(feature_str))),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(feature_str.to_string())),
+                ),
             ],
             1,
         ))
@@ -202,7 +205,6 @@ impl LicenseInfoSource {
 impl AsyncSource for LicenseInfoSource {
     const NAME: &'static str = "license_info";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.done {
@@ -225,12 +227,10 @@ impl AsyncSource for LicenseInfoSource {
             )?
         };
 
-        get_license_manager()
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
 
-        let info = get_license_manager()
-            .manager
+        let info = LicenseManagerSwitch::instance()
             .parse_license(license.as_str())
             .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
                 format!(

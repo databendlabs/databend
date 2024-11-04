@@ -19,11 +19,14 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
+use std::ops::Range;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
@@ -32,11 +35,11 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
+use super::CatalogInfo;
 use super::CreateOption;
+use super::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
-use crate::share::share_name_ident::ShareNameIdentRaw;
-use crate::share::ShareSpec;
-use crate::share::ShareTableInfoMap;
+use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -69,7 +72,7 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TableNameIdent {
     pub tenant: Tenant,
     pub db_name: String,
@@ -120,6 +123,18 @@ pub struct DBIdTableName {
     pub table_name: String,
 }
 
+impl DBIdTableName {
+    pub fn new(db_id: u64, table_name: impl ToString) -> Self {
+        DBIdTableName {
+            db_id,
+            table_name: table_name.to_string(),
+        }
+    }
+    pub fn display(&self) -> impl Display {
+        format!("{}.'{}'", self.db_id, self.table_name)
+    }
+}
+
 impl Display for DBIdTableName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.db_id, self.table_name)
@@ -161,7 +176,6 @@ impl Display for TableIdHistoryIdent {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareNameIdentRaw),
 }
 
 impl Display for DatabaseType {
@@ -170,20 +184,15 @@ impl Display for DatabaseType {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
             }
-            DatabaseType::ShareDB(share_ident) => {
-                write!(
-                    f,
-                    "share database: {}-{}",
-                    share_ident.tenant_name(),
-                    share_ident.name()
-                )
-            }
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
+    /// For a temp table,
+    /// `ident.seq` is always 0.
+    /// `id.table_id` is set as value of `TempTblId`.
     pub ident: TableIdent,
 
     /// For a table it is `db_name.table_name`.
@@ -201,10 +210,25 @@ pub struct TableInfo {
     /// `name`, `id` or `version` is not included in the table structure definition.
     pub meta: TableMeta,
 
-    pub tenant: String,
+    /// The corresponding catalog info of this table.
+    pub catalog_info: Arc<CatalogInfo>,
 
     // table belong to which type of database.
     pub db_type: DatabaseType,
+}
+
+impl TableInfo {
+    pub fn database_name(&self) -> Result<&str> {
+        if self.engine() != "FUSE" {
+            return Err(ErrorCode::Internal(format!(
+                "Invalid engine: {}",
+                self.engine()
+            )));
+        }
+        let database_name = self.desc.split('.').next().unwrap();
+        let database_name = &database_name[1..database_name.len() - 1];
+        Ok(database_name)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -231,7 +255,6 @@ pub struct TableStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableMeta {
     pub schema: Arc<TableSchema>,
-    pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub storage_params: Option<StorageParams>,
@@ -322,6 +345,7 @@ impl TableInfo {
         }
     }
 
+    /// Deprecated: use `new_full()`. This method sets default values for some fields.
     pub fn new(db_name: &str, table_name: &str, ident: TableIdent, meta: TableMeta) -> TableInfo {
         TableInfo {
             ident,
@@ -329,6 +353,24 @@ impl TableInfo {
             name: table_name.to_string(),
             meta,
             ..Default::default()
+        }
+    }
+
+    pub fn new_full(
+        db_name: &str,
+        table_name: &str,
+        ident: TableIdent,
+        meta: TableMeta,
+        catalog_info: Arc<CatalogInfo>,
+        db_type: DatabaseType,
+    ) -> TableInfo {
+        TableInfo {
+            ident,
+            desc: format!("'{}'.'{}'", db_name, table_name),
+            name: table_name.to_string(),
+            meta,
+            catalog_info,
+            db_type,
         }
     }
 
@@ -341,7 +383,7 @@ impl TableInfo {
     }
 
     pub fn catalog(&self) -> &str {
-        &self.meta.catalog
+        &self.catalog_info.name_ident.catalog_name
     }
 
     pub fn engine(&self) -> &str {
@@ -367,8 +409,7 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(TableSchema::empty()),
-            catalog: "default".to_string(),
-            engine: "".to_string(),
+            engine: "FUSE".to_string(),
             engine_options: BTreeMap::new(),
             storage_params: None,
             part_prefix: "".to_string(),
@@ -441,6 +482,12 @@ impl TableIdList {
         TableIdList::default()
     }
 
+    pub fn new_with_ids(ids: impl IntoIterator<Item = u64>) -> TableIdList {
+        TableIdList {
+            id_list: ids.into_iter().collect(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.id_list.len()
     }
@@ -461,7 +508,7 @@ impl TableIdList {
         self.id_list.pop()
     }
 
-    pub fn last(&mut self) -> Option<&u64> {
+    pub fn last(&self) -> Option<&u64> {
         self.id_list.last()
     }
 }
@@ -536,7 +583,10 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
+    // (db id, removed table id)
+    pub spec_vec: Option<(u64, u64)>,
+    pub prev_table_id: Option<u64>,
+    pub orphan_table_name: Option<String>,
 }
 
 /// Drop table by id.
@@ -554,6 +604,10 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
+
+    pub engine: String,
+
+    pub session_id: String,
 }
 
 impl DropTableByIdReq {
@@ -573,10 +627,32 @@ impl Display for DropTableByIdReq {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct DropTableReply {}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReply {
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
+pub struct CommitTableMetaReq {
+    pub name_ident: TableNameIdent,
+    pub db_id: MetaId,
+    pub table_id: MetaId,
+    pub prev_table_id: Option<MetaId>,
+    pub orphan_table_name: Option<String>,
 }
+
+impl CommitTableMetaReq {
+    pub fn table_id(&self) -> MetaId {
+        self.table_id
+    }
+}
+
+impl Display for CommitTableMetaReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "commit_table_meta:{}", self.table_id(),)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommitTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {
@@ -616,9 +692,6 @@ impl Display for UndropTableReq {
         )
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReq {
@@ -683,22 +756,40 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
-    pub copied_files: Option<UpsertTableCopiedFileReq>,
-    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_label: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateTempTableReq {
+    pub table_id: u64,
+    pub desc: String,
+    pub new_table_meta: TableMeta,
+    pub copied_files: BTreeMap<String, TableCopiedFileInfo>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
-    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
+    pub update_temp_tables: Vec<UpdateTempTableReq>,
+}
+
+impl UpdateMultiTableMetaReq {
+    pub fn is_empty(&self) -> bool {
+        self.update_table_metas.is_empty()
+            && self.copied_files.is_empty()
+            && self.update_stream_metas.is_empty()
+            && self.deduplicated_labels.is_empty()
+            && self.update_temp_tables.is_empty()
+    }
 }
 
 /// The result of updating multiple table meta
 ///
 /// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.
-pub type UpdateMultiTableMetaResult = std::result::Result<(), Vec<(u64, u64, TableMeta)>>;
+pub type UpdateMultiTableMetaResult =
+    std::result::Result<UpdateTableMetaReply, Vec<(u64, u64, TableMeta)>>;
 
 impl UpsertTableOptionReq {
     pub fn new(
@@ -742,23 +833,18 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct UpsertTableOptionReply {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpdateTableMetaReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct UpdateTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
     pub create_option: CreateOption,
+    pub tenant: Tenant,
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
@@ -768,34 +854,19 @@ pub struct CreateTableIndexReq {
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self.create_option {
-            CreateOption::Create => {
-                write!(
-                    f,
-                    "create_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-            CreateOption::CreateIfNotExists => {
-                write!(
-                    f,
-                    "create_table_index_if_not_exists: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-            CreateOption::CreateOrReplace => {
-                write!(
-                    f,
-                    "create_or_replace_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-        }
+        let typ = match self.create_option {
+            CreateOption::Create => "create_table_index",
+            CreateOption::CreateIfNotExists => "create_table_index_if_not_exists",
+            CreateOption::CreateOrReplace => "create_or_replace_table_index",
+        };
+
+        write!(
+            f,
+            "{}: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+            typ, self.name, self.column_ids, self.sync_creation, self.options,
+        )
     }
 }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexReq {
@@ -813,9 +884,6 @@ impl Display for DropTableIndexReq {
         )
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
@@ -848,58 +916,135 @@ impl GetTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
-    pub inner: DatabaseNameIdent,
-}
-
-impl Deref for ListTableReq {
-    type Target = DatabaseNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    pub tenant: Tenant,
+    pub database_id: DatabaseId,
 }
 
 impl ListTableReq {
-    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListTableReq {
+    pub fn new(tenant: &Tenant, database_id: DatabaseId) -> ListTableReq {
         ListTableReq {
-            inner: DatabaseNameIdent::new(tenant, db_name),
+            tenant: tenant.clone(),
+            database_id,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TableInfoFilter {
-    // if datatime is some, filter only dropped tables which drop time before that,
-    // else filter all dropped tables
-    Dropped(Option<DateTime<Utc>>),
-    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
-    // in this case, `ListTableReq`.db_name will be ignored
-    // return Tables in two cases:
-    //  1) if database drop before date time, then all table in this db will be return;
-    //  2) else, return all the tables drop before data time.
-    AllDroppedTables(Option<DateTime<Utc>>),
-    // return all tables, ignore drop on time.
-    All,
+pub struct ListDroppedTableReq {
+    pub tenant: Tenant,
+
+    /// If `database_name` is None, choose all tables in all databases.
+    /// Otherwise, choose only tables in this database.
+    pub database_name: Option<String>,
+
+    /// The time range in which the database/table will be returned.
+    /// choose only tables/databases dropped before this boundary time.
+    /// It can include non-dropped tables/databases with `None..Some()`
+    pub drop_time_range: Range<Option<DateTime<Utc>>>,
+
+    pub limit: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ListDroppedTableReq {
-    pub inner: DatabaseNameIdent,
-    pub filter: TableInfoFilter,
-    pub limit: Option<usize>,
+impl ListDroppedTableReq {
+    pub fn new(tenant: &Tenant) -> ListDroppedTableReq {
+        let rng_start = Some(DateTime::<Utc>::MIN_UTC);
+        let rng_end = Some(DateTime::<Utc>::MAX_UTC);
+        ListDroppedTableReq {
+            tenant: tenant.clone(),
+            database_name: None,
+            drop_time_range: rng_start..rng_end,
+            limit: None,
+        }
+    }
+
+    pub fn with_db(self, db_name: impl ToString) -> Self {
+        Self {
+            database_name: Some(db_name.to_string()),
+            ..self
+        }
+    }
+
+    pub fn with_retention_boundary(self, d: DateTime<Utc>) -> Self {
+        let rng_start = Some(DateTime::<Utc>::MIN_UTC);
+        let rng_end = Some(d);
+        Self {
+            drop_time_range: rng_start..rng_end,
+            ..self
+        }
+    }
+
+    pub fn with_limit(self, limit: usize) -> Self {
+        Self {
+            limit: Some(limit),
+            ..self
+        }
+    }
+
+    pub fn new4(
+        tenant: &Tenant,
+        database_name: Option<impl ToString>,
+        retention_boundary: Option<DateTime<Utc>>,
+        limit: Option<usize>,
+    ) -> ListDroppedTableReq {
+        let rng_start = Some(DateTime::<Utc>::MIN_UTC);
+        let rng_end = if let Some(b) = retention_boundary {
+            Some(b)
+        } else {
+            Some(DateTime::<Utc>::MAX_UTC)
+        };
+        ListDroppedTableReq {
+            tenant: tenant.clone(),
+            database_name: database_name.map(|s| s.to_string()),
+            drop_time_range: rng_start..rng_end,
+            limit,
+        }
+    }
+
+    pub fn database_name(&self) -> Option<&str> {
+        self.database_name.as_deref()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    // db id, db name
-    Db(u64, String),
-    // db id, table id, table name
-    Table(u64, u64, String),
+    Db { db_id: u64, db_name: String },
+    Table { name: DBIdTableName, id: TableId },
+}
+
+impl From<TableNIV> for DroppedId {
+    fn from(value: TableNIV) -> Self {
+        let (name, id, _) = value.unpack();
+        Self::Table { name, id }
+    }
+}
+
+impl DroppedId {
+    pub fn new_table_name_id(name: DBIdTableName, id: TableId) -> DroppedId {
+        DroppedId::Table { name, id }
+    }
+
+    pub fn new_table(db_id: u64, table_id: u64, table_name: impl ToString) -> DroppedId {
+        DroppedId::Table {
+            name: DBIdTableName::new(db_id, table_name),
+            id: TableId::new(table_id),
+        }
+    }
+
+    /// Build a string contains essential information for comparison.
+    ///
+    /// Only used for testing.
+    pub fn cmp_key(&self) -> String {
+        match self {
+            DroppedId::Db { db_id, db_name, .. } => format!("db:{}-{}", db_id, db_name),
+            DroppedId::Table { name, id } => format!("table:{:?}-{:?}", name, id),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDroppedTableResp {
-    pub drop_table_infos: Vec<Arc<TableInfo>>,
+    /// The **database_name, (name, id, value)** of a table to vacuum.
+    pub vacuum_tables: Vec<(DatabaseNameIdent, TableNIV)>,
     pub drop_ids: Vec<DroppedId>,
 }
 
@@ -908,9 +1053,6 @@ pub struct GcDroppedTableReq {
     pub tenant: Tenant,
     pub drop_ids: Vec<DroppedId>,
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GcDroppedTableResp {}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {
@@ -927,6 +1069,16 @@ impl Display for TableIdToName {
 pub struct TableCopiedFileNameIdent {
     pub table_id: u64,
     pub file: String,
+}
+
+impl fmt::Display for TableCopiedFileNameIdent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TableCopiedFileNameIdent{{table_id:{}, file:{}}}",
+            self.table_id, self.file
+        )
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
@@ -950,8 +1102,10 @@ pub struct GetTableCopiedFileReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
-    pub expire_at: Option<u64>,
-    pub fail_if_duplicated: bool,
+    /// If not None, specifies the time-to-live for the keys.
+    pub ttl: Option<Duration>,
+    /// If there is already existing key, ignore inserting
+    pub insert_if_not_exists: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -981,8 +1135,6 @@ mod kvapi_key_impl {
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
-    use crate::schema::LeastVisibleTime;
-    use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -1110,48 +1262,30 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for LeastVisibleTimeKey {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let table_id = b.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_lvt/table_id"
-    impl kvapi::Key for LeastVisibleTimeKey {
-        const PREFIX: &'static str = "__fd_table_lvt";
-
-        type ValueType = LeastVisibleTime;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-    }
-
     impl kvapi::Value for TableId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DBIdTableName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }
 
     impl kvapi::Value for DBIdTableName {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableIdList {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdHistoryIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             self.id_list
                 .iter()
                 .map(|id| TableId::new(*id).to_string_key())
@@ -1159,13 +1293,8 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableCopiedFileInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for LeastVisibleTime {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableCopiedFileNameIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

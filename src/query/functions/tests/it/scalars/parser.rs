@@ -23,6 +23,7 @@ use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::decimal::DecimalDataType;
@@ -36,7 +37,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
@@ -48,7 +48,7 @@ macro_rules! with_interval_mapped_name {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
-              Year => "year", Quarter => "quarter", Month => "month", Day => "day",
+              Year => "year", Quarter => "quarter", Month => "month", Week => "week", Day => "day",
               Hour => "hour", Minute => "minute", Second => "second",
             ],
             $($tail)*
@@ -418,6 +418,27 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
             })
         }
+        AExpr::DateDiff {
+            span,
+            unit,
+            date_start,
+            date_end,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("diff_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date_end, columns),
+                        transform_expr(*date_start, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
         AExpr::DateSub {
             span,
             unit,
@@ -558,6 +579,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         }
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
         databend_common_ast::ast::TypeName::Geometry => DataType::Geometry,
+        databend_common_ast::ast::TypeName::Geography => DataType::Geography,
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }

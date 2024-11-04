@@ -137,6 +137,8 @@ fn test_mul(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "d2 * e", columns);
     run_ast(file, "d2 * f", columns);
     run_ast(file, "e * f", columns);
+    run_ast(file, "e * e", columns);
+    run_ast(file, "f * f", columns);
     run_ast(file, "e * 0.5", columns);
 }
 

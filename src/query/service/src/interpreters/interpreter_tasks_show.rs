@@ -69,10 +69,10 @@ impl Interpreter for ShowTasksInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let config = GlobalConfig::instance();

@@ -24,24 +24,20 @@ use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::CreateOption;
 use crate::ast::FileFormatOptions;
+use crate::ast::LiteralStringOrVariable;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateStageStmt {
     pub create_option: CreateOption,
-    #[drive(skip)]
     pub stage_name: String,
 
     pub location: Option<UriLocation>,
 
     pub file_format_options: FileFormatOptions,
-    #[drive(skip)]
     pub on_error: String,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub validation_mode: String,
-    #[drive(skip)]
     pub comments: String,
 }
 
@@ -85,12 +81,12 @@ impl Display for CreateStageStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectStageOption {
-    Files(#[drive(skip)] Vec<String>),
-    Pattern(#[drive(skip)] String),
-    FileFormat(#[drive(skip)] String),
-    Connection(#[drive(skip)] BTreeMap<String, String>),
+    Files(Vec<String>),
+    Pattern(LiteralStringOrVariable),
+    FileFormat(String),
+    Connection(BTreeMap<String, String>),
 }
 
 impl SelectStageOptions {
@@ -108,15 +104,11 @@ impl SelectStageOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Default, Drive, DriveMut)]
 pub struct SelectStageOptions {
-    #[drive(skip)]
     pub files: Option<Vec<String>>,
-    #[drive(skip)]
-    pub pattern: Option<String>,
-    #[drive(skip)]
+    pub pattern: Option<LiteralStringOrVariable>,
     pub file_format: Option<String>,
-    #[drive(skip)]
     pub connection: BTreeMap<String, String>,
 }
 
@@ -159,7 +151,7 @@ impl Display for SelectStageOptions {
         }
 
         if let Some(pattern) = self.pattern.as_ref() {
-            write!(f, " PATTERN => '{}',", pattern)?;
+            write!(f, " PATTERN => {},", pattern)?;
         }
 
         if !self.connection.is_empty() {

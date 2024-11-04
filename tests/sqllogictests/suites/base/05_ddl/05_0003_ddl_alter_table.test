@@ -2,6 +2,9 @@ statement ok
 USE default
 
 statement ok
+set sql_dialect = 'PostgreSQL'
+
+statement ok
 DROP TABLE IF EXISTS `05_0003_at_t0`
 
 statement ok
@@ -202,8 +205,8 @@ alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
 query TTTTT
 select database,table,name,data_type,comment from system.columns where table='t' and database='default';
 ----
-default t c1 VARCHAR 'c1-column'
-default t c2 INT 'test'
+default t c1 VARCHAR c1-column
+default t c2 INT test
 
 statement ok
 alter table t comment='s1';
@@ -252,3 +255,27 @@ DROP TABLE IF EXISTS t;
 
 statement ok
 DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE OR REPLACE TABLE t1 (id VARCHAR NULL, size VARCHAR NULL, create_time int NULL, path VARCHAR NULL);
+
+statement ok
+CREATE OR REPLACE TABLE t1_random like t1 Engine = Random;
+
+statement ok
+INSERT INTO  t1 SELECT * FROM t1_random LIMIT 10;
+
+statement ok
+ALTER TABLE t1 DROP COLUMN size;
+
+statement ok
+ALTER TABLE t1 DROP COLUMN path;
+
+statement ok
+SELECT * FROM t1 WHERE create_time > 111113;
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t1_random;

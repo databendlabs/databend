@@ -53,13 +53,9 @@ impl Display for ShowCreateCatalogStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateCatalogStmt {
-    #[drive(skip)]
     pub if_not_exists: bool,
-    #[drive(skip)]
     pub catalog_name: String,
-    #[drive(skip)]
     pub catalog_type: CatalogType,
-    #[drive(skip)]
     pub catalog_options: BTreeMap<String, String>,
 }
 
@@ -79,7 +75,6 @@ impl Display for CreateCatalogStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropCatalogStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Identifier,
 }

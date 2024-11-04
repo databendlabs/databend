@@ -17,16 +17,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write;
 
+use fastrace::collector::EventRecord;
+use fastrace::collector::Reporter;
+use fastrace::collector::SpanId;
+use fastrace::collector::SpanRecord;
 use itertools::Itertools;
 use log::info;
-use minitrace::collector::EventRecord;
-use minitrace::collector::Reporter;
-use minitrace::collector::SpanId;
-use minitrace::collector::SpanRecord;
 pub struct DummyReporter;
 
 impl Reporter for DummyReporter {
-    fn report(&mut self, _spans: &[SpanRecord]) {}
+    fn report(&mut self, _spans: Vec<SpanRecord>) {}
 }
 
 pub struct StructLogReporter<R: Reporter> {
@@ -54,13 +54,11 @@ impl<R: Reporter> StructLogReporter<R> {
 }
 
 impl<R: Reporter> Reporter for StructLogReporter<R> {
-    fn report(&mut self, spans: &[SpanRecord]) {
-        self.inner.report(spans);
-
+    fn report(&mut self, spans: Vec<SpanRecord>) {
         let mut traces_contain_event = HashSet::new();
 
         // Find all traces that contain event.
-        for span in spans {
+        for span in &spans {
             if !span.events.is_empty() {
                 traces_contain_event.insert(span.trace_id);
             }
@@ -74,6 +72,8 @@ impl<R: Reporter> Reporter for StructLogReporter<R> {
                 .collect();
             pretty_print_trace(&spans);
         }
+
+        self.inner.report(spans);
     }
 }
 

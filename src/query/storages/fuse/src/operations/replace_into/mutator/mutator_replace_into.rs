@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::iter::once;
@@ -42,7 +43,6 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::MinMax;
 use log::info;
 
 use crate::operations::replace_into::meta::DeletionByColumn;
@@ -283,13 +283,21 @@ impl ReplaceIntoMutator {
     }
 }
 
+#[derive(Debug)]
+enum MinMax {
+    // min eq max
+    Point(Scalar),
+    // inclusive on both sides, min < max
+    Range(Scalar, Scalar),
+}
+
 type RowBloomHashes = Vec<u64>;
 #[derive(Debug)]
 struct Partition {
     // digests of on-conflict fields, of all the rows in this partition
     digests: HashSet<UniqueKeyDigest>,
     // min max of all the on-conflict fields in this partition
-    columns_min_max: Vec<MinMax<Scalar>>,
+    columns_min_max: Vec<MinMax>,
     // bloom hash of the on-conflict columns that will apply bloom pruning
     bloom_hashes: Vec<RowBloomHashes>,
 }
@@ -337,7 +345,23 @@ impl Partition {
         }
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
             let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
-            min_max.update(value);
+            match min_max {
+                MinMax::Point(v) => {
+                    let v = v.clone();
+                    match v.cmp(&value) {
+                        Ordering::Less => *min_max = MinMax::Range(v, value),
+                        Ordering::Greater => *min_max = MinMax::Range(value, v),
+                        Ordering::Equal => (),
+                    }
+                }
+                MinMax::Range(min, max) => {
+                    if value > *max {
+                        *max = value
+                    } else if value < *min {
+                        *min = value
+                    }
+                }
+            }
         }
         Ok(())
     }

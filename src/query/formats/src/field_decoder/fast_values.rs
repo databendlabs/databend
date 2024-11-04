@@ -29,14 +29,14 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
@@ -44,7 +44,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
@@ -54,8 +53,9 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
@@ -86,12 +86,11 @@ impl FastFieldDecoderValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
                 disable_variant_check: false,
                 binary_format: Default::default(),
                 is_rounding_mode,
+                enable_dst_hour_fix: format.enable_dst_hour_fix,
             },
         }
     }
@@ -101,7 +100,7 @@ impl FastFieldDecoderValues {
     }
 
     fn ignore_field_end<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> bool {
-        reader.ignore_white_spaces();
+        reader.ignore_white_spaces_or_comments();
         matches!(reader.peek(), None | Some(',') | Some(')') | Some(']'))
     }
 
@@ -152,6 +151,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader, positions),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader, positions),
             ColumnBuilder::Binary(_) => Err(ErrorCode::Unimplemented("binary literal")),
             ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
                 Err(ErrorCode::Unimplemented("empty array/map literal"))
@@ -284,10 +284,12 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
+        let date = buffer_readr.read_date_text(
+            &self.common_settings().timezone,
+            self.common_settings().enable_dst_hour_fix,
+        )?;
         let days = uniform_date(date);
-        check_date(days as i64)?;
-        column.push(days);
+        column.push(clamp_date(days as i64));
         Ok(())
     }
 
@@ -300,7 +302,11 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+        let ts = buffer_readr.read_timestamp_text(
+            &self.common_settings().timezone,
+            false,
+            self.common_settings.enable_dst_hour_fix,
+        )?;
         match ts {
             DateTimeResType::Datetime(ts) => {
                 if !buffer_readr.eof() {
@@ -312,8 +318,8 @@ impl FastFieldDecoderValues {
                     );
                     return Err(ErrorCode::BadBytes(msg));
                 }
-                let micros = ts.timestamp_micros();
-                check_timestamp(micros)?;
+                let mut micros = ts.timestamp_micros();
+                clamp_timestamp(&mut micros);
                 column.push(micros.as_());
             }
             _ => unreachable!(),
@@ -329,7 +335,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
         for idx in 0.. {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if reader.ignore_byte(b']') {
                 break;
             }
@@ -339,7 +345,7 @@ impl FastFieldDecoderValues {
                     return Err(err.into());
                 }
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if let Err(err) = self.read_field(&mut column.builder, reader, positions) {
                 self.pop_inner_values(&mut column.builder, idx);
                 return Err(err);
@@ -361,7 +367,7 @@ impl FastFieldDecoderValues {
         let mut set = HashSet::new();
         let map_builder = column.builder.as_tuple_mut().unwrap();
         for idx in 0.. {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if reader.ignore_byte(b'}') {
                 break;
             }
@@ -372,7 +378,7 @@ impl FastFieldDecoderValues {
                     return Err(err.into());
                 }
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if let Err(err) = self.read_field(&mut map_builder[KEY], reader, positions) {
                 self.pop_inner_values(&mut map_builder[KEY], idx);
                 self.pop_inner_values(&mut map_builder[VALUE], idx);
@@ -389,13 +395,13 @@ impl FastFieldDecoderValues {
             }
             set.insert(key.clone());
             map_builder[KEY].push(key.as_ref());
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if let Err(err) = reader.must_ignore_byte(b':') {
                 self.pop_inner_values(&mut map_builder[KEY], idx + 1);
                 self.pop_inner_values(&mut map_builder[VALUE], idx);
                 return Err(err.into());
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if let Err(err) = self.read_field(&mut map_builder[VALUE], reader, positions) {
                 self.pop_inner_values(&mut map_builder[KEY], idx + 1);
                 self.pop_inner_values(&mut map_builder[VALUE], idx);
@@ -414,7 +420,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
         for idx in 0..fields.len() {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if idx != 0 {
                 if let Err(err) = reader.must_ignore_byte(b',') {
                     for field in fields.iter_mut().take(idx) {
@@ -423,7 +429,7 @@ impl FastFieldDecoderValues {
                     return Err(err.into());
                 }
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if let Err(err) = self.read_field(&mut fields[idx], reader, positions) {
                 for field in fields.iter_mut().take(idx) {
                     self.pop_inner_values(field, 1);
@@ -489,8 +495,22 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        let geom = parse_to_ewkb(&buf, None)?;
+        let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let geog = geography_from_ewkt_bytes(&buf)?;
+        column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
     }
@@ -544,7 +564,7 @@ impl<'a> FastValuesDecoder<'a> {
         fallback_fn: &impl FastValuesDecodeFallback,
     ) -> Result<()> {
         for row in 0.. {
-            let _ = self.reader.ignore_white_spaces();
+            let _ = self.reader.ignore_white_spaces_or_comments();
             if self.reader.eof() {
                 break;
             }
@@ -567,7 +587,7 @@ impl<'a> FastValuesDecoder<'a> {
         columns: &mut [ColumnBuilder],
         fallback: &impl FastValuesDecodeFallback,
     ) -> Result<()> {
-        let _ = self.reader.ignore_white_spaces();
+        let _ = self.reader.ignore_white_spaces_or_comments();
         let col_size = columns.len();
         let start_pos_of_row = self.reader.checkpoint();
 
@@ -587,7 +607,7 @@ impl<'a> FastValuesDecoder<'a> {
         }
 
         for col_idx in 0..col_size {
-            let _ = self.reader.ignore_white_spaces();
+            let _ = self.reader.ignore_white_spaces_or_comments();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
 
             let col = columns
@@ -598,7 +618,7 @@ impl<'a> FastValuesDecoder<'a> {
                 .field_decoder
                 .read_field(col, &mut self.reader, &mut self.positions)
                 .map(|_| {
-                    let _ = self.reader.ignore_white_spaces();
+                    let _ = self.reader.ignore_white_spaces_or_comments();
                     let need_fallback = self.reader.ignore_byte(col_end).not();
                     (need_fallback, col_idx + 1)
                 })
@@ -636,7 +656,7 @@ impl<'a> FastValuesDecoder<'a> {
 
 // Values |(xxx), (yyy), (zzz)
 pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32) -> Result<()> {
-    let _ = reader.ignore_white_spaces();
+    let _ = reader.ignore_white_spaces_or_comments();
 
     let mut quoted = false;
     let mut escaped = false;

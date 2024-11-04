@@ -25,7 +25,6 @@ use crate::ast::Identifier;
 pub struct CreateSequenceStmt {
     pub create_option: CreateOption,
     pub sequence: Identifier,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -49,7 +48,6 @@ impl Display for CreateSequenceStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropSequenceStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub sequence: Identifier,
 }

@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Display;
-use std::io;
-use std::io::Read;
 use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
@@ -26,13 +24,9 @@ use geozero::GeozeroGeometry;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
-use scroll::Endian;
-use scroll::IOread;
 use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
-
-const GEO_TYPE_ID_MASK: u32 = 0x2000_0000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum GeometryDataType {
@@ -42,6 +36,18 @@ pub enum GeometryDataType {
     #[default]
     EWKT,
     GEOJSON,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Axis {
+    X,
+    Y,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Extremum {
+    Max,
+    Min,
 }
 
 impl FromStr for GeometryDataType {
@@ -74,27 +80,38 @@ impl Display for GeometryDataType {
     }
 }
 
-pub fn parse_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
-    let wkt = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-    let input_wkt = wkt.trim().to_ascii_uppercase();
+pub fn parse_bytes_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
+    let s = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+    parse_to_ewkb(s, srid)
+}
 
-    let parts: Vec<&str> = input_wkt.split(';').collect();
-
-    let parsed_srid: Option<i32> = srid.or_else(|| {
-        if input_wkt.starts_with("SRID=") && parts.len() == 2 {
-            parts[0].replace("SRID=", "").parse().ok()
-        } else {
-            None
-        }
-    });
-
-    let geo_part = if parts.len() == 2 { parts[1] } else { parts[0] };
-
+pub fn parse_to_ewkb(buf: &str, srid: Option<i32>) -> Result<Vec<u8>> {
+    let (parsed_srid, geo_part) = cut_srid(buf)?;
+    let srid = srid.or(parsed_srid);
     let geom: Geometry<f64> = Geometry::try_from_wkt_str(geo_part)
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
 
-    geom.to_ewkb(CoordDimensions::xy(), parsed_srid)
+    geom.to_ewkb(CoordDimensions::xy(), srid)
         .map_err(ErrorCode::from)
+}
+
+pub fn cut_srid(ewkt: &str) -> Result<(Option<i32>, &str)> {
+    match ewkt.find(';') {
+        None => Ok((None, ewkt)),
+        Some(idx) => {
+            let prefix = ewkt[..idx].trim();
+            match prefix
+                .strip_prefix("SRID=")
+                .or_else(|| prefix.strip_prefix("srid="))
+                .and_then(|srid| srid.trim().parse::<i32>().ok())
+            {
+                Some(srid) => Ok((Some(srid), &ewkt[idx + 1..])),
+                None => Err(ErrorCode::GeometryError(format!(
+                    "invalid EWKT with prefix {prefix}"
+                ))),
+            }
+        }
+    }
 }
 
 /// An enum representing any possible geometry subtype.
@@ -168,21 +185,6 @@ pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
         }
     }
 }
-
-pub fn read_ewkb_srid<R: Read>(raw: &mut R) -> std::result::Result<Option<i32>, io::Error> {
-    let byte_order = raw.ioread::<u8>()?;
-    let is_little_endian = byte_order != 0;
-    let endian = Endian::from(is_little_endian);
-    let type_id = raw.ioread_with::<u32>(endian)?;
-    let srid = if type_id & GEO_TYPE_ID_MASK == GEO_TYPE_ID_MASK {
-        Some(raw.ioread_with::<i32>(endian)?)
-    } else {
-        None
-    };
-
-    Ok(srid)
-}
-
 pub trait GeometryFormatOutput {
     fn format(self, data_type: GeometryDataType) -> Result<String>;
 }

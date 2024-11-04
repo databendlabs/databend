@@ -16,8 +16,6 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -57,24 +55,21 @@ pub fn get_hashes(
     }
 
     let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let mut columns: Vec<(Column, DataType)> = keys
+    // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
+    let columns = keys
         .iter()
         .map(|expr| {
-            let return_type = expr.data_type();
-            Ok((
-                evaluator
-                    .run(expr)?
-                    .convert_to_full_column(return_type, block.num_rows()),
-                return_type.clone(),
-            ))
+            let column = evaluator
+                .run(expr)?
+                .convert_to_full_column(expr.data_type(), block.num_rows());
+            if expr.data_type().is_nullable() {
+                Ok(column.remove_nullable())
+            } else {
+                Ok(column)
+            }
         })
-        .collect::<Result<_>>()?;
-    // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
-    for (col, ty) in columns.iter_mut() {
-        *col = col.remove_nullable();
-        *ty = ty.remove_nullable();
-    }
-    hash_by_method(method, &columns, block.num_rows(), hashes)?;
+        .collect::<Result<Vec<_>>>()?;
+    hash_by_method(method, (&columns).into(), block.num_rows(), hashes)?;
     Ok(())
 }
 

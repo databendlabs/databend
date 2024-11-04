@@ -48,7 +48,7 @@ pub fn compress_binary<O: Offset>(
         compressor.to_compression()
     );
 
-    let codec = u8::from(compressor.to_compression());
+    let codec = compressor.to_compression() as u8;
 
     match compressor {
         BinaryCompressor::Basic(c) => {
@@ -110,8 +110,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
     values: &mut Vec<u8>,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let (codec, compressed_size, _uncompressed_size) = read_compress_header(reader)?;
-    let compression = Compression::from_codec(codec)?;
+    let (compression, compressed_size, _uncompressed_size) = read_compress_header(reader, scratch)?;
 
     // already fit in buffer
     let mut use_inner = false;
@@ -138,25 +137,28 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
                 )
             };
             c.decompress(&input[..compressed_size], out_slice)?;
-            unsafe { offsets.set_len(offsets.len() + length + 1) };
 
             if use_inner {
                 reader.consume(compressed_size);
             }
+            let old_length = offsets.len();
+            let new_length = offsets.len() + length;
+            unsafe { offsets.set_len(new_length + 1) };
 
             if let Some(last) = last {
-                // fix offset
-                for i in offsets.len() - length - 1..offsets.len() {
+                // fix offset:
+                // because the offsets in current page is append to the original offsets,
+                // each new offset value must add the last value in original offsets.
+                for i in old_length..new_length {
                     let next_val = unsafe { *offsets.get_unchecked(i + 1) };
                     let val = unsafe { offsets.get_unchecked_mut(i) };
                     *val = last + next_val;
                 }
-                unsafe { offsets.set_len(offsets.len() - 1) };
+                unsafe { offsets.set_len(new_length) };
             }
 
             // values
-
-            let (_, compressed_size, uncompressed_size) = read_compress_header(reader)?;
+            let (_, compressed_size, uncompressed_size) = read_compress_header(reader, scratch)?;
             use_inner = false;
             reader.fill_buf()?;
             let input = if reader.buffer_bytes().len() >= compressed_size {

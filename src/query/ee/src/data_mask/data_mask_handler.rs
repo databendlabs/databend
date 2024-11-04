@@ -17,11 +17,11 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
-use databend_common_meta_app::data_mask::GetDatamaskReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandler;
@@ -42,7 +42,14 @@ impl DatamaskHandler for RealDatamaskHandler {
     }
 
     async fn drop_data_mask(&self, meta_api: Arc<MetaStore>, req: DropDatamaskReq) -> Result<()> {
-        let _ = meta_api.drop_data_mask(req).await?;
+        let dropped = meta_api.drop_data_mask(&req.name).await?;
+        if dropped.is_none() {
+            if req.if_exists {
+                // Ok
+            } else {
+                return Err(AppError::from(req.name.unknown_error("drop data mask")).into());
+            }
+        }
 
         Ok(())
     }
@@ -53,12 +60,12 @@ impl DatamaskHandler for RealDatamaskHandler {
         tenant: &Tenant,
         name: String,
     ) -> Result<DatamaskMeta> {
-        let resp = meta_api
-            .get_data_mask(GetDatamaskReq {
-                name: DataMaskNameIdent::new(tenant, name),
-            })
-            .await?;
-        Ok(resp.policy)
+        let name_ident = DataMaskNameIdent::new(tenant, name);
+        let seq_meta = meta_api
+            .get_data_mask(&name_ident)
+            .await?
+            .ok_or_else(|| AppError::from(name_ident.unknown_error("get data mask")))?;
+        Ok(seq_meta.data)
     }
 }
 

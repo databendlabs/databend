@@ -20,9 +20,11 @@ use std::time::Duration;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float32Type;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt32Type;
@@ -44,6 +46,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -57,7 +60,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use ordered_float::OrderedFloat;
+use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -73,9 +76,15 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_inet_ntoa(registry);
     register_run_diff(registry);
     register_grouping(registry);
+    register_num_to_char(registry);
 
     registry.properties.insert(
         "rand".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
+
+    registry.properties.insert(
+        "gen_random_uuid".to_string(),
         FunctionProperty::default().non_deterministic(),
     );
 
@@ -139,7 +148,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |ctx| {
-            let mut rng = rand::rngs::SmallRng::from_entropy();
+            let mut rng = if ctx.func_ctx.random_function_seed {
+                rand::rngs::SmallRng::seed_from_u64(1)
+            } else {
+                rand::rngs::SmallRng::from_entropy()
+            };
             let rand_nums = (0..ctx.num_rows)
                 .map(|_| rng.gen::<F64>())
                 .collect::<Vec<_>>();
@@ -228,7 +241,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 offsets.push(offsets.last().unwrap() + 36u64);
                 write!(&mut values, "{:x}", value).unwrap();
             }
-
             let col = StringColumn::new(values.into(), offsets.into());
             Value::Column(col)
         },
@@ -374,6 +386,98 @@ fn register_grouping(registry: &mut FunctionRegistry) {
             },
         }))
     })
+}
+
+fn register_num_to_char(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_2_arg::<Int64Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_i64(value))
+                {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f32(*value))
+                {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f64(*value))
+                {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
 }
 
 /// Compute `grouping` by `grouping_id` and `cols`.

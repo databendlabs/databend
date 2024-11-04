@@ -1,0 +1,32 @@
+statement ok
+set variable (a, b) = (select 3, 'x')
+
+onlyif http
+query TTT
+show variables
+----
+a 3 UInt8
+b 'x' String
+
+onlyif http
+query TTT
+show variables where name like 'a'
+----
+a 3 UInt8
+
+onlyif http
+query TTT
+show variables where type = 'UInt8'
+----
+a 3 UInt8
+
+onlyif http
+query TTT
+show variables where value = '\'x\''
+----
+b 'x' String
+
+query TTT
+select name, value, type from show_variables() where name='a';
+----
+a 3 UInt8

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -33,8 +34,8 @@ use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
@@ -44,7 +45,7 @@ use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -92,6 +93,9 @@ impl Interpreter for ReplaceInterpreter {
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        pipeline
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
 
         // purge
         if let Some((files, stage_info)) = purge_info {
@@ -112,7 +116,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Replace,
-                true,
+                LockTableOption::NoLock,
             );
             hook_operator.execute(&mut pipeline.main_pipeline).await;
         }
@@ -134,7 +138,6 @@ impl ReplaceInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
         let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
         for f in &plan.on_conflict_fields {
@@ -161,20 +164,15 @@ impl ReplaceInterpreter {
         })?;
 
         let table_info = fuse_table.get_table_info();
-        let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(
-                schema.as_ref().clone(),
-                Some(table_info.ident.seq),
-            ))
-        });
+        let base_snapshot = fuse_table.read_table_snapshot().await?;
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
-        let table_is_empty = base_snapshot.segments.is_empty();
-        let table_level_range_index = base_snapshot.summary.col_stats.clone();
+        let table_is_empty = base_snapshot.segments().is_empty();
+        let table_level_range_index = base_snapshot.summary().col_stats;
         let mut purge_info = None;
 
         let ReplaceSourceCtx {
@@ -219,7 +217,7 @@ impl ReplaceInterpreter {
                 Default::default(),
                 Default::default(),
             );
-            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let (scalar, _) = scalar_binder.bind(expr)?;
             let columns = scalar.used_columns();
             if columns.len() != 1 {
                 return Err(ErrorCode::BadArguments(
@@ -252,15 +250,34 @@ impl ReplaceInterpreter {
             None
         };
 
-        // remove top exchange
-        if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
+        // remove top exchange merge plan
+        let mut is_exchange = false;
+        let is_stage_source = matches!(self.plan.source, InsertInputSource::Stage(_));
+
+        if let PhysicalPlan::Exchange(Exchange {
+            input,
+            kind: FragmentKind::Merge,
+            ..
+        }) = root.as_ref()
+        {
+            is_exchange = true;
             root = input.clone();
         }
+
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
                 kind: FragmentKind::Expansive,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            }));
+        } else if is_exchange && !is_stage_source {
+            root = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: root,
+                kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
@@ -290,7 +307,6 @@ impl ReplaceInterpreter {
                 bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
                 table_is_empty,
                 table_info: table_info.clone(),
-                catalog_info: catalog.info(),
                 select_ctx,
                 target_schema: plan.schema.clone(),
                 table_level_range_index,
@@ -299,23 +315,24 @@ impl ReplaceInterpreter {
                 plan_id: u32::MAX,
             },
         )));
+
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
-            catalog_info: catalog.info(),
             on_conflicts,
             bloom_filter_column_indexes,
             segments: base_snapshot
-                .segments
-                .clone()
-                .into_iter()
+                .segments()
+                .iter()
+                .cloned()
                 .enumerate()
                 .collect(),
             block_slots: None,
             need_insert: true,
             plan_id: u32::MAX,
         })));
+
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
@@ -326,17 +343,17 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
+
         root = Box::new(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
-            catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
-            need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            recluster_info: None,
         })));
         root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
@@ -394,9 +411,6 @@ impl ReplaceInterpreter {
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
-            _ => Err(ErrorCode::Unimplemented(
-                "input source other than literal VALUES and sub queries are NOT supported yet.",
-            )),
         }
     }
 

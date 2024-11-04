@@ -19,6 +19,8 @@ mod util;
 
 mod compression;
 pub use compression::CommonCompression;
+pub use compression::Compression;
+pub type SchemaDescriptor = parquet2::metadata::SchemaDescriptor;
 pub mod read;
 pub mod stat;
 pub mod write;

@@ -45,6 +45,25 @@ use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
 use super::WindowFunctionInfo;
 
+#[derive(Debug, Clone)]
+pub struct WindowSortDesc {
+    pub offset: usize,
+    pub asc: bool,
+    pub nulls_first: bool,
+    // Used for check null frame.
+    pub is_nullable: bool,
+}
+
+impl From<WindowSortDesc> for SortColumnDescription {
+    fn from(value: WindowSortDesc) -> Self {
+        SortColumnDescription {
+            offset: value.offset,
+            asc: value.asc,
+            nulls_first: value.nulls_first,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct RowPtr {
     pub block: usize,
@@ -77,7 +96,7 @@ pub struct TransformWindow<T: Number> {
 
     partition_indices: Vec<usize>,
     // The second field indicate if the order by column is nullable.
-    order_by: Vec<SortColumnDescription>,
+    order_by: Vec<WindowSortDesc>,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -85,7 +104,7 @@ pub struct TransformWindow<T: Number> {
     /// A queue of data blocks that can be output.
     outputs: VecDeque<DataBlock>,
 
-    /// monotonically increasing index of the current block in the queue.
+    /// The monotonically increasing index of the current block in the queue.
     first_block: usize,
     next_output_block: usize,
 
@@ -229,7 +248,7 @@ impl<T: Number> TransformWindow<T> {
                 let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
                 if unsafe {
-                    start_column.index_unchecked(self.partition_start.row)
+                    start_column.index_unchecked(index.row)
                         != compare_column.index_unchecked(self.partition_end.row)
                 } {
                     break;
@@ -249,7 +268,6 @@ impl<T: Number> TransformWindow<T> {
         assert_eq!(self.partition_end.row, block_rows);
         self.partition_end.block += 1;
         self.partition_end.row = 0;
-
         assert!(!self.partition_ended && self.partition_end == end);
     }
 
@@ -342,7 +360,6 @@ impl<T: Number> TransformWindow<T> {
     /// if the current row is the last row of the current block, advance the current block and row = 0
     fn advance_row(&self, mut row: RowPtr) -> RowPtr {
         debug_assert!(row.block >= self.first_block);
-
         if row == self.blocks_end() {
             return row;
         }
@@ -359,6 +376,8 @@ impl<T: Number> TransformWindow<T> {
     fn goback_row(&self, mut row: RowPtr) -> RowPtr {
         if row.row != 0 {
             row.row -= 1;
+        } else if row.block == 0 {
+            row.row = self.block_rows(&row) - 1;
         } else {
             row.block -= 1;
             row.row = self.block_rows(&row) - 1;
@@ -395,6 +414,10 @@ impl<T: Number> TransformWindow<T> {
         if lhs == rhs {
             return true;
         }
+        if lhs.block < self.first_block {
+            return false;
+        }
+
         if self.frame_unit.is_rows() && for_computing_bound {
             // For ROWS frame, the row's peer is only the row itself.
             return false;
@@ -496,7 +519,7 @@ impl<T: Number> TransformWindow<T> {
             };
             let cols = agg.arg_columns(data);
             for row in start_row..end_row {
-                agg.accumulate_row(&cols, row)?;
+                agg.accumulate_row(cols, row)?;
             }
         }
 
@@ -539,16 +562,15 @@ impl<T: Number> TransformWindow<T> {
             }
             WindowFunctionImpl::LagLead(ll) => {
                 let value = if self.frame_start == self.frame_end {
-                    let default_value = match ll.default.clone() {
+                    match &ll.default {
                         LagLeadDefault::Null => Scalar::Null,
                         LagLeadDefault::Index(col) => {
                             let block =
                                 &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(col).value;
+                            let value = &block.get_by_offset(*col).value;
                             value.index(self.current_row.row).unwrap().to_owned()
                         }
-                    };
-                    default_value
+                    }
                 } else {
                     let block = &self
                         .blocks
@@ -573,9 +595,7 @@ impl<T: Number> TransformWindow<T> {
                         n -= 1;
                     }
                     if cur != self.frame_end {
-                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                        let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                        col.index(cur.row).unwrap().to_owned()
+                        self.get_nth_value_by_ignoring_nulls(cur, func.arg, func.ignore_null, true)
                     } else {
                         // No such row
                         Scalar::Null
@@ -584,9 +604,7 @@ impl<T: Number> TransformWindow<T> {
                     // last_value
                     let cur = self.goback_row(self.frame_end);
                     debug_assert!(self.frame_start <= cur);
-                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                    let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                    col.index(cur.row).unwrap().to_owned()
+                    self.get_nth_value_by_ignoring_nulls(cur, func.arg, func.ignore_null, false)
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
@@ -648,6 +666,79 @@ impl<T: Number> TransformWindow<T> {
         }
         false
     }
+
+    #[inline]
+    fn get_nth_value_by_ignoring_nulls(
+        &self,
+        mut cur: RowPtr,
+        arg_index: usize,
+        ignore_null: bool,
+        advance: bool,
+    ) -> Scalar {
+        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+        let mut block_entry = block.get_by_offset(arg_index);
+        if !ignore_null {
+            return match &block_entry.value {
+                Value::Scalar(scalar) => scalar.to_owned(),
+                Value::Column(col) => unsafe { col.index_unchecked(cur.row) }.to_owned(),
+            };
+        }
+
+        while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
+            match &block_entry.value {
+                Value::Scalar(scalar) => {
+                    if scalar != &Scalar::Null {
+                        return scalar.to_owned();
+                    }
+                    // If value is Scalar we can directly skip this block.
+                    if advance {
+                        cur.block += 1;
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        block_entry = block.get_by_offset(arg_index);
+                    } else if cur == self.frame_start {
+                        return scalar.to_owned();
+                    } else {
+                        cur.block -= 1;
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        block_entry = block.get_by_offset(arg_index);
+                    }
+                }
+                Value::Column(col) => {
+                    let value = col.index(cur.row).unwrap();
+                    if value != ScalarRef::Null {
+                        return value.to_owned();
+                    }
+
+                    cur = if advance {
+                        let advance_cur = self.advance_row(cur);
+                        if advance_cur.block != cur.block {
+                            block_entry = self
+                                .blocks
+                                .get(advance_cur.block - self.first_block)
+                                .unwrap()
+                                .block
+                                .get_by_offset(arg_index);
+                        }
+                        advance_cur
+                    } else if cur == self.frame_start {
+                        return unsafe { col.index_unchecked(cur.row) }.to_owned();
+                    } else {
+                        let back_cur = self.goback_row(cur);
+                        if back_cur.block != cur.block {
+                            block_entry = self
+                                .blocks
+                                .get(back_cur.block - self.first_block)
+                                .unwrap()
+                                .block
+                                .get_by_offset(arg_index);
+                        }
+                        back_cur
+                    };
+                }
+            }
+        }
+        Scalar::Null
+    }
 }
 
 // For ROWS frame
@@ -658,7 +749,7 @@ impl TransformWindow<u64> {
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
-        order_by: Vec<SortColumnDescription>,
+        order_by: Vec<WindowSortDesc>,
         bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
@@ -729,7 +820,7 @@ where T: Number + ResultTypeOfUnary
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
-        order_by: Vec<SortColumnDescription>,
+        order_by: Vec<WindowSortDesc>,
         bounds: (FrameBound<T>, FrameBound<T>),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
@@ -931,10 +1022,12 @@ where T: Number + ResultTypeOfUnary
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         if let Some(data) = data {
             let num_rows = data.num_rows();
-            self.blocks.push_back(WindowBlock {
-                block: data.convert_to_full(),
-                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-            });
+            if num_rows != 0 {
+                self.blocks.push_back(WindowBlock {
+                    block: data.consume_convert_to_full(),
+                    builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
+                });
+            }
         }
 
         // Each loop will do:
@@ -1085,7 +1178,7 @@ macro_rules! impl_advance_frame_bound_method {
         paste::paste! {
             impl<T: Number + ResultTypeOfUnary> TransformWindow<T> {
                 fn [<advance_frame_ $bound _range>](&mut self, n: T, is_preceding: bool) {
-                    let SortColumnDescription {
+                    let WindowSortDesc {
                         offset,
                         asc,
                         ..
@@ -1121,7 +1214,7 @@ macro_rules! impl_advance_frame_bound_method {
                 }
 
                 fn [<advance_frame_ $bound _nullable_range>](&mut self, n: T, is_preceding: bool) {
-                    let SortColumnDescription {
+                    let WindowSortDesc {
                         offset: ref_idx,
                         asc,
                         nulls_first,
@@ -1276,7 +1369,6 @@ mod tests {
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
-    use databend_common_expression::SortColumnDescription;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_core::processors::connect;
     use databend_common_pipeline_core::processors::Event;
@@ -1287,6 +1379,7 @@ mod tests {
 
     use super::TransformWindow;
     use super::WindowBlock;
+    use super::WindowSortDesc;
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
@@ -1300,7 +1393,7 @@ mod tests {
             OutputPort::create(),
             func,
             vec![],
-            vec![SortColumnDescription {
+            vec![WindowSortDesc {
                 offset: 0,
                 asc: false,
                 nulls_first: false,
@@ -1322,7 +1415,7 @@ mod tests {
             OutputPort::create(),
             func,
             vec![],
-            vec![SortColumnDescription {
+            vec![WindowSortDesc {
                 offset: 0,
                 asc: false,
                 nulls_first: false,

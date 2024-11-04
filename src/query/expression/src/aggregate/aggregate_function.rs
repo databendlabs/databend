@@ -24,6 +24,7 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::InputColumns;
 use crate::Scalar;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
@@ -47,7 +48,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate(
         &self,
         _place: StateAddr,
-        _columns: &[Column],
+        _columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()>;
@@ -57,7 +58,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         for (row, place) in places.iter().enumerate() {
@@ -67,7 +68,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     // Used in aggregate_null_adaptor
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()>;
+    fn accumulate_row(&self, _place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
     fn batch_serialize(
@@ -157,7 +158,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(None)
     }
 
-    fn get_if_condition(&self, _columns: &[Column]) -> Option<Bitmap> {
+    fn get_if_condition(&self, _columns: InputColumns) -> Option<Bitmap> {
         None
     }
 

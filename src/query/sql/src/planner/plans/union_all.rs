@@ -28,21 +28,58 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnionAll {
-    // Pairs of unioned columns
-    pub pairs: Vec<(IndexType, IndexType)>,
+    // We'll cast the output of union to the expected data type by the cast expr at runtime.
+    // Left of union, output idx and the expected data type
+    pub left_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
+    // Right of union, output idx and the expected data type
+    pub right_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
+    // Recursive cte scan names
+    // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
+    // The `cte_scan_names` are `m` and `f`
+    pub cte_scan_names: Vec<String>,
 }
 
 impl UnionAll {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for (left, right) in &self.pairs {
-            used_columns.insert(*left);
-            used_columns.insert(*right);
+        for (idx, _) in &self.left_outputs {
+            used_columns.insert(*idx);
+        }
+        for (idx, _) in &self.right_outputs {
+            used_columns.insert(*idx);
         }
         Ok(used_columns)
+    }
+
+    pub fn derive_union_stats(
+        &self,
+        left_stat_info: Arc<StatInfo>,
+        right_stat_info: Arc<StatInfo>,
+    ) -> Result<Arc<StatInfo>> {
+        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
+
+        let precise_cardinality =
+            left_stat_info
+                .statistics
+                .precise_cardinality
+                .and_then(|left_cardinality| {
+                    right_stat_info
+                        .statistics
+                        .precise_cardinality
+                        .map(|right_cardinality| left_cardinality + right_cardinality)
+                });
+
+        Ok(Arc::new(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+            },
+        }))
     }
 }
 
@@ -78,14 +115,12 @@ impl Operator for UnionAll {
         used_columns.extend(left_prop.used_columns.clone());
         used_columns.extend(right_prop.used_columns.clone());
 
-        // Derive orderings
-        let orderings = vec![];
-
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-            orderings,
+            orderings: vec![],
+            partition_orderings: None,
         }))
     }
 
@@ -109,26 +144,7 @@ impl Operator for UnionAll {
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
-
-        let precise_cardinality =
-            left_stat_info
-                .statistics
-                .precise_cardinality
-                .and_then(|left_cardinality| {
-                    right_stat_info
-                        .statistics
-                        .precise_cardinality
-                        .map(|right_cardinality| left_cardinality + right_cardinality)
-                });
-
-        Ok(Arc::new(StatInfo {
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality,
-                column_stats: Default::default(),
-            },
-        }))
+        self.derive_union_stats(left_stat_info, right_stat_info)
     }
 
     fn compute_required_prop_child(

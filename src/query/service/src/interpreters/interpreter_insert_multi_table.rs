@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::UInt64Type;
@@ -34,6 +36,7 @@ use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -43,10 +46,10 @@ use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 
+use super::HookOperator;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -88,8 +91,27 @@ impl Interpreter for InsertMultiTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let physical_plan = self.build_physical_plan().await?;
-        let build_res =
+        let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        // Execute hook.
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_compact_after_multi_table_insert()?
+        {
+            for (_, (db, tbl)) in &self.plan.target_tables {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    // multi table insert only support default catalog
+                    CATALOG_DEFAULT.to_string(),
+                    db.to_string(),
+                    tbl.to_string(),
+                    MutationKind::Insert,
+                    LockTableOption::LockNoRetry,
+                );
+                hook_operator.execute(&mut build_res.main_pipeline).await;
+            }
+        }
         Ok(build_res)
     }
 
@@ -108,7 +130,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let (mut root, metadata, bind_ctx) = self.build_source_physical_plan().await?;
+        let (mut root, metadata) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
@@ -154,7 +176,6 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
             input: Box::new(root),
-            project_columns: bind_ctx.columns.clone(),
             n: branches.len(),
         }));
 
@@ -214,9 +235,7 @@ impl InsertMultiTableInterpreter {
         Ok(root)
     }
 
-    async fn build_source_physical_plan(
-        &self,
-    ) -> Result<(PhysicalPlan, MetadataRef, Box<BindContext>)> {
+    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,
@@ -227,7 +246,7 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                Ok((input_source, metadata.clone(), bind_context.clone()))
+                Ok((input_source, metadata.clone()))
             }
             _ => unreachable!(),
         }
@@ -453,17 +472,15 @@ impl InsertIntoBranches {
 
     async fn build_fill_and_reorder(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<Option<FillAndReorder>>> {
         let mut fill_and_reorders = vec![];
         for (table, casted_schema) in self.tables.iter().zip(self.casted_schemas.iter()) {
             let target_schema: DataSchemaRef = Arc::new(table.schema().into());
             if target_schema.as_ref() != casted_schema.as_ref() {
                 let table_info = table.get_table_info();
-                let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
                 fill_and_reorders.push(Some(FillAndReorder {
                     source_schema: casted_schema.clone(),
-                    catalog_info,
                     target_table_info: table_info.clone(),
                 }));
             } else {

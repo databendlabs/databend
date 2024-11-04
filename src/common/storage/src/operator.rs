@@ -16,8 +16,6 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::sync::Arc;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -44,24 +42,21 @@ use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
+use opendal::layers::FastraceLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MinitraceLayer;
+use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
-use reqwest_hickory_resolver::HickoryResolver;
 
 use crate::metrics_layer::METRICS_LAYER;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
-
-/// The global dns resolver for opendal.
-static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> =
-    LazyLock::new(|| Arc::new(HickoryResolver::default()));
+use crate::StorageHttpClient;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -95,16 +90,35 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     Ok(op)
 }
 
+/// Please take care about the timing of calling opendal's `finish`.
+///
+/// Layers added before `finish` will use static dispatch, and layers added after `finish`
+/// will use dynamic dispatch. Adding too many layers via static dispatch will increase
+/// the compile time of rustc or even results in a compile error.
+///
+/// ```txt
+/// error[E0275]: overflow evaluating the requirement `http::response::Response<()>: std::marker::Send`
+///      |
+///      = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`databend_common_storage`)
+/// note: required because it appears within the type `h2::proto::peer::PollMessage`
+///     --> /home/xuanwo/.cargo/registry/src/index.crates.io-6f17d22bba15001f/h2-0.4.5/src/proto/peer.rs:43:10
+///      |
+/// 43   | pub enum PollMessage {
+///      |          ^^^^^^^^^^^
+/// ```
+///
+/// Please balance the performance and compile time.
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
-    let ob = Operator::new(builder)?;
-
-    let op = ob
+    let ob = Operator::new(builder)?
         // NOTE
         //
         // Magic happens here. We will add a layer upon original
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
+        .finish();
+
+    let mut op = ob
         .layer({
             let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
                 .ok()
@@ -131,41 +145,42 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
             timeout_layer
         })
         // Add retry
-        .layer(RetryLayer::new().with_jitter())
+        .layer(
+            RetryLayer::new()
+                .with_jitter()
+                .with_notify(DatabendRetryInterceptor),
+        )
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
         // Add logging
-        .layer(LoggingLayer::default().with_backtrace_output(true))
+        .layer(LoggingLayer::default())
         // Add tracing
-        .layer(MinitraceLayer)
+        .layer(FastraceLayer)
         // Add PrometheusClientLayer
         .layer(METRICS_LAYER.clone());
 
     if let Ok(permits) = env::var("_DATABEND_INTERNAL_MAX_CONCURRENT_IO_REQUEST") {
         if let Ok(permits) = permits.parse::<usize>() {
-            return Ok(op.layer(ConcurrentLimitLayer::new(permits)).finish());
+            op = op.layer(ConcurrentLimitLayer::new(permits));
         }
     }
 
-    Ok(op.finish())
+    Ok(op)
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
 pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
-    let mut builder = services::Azblob::default();
-
-    // Endpoint
-    builder.endpoint(&cfg.endpoint_url);
-
-    // Container
-    builder.container(&cfg.container);
-
-    // Root
-    builder.root(&cfg.root);
-
-    // Credential
-    builder.account_name(&cfg.account_name);
-    builder.account_key(&cfg.account_key);
+    let builder = services::Azblob::default()
+        // Endpoint
+        .endpoint(&cfg.endpoint_url)
+        // Container
+        .container(&cfg.container)
+        // Root
+        .root(&cfg.root)
+        // Credential
+        .account_name(&cfg.account_name)
+        .account_key(&cfg.account_key)
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -178,20 +193,19 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Builder> {
     if !path.starts_with('/') {
         path = env::current_dir().unwrap().join(path).display().to_string();
     }
-    builder.root(&path);
+    builder = builder.root(&path);
 
     Ok(builder)
 }
 
 /// init_gcs_operator will init a opendal gcs operator.
 fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
-    let mut builder = services::Gcs::default();
-
-    builder
+    let builder = services::Gcs::default()
         .endpoint(&cfg.endpoint_url)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
-        .credential(&cfg.credential);
+        .credential(&cfg.credential)
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -199,31 +213,27 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
 fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Builder> {
-    let mut builder = services::Hdfs::default();
-
-    // Endpoint.
-    builder.name_node(&cfg.name_node);
-
-    // Root
-    builder.root(&cfg.root);
+    let builder = services::Hdfs::default()
+        // Endpoint.
+        .name_node(&cfg.name_node)
+        // Root
+        .root(&cfg.root);
 
     Ok(builder)
 }
 
 fn init_ipfs_operator(cfg: &StorageIpfsConfig) -> Result<impl Builder> {
-    let mut builder = services::Ipfs::default();
-
-    builder.root(&cfg.root);
-    builder.endpoint(&cfg.endpoint_url);
+    let builder = services::Ipfs::default()
+        .root(&cfg.root)
+        .endpoint(&cfg.endpoint_url);
 
     Ok(builder)
 }
 
 fn init_http_operator(cfg: &StorageHttpConfig) -> Result<(impl Builder, ImmutableIndexLayer)> {
-    let mut builder = services::Http::default();
-
-    // Endpoint.
-    builder.endpoint(&cfg.endpoint_url);
+    let builder = services::Http::default()
+        // Endpoint.
+        .endpoint(&cfg.endpoint_url);
 
     // HTTP Service is read-only and doesn't support list operation.
     // ImmutableIndexLayer will build an in-memory immutable index for it.
@@ -250,109 +260,73 @@ fn init_memory_operator() -> Result<impl Builder> {
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
 fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
-    let mut builder = services::S3::default();
-
-    // Endpoint.
-    builder.endpoint(&cfg.endpoint_url);
-
-    // Bucket.
-    builder.bucket(&cfg.bucket);
+    let mut builder = services::S3::default()
+        // Endpoint.
+        .endpoint(&cfg.endpoint_url)
+        // Bucket.
+        .bucket(&cfg.bucket);
 
     // Region
     if !cfg.region.is_empty() {
-        builder.region(&cfg.region);
+        builder = builder.region(&cfg.region);
     } else if let Ok(region) = env::var("AWS_REGION") {
         // Try to load region from env if not set.
-        builder.region(&region);
+        builder = builder.region(&region);
     } else {
         // FIXME: we should return error here but keep those logic for compatibility.
         warn!(
             "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
         );
-        builder.region("us-east-1");
+        builder = builder.region("us-east-1");
     }
 
     // Credential.
-    builder.access_key_id(&cfg.access_key_id);
-    builder.secret_access_key(&cfg.secret_access_key);
-    builder.security_token(&cfg.security_token);
-    builder.role_arn(&cfg.role_arn);
-    builder.external_id(&cfg.external_id);
-
-    // It's safe to allow anonymous since opendal will perform the check first.
-    builder.allow_anonymous();
-
-    // Root.
-    builder.root(&cfg.root);
+    builder = builder
+        .access_key_id(&cfg.access_key_id)
+        .secret_access_key(&cfg.secret_access_key)
+        .session_token(&cfg.security_token)
+        .role_arn(&cfg.role_arn)
+        .external_id(&cfg.external_id)
+        // It's safe to allow anonymous since opendal will perform the check first.
+        .allow_anonymous()
+        // Root.
+        .root(&cfg.root);
 
     // Disable credential loader
     if cfg.disable_credential_loader {
-        builder.disable_config_load();
-        builder.disable_ec2_metadata();
+        builder = builder.disable_config_load().disable_ec2_metadata();
     }
 
     // Enable virtual host style
     if cfg.enable_virtual_host_style {
-        builder.enable_virtual_host_style();
+        builder = builder.enable_virtual_host_style();
     }
 
-    let http_builder = {
-        let mut builder = reqwest::ClientBuilder::new();
-
-        // Set dns resolver.
-        builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
-
-        // Pool max idle per host controls connection pool size.
-        // Default to no limit, set to `0` for disable it.
-        let pool_max_idle_per_host = env::var("_DATABEND_INTERNAL_POOL_MAX_IDLE_PER_HOST")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(usize::MAX);
-        builder = builder.pool_max_idle_per_host(pool_max_idle_per_host);
-
-        // Connect timeout default to 30s.
-        let connect_timeout = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
-        builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
-
-        // Enable TCP keepalive if set.
-        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
-            if let Ok(v) = v.parse::<u64>() {
-                builder = builder.tcp_keepalive(Duration::from_secs(v));
-            }
-        }
-
-        builder
-    };
-
-    builder.http_client(HttpClient::build(http_builder)?);
+    builder = builder.http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
 
 /// init_obs_operator will init a opendal obs operator with input obs config.
 fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
-    let mut builder = services::Obs::default();
-    // Endpoint
-    builder.endpoint(&cfg.endpoint_url);
-    // Bucket
-    builder.bucket(&cfg.bucket);
-    // Root
-    builder.root(&cfg.root);
-    // Credential
-    builder.access_key_id(&cfg.access_key_id);
-    builder.secret_access_key(&cfg.secret_access_key);
+    let builder = services::Obs::default()
+        // Endpoint
+        .endpoint(&cfg.endpoint_url)
+        // Bucket
+        .bucket(&cfg.bucket)
+        // Root
+        .root(&cfg.root)
+        // Credential
+        .access_key_id(&cfg.access_key_id)
+        .secret_access_key(&cfg.secret_access_key)
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
 
 /// init_oss_operator will init an opendal OSS operator with input oss config.
 fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
-    let mut builder = services::Oss::default();
-
-    builder
+    let builder = services::Oss::default()
         .endpoint(&cfg.endpoint_url)
         .presign_endpoint(&cfg.presign_endpoint_url)
         .access_key_id(&cfg.access_key_id)
@@ -360,52 +334,48 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .server_side_encryption(&cfg.server_side_encryption)
-        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
+        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id)
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
 
 /// init_moka_operator will init a moka operator.
 fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
-    let mut builder = services::Moka::default();
-
-    builder.max_capacity(v.max_capacity);
-    builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
-    builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
+    let builder = services::Moka::default()
+        .max_capacity(v.max_capacity)
+        .time_to_live(std::time::Duration::from_secs(v.time_to_live as u64))
+        .time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
 
     Ok(builder)
 }
 
 /// init_webhdfs_operator will init a WebHDFS operator
 fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
-    let mut builder = services::Webhdfs::default();
-
-    builder.endpoint(&v.endpoint_url);
-    builder.root(&v.root);
-    builder.delegation(&v.delegation);
+    let builder = services::Webhdfs::default()
+        .endpoint(&v.endpoint_url)
+        .root(&v.root)
+        .delegation(&v.delegation);
 
     Ok(builder)
 }
 
 /// init_cos_operator will init an opendal COS operator with input oss config.
 fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
-    let mut builder = services::Cos::default();
-
-    builder
+    let builder = services::Cos::default()
         .endpoint(&cfg.endpoint_url)
         .secret_id(&cfg.secret_id)
         .secret_key(&cfg.secret_key)
         .bucket(&cfg.bucket)
-        .root(&cfg.root);
+        .root(&cfg.root)
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
 
 /// init_huggingface_operator will init an opendal operator with input config.
 fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Builder> {
-    let mut builder = services::Huggingface::default();
-
-    builder
+    let builder = services::Huggingface::default()
         .repo_type(&cfg.repo_type)
         .repo_id(&cfg.repo_id)
         .revision(&cfg.revision)
@@ -413,6 +383,17 @@ fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Buil
         .root(&cfg.root);
 
     Ok(builder)
+}
+
+pub struct DatabendRetryInterceptor;
+
+impl RetryInterceptor for DatabendRetryInterceptor {
+    fn intercept(&self, err: &opendal::Error, dur: Duration) {
+        warn!(
+            target: "opendal::layers::retry",
+            "will retry after {:.2}s because: {:?}",
+            dur.as_secs_f64(), err)
+    }
 }
 
 /// DataOperator is the operator to access persist data services.

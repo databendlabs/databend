@@ -22,7 +22,6 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use log::debug;
 
 use super::AggIndexReader;
-use crate::io::BlockReader;
 use crate::io::NativeSourceData;
 use crate::FuseBlockPartInfo;
 
@@ -36,7 +35,8 @@ impl AggIndexReader {
                     .blocking()
                     .reader(loc)
                     .ok()?
-                    .into_std_read(0..meta.content_length());
+                    .into_std_read(0..meta.content_length())
+                    .ok()?;
                 let metadata = nread::reader::read_meta(&mut reader)
                     .inspect_err(|e| {
                         debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
@@ -48,6 +48,7 @@ impl AggIndexReader {
                         .iter()
                         .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
                 );
+
                 let columns_meta = metadata
                     .into_iter()
                     .enumerate()
@@ -138,15 +139,10 @@ impl AggIndexReader {
 
     pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<DataBlock> {
         let mut all_columns_arrays = vec![];
-        for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
-            let column_leaves = column_node
-                .leaf_indices
-                .iter()
-                .map(|i| self.reader.parquet_schema_descriptor.columns()[*i].clone())
-                .collect::<Vec<_>>();
 
+        for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
             let readers = data.remove(&index).unwrap();
-            let array_iter = BlockReader::build_array_iter(column_node, column_leaves, readers)?;
+            let array_iter = self.reader.build_array_iter(column_node, readers)?;
             let arrays = array_iter.map(|a| Ok(a?)).collect::<Result<Vec<_>>>()?;
             all_columns_arrays.push(arrays);
         }

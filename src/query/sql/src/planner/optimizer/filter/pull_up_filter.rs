@@ -68,7 +68,9 @@ impl PullUpFilterOptimizer {
     pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
-            RelOperator::Join(join) if !join.is_lateral => self.pull_up_join(s_expr, join),
+            RelOperator::Join(join) if !join.is_lateral && !join.has_null_equi_condition() => {
+                self.pull_up_join(s_expr, join)
+            }
             RelOperator::EvalScalar(eval_scalar) => self.pull_up_eval_scalar(s_expr, eval_scalar),
             RelOperator::MaterializedCte(_) => Ok(s_expr.clone()),
             _ => self.pull_up_others(s_expr),
@@ -114,24 +116,21 @@ impl PullUpFilterOptimizer {
         }
         let mut join = join.clone();
         if left_need_pull_up && right_need_pull_up {
-            for (left_condition, right_condition) in join
-                .left_conditions
-                .iter()
-                .zip(join.right_conditions.iter())
-            {
+            for condition in join.equi_conditions.iter() {
+                let left_condition = condition.left.clone();
+                let right_condition = condition.right.clone();
                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: "eq".to_string(),
                     params: vec![],
-                    arguments: vec![left_condition.clone(), right_condition.clone()],
+                    arguments: vec![left_condition, right_condition],
                 });
                 self.predicates.push(predicate);
             }
             for predicate in join.non_equi_conditions.iter() {
                 self.predicates.extend(split_conjunctions(predicate));
             }
-            join.left_conditions.clear();
-            join.right_conditions.clear();
+            join.equi_conditions.clear();
             join.non_equi_conditions.clear();
             join.join_type = JoinType::Cross;
         }

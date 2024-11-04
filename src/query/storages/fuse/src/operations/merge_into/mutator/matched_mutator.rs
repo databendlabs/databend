@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -34,14 +33,15 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -49,12 +49,11 @@ use itertools::Itertools;
 use log::info;
 use opendal::Operator;
 
-use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
-use crate::io::ReadSettings;
 use crate::io::WriteSettings;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::MutationLogEntry;
@@ -98,7 +97,8 @@ impl MatchedAggregator {
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
     ) -> Result<Self> {
-        let target_table_schema = table.schema_with_stream();
+        let target_table_schema =
+            Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
         let data_accessor = table.get_operator();
         let write_settings = table.get_write_settings();
         let update_stream_columns = table.change_tracking_enabled();
@@ -127,6 +127,7 @@ impl MatchedAggregator {
                 target_table_schema,
                 table.get_table_info().ident.seq,
                 true,
+                false,
             )?)
         } else {
             None
@@ -156,7 +157,7 @@ impl MatchedAggregator {
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
         // An optimization: If we use target table as build side, the deduplicate will be done
         // in hashtable probe phase.In this case, We don't support delete for now, so we
-        // don't to add MergeStatus here.
+        // don't to add MutationStatus here.
         if data_block.get_meta().is_some() && data_block.is_empty() {
             let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
             if meta_index.is_some() {
@@ -182,12 +183,19 @@ impl MatchedAggregator {
         let start = Instant::now();
         // data_block is from matched_split, so there is only one column.
         // that's row_id
-        let row_ids = get_row_id(&data_block, 0)?;
+        let row_id_col = data_block.get_by_offset(0);
+        debug_assert!(
+            row_id_col.data_type.remove_nullable() == DataType::Number(NumberDataType::UInt64)
+        );
+        let row_ids = row_id_col
+            .value
+            .convert_to_full_column(&row_id_col.data_type, data_block.num_rows());
         let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
         match row_id_kind {
             RowIdKind::Update => {
-                for row_id in row_ids {
-                    let (prefix, offset) = split_row_id(row_id);
+                for row_id in row_ids.iter() {
+                    let (prefix, offset) =
+                        split_row_id(row_id.as_number().unwrap().into_u_int64().unwrap());
                     if !self
                         .block_mutation_row_offset
                         .entry(prefix)
@@ -202,23 +210,17 @@ impl MatchedAggregator {
                 }
             }
             RowIdKind::Delete => {
-                for row_id in row_ids {
-                    let (prefix, offset) = split_row_id(row_id);
+                let mut num_deleted_rows = 0;
+                for row_id in row_ids.iter() {
+                    let (prefix, offset) =
+                        split_row_id(row_id.as_number().unwrap().into_u_int64().unwrap());
                     let value = self.block_mutation_row_offset.get(&prefix);
                     if value.is_none() {
-                        self.ctx.add_merge_status(MergeStatus {
-                            insert_rows: 0,
-                            update_rows: 0,
-                            deleted_rows: 1,
-                        });
+                        num_deleted_rows += 1;
                     } else {
                         let s = value.unwrap();
                         if !s.1.contains(&(offset as usize)) {
-                            self.ctx.add_merge_status(MergeStatus {
-                                insert_rows: 0,
-                                update_rows: 0,
-                                deleted_rows: 1,
-                            });
+                            num_deleted_rows += 1;
                         }
                     }
                     // support idempotent delete
@@ -228,6 +230,11 @@ impl MatchedAggregator {
                         .1
                         .insert(offset as usize);
                 }
+                self.ctx.add_mutation_status(MutationStatus {
+                    insert_rows: 0,
+                    update_rows: 0,
+                    deleted_rows: num_deleted_rows,
+                });
             }
         };
         let elapsed_time = start.elapsed().as_millis() as u64;
@@ -457,11 +464,8 @@ impl AggregationContext {
             })??;
 
         // persistent data
-        let new_block_meta = serialized.block_meta;
-        let new_block_location = new_block_meta.location.0.clone();
-        let new_block_raw_data = serialized.block_raw_data;
-        let data_accessor = self.data_accessor.clone();
-        write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+
+        let new_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
 
         metrics_inc_merge_into_replace_blocks_counter(1);
         metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
@@ -475,17 +479,5 @@ impl AggregationContext {
         };
 
         Ok(Some(mutation))
-    }
-}
-
-pub(crate) fn get_row_id(data_block: &DataBlock, row_id_idx: usize) -> Result<Buffer<u64>> {
-    let row_id_col = data_block.get_by_offset(row_id_idx);
-    match row_id_col.value.as_column() {
-        Some(Column::Nullable(boxed)) => match &boxed.column {
-            Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
-            _ => Err(ErrorCode::BadArguments("row id is not uint64")),
-        },
-        Some(Column::Number(NumberColumn::UInt64(data))) => Ok(data.clone()),
-        _ => Err(ErrorCode::BadArguments("row id is not uint64")),
     }
 }

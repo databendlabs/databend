@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
@@ -19,8 +20,10 @@ use std::ops::Range;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use log::error;
 use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
@@ -44,12 +47,14 @@ pub const DATE_MIN: i32 = -354285;
 pub const DATE_MAX: i32 = 2932896;
 
 /// Check if date is within range.
+/// /// If days is invalid convert to DATE_MIN.
 #[inline]
-pub fn check_date(days: i64) -> Result<i32, String> {
+pub fn clamp_date(days: i64) -> i32 {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
-        Ok(days as i32)
+        days as i32
     } else {
-        Err("date is out of range".to_string())
+        error!("{}", format!("date {} is out of range", days));
+        DATE_MIN
     }
 }
 
@@ -163,6 +168,10 @@ impl ValueType for DateType {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.resize(builder.len() + n, item);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(Self::Scalar::default());
     }
@@ -178,6 +187,11 @@ impl ValueType for DateType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 
     #[inline(always)]
@@ -244,14 +258,21 @@ impl ArgType for DateType {
 }
 
 #[inline]
-pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: Tz) -> Option<NaiveDate> {
+pub fn string_to_date(
+    date_str: impl AsRef<[u8]>,
+    tz: Tz,
+    enable_dst_hour_fix: bool,
+) -> databend_common_exception::Result<NaiveDate> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(&tz) {
+    match reader.read_date_text(&tz, enable_dst_hour_fix) {
         Ok(d) => match reader.must_eof() {
-            Ok(..) => Some(d),
-            Err(_) => None,
+            Ok(..) => Ok(d),
+            Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
         },
-        Err(_) => None,
+        Err(e) => match e.code() {
+            ErrorCode::BAD_BYTES => Err(e),
+            _ => Err(ErrorCode::BadArguments("unexpected argument")),
+        },
     }
 }
 

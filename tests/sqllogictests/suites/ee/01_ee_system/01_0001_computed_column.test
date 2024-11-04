@@ -78,7 +78,7 @@ statement ok
 insert into t_stored2 values ('{"id":1,"name":"tom"}'), ('{"id":2,"name":"jim"}'),('{"id":3}')
 
 query TIS
-select * from t_stored2
+select * from t_stored2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
@@ -91,7 +91,7 @@ statement error 1006
 update t_stored2 set c = 'test'
 
 query TIS
-select * from t_stored2
+select * from t_stored2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
@@ -169,7 +169,7 @@ statement ok
 insert into t_virtual2 values ('{"id":1,"name":"tom"}'), ('{"id":2,"name":"jim"}'),('{"id":3}')
 
 query TIS
-select * from t_virtual2
+select * from t_virtual2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
@@ -182,7 +182,7 @@ statement error 1006
 update t_virtual2 set c = 'test'
 
 query TIS
-select * from t_virtual2
+select * from t_virtual2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
@@ -255,6 +255,44 @@ select * from t_stored_merge order by a,b,c;
 ----
 a1 a1-c1 c1
 a2 a2-c2 c2
+
+statement ok
+drop table if exists t_virtual;
+
+statement ok
+create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) virtual, c string null default 'c');
+
+statement ok
+insert into t_virtual values ('a1', 'c1'), ('a2', 'c2');
+
+statement ok
+insert into t_virtual (a) values ('a3'), ('a4');
+
+statement ok
+insert into t_virtual (c) values ('c5'), ('c6');
+
+query T
+select * from t_virtual order by a, c;
+----
+a a-c5 c5
+a a-c6 c6
+a1 a1-c1 c1
+a2 a2-c2 c2
+a3 a3-c c
+a4 a4-c c
+
+statement ok
+merge into t_virtual target using t_virtual source on target.a = source.a when matched and source.a = 'a4' then update set target.a = 'aa', target.c = 'cc'; 
+
+query T
+select * from t_virtual order by a, c;
+----
+a a-c5 c5
+a a-c6 c6
+a1 a1-c1 c1
+a2 a2-c2 c2
+a3 a3-c c
+aa aa-cc cc
 
 statement ok
 set enable_experimental_merge_into = 0;

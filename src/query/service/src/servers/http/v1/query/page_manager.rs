@@ -24,11 +24,10 @@ use databend_common_io::prelude::FormatSettings;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
-use serde_json::Value as JsonValue;
 
-use crate::servers::http::v1::json_block::block_to_json_value;
+use super::string_block::block_to_strings;
+use super::string_block::StringBlock;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
-use crate::servers::http::v1::JsonBlock;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
@@ -38,8 +37,7 @@ pub enum Wait {
 
 #[derive(Clone)]
 pub struct Page {
-    pub data: JsonBlock,
-    pub total_rows: usize,
+    pub data: StringBlock,
 }
 
 pub struct ResponseData {
@@ -54,7 +52,7 @@ pub struct PageManager {
     end: bool,
     block_end: bool,
     last_page: Option<Page>,
-    row_buffer: VecDeque<Vec<JsonValue>>,
+    row_buffer: VecDeque<Vec<Option<String>>>,
     block_receiver: SizedChannelReceiver<DataBlock>,
     format_settings: Arc<RwLock<Option<FormatSettings>>>,
 }
@@ -94,10 +92,7 @@ impl PageManager {
                 let (block, end) = self.collect_new_page(tp).await?;
                 let num_row = block.num_rows();
                 self.total_rows += num_row;
-                let page = Page {
-                    data: block,
-                    total_rows: self.total_rows,
-                };
+                let page = Page { data: block };
                 if num_row > 0 {
                     self.total_pages += 1;
                     self.last_page = Some(page.clone());
@@ -109,8 +104,7 @@ impl PageManager {
                 // but the response may be lost and client will retry,
                 // we simply return an empty page.
                 let page = Page {
-                    data: JsonBlock::default(),
-                    total_rows: self.total_rows,
+                    data: StringBlock::default(),
                 };
                 Ok(page)
             }
@@ -130,51 +124,72 @@ impl PageManager {
 
     fn append_block(
         &mut self,
-        rows: &mut Vec<Vec<JsonValue>>,
+        res: &mut Vec<Vec<Option<String>>>,
         block: DataBlock,
-        remain: usize,
+        remain_rows: &mut usize,
+        remain_size: &mut usize,
     ) -> Result<()> {
         let format_settings = {
             let guard = self.format_settings.read();
             guard.as_ref().unwrap().clone()
         };
-        let mut iter = block_to_json_value(&block, &format_settings)?
-            .into_iter()
-            .peekable();
-        let chunk: Vec<_> = iter.by_ref().take(remain).collect();
-        rows.extend(chunk);
-        self.row_buffer = iter.by_ref().collect();
+        let rows = block_to_strings(&block, &format_settings)?;
+        let mut i = 0;
+        while *remain_rows > 0 && *remain_size > 0 && i < rows.len() {
+            let size = row_size(&rows[i]);
+            if *remain_size > size {
+                *remain_size -= size;
+                *remain_rows -= 1;
+                i += 1;
+            } else {
+                *remain_size = 0;
+            }
+        }
+        res.extend_from_slice(&rows[..i]);
+        self.row_buffer = rows[i..].iter().cloned().collect();
         Ok(())
     }
 
     #[async_backtrace::framed]
-    async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
-        let mut res: Vec<Vec<JsonValue>> = Vec::with_capacity(self.max_rows_per_page);
-        while res.len() < self.max_rows_per_page {
+    async fn collect_new_page(&mut self, tp: &Wait) -> Result<(StringBlock, bool)> {
+        let mut res: Vec<Vec<Option<String>>> = Vec::with_capacity(self.max_rows_per_page);
+        let mut remain_size = 10 * 1024 * 1024;
+        let mut remain_rows = self.max_rows_per_page;
+        while remain_rows > 0 && remain_size > 0 {
             if let Some(row) = self.row_buffer.pop_front() {
-                res.push(row)
+                let size = row_size(&row);
+                if remain_size > size {
+                    res.push(row);
+                    remain_size -= size;
+                    remain_rows -= 1;
+                } else {
+                    self.row_buffer.push_front(row);
+                    remain_size = 0;
+                }
             } else {
                 break;
             }
         }
-        loop {
-            assert!(self.max_rows_per_page >= res.len());
-            let remain = self.max_rows_per_page - res.len();
-            if remain == 0 {
-                break;
-            }
+
+        while remain_rows > 0 && remain_size > 0 {
             match tp {
                 Wait::Async => match self.block_receiver.try_recv() {
-                    Some(block) => self.append_block(&mut res, block, remain)?,
+                    Some(block) => {
+                        self.append_block(&mut res, block, &mut remain_rows, &mut remain_size)?
+                    }
                     None => break,
                 },
                 Wait::Deadline(t) => {
                     let now = Instant::now();
                     let d = *t - now;
+                    if d.is_zero() {
+                        // timeout() will return Ok if the future completes immediately
+                        break;
+                    }
                     match tokio::time::timeout(d, self.block_receiver.recv()).await {
                         Ok(Some(block)) => {
                             debug!("http query got new block with {} rows", block.num_rows());
-                            self.append_block(&mut res, block, remain)?;
+                            self.append_block(&mut res, block, &mut remain_rows, &mut remain_size)?;
                         }
                         Ok(None) => {
                             info!("http query reach end of blocks");
@@ -189,7 +204,7 @@ impl PageManager {
             }
         }
 
-        let block = JsonBlock { data: res };
+        let block = StringBlock { data: res };
 
         // try to report 'no more data' earlier to client to avoid unnecessary http call
         if !self.block_end {
@@ -205,4 +220,17 @@ impl PageManager {
         self.last_page = None;
         self.row_buffer.clear()
     }
+}
+
+fn row_size(row: &[Option<String>]) -> usize {
+    let n = row.len();
+    // ["1","2",null],
+    row.iter()
+        .map(|s| match s {
+            Some(s) => s.len(),
+            None => 2,
+        })
+        .sum::<usize>()
+        + n * 3
+        + 2
 }

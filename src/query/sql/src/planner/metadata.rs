@@ -21,8 +21,10 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
+use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::Scalar;
@@ -57,6 +59,10 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
+    /// Table column indexes that are lazy materialized.
+    table_lazy_columns: HashMap<IndexType, ColumnSet>,
+    table_source: HashMap<IndexType, DataSourcePlan>,
+    retained_columns: HashSet<IndexType>,
     /// Columns that are lazy materialized.
     lazy_columns: HashSet<IndexType>,
     /// Columns that are used for compute lazy materialized.
@@ -120,6 +126,30 @@ impl Metadata {
 
     pub fn columns(&self) -> &[ColumnEntry] {
         self.columns.as_slice()
+    }
+
+    pub fn add_retained_column(&mut self, index: IndexType) {
+        self.retained_columns.insert(index);
+    }
+
+    pub fn get_retained_column(&self) -> &HashSet<IndexType> {
+        &self.retained_columns
+    }
+
+    pub fn set_table_lazy_columns(&mut self, table_index: IndexType, lazy_columns: ColumnSet) {
+        self.table_lazy_columns.insert(table_index, lazy_columns);
+    }
+
+    pub fn get_table_lazy_columns(&self, table_index: &IndexType) -> Option<ColumnSet> {
+        self.table_lazy_columns.get(table_index).cloned()
+    }
+
+    pub fn set_table_source(&mut self, table_index: IndexType, source: DataSourcePlan) {
+        self.table_source.insert(table_index, source);
+    }
+
+    pub fn get_table_source(&self, table_index: &IndexType) -> Option<&DataSourcePlan> {
+        self.table_source.get(table_index)
     }
 
     pub fn is_lazy_column(&self, index: usize) -> bool {
@@ -199,7 +229,7 @@ impl Metadata {
         data_type: TableDataType,
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
-        leaf_index: Option<IndexType>,
+        column_id: Option<u32>,
         column_position: Option<usize>,
         virtual_computed_expr: Option<String>,
     ) -> IndexType {
@@ -211,7 +241,7 @@ impl Metadata {
             column_index,
             table_index,
             path_indices,
-            leaf_index,
+            column_id,
             virtual_computed_expr,
         });
         self.columns.push(column_entry);
@@ -295,6 +325,10 @@ impl Metadata {
         self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
+    pub fn has_agg_indexes(&self) -> bool {
+        !self.agg_indexes.is_empty()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn add_table(
         &mut self,
@@ -336,8 +370,6 @@ impl Metadata {
             }
         }
 
-        // build leaf index in DFS order for primitive columns.
-        let mut leaf_index = 0;
         while let Some((indices, field)) = fields.pop_front() {
             if indices.is_empty() {
                 self.add_base_table_column(
@@ -345,7 +377,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     None,
-                    None,
+                    Some(field.column_id),
                     None,
                     Some(field.computed_expr().unwrap().expr().clone()),
                 );
@@ -368,21 +400,29 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    None,
+                    Some(field.column_id),
                     None,
                     None,
                 );
 
-                let mut i = fields_type.len();
-                for (inner_field_name, inner_field_type) in
-                    fields_name.iter().zip(fields_type.iter()).rev()
+                let mut inner_column_id = field.column_id;
+                for (index, (inner_field_name, inner_field_type)) in
+                    fields_name.iter().zip(fields_type.iter()).enumerate()
                 {
-                    i -= 1;
                     let mut inner_indices = indices.clone();
-                    inner_indices.push(i);
+                    inner_indices.push(index);
                     // create tuple inner field
-                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
-                    let inner_field = TableField::new(&inner_name, inner_field_type.clone());
+                    let inner_name = format!(
+                        "{}:{}",
+                        field.name(),
+                        display_tuple_field_name(inner_field_name)
+                    );
+                    let inner_field = TableField::new_from_column_id(
+                        &inner_name,
+                        inner_field_type.clone(),
+                        inner_column_id,
+                    );
+                    inner_column_id += inner_field_type.num_leaf_columns() as u32;
                     fields.push_front((inner_indices, inner_field));
                 }
             } else {
@@ -391,11 +431,10 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    Some(leaf_index),
+                    Some(field.column_id),
                     Some(indices[0] + 1),
                     None,
                 );
-                leaf_index += 1;
             }
         }
 
@@ -535,9 +574,8 @@ pub struct BaseTableColumn {
 
     /// Path indices for inner column of struct data type.
     pub path_indices: Option<Vec<usize>>,
-    /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
-    /// None if the data type of column is struct.
-    pub leaf_index: Option<usize>,
+    /// The column id in table schema.
+    pub column_id: Option<u32>,
     /// Virtual computed expression, generated in query.
     pub virtual_computed_expr: Option<String>,
 }

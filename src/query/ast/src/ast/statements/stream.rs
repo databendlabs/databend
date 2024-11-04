@@ -33,9 +33,7 @@ pub struct CreateStreamStmt {
     pub table_database: Option<Identifier>,
     pub table: Identifier,
     pub travel_point: Option<TimeTravelPoint>,
-    #[drive(skip)]
     pub append_only: bool,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -73,7 +71,6 @@ impl Display for CreateStreamStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropStreamStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -100,7 +97,6 @@ impl Display for DropStreamStmt {
 pub struct ShowStreamsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }

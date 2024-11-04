@@ -32,6 +32,8 @@ pub(super) struct LimitFileSizeProcessor {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     threshold: usize,
+    flushing: bool,
+    buffered_size: usize,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
@@ -42,15 +44,17 @@ impl LimitFileSizeProcessor {
     pub(super) fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        threshold: usize,
+        max_file_size: usize,
     ) -> Result<ProcessorPtr> {
         let p = Self {
             input,
             output,
-            threshold,
+            threshold: max_file_size,
             input_data: None,
             output_data: None,
             buffers: Vec::new(),
+            flushing: false,
+            buffered_size: 0,
         };
         Ok(ProcessorPtr::create(Box::new(p)))
     }
@@ -58,7 +62,7 @@ impl LimitFileSizeProcessor {
 
 impl Processor for LimitFileSizeProcessor {
     fn name(&self) -> String {
-        String::from("ResizeProcessor")
+        String::from("LimitFileSizeProcessor")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -79,20 +83,20 @@ impl Processor for LimitFileSizeProcessor {
                     Ok(Event::NeedConsume)
                 }
                 None => {
-                    if self.input_data.is_some() {
+                    // backwards
+                    if self.buffered_size > self.threshold || self.input_data.is_some() {
                         Ok(Event::Sync)
                     } else if self.input.has_data() {
                         self.input_data = Some(self.input.pull_data().unwrap()?);
                         Ok(Event::Sync)
                     } else if self.input.is_finished() {
                         if self.buffers.is_empty() {
+                            assert_eq!(self.buffered_size, 0);
                             self.output.finish();
                             Ok(Event::Finished)
                         } else {
-                            let buffers = std::mem::take(&mut self.buffers);
-                            self.output
-                                .push_data(Ok(FileOutputBuffers::create_block(buffers)));
-                            Ok(Event::NeedConsume)
+                            self.flushing = true;
+                            Ok(Event::Sync)
                         }
                     } else {
                         self.input.set_need_data();
@@ -103,39 +107,38 @@ impl Processor for LimitFileSizeProcessor {
         }
     }
 
-    fn process(&mut self) -> databend_common_exception::Result<()> {
+    fn process(&mut self) -> Result<()> {
         assert!(self.output_data.is_none());
-        assert!(self.input_data.is_some());
+        assert!(self.input_data.is_some() || self.flushing || self.buffered_size > self.threshold);
 
-        let block = self.input_data.take().unwrap();
-        let block_meta = block.get_owned_meta().unwrap();
-        let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
-        let buffers = buffers.buffers;
-
-        self.buffers.extend(buffers);
+        if self.buffered_size <= self.threshold {
+            if let Some(block) = self.input_data.take() {
+                let block_meta = block.get_owned_meta().unwrap();
+                let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
+                let buffers = buffers.buffers;
+                self.buffered_size += buffers.iter().map(|b| b.buffer.len()).sum::<usize>();
+                self.buffers.extend(buffers);
+            }
+        }
 
         let mut size = 0;
-        let mut buffers = mem::take(&mut self.buffers);
-        let break_idx = buffers
-            .iter()
-            .enumerate()
-            .find_map(|(idx, b)| {
-                size += b.buffer.len();
-                if size >= self.threshold {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(buffers.len());
-        if break_idx == buffers.len() {
-            self.buffers = buffers;
-            Ok(())
-        } else {
-            let remain = buffers.split_off(break_idx + 1);
-            self.output_data = Some(FileOutputBuffers::create_block(buffers));
-            self.buffers = remain;
-            Ok(())
+        for i in 0..self.buffers.len() {
+            size += self.buffers[i].buffer.len();
+            if size > self.threshold {
+                let mut buffers = mem::take(&mut self.buffers);
+                self.buffers = buffers.split_off(i + 1);
+                self.buffered_size = self.buffers.iter().map(|b| b.buffer.len()).sum::<usize>();
+                self.output_data = Some(FileOutputBuffers::create_block(buffers));
+                return Ok(());
+            }
         }
+        if self.flushing {
+            assert!(self.input_data.is_none());
+            let buffers = mem::take(&mut self.buffers);
+            self.output
+                .push_data(Ok(FileOutputBuffers::create_block(buffers)));
+            self.buffered_size = 0;
+        }
+        Ok(())
     }
 }

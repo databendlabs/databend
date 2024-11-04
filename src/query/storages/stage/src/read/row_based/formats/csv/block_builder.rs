@@ -23,7 +23,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_meta_app::principal::EmptyFieldAs;
-use databend_common_pipeline_sources::input_formats::error_utils::get_decode_error_by_pos;
 use databend_common_storage::FileParseError;
 
 use crate::read::load_context::LoadContext;
@@ -31,6 +30,7 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::csv::CsvInputFormat;
 use crate::read::row_based::processors::BlockBuilderState;
+use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct CsvDecoder {
     pub load_context: Arc<LoadContext>,
@@ -55,61 +55,56 @@ impl CsvDecoder {
         col_data: &[u8],
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
-        let empty_filed_as = &self.fmt.params.empty_field_as;
+        let empty_field_as = &self.fmt.params.empty_field_as;
         if col_data.is_empty() {
-            match &self.load_context.default_values {
-                None => {
-                    // query
-                    builder.push_default();
-                }
-                Some(values) => {
-                    let field = &self.load_context.schema.fields()[column_index];
-                    // copy
-                    match empty_filed_as {
-                        EmptyFieldAs::FieldDefault => {
-                            builder.push(values[column_index].as_ref());
-                        }
-                        EmptyFieldAs::Null => {
-                            if !matches!(field.data_type, TableDataType::Nullable(_)) {
-                                return Err(FileParseError::ColumnEmptyError {
-                                    column_index,
-                                    column_name: field.name().to_owned(),
-                                    column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
-                                    remedy: format!(
-                                        "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
-                                        field.name()
-                                    ),
-                                });
-                            }
-                            builder.push_default();
-                        }
-                        EmptyFieldAs::String => match builder {
-                            ColumnBuilder::String(b) => {
-                                b.put_str("");
-                                b.commit_row();
-                            }
-                            ColumnBuilder::Nullable(box NullableColumnBuilder {
-                                builder: ColumnBuilder::String(b),
-                                validity,
-                            }) => {
-                                b.put_str("");
-                                b.commit_row();
-                                validity.push(true);
-                            }
-                            _ => {
-                                let field = &self.load_context.schema.fields()[column_index];
-                                return Err(FileParseError::ColumnEmptyError {
-                                    column_index,
-                                    column_name: field.name().to_owned(),
-                                    column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
-                                    remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL."
-                                        .to_string(),
-                                });
-                            }
-                        },
+            if !self.load_context.is_copy {
+                builder.push_default();
+            } else {
+                let field = &self.load_context.schema.fields()[column_index];
+                match empty_field_as {
+                    EmptyFieldAs::FieldDefault => {
+                        self.load_context
+                            .push_default_value(builder, column_index, true)?;
                     }
+                    EmptyFieldAs::Null => {
+                        if !matches!(field.data_type, TableDataType::Nullable(_)) {
+                            return Err(FileParseError::ColumnEmptyError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                                empty_field_as: empty_field_as.to_string(),
+                                remedy: format!(
+                                    "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
+                                    field.name()
+                                ),
+                            });
+                        }
+                        builder.push_default();
+                    }
+                    EmptyFieldAs::String => match builder {
+                        ColumnBuilder::String(b) => {
+                            b.put_str("");
+                            b.commit_row();
+                        }
+                        ColumnBuilder::Nullable(box NullableColumnBuilder {
+                            builder: ColumnBuilder::String(b),
+                            validity,
+                        }) => {
+                            b.put_str("");
+                            b.commit_row();
+                            validity.push(true);
+                        }
+                        _ => {
+                            let field = &self.load_context.schema.fields()[column_index];
+                            return Err(FileParseError::ColumnEmptyError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                                empty_field_as: empty_field_as.to_string(),
+                                remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
+                            });
+                        }
+                    },
                 }
             }
             return Ok(());

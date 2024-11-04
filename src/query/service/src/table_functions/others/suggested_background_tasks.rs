@@ -36,7 +36,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -160,7 +160,7 @@ impl SuggestedBackgroundTasksSource {
         sql: String,
     ) -> Result<Option<RecordBatch>> {
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _) = interpreter_plan_sql(ctx.clone(), sql.as_str()).await?;
+        let (plan, _, _) = interpreter_plan_sql(ctx.clone(), sql.as_str(), false).await?;
 
         let data_schema = plan.schema();
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
@@ -195,7 +195,7 @@ impl SuggestedBackgroundTasksSource {
         info!(
             background = true,
             tenant = ctx.get_tenant().tenant_name().to_string();
-            "list all lsuggestions"
+            "list all suggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await
     }
@@ -241,7 +241,6 @@ impl SuggestedBackgroundTasksSource {
 impl AsyncSource for SuggestedBackgroundTasksSource {
     const NAME: &'static str = "suggested_background_tasks";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.done {
@@ -250,9 +249,7 @@ impl AsyncSource for SuggestedBackgroundTasksSource {
         self.done = true;
 
         let ctx = self.ctx.as_any().downcast_ref::<QueryContext>().unwrap();
-        let license_mgr = get_license_manager();
-        license_mgr
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::BackgroundService)?;
 
         let suggestions = Self::all_suggestions(Arc::new(ctx.clone())).await?;

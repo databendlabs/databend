@@ -118,6 +118,7 @@ impl AsyncSystemTable for NotificationHistoryTable {
                             notification_name = Some(s.clone());
                         }
                     }
+                    Ok(())
                 });
             }
         }

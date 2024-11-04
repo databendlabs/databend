@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyerror::AnyError;
+
 use crate::protobuf::SnapshotChunkRequest;
-use crate::protobuf::SnapshotChunkRequestV2;
+use crate::protobuf::SnapshotChunkRequestV003;
 use crate::protobuf::SnapshotChunkV1;
+use crate::protobuf::SnapshotResponseV003;
 use crate::InstallSnapshotRequest;
+use crate::NetworkError;
 use crate::SnapshotMeta;
 use crate::Vote;
 
@@ -43,13 +47,13 @@ impl SnapshotChunkRequest {
     }
 }
 
-impl SnapshotChunkRequestV2 {
+impl SnapshotChunkRequestV003 {
     /// Build the last chunk of a snapshot stream, which contains vote and snapshot meta, without data.
     pub fn new_end_chunk(vote: Vote, snapshot_meta: SnapshotMeta) -> Self {
-        let meta = ("ndjson".to_string(), vote, snapshot_meta);
+        let meta = ("rotbl::v001".to_string(), vote, snapshot_meta);
         let rpc_meta = serde_json::to_string(&meta).unwrap();
 
-        SnapshotChunkRequestV2 {
+        SnapshotChunkRequestV003 {
             rpc_meta: Some(rpc_meta),
             chunk: vec![],
         }
@@ -57,9 +61,25 @@ impl SnapshotChunkRequestV2 {
 
     /// Build a chunk item with data.
     pub fn new_chunk(chunk: Vec<u8>) -> Self {
-        SnapshotChunkRequestV2 {
+        SnapshotChunkRequestV003 {
             rpc_meta: None,
             chunk,
         }
+    }
+}
+
+impl SnapshotResponseV003 {
+    pub fn new(vote: Vote) -> Self {
+        Self {
+            vote: serde_json::to_string(&vote).unwrap(),
+        }
+    }
+
+    pub fn to_vote(&self) -> Result<Vote, NetworkError> {
+        serde_json::from_str(&self.vote).map_err(|e| {
+            NetworkError::new(
+                &AnyError::new(&e).add_context(|| "when decoding vote from SnapshotResponseV003"),
+            )
+        })
     }
 }

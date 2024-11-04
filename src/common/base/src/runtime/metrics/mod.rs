@@ -17,6 +17,7 @@ mod family;
 mod family_metrics;
 mod gauge;
 mod histogram;
+mod process_collector;
 mod registry;
 mod sample;
 
@@ -25,6 +26,7 @@ pub use gauge::Gauge;
 pub use histogram::Histogram;
 pub use histogram::BUCKET_MILLISECONDS;
 pub use histogram::BUCKET_SECONDS;
+pub use process_collector::dump_process_stat;
 pub use registry::register_counter;
 pub use registry::register_counter_family;
 pub use registry::register_gauge;

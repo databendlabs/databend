@@ -27,6 +27,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 
@@ -150,8 +151,11 @@ impl Rule for RuleLeftExchangeJoin {
                     is_equal_op,
                 } => {
                     if is_equal_op {
-                        join_3.left_conditions.push(left.clone());
-                        join_3.right_conditions.push(right.clone());
+                        join_3.equi_conditions.push(JoinEquiCondition::new(
+                            left.clone(),
+                            right.clone(),
+                            false,
+                        ));
                     } else {
                         join_3.non_equi_conditions.push(predicate.clone());
                     }
@@ -162,7 +166,7 @@ impl Rule for RuleLeftExchangeJoin {
             }
         }
 
-        if !join_3.left_conditions.is_empty() && !join_3.right_conditions.is_empty() {
+        if !join_3.equi_conditions.is_empty() {
             join_3.join_type = JoinType::Inner;
         }
 
@@ -183,8 +187,11 @@ impl Rule for RuleLeftExchangeJoin {
                     is_equal_op,
                 } => {
                     if is_equal_op {
-                        join_4.left_conditions.push(left.clone());
-                        join_4.right_conditions.push(right.clone());
+                        join_4.equi_conditions.push(JoinEquiCondition::new(
+                            left.clone(),
+                            right.clone(),
+                            false,
+                        ));
                     } else {
                         join_4.non_equi_conditions.push(predicate.clone());
                     }
@@ -192,7 +199,7 @@ impl Rule for RuleLeftExchangeJoin {
             }
         }
 
-        if !join_4.left_conditions.is_empty() && !join_4.right_conditions.is_empty() {
+        if !join_4.equi_conditions.is_empty() {
             join_4.join_type = JoinType::Inner;
         }
 

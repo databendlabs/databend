@@ -1,4 +1,13 @@
 statement ok
+drop database if exists db;
+
+statement ok
+create database db;
+
+statement ok
+use db;
+
+statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok

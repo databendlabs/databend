@@ -20,10 +20,12 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::servers::flight::v1::actions::get_profile::get_profile;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
 use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
@@ -31,11 +33,14 @@ use crate::servers::flight::v1::actions::kill_query::kill_query;
 use crate::servers::flight::v1::actions::set_priority::set_priority;
 use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
 use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
+use crate::servers::flight::v1::actions::system_action::system_action;
 use crate::servers::flight::v1::actions::truncate_table::truncate_table;
 use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
+use crate::servers::flight::v1::actions::GET_PROFILE;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
+use crate::servers::flight::v1::actions::SYSTEM_ACTION;
 
 pub struct FlightActions {
     #[allow(clippy::type_complexity)]
@@ -64,7 +69,10 @@ impl FlightActions {
         self.actions.insert(
             path.clone(),
             Box::new(move |request| {
-                let request = serde_json::from_slice::<Req>(request).map_err(|cause| {
+                let mut deserializer = serde_json::Deserializer::from_slice(request);
+                deserializer.disable_recursion_limit();
+                let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+                let request = Req::deserialize(deserializer).map_err(|cause| {
                     ErrorCode::BadArguments(format!(
                         "Cannot parse request for {}, cause: {:?}",
                         path, cause
@@ -79,13 +87,24 @@ impl FlightActions {
                     let future = catch_unwind(move || t(request))?;
 
                     let future = CatchUnwindFuture::create(future);
-                    match future.await.flatten() {
-                        Ok(v) => serde_json::to_vec(&v).map_err(|cause| {
-                            ErrorCode::BadBytes(format!(
-                                "Cannot serialize response for {}, cause: {:?}",
-                                path, cause
-                            ))
-                        }),
+                    match future
+                        .await
+                        .with_context(|| "failed to do filght action")
+                        .flatten()
+                    {
+                        Ok(v) => {
+                            let mut out = Vec::with_capacity(512);
+                            let mut serializer = serde_json::Serializer::new(&mut out);
+                            let serializer = serde_stacker::Serializer::new(&mut serializer);
+                            v.serialize(serializer).map_err(|cause| {
+                                ErrorCode::BadBytes(format!(
+                                    "Cannot serialize response for {}, cause: {:?}",
+                                    path, cause
+                                ))
+                            })?;
+
+                            Ok(out)
+                        }
                         Err(err) => Err(err),
                     }
                 })
@@ -114,4 +133,6 @@ pub fn flight_actions() -> FlightActions {
         .action(TRUNCATE_TABLE, truncate_table)
         .action(KILL_QUERY, kill_query)
         .action(SET_PRIORITY, set_priority)
+        .action(SYSTEM_ACTION, system_action)
+        .action(GET_PROFILE, get_profile)
 }

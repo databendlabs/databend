@@ -17,10 +17,12 @@ use std::fmt::Formatter;
 use std::iter::Peekable;
 use std::str::FromStr;
 
+use crate::parser::Dialect;
+
 // In ANSI SQL, it does not need to quote an identifier if the identifier matches
 // the following regular expression: [A-Za-z_][A-Za-z0-9_$]*.
 //
-// There're also two known special cases in Databend which do not requires quoting:
+// There are also two known special cases in Databend which do not require quoting:
 // - "~" is a valid stage name
 // - '$' is a valid character in some system functions
 pub fn ident_needs_quote(ident: &str) -> bool {
@@ -46,6 +48,17 @@ pub fn ident_needs_quote(ident: &str) -> bool {
     }
 
     false
+}
+
+pub fn display_ident(name: &str, quoted_ident_case_sensitive: bool, dialect: Dialect) -> String {
+    // Db-s -> "Db-s" ; dbs -> dbs
+    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive
+        || ident_needs_quote(name)
+    {
+        QuotedIdent(name, dialect.default_ident_quote()).to_string()
+    } else {
+        name.to_string()
+    }
 }
 
 pub struct QuotedIdent<T: AsRef<str>>(pub T, pub char);

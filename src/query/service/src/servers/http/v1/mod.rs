@@ -12,34 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod discovery;
 mod http_query_handlers;
-pub mod json_block;
-mod load;
-mod login;
 mod query;
+mod session;
 mod stage;
 mod suggestions;
+mod verify;
 
+pub use discovery::discovery_nodes;
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
 pub use http_query_handlers::query_route;
-pub use http_query_handlers::QueryError;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
-pub(crate) use json_block::JsonBlock;
-pub use load::streaming_load;
-pub use load::LoadResponse;
-pub(crate) use login::login_handler;
+pub use query::string_block::StringBlock;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
 pub use query::ExpiringState;
 pub use query::HttpQueryContext;
 pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
+pub use session::login_handler::login_handler;
+pub use session::login_handler::LoginResponse;
+pub use session::logout_handler::logout_handler;
+pub use session::refresh_handler::refresh_handler;
+pub use session::refresh_handler::RefreshResponse;
+pub(crate) use session::unix_ts;
+pub use session::ClientSessionManager;
+pub(crate) use session::SessionClaim;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
 pub use suggestions::list_suggestions;
 pub use suggestions::SuggestionsResponse;
+pub use verify::verify_handler;
 
 pub use crate::servers::http::clickhouse_handler::clickhouse_router;
+pub use crate::servers::http::error::QueryError;

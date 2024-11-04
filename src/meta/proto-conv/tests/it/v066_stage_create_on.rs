@@ -18,7 +18,7 @@ use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 
@@ -56,6 +56,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
         file_format_params: mt::principal::FileFormatParams::Parquet(
             mt::principal::ParquetFileFormatParams {
                 missing_field_as: Default::default(),
+                null_if: vec![],
             },
         ),
         copy_options: mt::principal::CopyOptions {

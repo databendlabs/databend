@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,12 +20,15 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
-
 // (TableName, file, file size)
 pub type VacuumDropFileInfo = (String, String, u64);
+
+// (drop_files, failed_tables)
+pub type VacuumDropTablesResult = Result<(Option<Vec<VacuumDropFileInfo>>, HashSet<u64>)>;
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
@@ -41,13 +45,14 @@ pub trait VacuumHandler: Sync + Send {
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<VacuumDropFileInfo>>>;
+    ) -> VacuumDropTablesResult;
 
     async fn do_vacuum_temporary_files(
         &self,
+        abort_checker: AbortChecker,
         temporary_dir: String,
         retain: Option<Duration>,
-        vacuum_limit: Option<usize>,
+        vacuum_limit: usize,
     ) -> Result<usize>;
 }
 
@@ -79,7 +84,7 @@ impl VacuumHandlerWrapper {
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
+    ) -> VacuumDropTablesResult {
         self.handler
             .do_vacuum_drop_tables(threads_nums, tables, dry_run_limit)
             .await
@@ -88,12 +93,13 @@ impl VacuumHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn do_vacuum_temporary_files(
         &self,
+        abort_checker: AbortChecker,
         temporary_dir: String,
         retain: Option<Duration>,
-        vacuum_limit: Option<usize>,
+        vacuum_limit: usize,
     ) -> Result<usize> {
         self.handler
-            .do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit)
+            .do_vacuum_temporary_files(abort_checker, temporary_dir, retain, vacuum_limit)
             .await
     }
 }

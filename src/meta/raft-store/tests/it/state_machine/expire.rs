@@ -34,7 +34,7 @@ use crate::testing::new_raft_test_context;
 use crate::testing::raft_store_test_harness;
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_update_expiration_index() -> anyhow::Result<()> {
     // - Update expiration index when upsert.
     // - Remove from expiration index when overriding
@@ -100,7 +100,7 @@ async fn test_state_machine_update_expiration_index() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_list_expired() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - List expired keys

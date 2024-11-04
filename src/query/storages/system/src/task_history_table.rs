@@ -158,6 +158,7 @@ impl AsyncSystemTable for TaskHistoryTable {
                             task_name = Some(s.clone());
                         }
                     }
+                    Ok(())
                 });
                 find_lt_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "scheduled_time" {
@@ -190,6 +191,8 @@ impl AsyncSystemTable for TaskHistoryTable {
             page_size: None,
             previous_page_token: None,
             task_ids: vec![],
+            task_names: vec![],
+            root_task_id: None,
         };
 
         let cloud_api = CloudControlApiProvider::instance();

@@ -26,8 +26,6 @@ pub enum FuseTableType {
     External,
     // Table attached to the system.
     Attached,
-    // Attached table with read-only access.
-    AttachedReadOnly,
     // Shared table with read-only access.
     SharedReadOnly,
 }
@@ -38,8 +36,7 @@ impl FuseTableType {
         match self {
             FuseTableType::Standard => false,
             FuseTableType::External => false,
-            FuseTableType::Attached => false,
-            FuseTableType::AttachedReadOnly => true,
+            FuseTableType::Attached => true,
             FuseTableType::SharedReadOnly => true,
         }
     }

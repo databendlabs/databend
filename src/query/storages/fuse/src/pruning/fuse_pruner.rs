@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -27,6 +28,9 @@ use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::BlockMetaCache;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -40,10 +44,17 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use log::info;
 use log::warn;
 use opendal::Operator;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
+use rand::prelude::SliceRandom;
+use rand::thread_rng;
 
+use crate::io::BloomIndexBuilder;
 use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
@@ -52,6 +63,8 @@ use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
+
+const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
@@ -80,6 +93,7 @@ impl PruningContext {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         max_concurrency: usize,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -131,6 +145,7 @@ impl PruningContext {
             dal.clone(),
             filter_expr.as_ref(),
             bloom_index_cols,
+            bloom_index_builder,
         )?;
 
         // Page pruner, used in native format
@@ -143,7 +158,7 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(dal.clone(), push_down)?;
+        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
@@ -185,6 +200,7 @@ pub struct FusePruner {
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
     pub deleted_segments: Vec<DeletedSegmentInfo>,
+    pub block_meta_cache: Option<BlockMetaCache>,
 }
 
 impl FusePruner {
@@ -195,6 +211,7 @@ impl FusePruner {
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -204,6 +221,7 @@ impl FusePruner {
             None,
             vec![],
             bloom_index_cols,
+            bloom_index_builder,
         )
     }
 
@@ -216,6 +234,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -230,6 +249,8 @@ impl FusePruner {
             v
         };
 
+        info!("max concurrency of pruning is set to {}", max_concurrency);
+
         let pruning_ctx = PruningContext::try_create(
             ctx,
             dal,
@@ -239,6 +260,7 @@ impl FusePruner {
             cluster_keys,
             bloom_index_cols,
             max_concurrency,
+            bloom_index_builder,
         )?;
 
         Ok(FusePruner {
@@ -248,6 +270,7 @@ impl FusePruner {
             pruning_ctx,
             inverse_range_index: None,
             deleted_segments: vec![],
+            block_meta_cache: CacheManager::instance().get_block_meta_cache(),
         })
     }
 
@@ -295,6 +318,7 @@ impl FusePruner {
                 let block_pruner = block_pruner.clone();
                 let segment_pruner = segment_pruner.clone();
                 let pruning_ctx = self.pruning_ctx.clone();
+                let push_down = self.push_down.clone();
 
                 async move {
                     // Build pruning tasks.
@@ -313,73 +337,115 @@ impl FusePruner {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
-                        // inverse prun
                         for (segment_location, compact_segment_info) in &pruned_segments {
-                            // for delete_prune
-                            match inverse_range_index.as_ref() {
-                                Some(range_index) => {
-                                    if !range_index
-                                        .should_keep(&compact_segment_info.summary.col_stats, None)
-                                    {
-                                        deleted_segments.push(DeletedSegmentInfo {
-                                            index: segment_location.segment_idx,
-                                            summary: compact_segment_info.summary.clone(),
-                                        })
-                                    } else {
-                                        res.extend(
-                                            block_pruner
-                                                .pruning(
-                                                    segment_location.clone(),
-                                                    compact_segment_info.block_metas()?,
-                                                )
-                                                .await?,
-                                        );
-                                    }
-                                }
-                                None => {
-                                    res.extend(
-                                        block_pruner
-                                            .pruning(
-                                                segment_location.clone(),
-                                                compact_segment_info.block_metas()?,
-                                            )
-                                            .await?,
-                                    );
-                                }
+                            if let Some(range_index) = &inverse_range_index {
+                                if !range_index
+                                    .should_keep(&compact_segment_info.summary.col_stats, None)
+                                {
+                                    deleted_segments.push(DeletedSegmentInfo {
+                                        index: segment_location.segment_idx,
+                                        summary: compact_segment_info.summary.clone(),
+                                    });
+                                    continue;
+                                };
                             }
+                            // do not populate the block meta cache for deletion operations,
+                            // since block metas touched by deletion are not likely to
+                            // be accessed soon.
+                            let populate_block_meta_cache = false;
+                            let block_metas = Self::extract_block_metas(
+                                &segment_location.location.0,
+                                compact_segment_info,
+                                populate_block_meta_cache,
+                            )?;
+                            res.extend(
+                                block_pruner
+                                    .pruning(segment_location.clone(), block_metas)
+                                    .await?,
+                            );
                         }
                     } else {
+                        let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
-                            let block_metas = info.block_metas()?;
-                            res.extend(block_pruner.pruning(location, block_metas).await?);
+                            let mut block_metas =
+                                Self::extract_block_metas(&location.location.0, &info, true)?;
+                            if let Some(probability) = sample_probability {
+                                if block_metas.len() <= SMALL_DATASET_SAMPLE_THRESHOLD {
+                                    // Deterministic sampling for small datasets
+                                    // Ensure at least one block is sampled for small datasets
+                                    let sample_size = max(
+                                        1,
+                                        (block_metas.len() as f64 * probability).round() as usize,
+                                    );
+                                    let mut rng = thread_rng();
+                                    block_metas = Arc::new(
+                                        block_metas
+                                            .choose_multiple(&mut rng, sample_size)
+                                            .cloned()
+                                            .collect(),
+                                    );
+                                } else {
+                                    // Random sampling for larger datasets
+                                    let mut sample_block_metas =
+                                        Vec::with_capacity(block_metas.len());
+                                    let mut rng = thread_rng();
+                                    let bernoulli = Bernoulli::new(probability).unwrap();
+                                    for block in block_metas.iter() {
+                                        if bernoulli.sample(&mut rng) {
+                                            sample_block_metas.push(block.clone());
+                                        }
+                                    }
+                                    // Ensure at least one block is sampled for large datasets too
+                                    if sample_block_metas.is_empty() && !block_metas.is_empty() {
+                                        // Safe to unwrap, because we've checked that block_metas is not empty
+                                        sample_block_metas
+                                            .push(block_metas.choose(&mut rng).unwrap().clone());
+                                    }
+                                    block_metas = Arc::new(sample_block_metas);
+                                }
+                            }
+                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
                     }
-                    Result::<_, ErrorCode>::Ok((res, deleted_segments))
+                    Result::<_>::Ok((res, deleted_segments))
                 }
             }));
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let mut res = worker?;
-                    metas.extend(res.0);
-                    self.deleted_segments.append(&mut res.1);
-                }
-                if delete_pruning {
-                    Ok(metas)
-                } else {
-                    // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-                    // will get here, we can prevent other mutations like update and so on.
-                    // TopN pruner.
-                    self.topn_pruning(metas)
+        let workers = futures::future::try_join_all(works).await?;
+
+        let mut metas = vec![];
+        for worker in workers {
+            let mut res = worker?;
+            metas.extend(res.0);
+            self.deleted_segments.append(&mut res.1);
+        }
+        if delete_pruning {
+            Ok(metas)
+        } else {
+            // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+            // will get here, we can prevent other mutations like update and so on.
+            // TopN pruner.
+            self.topn_pruning(metas)
+        }
+    }
+
+    fn extract_block_metas(
+        segment_path: &str,
+        segment: &CompactSegmentInfo,
+        populate_cache: bool,
+    ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
+        if let Some(cache) = CacheManager::instance().get_block_meta_cache() {
+            if let Some(metas) = cache.get(segment_path) {
+                Ok(metas)
+            } else {
+                match populate_cache {
+                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
+                    false => Ok(Arc::new(segment.block_metas()?)),
                 }
             }
+        } else {
+            Ok(Arc::new(segment.block_metas()?))
         }
     }
 
@@ -412,33 +478,27 @@ impl FusePruner {
                                 location: ("".to_string(), 0),
                                 snapshot_loc: None,
                             },
-                            batch,
+                            Arc::new(batch),
                         )
                         .await?;
 
-                    Result::<_, ErrorCode>::Ok(res)
+                    Result::<_>::Ok(res)
                 }
             }));
             segment_idx += 1;
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let res = worker?;
-                    metas.extend(res);
-                }
-                // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-                // will get here, we can prevent other mutations like update and so on.
-                // TopN pruner.
-                self.topn_pruning(metas)
-            }
+        let workers = futures::future::try_join_all(works).await?;
+
+        let mut metas = vec![];
+        for worker in workers {
+            let res = worker?;
+            metas.extend(res);
         }
+        // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+        // will get here, we can prevent other mutations like update and so on.
+        // TopN pruner.
+        self.topn_pruning(metas)
     }
 
     // topn pruner:
@@ -500,4 +560,23 @@ impl FusePruner {
     pub fn get_inverse_range_index(&self) -> Option<RangeIndex> {
         self.inverse_range_index.clone()
     }
+}
+
+fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>> {
+    let mut sample_probability = None;
+    if let Some(sample) = push_down_info
+        .as_ref()
+        .and_then(|info| info.sample.as_ref())
+    {
+        if let Some(block_sample_value) = sample.block_level {
+            if block_sample_value > 100.0 {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Sample value should be less than or equal to 100, but got {}",
+                    block_sample_value
+                )));
+            }
+            sample_probability = Some(block_sample_value / 100.0)
+        }
+    }
+    Ok(sample_probability)
 }

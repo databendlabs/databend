@@ -23,7 +23,7 @@
 //!
 //! - Shut down all databend-meta processes.
 //!
-//! - Backup before proceeding: https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore
+//! - Backup before proceeding: https://docs.databend.com/guides/deploy/upgrade/backup-and-restore-schema
 //!
 //! - To view the current TableMeta version, print all TableMeta records with the following command:
 //!   It should display a list of TableMeta record.

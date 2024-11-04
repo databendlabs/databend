@@ -15,10 +15,10 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::str::FromStr;
 
 use clap::ArgAction;
 use clap::Args;
@@ -26,10 +26,9 @@ use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use databend_common_base::base::mask_string;
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::AuthInfo;
-use databend_common_meta_app::principal::AuthType;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
@@ -55,7 +54,6 @@ use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
-use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -72,6 +70,9 @@ use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::background_config::BackgroundConfig;
+use crate::builtin::BuiltInConfig;
+use crate::builtin::UDFConfig;
+use crate::builtin::UserConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -88,7 +89,7 @@ const CATALOG_HIVE: &str = "hive";
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(name = "databend-query", about, version = &**DATABEND_COMMIT_VERSION, author)]
+#[clap(name = "databend-query", about, version = & * * DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
@@ -132,6 +133,10 @@ pub struct Config {
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
+
+    // spill Config
+    #[clap(flatten)]
+    pub spill: SpillConfig,
 
     // background configs
     #[clap(flatten)]
@@ -472,7 +477,7 @@ pub struct HiveCatalogConfig {
 impl TryInto<InnerCatalogConfig> for CatalogConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerCatalogConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogConfig, Self::Error> {
         match self.ty.as_str() {
             "hive" => Ok(InnerCatalogConfig::Hive(self.hive.try_into()?)),
             ty => Err(ErrorCode::CatalogNotSupported(format!(
@@ -496,7 +501,7 @@ impl From<InnerCatalogConfig> for CatalogConfig {
 
 impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
         if self.meta_store_address.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_store_address` is deprecated, please use `address` instead",
@@ -530,7 +535,7 @@ impl Default for CatalogsHiveConfig {
 
 impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
         if self.meta_store_address.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_store_address` is deprecated, please use `address` instead",
@@ -646,7 +651,7 @@ impl From<InnerStorageGcsConfig> for GcsStorageConfig {
 impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerStorageGcsConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerStorageGcsConfig, Self::Error> {
         Ok(InnerStorageGcsConfig {
             endpoint_url: self.gcs_endpoint_url,
             bucket: self.gcs_bucket,
@@ -1113,7 +1118,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
 impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerStorageOssConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerStorageOssConfig, Self::Error> {
         Ok(InnerStorageOssConfig {
             endpoint_url: self.oss_endpoint_url,
             presign_endpoint_url: self.oss_presign_endpoint_url,
@@ -1217,7 +1222,7 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
 impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
     type Error = ErrorCode;
 
-    fn try_from(value: WebhdfsStorageConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: WebhdfsStorageConfig) -> std::result::Result<Self, Self::Error> {
         Ok(InnerStorageWebhdfsConfig {
             delegation: value.webhdfs_delegation,
             endpoint_url: value.webhdfs_endpoint_url,
@@ -1296,7 +1301,7 @@ impl From<InnerStorageCosConfig> for CosStorageConfig {
 impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
     type Error = ErrorCode;
 
-    fn try_from(value: CosStorageConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: CosStorageConfig) -> std::result::Result<Self, Self::Error> {
         Ok(InnerStorageCosConfig {
             secret_id: value.cos_secret_id,
             secret_key: value.cos_secret_key,
@@ -1314,7 +1319,7 @@ pub enum SettingValue {
 }
 
 impl Serialize for SettingValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         match self {
             SettingValue::UInt64(v) => serializer.serialize_u64(*v),
@@ -1324,7 +1329,7 @@ impl Serialize for SettingValue {
 }
 
 impl<'de> Deserialize<'de> for SettingValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         deserializer.deserialize_any(SettingVisitor)
     }
@@ -1348,12 +1353,12 @@ impl<'de> serde::de::Visitor<'de> for SettingVisitor {
         write!(formatter, "integer or string")
     }
 
-    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         Ok(SettingValue::UInt64(value))
     }
 
-    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         if value < 0 {
             return Err(E::custom("setting value must be positive"));
@@ -1361,7 +1366,7 @@ impl<'de> serde::de::Visitor<'de> for SettingVisitor {
         Ok(SettingValue::UInt64(value as u64))
     }
 
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         Ok(SettingValue::String(value.to_string()))
     }
@@ -1407,7 +1412,12 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "false")]
+    #[clap(
+        long,
+        value_name = "VALUE",
+        value_parser = clap::value_parser!(bool),
+        default_value = "false"
+    )]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1441,6 +1451,9 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
+
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub discovery_address: String,
 
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:8080")]
     pub admin_api_address: String,
@@ -1491,7 +1504,12 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "true")]
+    #[clap(
+        long,
+        value_name = "VALUE",
+        value_parser = clap::value_parser!(bool),
+        default_value = "true"
+    )]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "5000")]
@@ -1523,6 +1541,9 @@ pub struct QueryConfig {
     #[clap(skip)]
     users: Vec<UserConfig>,
 
+    #[clap(skip)]
+    udfs: Vec<UDFConfig>,
+
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub share_endpoint_address: String,
 
@@ -1534,6 +1555,9 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE")]
     pub internal_enable_sandbox_tenant: bool,
+
+    #[clap(long, value_name = "VALUE")]
+    pub enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 
     /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
     #[clap(long, value_name = "VALUE")]
@@ -1651,11 +1675,17 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
 
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub udf_server_allow_insecure: bool,
+
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
 
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub cloud_control_grpc_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value = "50")]
+    pub max_cached_queries_profiles: usize,
 
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
@@ -1676,6 +1706,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),
+            node_secret: "".to_string(),
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
@@ -1692,6 +1723,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
+            discovery_address: self.discovery_address,
             flight_sql_handler_host: self.flight_sql_handler_host,
             flight_sql_handler_port: self.flight_sql_handler_port,
             admin_api_address: self.admin_api_address,
@@ -1720,12 +1752,14 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
-            idm: InnerIDMConfig {
-                users: users_to_inner(self.users)?,
+            builtin: BuiltInConfig {
+                users: self.users,
+                udfs: self.udfs,
             },
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            upgrade_to_pb: self.enable_meta_data_upgrade_json_to_pb_from_v307,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             data_retention_time_in_days_max: self.data_retention_time_in_days_max,
@@ -1738,8 +1772,10 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
+            udf_server_allow_insecure: self.udf_server_allow_insecure,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
+            max_cached_queries_profiles: self.max_cached_queries_profiles,
             settings: self
                 .settings
                 .into_iter()
@@ -1779,6 +1815,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             flight_api_address: inner.flight_api_address,
             flight_sql_handler_host: inner.flight_sql_handler_host,
             flight_sql_handler_port: inner.flight_sql_handler_port,
+            discovery_address: inner.discovery_address,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
             http_handler_tls_server_cert: inner.http_handler_tls_server_cert,
@@ -1805,10 +1842,12 @@ impl From<InnerQueryConfig> for QueryConfig {
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
-            users: users_from_inner(inner.idm.users),
+            users: inner.builtin.users,
+            udfs: inner.builtin.udfs,
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            enable_meta_data_upgrade_json_to_pb_from_v307: inner.upgrade_to_pb,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
             data_retention_time_in_days_max: 90,
@@ -1835,8 +1874,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
+            udf_server_allow_insecure: inner.udf_server_allow_insecure,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
+            max_cached_queries_profiles: inner.max_cached_queries_profiles,
             settings: HashMap::new(),
         }
     }
@@ -2013,7 +2054,9 @@ impl From<InnerLogConfig> for LogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
-    #[clap(long = "log-file-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-file-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub file_on: bool,
 
@@ -2041,11 +2084,13 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter
+    /// Log prefix filter, separated by comma.
+    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
+    /// This filter does not affect `WARNING` and `ERROR` log.
     #[clap(
         long = "log-file-prefix-filter",
         value_name = "VALUE",
-        default_value = "databend_"
+        default_value = "databend_,openraft"
     )]
     #[serde(rename = "prefix_filter")]
     pub file_prefix_filter: String,
@@ -2088,7 +2133,9 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StderrLogConfig {
-    #[clap(long = "log-stderr-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-stderr-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub stderr_on: bool,
 
@@ -2141,7 +2188,9 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct OTLPLogConfig {
-    #[clap(long = "log-otlp-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-otlp-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub otlp_on: bool,
 
@@ -2186,7 +2235,9 @@ impl From<InnerOTLPLogConfig> for OTLPLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryLogConfig {
-    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub log_query_on: bool,
 
@@ -2231,7 +2282,9 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct ProfileLogConfig {
-    #[clap(long = "log-profile-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-profile-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub log_profile_on: bool,
 
@@ -2279,7 +2332,9 @@ impl From<InnerProfileLogConfig> for ProfileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StructLogConfig {
-    #[clap(long = "log-structlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-structlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub log_structlog_on: bool,
 
@@ -2318,7 +2373,9 @@ impl From<InnerStructLogConfig> for StructLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct TracingConfig {
-    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub tracing_on: bool,
 
@@ -2451,7 +2508,7 @@ pub struct MetaConfig {
     #[clap(
         long = "meta-client-timeout-in-second",
         value_name = "VALUE",
-        default_value = "10"
+        default_value = "4"
     )]
     pub client_timeout_in_second: u64,
 
@@ -2580,90 +2637,6 @@ impl Debug for MetaConfig {
     }
 }
 
-fn users_from_inner(inner: HashMap<String, AuthInfo>) -> Vec<UserConfig> {
-    inner
-        .into_iter()
-        .map(|(name, auth)| UserConfig {
-            name,
-            auth: auth.into(),
-        })
-        .collect()
-}
-
-fn users_to_inner(outer: Vec<UserConfig>) -> Result<HashMap<String, AuthInfo>> {
-    let mut inner = HashMap::new();
-    for c in outer.into_iter() {
-        inner.insert(c.name.clone(), c.auth.try_into()?);
-    }
-    Ok(inner)
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserConfig {
-    pub name: String,
-    #[serde(flatten)]
-    pub auth: UserAuthConfig,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserAuthConfig {
-    auth_type: String,
-    auth_string: Option<String>,
-}
-
-fn check_no_auth_string(auth_string: Option<String>, auth_info: AuthInfo) -> Result<AuthInfo> {
-    match auth_string {
-        Some(s) if !s.is_empty() => Err(ErrorCode::InvalidConfig(format!(
-            "should not set auth_string for auth_type {}",
-            auth_info.get_type().to_str()
-        ))),
-        _ => Ok(auth_info),
-    }
-}
-
-impl TryInto<AuthInfo> for UserAuthConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<AuthInfo> {
-        let auth_type = AuthType::from_str(&self.auth_type)?;
-        match auth_type {
-            AuthType::NoPassword => check_no_auth_string(self.auth_string, AuthInfo::None),
-            AuthType::JWT => check_no_auth_string(self.auth_string, AuthInfo::JWT),
-            AuthType::Sha256Password | AuthType::DoubleSha1Password => {
-                let password_type = auth_type.get_password_type().expect("must success");
-                match self.auth_string {
-                    None => Err(ErrorCode::InvalidConfig("must set auth_string")),
-                    Some(s) => {
-                        let p = hex::decode(s).map_err(|e| {
-                            ErrorCode::InvalidConfig(format!("password is not hex: {e:?}"))
-                        })?;
-                        Ok(AuthInfo::Password {
-                            hash_value: p,
-                            hash_method: password_type,
-                        })
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl From<AuthInfo> for UserAuthConfig {
-    fn from(inner: AuthInfo) -> Self {
-        let auth_type = inner.get_type().to_str().to_owned();
-        let auth_string = inner.get_auth_string();
-        let auth_string = if auth_string.is_empty() {
-            None
-        } else {
-            Some(hex::encode(auth_string))
-        };
-        UserAuthConfig {
-            auth_type,
-            auth_string,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct LocalConfig {
@@ -2725,6 +2698,14 @@ pub struct CacheConfig {
         default_value = "1073741824"
     )]
     pub table_meta_segment_bytes: u64,
+
+    /// Max number of cached table block meta
+    #[clap(
+        long = "cache-block-meta-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub block_meta_count: u64,
 
     /// Max number of cached table statistic meta
     #[clap(
@@ -2941,9 +2922,39 @@ pub struct DiskCacheConfig {
         default_value = "./.databend/_cache"
     )]
     pub path: String,
+
+    /// Whether sync data after write.
+    /// If the query node's memory is managed by cgroup (at least cgroup v1),
+    /// it's recommended to set this to true to prevent the container from
+    /// being killed due to high dirty page memory usage.
+    #[clap(
+        long = "cache-disk-sync-data",
+        value_name = "VALUE",
+        default_value = "true"
+    )]
+    #[serde(default = "bool_true")]
+    pub sync_data: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct SpillConfig {
+    /// Path of spill to local disk. disable if it's empty.
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub spill_local_disk_path: OsString,
+
+    #[clap(long, value_name = "VALUE", default_value = "30")]
+    /// Percentage of reserve disk space that won't be used for spill to local disk.
+    pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
+
+    #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
+    /// Allow space in bytes to spill to local disk.
+    pub spill_local_disk_max_bytes: u64,
 }
 
 mod cache_config_converters {
+    use std::path::PathBuf;
+
     use log::warn;
 
     use super::*;
@@ -2966,6 +2977,7 @@ mod cache_config_converters {
                     .map(|(k, v)| (k, v.into()))
                     .collect(),
                 cache: inner.cache.into(),
+                spill: inner.spill.into(),
                 background: inner.background.into(),
             }
         }
@@ -2975,30 +2987,55 @@ mod cache_config_converters {
         type Error = ErrorCode;
 
         fn try_into(self) -> Result<InnerConfig> {
+            let Config {
+                subcommand,
+                config_file,
+                query,
+                log,
+                meta,
+                storage,
+                catalog,
+                cache,
+                mut spill,
+                background,
+                catalogs: input_catalogs,
+                ..
+            } = self;
+
             let mut catalogs = HashMap::new();
-            for (k, v) in self.catalogs.into_iter() {
+            for (k, v) in input_catalogs.into_iter() {
                 let catalog = v.try_into()?;
                 catalogs.insert(k, catalog);
             }
-            if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
+            if !catalog.address.is_empty() || !catalog.protocol.is_empty() {
                 warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
-                let hive = self.catalog.try_into()?;
+                let hive = catalog.try_into()?;
                 let catalog = InnerCatalogConfig::Hive(hive);
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
+            // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
+            if cache.disk_cache_config.path != inner::DiskCacheConfig::default().path
+                && spill.spill_local_disk_path == inner::SpillConfig::default().path
+            {
+                spill.spill_local_disk_path = PathBuf::from(&cache.disk_cache_config.path)
+                    .join("temp/_query_spill")
+                    .into();
+            };
+
             Ok(InnerConfig {
-                subcommand: self.subcommand,
-                config_file: self.config_file,
-                query: self.query.try_into()?,
-                log: self.log.try_into()?,
-                meta: self.meta.try_into()?,
-                storage: self.storage.try_into()?,
+                subcommand,
+                config_file,
+                query: query.try_into()?,
+                log: log.try_into()?,
+                meta: meta.try_into()?,
+                storage: storage.try_into()?,
                 catalogs,
-                cache: self.cache.try_into()?,
-                background: self.background.try_into()?,
+                cache: cache.try_into()?,
+                spill: spill.try_into()?,
+                background: background.try_into()?,
             })
         }
     }
@@ -3011,6 +3048,7 @@ mod cache_config_converters {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
+                block_meta_count: value.block_meta_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -3038,6 +3076,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                block_meta_count: value.block_meta_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
@@ -3058,12 +3097,48 @@ mod cache_config_converters {
         }
     }
 
+    impl TryFrom<SpillConfig> for inner::SpillConfig {
+        type Error = ErrorCode;
+
+        fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
+            let SpillConfig {
+                spill_local_disk_path,
+                spill_local_disk_reserved_space_percentage: spill_local_disk_max_space_percentage,
+                spill_local_disk_max_bytes,
+            } = value;
+            if !spill_local_disk_max_space_percentage.is_normal()
+                || spill_local_disk_max_space_percentage.is_sign_negative()
+                || spill_local_disk_max_space_percentage > OrderedFloat(100.0)
+            {
+                return Err(ErrorCode::InvalidArgument(
+                    "invalid spill_local_disk_max_space_percentage",
+                ));
+            }
+            Ok(Self {
+                path: spill_local_disk_path,
+                reserved_disk_ratio: spill_local_disk_max_space_percentage / 100.0,
+                global_bytes_limit: spill_local_disk_max_bytes,
+            })
+        }
+    }
+
+    impl From<inner::SpillConfig> for SpillConfig {
+        fn from(value: inner::SpillConfig) -> Self {
+            Self {
+                spill_local_disk_path: value.path,
+                spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
+                spill_local_disk_max_bytes: value.global_bytes_limit,
+            }
+        }
+    }
+
     impl TryFrom<DiskCacheConfig> for inner::DiskCacheConfig {
         type Error = ErrorCode;
         fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
             Ok(Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
+                sync_data: value.sync_data,
             })
         }
     }
@@ -3073,6 +3148,7 @@ mod cache_config_converters {
             Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
+                sync_data: value.sync_data,
             }
         }
     }

@@ -40,7 +40,6 @@ pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
-    reach_limit: bool,
 }
 
 impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
@@ -50,16 +49,15 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(Box::new(BlockMetaTransformer::create(
+        Ok(BlockMetaTransformer::create(
             input,
             output,
             TransformFinalGroupBy::<Method> {
                 method,
                 params,
                 flush_state: PayloadFlushState::default(),
-                reach_limit: false,
             },
-        )))
+        ))
     }
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
@@ -118,22 +116,10 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
             let mut blocks = vec![];
             self.flush_state.clear();
 
-            let mut rows = 0;
             loop {
                 if ht.merge_result(&mut self.flush_state)? {
                     let cols = self.flush_state.take_group_columns();
-                    rows += cols[0].len();
                     blocks.push(DataBlock::new_from_columns(cols));
-
-                    if rows >= self.params.limit.unwrap_or(usize::MAX) {
-                        log::info!(
-                            "reach limit optimization in flush agg hashtable, current {}, total {}",
-                            rows,
-                            ht.len(),
-                        );
-                        self.reach_limit = true;
-                        break;
-                    }
                 } else {
                     break;
                 }
@@ -154,20 +140,16 @@ where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformFinalGroupBy";
 
-    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
-        if self.reach_limit {
-            return Ok(self.params.empty_result_block());
-        }
-
+    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<Vec<DataBlock>> {
         if self.params.enable_experimental_aggregate_hashtable {
-            return self.transform_agg_hashtable(meta);
+            return Ok(vec![self.transform_agg_hashtable(meta)?]);
         }
 
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let arena = Arc::new(Bump::new());
             let mut hashtable = self.method.create_hash_table::<()>(arena)?;
 
-            'merge_hashtable: for bucket_data in data {
+            for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Spilled(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
@@ -182,13 +164,6 @@ where Method: HashMethodBounds
                             for key in keys_iter.iter() {
                                 let _ = hashtable.insert_and_entry(key);
                             }
-
-                            if let Some(limit) = self.params.limit {
-                                if hashtable.len() >= limit {
-                                    self.reach_limit = true;
-                                    break 'merge_hashtable;
-                                }
-                            }
                         }
                     }
                     AggregateMeta::HashTable(payload) => unsafe {
@@ -196,12 +171,6 @@ where Method: HashMethodBounds
 
                         for key in payload.cell.hashtable.iter() {
                             let _ = hashtable.insert_and_entry(key.key());
-                        }
-
-                        if let Some(limit) = self.params.limit {
-                            if hashtable.len() >= limit {
-                                break 'merge_hashtable;
-                            }
                         }
                     },
                     AggregateMeta::AggregatePayload(_) => unreachable!(),
@@ -220,7 +189,9 @@ where Method: HashMethodBounds
                 group_columns_builder.append_value(group_entity.key());
             }
 
-            return Ok(DataBlock::new_from_columns(group_columns_builder.finish()?));
+            return Ok(vec![DataBlock::new_from_columns(
+                group_columns_builder.finish()?,
+            )]);
         }
 
         Err(ErrorCode::Internal(

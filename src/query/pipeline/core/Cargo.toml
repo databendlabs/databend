@@ -6,21 +6,20 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-base = { path = "../../../common/base" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
-minitrace = { workspace = true }
-petgraph = "0.6.2"
+log = { workspace = true }
+petgraph = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
@@ -28,3 +27,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
+
+[lints]
+workspace = true

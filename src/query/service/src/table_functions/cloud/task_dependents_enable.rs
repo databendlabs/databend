@@ -158,7 +158,6 @@ impl TaskDependentsEnableSource {
 impl AsyncSource for TaskDependentsEnableSource {
     const NAME: &'static str = "task_dependents_enable";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let config = GlobalConfig::instance();

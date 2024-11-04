@@ -20,6 +20,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::stream;
+use log::info;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
@@ -62,6 +63,10 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                         Ok(s) => Ok(Some(s)),
                         Err(e) => {
                             if e.code() == ErrorCode::STORAGE_NOT_FOUND {
+                                info!(
+                                    "traverse snapshot history break at location ({}, {}), err detail {}",
+                                    load_params.location, load_params.ver, e
+                                );
                                 Ok(None)
                             } else {
                                 Err(e)

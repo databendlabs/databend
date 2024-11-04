@@ -18,15 +18,19 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storages_fuse::io::SegmentWriter;
+use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
@@ -46,6 +50,7 @@ use rand::thread_rng;
 use rand::Rng;
 use uuid::Uuid;
 
+use crate::storages::fuse::operations::mutation::verify_compact_tasks;
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -54,8 +59,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let data_accessor = ctx.get_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
 
     let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
@@ -71,6 +75,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             location.clone(),
             None,
             0,
+            None,
             meta::Compression::Lz4Raw,
             Some(Utc::now()),
         ));
@@ -82,7 +87,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
+        let segment_location = location_generator.gen_segment_info_location();
+        segment
+            .write_meta(&data_accessor, &segment_location)
+            .await?;
+        Ok::<_, ErrorCode>(((segment_location, SegmentInfo::VERSION), location))
     };
 
     let mut test_segment_locations = vec![];
@@ -134,19 +143,28 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     )
     .await?;
 
-    let mut mutator = ReclusterMutator::try_create(
+    let column_ids = snapshot.schema.to_leaf_column_id_set();
+    let mutator = ReclusterMutator::new(
         ctx,
-        Arc::new(snapshot),
         schema,
+        vec![DataType::Number(NumberDataType::Int64)],
         1.0,
         BlockThresholds::default(),
         cluster_key_id,
         1,
-    )?;
-    let need_recluster = mutator.target_select(compact_segments).await?;
+        1000,
+        column_ids,
+    );
+    let (_, parts) = mutator
+        .target_select(compact_segments, ReclusterMode::Recluster)
+        .await?;
+    let need_recluster = !parts.is_empty();
     assert!(need_recluster);
-    assert_eq!(mutator.tasks.len(), 1);
-    let total_block_nums = mutator.tasks.iter().map(|t| t.parts.len()).sum::<usize>();
+    let ReclusterParts::Recluster { tasks, .. } = parts else {
+        return Err(ErrorCode::Internal("Logical error, it's a bug"));
+    };
+    assert_eq!(tasks.len(), 1);
+    let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
     assert_eq!(total_block_nums, 3);
 
     Ok(())
@@ -156,7 +174,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 async fn test_safety_for_recluster() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let operator = ctx.get_data_operator()?.operator();
+    let operator = ctx.get_application_level_data_operator()?.operator();
 
     let recluster_block_size = 300;
     ctx.get_settings()
@@ -198,6 +216,17 @@ async fn test_safety_for_recluster() -> Result<()> {
             number_of_segments, number_of_blocks,
         );
 
+        let unclustered: bool = rand.gen();
+        let mut unclustered_segment_indices = HashSet::new();
+        if unclustered {
+            unclustered_segment_indices = block_number_of_segments
+                .iter()
+                .rev()
+                .enumerate()
+                .filter(|(_, &num)| num % 4 == 0)
+                .map(|(index, _)| index)
+                .collect();
+        }
         let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
             ctx.clone(),
             block_number_of_segments,
@@ -205,6 +234,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             threshold,
             Some(cluster_key_id),
             block_per_seg,
+            unclustered,
         )
         .await?;
 
@@ -236,7 +266,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         }
 
         let ctx: Arc<dyn TableContext> = ctx.clone();
-        let segment_locations = create_segment_location_vector(locations, None);
+        let segment_locations = create_segment_location_vector(locations.clone(), None);
         let compact_segments = FuseTable::segment_pruning(
             &ctx,
             schema.clone(),
@@ -246,76 +276,89 @@ async fn test_safety_for_recluster() -> Result<()> {
         )
         .await?;
 
-        let mut need_recluster = false;
-        let mut mutator = ReclusterMutator::try_create(
+        let column_ids = snapshot.schema.to_leaf_column_id_set();
+        let mut parts = ReclusterParts::new_recluster_parts();
+        let mutator = Arc::new(ReclusterMutator::new(
             ctx.clone(),
-            snapshot,
             schema.clone(),
+            vec![DataType::Number(NumberDataType::Int32)],
             1.0,
             threshold,
             cluster_key_id,
             max_tasks,
-        )?;
-        let selected_segs =
-            ReclusterMutator::select_segments(&compact_segments, block_per_seg, 8, cluster_key_id)?;
+            block_per_seg,
+            column_ids,
+        ));
+        let (mode, selected_segs) = mutator.select_segments(&compact_segments, 8)?;
+        // select the blocks with the highest depth.
         if selected_segs.is_empty() {
-            for compact_segment in compact_segments.into_iter() {
-                if !ReclusterMutator::segment_can_recluster(
-                    &compact_segment.1.summary,
-                    block_per_seg,
-                    cluster_key_id,
-                ) {
-                    continue;
-                }
-
-                if mutator.target_select(vec![compact_segment]).await? {
-                    need_recluster = true;
-                    break;
-                }
+            let result = FuseTable::generate_recluster_parts(mutator, compact_segments).await?;
+            if let Some((_, _, recluster_parts)) = result {
+                parts = recluster_parts;
             }
         } else {
-            let mut selected_segments = Vec::with_capacity(selected_segs.len());
-            selected_segs.into_iter().for_each(|i| {
-                selected_segments.push(compact_segments[i].clone());
-            });
-            need_recluster = mutator.target_select(selected_segments).await?;
+            let selected_segments = selected_segs
+                .into_iter()
+                .map(|i| compact_segments[i].clone())
+                .collect();
+            (_, parts) = mutator.target_select(selected_segments, mode).await?;
         }
 
-        eprintln!("need_recluster: {}", need_recluster);
-        if need_recluster {
-            let tasks = mutator.tasks;
-            assert!(tasks.len() <= max_tasks && !tasks.is_empty());
-            eprintln!("tasks_num: {}, max_tasks: {}", tasks.len(), max_tasks);
-            let mut blocks = Vec::new();
-            for task in tasks.into_iter() {
-                let parts = task.parts.partitions;
-                assert!(task.total_bytes <= recluster_block_size);
-                for part in parts.into_iter() {
-                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    blocks.push(fuse_part.location.clone());
+        if !parts.is_empty() {
+            eprintln!("need_recluster");
+            match parts {
+                ReclusterParts::Recluster {
+                    tasks,
+                    remained_blocks,
+                    removed_segment_indexes,
+                    ..
+                } => {
+                    assert!(unclustered_segment_indices.is_empty());
+                    assert!(tasks.len() <= max_tasks);
+                    assert!(!tasks.is_empty() || !remained_blocks.is_empty());
+                    eprintln!("tasks_num: {}, max_tasks: {}", tasks.len(), max_tasks);
+                    let mut blocks = Vec::new();
+                    for task in tasks.into_iter() {
+                        let parts = task.parts.partitions;
+                        assert!(task.total_bytes <= recluster_block_size);
+                        for part in parts.into_iter() {
+                            let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+                            blocks.push(fuse_part.location.clone());
+                        }
+                    }
+
+                    eprintln!(
+                        "selected segments number {}, selected blocks number {}, remained blocks number {}",
+                        removed_segment_indexes.len(),
+                        blocks.len(),
+                        remained_blocks.len()
+                    );
+                    for remain in remained_blocks {
+                        blocks.push(remain.location.0.clone());
+                    }
+
+                    let block_ids_after_target = HashSet::from_iter(blocks.into_iter());
+
+                    let mut origin_blocks_ids = HashSet::new();
+                    for idx in &removed_segment_indexes {
+                        for b in &segment_infos[*idx].blocks {
+                            origin_blocks_ids.insert(b.location.0.clone());
+                        }
+                    }
+                    assert_eq!(block_ids_after_target, origin_blocks_ids);
                 }
-            }
-
-            let remained_blocks = std::mem::take(&mut mutator.remained_blocks);
-            eprintln!(
-                "selected segments number {}, selected blocks number {}, remained blocks number {}",
-                mutator.removed_segment_indexes.len(),
-                blocks.len(),
-                remained_blocks.len()
-            );
-            for remain in remained_blocks {
-                blocks.push(remain.location.0.clone());
-            }
-
-            let block_ids_after_target = HashSet::from_iter(blocks.into_iter());
-
-            let mut origin_blocks_ids = HashSet::new();
-            for idx in &mutator.removed_segment_indexes {
-                for b in &segment_infos[*idx].blocks {
-                    origin_blocks_ids.insert(b.location.0.clone());
+                ReclusterParts::Compact(parts) => {
+                    assert!(unclustered);
+                    assert!(!unclustered_segment_indices.is_empty());
+                    verify_compact_tasks(
+                        ctx.get_application_level_data_operator()?.operator(),
+                        parts,
+                        locations,
+                        unclustered_segment_indices,
+                    )
+                    .await?;
                 }
-            }
-            assert_eq!(block_ids_after_target, origin_blocks_ids);
+            };
         }
     }
 

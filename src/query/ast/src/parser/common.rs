@@ -19,6 +19,7 @@ use nom::multi::many1;
 use nom::sequence::terminated;
 use nom::Offset;
 use nom::Slice;
+use nom_rule::rule;
 use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
@@ -27,26 +28,19 @@ use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::IdentifierType;
+use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
+use crate::parser::query::with_options;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
-use crate::rule;
 use crate::Range;
 use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
-
-#[macro_export]
-macro_rules! rule {
-    ($($tt:tt)*) => { nom_rule::rule!(
-        $crate::parser::match_text,
-        $crate::parser::match_token,
-        $($tt)*)
-    }
-}
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.text() == text) {
@@ -94,6 +88,10 @@ pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
 
+pub fn plain_ident(i: Input) -> IResult<Identifier> {
+    plain_identifier(|token| token.is_reserved_ident(false))(i)
+}
+
 pub fn ident_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(true))(i)
 }
@@ -108,7 +106,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     });
 
     rule!(
-        #ident
+        #plain_ident
         | #anonymous_stage
     )(i)
 }
@@ -126,7 +124,7 @@ fn plain_identifier(
                 span: transform_span(&[token.clone()]),
                 name: token.text().to_string(),
                 quote: None,
-                is_hole: false,
+                ident_type: IdentifierType::None,
             },
         )(i)
     }
@@ -151,7 +149,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 span: transform_span(&[token.clone()]),
                 name: ident,
                 quote: Some(quote),
-                is_hole: false,
+                ident_type: IdentifierType::None,
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -165,15 +163,29 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
 fn identifier_hole(i: Input) -> IResult<Identifier> {
     check_template_mode(map(
         consumed(rule! {
-            IDENTIFIER ~ ^"(" ~ ^#template_hole ~ ^")"
+            IDENTIFIER ~ ^"(" ~ #template_hole ~ ^")"
         }),
-        |(span, (_, _, (_, name), _))| Identifier {
+        |(span, (_, _, name, _))| Identifier {
             span: transform_span(span.tokens),
             name,
             quote: None,
-            is_hole: true,
+            ident_type: IdentifierType::Hole,
         },
     ))(i)
+}
+
+fn identifier_variable(i: Input) -> IResult<Identifier> {
+    map(
+        consumed(rule! {
+            IDENTIFIER ~ ^"(" ~ ^#variable_ident ~ ^")"
+        }),
+        |(span, (_, _, name, _))| Identifier {
+            span: transform_span(span.tokens),
+            name,
+            quote: None,
+            ident_type: IdentifierType::Variable,
+        },
+    )(i)
 }
 
 fn non_reserved_identifier(
@@ -184,6 +196,7 @@ fn non_reserved_identifier(
             #plain_identifier(is_reserved_keyword)
             | #quoted_identifier
             | #identifier_hole
+            | #identifier_variable
         )(i)
     }
 }
@@ -211,13 +224,34 @@ pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
 }
 
 pub fn table_ref(i: Input) -> IResult<TableRef> {
-    map(dot_separated_idents_1_to_3, |(catalog, database, table)| {
-        TableRef {
+    map(
+        rule! {
+           #dot_separated_idents_1_to_3 ~ #with_options?
+        },
+        |((catalog, database, table), with_options)| TableRef {
             catalog,
             database,
             table,
-        }
-    })(i)
+            with_options,
+        },
+    )(i)
+}
+
+pub fn set_type(i: Input) -> IResult<SetType> {
+    map(
+        rule! {
+           (GLOBAL | SESSION | VARIABLE)?
+        },
+        |res| match res {
+            Some(token) => match token.kind {
+                GLOBAL => SetType::SettingsGlobal,
+                SESSION => SetType::SettingsSession,
+                VARIABLE => SetType::Variable,
+                _ => unreachable!(),
+            },
+            None => SetType::SettingsSession,
+        },
+    )(i)
 }
 
 pub fn column_id(i: Input) -> IResult<ColumnID> {
@@ -240,6 +274,10 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
         }),
         map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
     ))(i)
+}
+
+pub fn variable_ident(i: Input) -> IResult<String> {
+    map(rule! { IdentVariable }, |t| t.text()[1..].to_string())(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -418,11 +456,18 @@ where
 {
     move |input: Input| {
         let i = input;
-        let (input, o1) = parser.parse(input)?;
+        let bt = i.backtrace.clone();
+        let (rest, o1) = parser.parse(input)?;
         match f(o1) {
-            Ok(o2) => Ok((input, o2)),
-            Err(nom::Err::Error(e)) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
-            Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(Error::from_error_kind(i, e))),
+            Ok(o2) => Ok((rest, o2)),
+            Err(nom::Err::Error(e)) => {
+                i.backtrace.restore(bt);
+                Err(nom::Err::Error(Error::from_error_kind(i, e)))
+            }
+            Err(nom::Err::Failure(e)) => {
+                i.backtrace.restore(bt);
+                Err(nom::Err::Failure(Error::from_error_kind(i, e)))
+            }
             Err(nom::Err::Incomplete(_)) => unreachable!(),
         }
     }
@@ -473,7 +518,7 @@ where
             input.backtrace.clear();
 
             let err_kind = match err {
-                PrattError::EmptyInput => ErrorKind::Other("expecting more subsequent tokens"),
+                PrattError::EmptyInput => ErrorKind::Other("expecting an oprand"),
                 PrattError::UnexpectedNilfix(_) => ErrorKind::Other("unable to parse the element"),
                 PrattError::UnexpectedPrefix(_) => {
                     ErrorKind::Other("unable to parse the prefix operator")
@@ -522,12 +567,12 @@ where F: nom::Parser<Input<'a>, O, Error<'a>> {
     }
 }
 
-pub fn template_hole(i: Input) -> IResult<(Span, String)> {
+pub fn template_hole(i: Input) -> IResult<String> {
     check_template_mode(map(
-        consumed(rule! {
-            ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
-        }),
-        |(span, (_, ident))| (transform_span(span.tokens), ident.name),
+        rule! {
+            ":" ~ ^#plain_ident
+        },
+        |(_, name)| name.name,
     ))(i)
 }
 

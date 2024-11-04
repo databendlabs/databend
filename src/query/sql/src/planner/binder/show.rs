@@ -90,6 +90,22 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_variables(
+        &mut self,
+        bind_context: &mut BindContext,
+        show_options: &Option<ShowOptions>,
+    ) -> Result<Plan> {
+        let (show_limit, limit_str) = get_show_options(show_options, None);
+        let query = format!(
+            "SELECT name, value, type FROM show_variables() {} ORDER BY name {}",
+            show_limit, limit_str,
+        );
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVariables)
+            .await
+    }
+
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_metrics(
         &mut self,
         bind_context: &mut BindContext,

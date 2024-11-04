@@ -107,6 +107,10 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
         }
     }
 
+    pub fn get(&self, label_set: &S) -> Option<Arc<M>> {
+        self.metrics.read().get(label_set).cloned()
+    }
+
     pub fn remove(&self, label_set: &S) -> bool {
         ScopedRegistry::op(self.index, |m: &Self| {
             m.metrics.write().remove(label_set);
@@ -199,7 +203,7 @@ mod prometheus_parse {
 
     fn parse_golang_float(s: &str) -> Result<f64, <f64 as std::str::FromStr>::Err> {
         match s.to_lowercase().as_str() {
-            "nan" => Ok(std::f64::NAN), // f64::parse doesn't recognize 'nan'
+            "nan" => Ok(f64::NAN), // f64::parse doesn't recognize 'nan'
             "+inf" | "inf" => Ok(f64::MAX),
             "-inf" => Ok(f64::MIN),
             s => s.parse::<f64>(),

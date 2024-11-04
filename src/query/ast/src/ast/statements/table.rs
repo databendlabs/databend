@@ -38,10 +38,8 @@ use crate::ast::UriLocation;
 pub struct ShowTablesStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
-    #[drive(skip)]
     pub with_history: bool,
 }
 
@@ -131,6 +129,46 @@ impl Display for ShowDropTablesStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum ClusterType {
+    Linear,
+    Hilbert,
+}
+
+impl Display for ClusterType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ClusterType::Linear => write!(f, "LINEAR"),
+            ClusterType::Hilbert => write!(f, "HILBERT"),
+        }
+    }
+}
+
+impl std::str::FromStr for ClusterType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "linear" => Ok(ClusterType::Linear),
+            "hilbert" => Ok(ClusterType::Hilbert),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ClusterOption {
+    pub cluster_type: ClusterType,
+    pub cluster_exprs: Vec<Expr>,
+}
+
+impl Display for ClusterOption {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CLUSTER BY {}(", self.cluster_type)?;
+        write_comma_separated_list(f, &self.cluster_exprs)?;
+        write!(f, ")")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTableStmt {
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
@@ -139,12 +177,17 @@ pub struct CreateTableStmt {
     pub source: Option<CreateTableSource>,
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
-    pub cluster_by: Vec<Expr>,
-    #[drive(skip)]
+    pub cluster_by: Option<ClusterOption>,
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
-    #[drive(skip)]
-    pub transient: bool,
+    pub table_type: TableType,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TableType {
+    Normal,
+    Transient,
+    Temporary,
 }
 
 impl Display for CreateTableStmt {
@@ -153,9 +196,11 @@ impl Display for CreateTableStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        if self.transient {
-            write!(f, "TRANSIENT ")?;
-        }
+        match self.table_type {
+            TableType::Normal => {}
+            TableType::Transient => write!(f, "TRANSIENT ")?,
+            TableType::Temporary => write!(f, "TEMPORARY ")?,
+        };
         write!(f, "TABLE ")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
@@ -180,10 +225,8 @@ impl Display for CreateTableStmt {
             write!(f, " {uri_location}")?;
         }
 
-        if !self.cluster_by.is_empty() {
-            write!(f, " CLUSTER BY (")?;
-            write_comma_separated_list(f, &self.cluster_by)?;
-            write!(f, ")")?
+        if let Some(cluster_by) = &self.cluster_by {
+            write!(f, " {cluster_by}")?;
         }
 
         // Format table options
@@ -206,8 +249,6 @@ pub struct AttachTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
-    #[drive(skip)]
-    pub read_only: bool,
 }
 
 impl Display for AttachTableStmt {
@@ -222,10 +263,6 @@ impl Display for AttachTableStmt {
         )?;
 
         write!(f, " {}", self.uri_location)?;
-
-        if self.read_only {
-            write!(f, " READ_ONLY")?;
-        }
 
         Ok(())
     }
@@ -286,12 +323,10 @@ impl Display for DescribeTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    #[drive(skip)]
     pub all: bool,
 }
 
@@ -338,7 +373,6 @@ impl Display for UndropTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub table_reference: TableReference,
     pub action: AlterTableAction,
@@ -369,7 +403,6 @@ pub enum AlterTableAction {
         new_column: Identifier,
     },
     ModifyTableComment {
-        #[drive(skip)]
         new_comment: String,
     },
     ModifyColumn {
@@ -379,22 +412,22 @@ pub enum AlterTableAction {
         column: Identifier,
     },
     AlterTableClusterKey {
-        cluster_by: Vec<Expr>,
+        cluster_by: ClusterOption,
     },
     DropTableClusterKey,
     ReclusterTable {
-        #[drive(skip)]
         is_final: bool,
         selection: Option<Expr>,
-        #[drive(skip)]
         limit: Option<u64>,
     },
     FlashbackTo {
         point: TimeTravelPoint,
     },
     SetOptions {
-        #[drive(skip)]
         set_options: BTreeMap<String, String>,
+    },
+    UnsetOptions {
+        targets: Vec<Identifier>,
     },
 }
 
@@ -406,6 +439,7 @@ impl Display for AlterTableAction {
                 write_comma_separated_string_map(f, set_options)?;
                 write!(f, ")")?;
             }
+
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
             }
@@ -428,9 +462,7 @@ impl Display for AlterTableAction {
                 write!(f, "DROP COLUMN {column}")?;
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                write!(f, "CLUSTER BY (")?;
-                write_comma_separated_list(f, cluster_by)?;
-                write!(f, ")")?;
+                write!(f, " {cluster_by}")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -453,6 +485,18 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::FlashbackTo { point } => {
                 write!(f, "FLASHBACK TO {}", point)?;
+            }
+            AlterTableAction::UnsetOptions {
+                targets: unset_targets,
+            } => {
+                write!(f, "UNSET OPTIONS ")?;
+                if unset_targets.len() == 1 {
+                    write!(f, "{}", unset_targets[0])?;
+                } else {
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, unset_targets)?;
+                    write!(f, ")")?;
+                }
             }
         };
         Ok(())
@@ -478,7 +522,6 @@ impl Display for AddColumnOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RenameTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -580,7 +623,6 @@ impl Display for VacuumDropTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTemporaryFiles {
-    #[drive(skip)]
     pub limit: Option<u64>,
     #[drive(skip)]
     pub retain: Option<Duration>,
@@ -614,7 +656,6 @@ pub struct OptimizeTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
@@ -712,7 +753,6 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
-    #[drive(skip)]
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
 }
@@ -731,10 +771,8 @@ impl Display for VacuumTableOption {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumDropTableOption {
-    #[drive(skip)]
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
-    #[drive(skip)]
     pub limit: Option<usize>,
 }
 
@@ -821,7 +859,6 @@ pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -842,9 +879,7 @@ impl Display for ColumnDefinition {
 pub struct InvertedIndexDefinition {
     pub index_name: Identifier,
     pub columns: Vec<Identifier>,
-    #[drive(skip)]
     pub sync_creation: bool,
-    #[drive(skip)]
     pub index_options: BTreeMap<String, String>,
 }
 
@@ -891,7 +926,7 @@ impl Display for CreateDefinition {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
-    SetMaskingPolicy(Identifier, #[drive(skip)] String),
+    SetMaskingPolicy(Identifier, String),
     // column name id
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>

@@ -20,9 +20,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_storage::Datum;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use itertools::Itertools;
 
 use crate::optimizer::histogram_from_ndv;
@@ -36,7 +38,6 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -50,6 +51,24 @@ pub struct ConstantTableScan {
 }
 
 impl ConstantTableScan {
+    pub fn new_empty_scan(schema: DataSchemaRef, columns: ColumnSet) -> Self {
+        let values = schema
+            .fields
+            .iter()
+            .map(|f| {
+                let builder = ColumnBuilder::with_capacity(f.data_type(), 0);
+                builder.build()
+            })
+            .collect::<Vec<_>>();
+
+        Self {
+            values,
+            num_rows: 0,
+            schema,
+            columns,
+        }
+    }
+
     pub fn prune_columns(&self, columns: ColumnSet) -> Self {
         let mut projection = columns
             .iter()
@@ -73,6 +92,14 @@ impl ConstantTableScan {
 
     pub fn used_columns(&self) -> Result<ColumnSet> {
         Ok(self.columns.clone())
+    }
+
+    pub fn name(&self) -> &str {
+        if self.num_rows == 0 {
+            "EmptyResultScan"
+        } else {
+            "ConstantTableScan"
+        }
     }
 }
 
@@ -116,6 +143,7 @@ impl Operator for ConstantTableScan {
             outer_columns: Default::default(),
             used_columns: self.columns.clone(),
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

@@ -1,0 +1,60 @@
+statement ok
+create or replace database test_txn_snapshots;
+
+statement ok
+use  test_txn_snapshots;
+
+statement ok
+create or replace table t(c int);
+
+
+###################################
+# no snapshots left if tx aborted #
+###################################
+
+statement ok
+begin;
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(1);
+
+statement ok
+rollback;
+
+query I
+select count() from fuse_snapshot('test_txn_snapshots', 't');
+----
+0
+
+
+#####################################################
+# one snapshot left if table mutated multiple times #
+#####################################################
+
+
+
+statement ok
+begin;
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(1);
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('test_txn_snapshots', 't');
+----
+1
+
+statement ok
+create or replace table transaction(c int);

@@ -64,6 +64,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::LockMeta;
+    use crate::schema::TableLockIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -75,7 +76,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for LockMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableLockIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

@@ -53,6 +53,7 @@ impl AggregateRewriter {
 }
 
 impl AggregateRewriter {
+    // sum(c + expr) --> c * count(expr) + sum(expr)
     fn rewrite_sum(&self, args: &[Expr]) -> Option<Expr> {
         match &args[0] {
             Expr::BinaryOp {
@@ -76,7 +77,7 @@ impl AggregateRewriter {
                                     func: FunctionCall {
                                         distinct: false,
                                         name: Identifier::from_name(l.span(), "count"),
-                                        args: vec![],
+                                        args: vec![other.clone()],
                                         params: vec![],
                                         window: None,
                                         lambda: None,
@@ -122,7 +123,7 @@ impl AggregateRewriter {
                                     func: FunctionCall {
                                         distinct: false,
                                         name: Identifier::from_name(l.span(), "count"),
-                                        args: vec![],
+                                        args: vec![other.clone()],
                                         params: vec![],
                                         window: None,
                                         lambda: None,
@@ -141,8 +142,8 @@ impl AggregateRewriter {
         None
     }
 
+    // avg(arg) --> "sum({args[0]}) / if(count({args[0]}) = 0, 1, count({args[0]}))"
     fn rewrite_avg(&self, args: &[Expr]) -> Expr {
-        // "sum({args[0]}) / if(count({args[0]}) = 0, 1, count({args[0]}))"
         Expr::BinaryOp {
             span: args[0].span(),
             op: BinaryOperator::Divide,

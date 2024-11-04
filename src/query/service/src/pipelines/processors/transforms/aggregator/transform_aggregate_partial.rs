@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec;
 
 use bumpalo::Bump;
@@ -25,9 +26,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::StateAddr;
@@ -111,6 +112,10 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
+    start: Instant,
+    first_block_start: Option<Instant>,
+    processed_bytes: usize,
+    processed_rows: usize,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -164,36 +169,24 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 hash_table,
                 probe_state: ProbeState::default(),
                 settings: AggregateSettings::try_from(ctx)?,
+                start: Instant::now(),
+                first_block_start: None,
+                processed_bytes: 0,
+                processed_rows: 0,
             },
         ))
     }
 
     // Block should be `convert_to_full`.
     #[inline(always)]
-    fn aggregate_arguments(
-        block: &DataBlock,
-        params: &Arc<AggregatorParams>,
-    ) -> Result<Vec<Vec<Column>>> {
-        let aggregate_functions_arguments = &params.aggregate_functions_arguments;
-        let mut aggregate_arguments_columns =
-            Vec::with_capacity(aggregate_functions_arguments.len());
-        for function_arguments in aggregate_functions_arguments {
-            let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
-
-            for argument_index in function_arguments {
-                // Unwrap safety: chunk has been `convert_to_full`.
-                let argument_column = block
-                    .get_by_offset(*argument_index)
-                    .value
-                    .as_column()
-                    .unwrap();
-                function_arguments_column.push(argument_column.clone());
-            }
-
-            aggregate_arguments_columns.push(function_arguments_column);
-        }
-
-        Ok(aggregate_arguments_columns)
+    fn aggregate_arguments<'a>(
+        block: &'a DataBlock,
+        aggregate_functions_arguments: &'a [Vec<usize>],
+    ) -> Vec<InputColumns<'a>> {
+        aggregate_functions_arguments
+            .iter()
+            .map(|function_arguments| InputColumns::new_block_proxy(function_arguments, block))
+            .collect::<Vec<_>>()
     }
 
     #[inline(always)]
@@ -203,20 +196,26 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         block: &DataBlock,
         places: &StateAddrs,
     ) -> Result<()> {
-        let aggregate_functions = &params.aggregate_functions;
-        let offsets_aggregate_states = &params.offsets_aggregate_states;
-        let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;
+        let AggregatorParams {
+            aggregate_functions,
+            offsets_aggregate_states,
+            aggregate_functions_arguments,
+            ..
+        } = &**params;
 
         // This can beneficial for the case of dereferencing
         // This will help improve the performance ~hundreds of megabits per second
-        let aggr_arg_columns_slice = &aggregate_arguments_columns;
-
+        let aggr_arg_columns = Self::aggregate_arguments(block, aggregate_functions_arguments);
+        let aggr_arg_columns = aggr_arg_columns.as_slice();
         let rows = block.num_rows();
         for index in 0..aggregate_functions.len() {
             let function = &aggregate_functions[index];
-            let state_offset = offsets_aggregate_states[index];
-            let function_arguments = &aggr_arg_columns_slice[index];
-            function.accumulate_keys(places, state_offset, function_arguments, rows)?;
+            function.accumulate_keys(
+                places,
+                offsets_aggregate_states[index],
+                aggr_arg_columns[index],
+                rows,
+            )?;
         }
 
         Ok(())
@@ -249,27 +248,25 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.convert_to_full();
+        let block = block.consume_convert_to_full();
+        let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
+        let rows_num = block.num_rows();
 
-        let group_columns = self
-            .params
-            .group_columns
-            .iter()
-            .map(|&index| block.get_by_offset(index))
-            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
-            .collect::<Vec<_>>();
+        self.processed_bytes += block.memory_size();
+        self.processed_rows += rows_num;
+        if self.first_block_start.is_none() {
+            self.first_block_start = Some(Instant::now());
+        }
 
-        unsafe {
-            let rows_num = block.num_rows();
-
+        {
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(hashtable) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
-                        places.push(match hashtable.hashtable.insert_and_entry(key) {
+                        places.push(match unsafe { hashtable.hashtable.insert_and_entry(key) } {
                             Err(entry) => Into::<StateAddr>::into(*entry.get()),
                             Ok(mut entry) => {
                                 let place = self.params.alloc_layout(&mut hashtable.arena);
@@ -286,11 +283,11 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
                 }
                 HashTable::PartitionedHashTable(hashtable) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
-                        places.push(match hashtable.hashtable.insert_and_entry(key) {
+                        places.push(match unsafe { hashtable.hashtable.insert_and_entry(key) } {
                             Err(entry) => Into::<StateAddr>::into(*entry.get()),
                             Ok(mut entry) => {
                                 let place = self.params.alloc_layout(&mut hashtable.arena);
@@ -307,36 +304,34 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
                 }
                 HashTable::AggregateHashTable(hashtable) => {
-                    let group_columns: Vec<Column> =
-                        group_columns.into_iter().map(|c| c.0).collect();
-
-                    let (params_columns, agg_states) = if is_agg_index_block {
+                    let (params_columns, states_index) = if is_agg_index_block {
+                        let num_columns = block.num_columns();
+                        let functions_count = self.params.aggregate_functions.len();
                         (
                             vec![],
-                            (0..self.params.aggregate_functions.len())
-                                .map(|index| {
-                                    block
-                                        .get_by_offset(
-                                            block.num_columns()
-                                                - self.params.aggregate_functions.len()
-                                                + index,
-                                        )
-                                        .value
-                                        .as_column()
-                                        .cloned()
-                                        .unwrap()
-                                })
-                                .collect(),
+                            (num_columns - functions_count..num_columns).collect::<Vec<_>>(),
                         )
                     } else {
-                        (Self::aggregate_arguments(&block, &self.params)?, vec![])
+                        (
+                            Self::aggregate_arguments(
+                                &block,
+                                &self.params.aggregate_functions_arguments,
+                            ),
+                            vec![],
+                        )
+                    };
+
+                    let agg_states = if !states_index.is_empty() {
+                        InputColumns::new_block_proxy(&states_index, &block)
+                    } else {
+                        (&[]).into()
                     };
 
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
-                        &group_columns,
+                        group_columns,
                         &params_columns,
-                        &agg_states,
+                        agg_states,
                         rows_num,
                     )?;
                     Ok(())
@@ -469,6 +464,26 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
+
+                log::info!(
+                    "Aggregated {} to {} rows in {} sec(real: {}). ({} rows/sec, {}/sec, {})",
+                    self.processed_rows,
+                    hashtable.payload.len(),
+                    self.start.elapsed().as_secs_f64(),
+                    if let Some(t) = &self.first_block_start {
+                        t.elapsed().as_secs_f64()
+                    } else {
+                        self.start.elapsed().as_secs_f64()
+                    },
+                    convert_number_size(
+                        self.processed_rows as f64 / self.start.elapsed().as_secs_f64()
+                    ),
+                    convert_byte_size(
+                        self.processed_bytes as f64 / self.start.elapsed().as_secs_f64()
+                    ),
+                    convert_byte_size(self.processed_bytes as f64),
+                );
+
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(

@@ -18,5 +18,5 @@ mod distributed_merge;
 mod sort_and_limit;
 
 pub use distributed::optimize_distributed_query;
-pub use distributed_merge::MergeSourceOptimizer;
+pub use distributed_merge::BroadcastToShuffleOptimizer;
 pub use sort_and_limit::SortAndLimitPushDownOptimizer;

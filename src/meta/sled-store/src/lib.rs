@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(lazy_cell)]
 
 //! sled_store implement a key-value like store backed by sled::Tree.
 //!

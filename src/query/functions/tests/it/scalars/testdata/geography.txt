@@ -1,0 +1,59 @@
+ast            : st_makepoint(40.7127, -74.0059)
+raw expr       : st_makepoint(40.7127, minus(74.0059))
+checked expr   : st_makepoint<Float64, Float64>(to_float64<Decimal(6, 4)>(40.7127_d128(6,4)), to_float64<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d128(6,4))))
+optimized expr : "POINT(40.7127 -74.0059)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(40.7127 -74.0059)'
+
+
+ast            : st_makepoint(lon, lat)
+raw expr       : st_makepoint(lon::Float64, lat::Float64)
+checked expr   : st_makepoint<Float64, Float64>(lon, lat)
+evaluation:
++--------+-----------------+------------+--------------------+
+|        | lon             | lat        | Output             |
++--------+-----------------+------------+--------------------+
+| Type   | Float64         | Float64    | Geography          |
+| Domain | {-48.5..=78.74} | {-45..=90} | Unknown            |
+| Row 0  | 12.57           | 0          | 'POINT(12.57 0)'   |
+| Row 1  | 78.74           | 90         | 'POINT(78.74 90)'  |
+| Row 2  | -48.5           | -45        | 'POINT(-48.5 -45)' |
++--------+-----------------+------------+--------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                               |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| lon    | Float64([12.57, 78.74, -48.5])                                                                                                                                                                     |
+| lat    | Float64([0, 90, -45])                                                                                                                                                                              |
+| Output | GeographyColumn(BinaryColumn { data: 0x0101000000a4703d0ad7232940000000000000000001010000008fc2f5285caf53400000000000805640010100000000000000004048c000000000008046c0, offsets: [0, 21, 42, 63] }) |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : st_geographyfromewkt('POINT(1 2)')
+raw expr       : st_geographyfromewkt('POINT(1 2)')
+checked expr   : st_geographyfromewkt<String>("POINT(1 2)")
+optimized expr : "POINT(1 2)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(1 2)'
+
+
+ast            : st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')
+raw expr       : st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')
+checked expr   : st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)")
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'SRID=4326;POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')
+raw expr       : st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')
+checked expr   : st_geographyfromewkt<String>("LINESTRING(-124.2 42,-120.01 41.99)")
+optimized expr : "LINESTRING(-124.2 42,-120.01 41.99)"
+output type    : Geography
+output domain  : Undefined
+output         : 'LINESTRING(-124.2 42,-120.01 41.99)'
+
+
