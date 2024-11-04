@@ -93,7 +93,7 @@ impl From<SnapshotStoreError> for StorageError {
 
 impl From<SnapshotStoreError> for MetaStorageError {
     fn from(value: SnapshotStoreError) -> Self {
-        MetaStorageError::snapshot_error(&value.source, || {
+        MetaStorageError::damaged(&value.source, || {
             format!("when {}: {}", value.verb, value.context)
         })
     }
