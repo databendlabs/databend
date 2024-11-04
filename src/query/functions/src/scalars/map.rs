@@ -16,9 +16,7 @@ use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::map::KvColumn;
-use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
@@ -36,15 +34,12 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
@@ -242,38 +237,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("map_delete", |_, args_type| {
-        if args_type.len() < 2 {
-            return None;
-        }
-
-        let map_key_type = match args_type[0].remove_nullable() {
-            DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
-                Some(type_tuple[0].clone())
-            }
-            DataType::EmptyMap => None,
-            _ => return None,
-        };
-
-        if let Some(map_key_type) = map_key_type {
-            for arg_type in args_type.iter().skip(1) {
-                if arg_type != &map_key_type {
-                    return None;
-                }
-            }
-        } else {
-            let key_type = &args_type[1];
-            if !check_valid_map_key_type(key_type) {
-                return None;
-            }
-            for arg_type in args_type.iter().skip(2) {
-                if arg_type != key_type {
-                    return None;
-                }
-            }
-        }
-
-        let return_type = args_type[0].clone();
-
+        let return_type = check_map_arg_types(args_type)?;
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "map_delete".to_string(),
@@ -313,8 +277,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             col.index_unchecked(idx)
                                         },
                                     };
-
-                                    delete_key_list.insert(input_key.to_owned());
+                                    match input_key {
+                                        ScalarRef::EmptyArray | ScalarRef::Null => {}
+                                        ScalarRef::Array(arr_col) => {
+                                            for arr_key in arr_col.iter() {
+                                                if arr_key == ScalarRef::Null {
+                                                    continue;
+                                                }
+                                                delete_key_list.insert(arr_key.to_owned());
+                                            }
+                                        }
+                                        _ => {
+                                            delete_key_list.insert(input_key.to_owned());
+                                        }
+                                    }
                                 }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
@@ -369,56 +345,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         );
 
     registry.register_function_factory("map_pick", |_, args_type: &[DataType]| {
-        if args_type.len() < 2 {
-            return None;
-        }
-
-        let map_key_type = match args_type[0].remove_nullable() {
-            DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
-                Some(type_tuple[0].clone())
-            }
-            DataType::EmptyMap => None,
-            _ => return None,
-        };
-
-        // the second argument can be an array of keys.
-        let (is_array, array_key_type) = match args_type[1].remove_nullable() {
-            DataType::Array(box key_type) => (true, Some(key_type.clone())),
-            DataType::EmptyArray => (true, None),
-            _ => (false, None),
-        };
-
-        if let Some(map_key_type) = map_key_type {
-            if is_array {
-                if args_type.len() != 2 || map_key_type != array_key_type {
-                    return None;
-                }
-            } else {
-                for arg_type in args_type.iter().skip(1) {
-                    if arg_type != &map_key_type {
-                        return None;
-                    }
-                }
-            }
-        } else {
-            if is_array {
-                if args_type.len() != 2 || !check_valid_map_key_type(array_key_type) {
-                    return None;
-                }
-            } else {
-                let key_type = &args_type[1];
-                if !check_valid_map_key_type(key_type) {
-                    return None;
-                }
-                for arg_type in args_type.iter().skip(2) {
-                    if arg_type != key_type {
-                        return None;
-                    }
-                }
-            }
-        }
-        let return_type = args_type[0].clone();
-
+        let return_type = check_map_arg_types(args_type)?;
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "map_pick".to_string(),
@@ -510,15 +437,71 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
+// Check map function arg types
+// 1. The first arg must be a Map or EmptyMap.
+// 2. The second arg can be an Array or EmptyArray.
+// 3. Multiple args with same key type is also valid.
+fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
+    if args_type.len() < 2 {
+        return None;
+    }
+
+    let map_key_type = match args_type[0].remove_nullable() {
+        DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
+            Some(type_tuple[0].clone())
+        }
+        DataType::EmptyMap => None,
+        _ => return None,
+    };
+
+    // the second argument can be an array of keys.
+    let (is_array, array_key_type) = match args_type[1].remove_nullable() {
+        DataType::Array(box key_type) => (true, Some(key_type.clone())),
+        DataType::EmptyArray => (true, None),
+        _ => (false, None),
+    };
+    if is_array && args_type.len() != 2 {
+        return None;
+    }
+    if let Some(map_key_type) = map_key_type {
+        if is_array {
+            if let Some(array_key_type) = array_key_type {
+                if map_key_type != array_key_type {
+                    return None;
+                }
+            }
+        } else {
+            for arg_type in args_type.iter().skip(1) {
+                if arg_type != &map_key_type {
+                    return None;
+                }
+            }
+        }
+    } else if is_array {
+        if let Some(array_key_type) = array_key_type {
+            if !check_valid_map_key_type(&array_key_type) {
+                return None;
+            }
+        }
+    } else {
+        let key_type = &args_type[1];
+        if !check_valid_map_key_type(key_type) {
+            return None;
+        }
+        for arg_type in args_type.iter().skip(2) {
+            if arg_type != key_type {
+                return None;
+            }
+        }
+    }
+    let return_type = args_type[0].clone();
+    Some(return_type)
+}
+
 fn check_valid_map_key_type(key_type: &DataType) -> bool {
-    if key_type.is_boolean()
+    key_type.is_boolean()
         || key_type.is_string()
         || key_type.is_numeric()
         || key_type.is_decimal()
         || key_type.is_date_or_date_time()
-    {
-        true
-    } else {
-        false
-    }
 }

@@ -297,6 +297,11 @@ fn test_map_delete(file: &mut impl Write) {
         "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 'k3', 'k2')",
         &[],
     );
+    run_ast(
+        file,
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2'])",
+        &[],
+    );
 
     // Deleting keys from a nested map
     let columns = [
@@ -386,6 +391,10 @@ fn test_map_delete(file: &mut impl Write) {
 fn test_map_pick(file: &mut impl Write) {
     run_ast(file, "map_pick({'a':1,'b':2,'c':3}, 'a', 'b')", &[]);
     run_ast(file, "map_pick({'a':1,'b':2,'c':3}, ['a', 'b'])", &[]);
+    run_ast(file, "map_pick({'a':1,'b':2,'c':3}, [])", &[]);
+    run_ast(file, "map_pick({1:'a',2:'b',3:'c'}, 1, 3)", &[]);
+    run_ast(file, "map_pick({}, 'a', 'b')", &[]);
+    run_ast(file, "map_pick({}, [])", &[]);
 
     let columns = [
         ("a_col", StringType::from_data(vec!["a", "b", "c"])),
