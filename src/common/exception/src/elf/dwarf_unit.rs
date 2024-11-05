@@ -16,16 +16,21 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
-use gimli::{Abbreviations, DebugInfo, DebugLineStr, DebugLineStrOffset, DebugStrOffsets};
+use gimli::Abbreviations;
 use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::DebugAddr;
 use gimli::DebugAddrBase;
+use gimli::DebugAddrIndex;
+use gimli::DebugInfo;
 use gimli::DebugLine;
 use gimli::DebugLineOffset;
+use gimli::DebugLineStr;
+use gimli::DebugLineStrOffset;
 use gimli::DebugLocListsBase;
 use gimli::DebugRngListsBase;
 use gimli::DebugStr;
+use gimli::DebugStrOffsets;
 use gimli::DebugStrOffsetsBase;
 use gimli::EndianSlice;
 use gimli::EntriesTreeNode;
@@ -54,7 +59,7 @@ pub struct UnitAttrs<R: Reader> {
 
     pub ranges_offset: Option<RangeListsOffset<R::Offset>>,
 
-    addr_base: DebugAddrBase<R::Offset>,
+    pub addr_base: DebugAddrBase<R::Offset>,
     loclists_base: DebugLocListsBase<R::Offset>,
     rnglists_base: DebugRngListsBase<R::Offset>,
     pub str_offsets_base: DebugStrOffsetsBase<R::Offset>,
@@ -95,9 +100,9 @@ impl<R: Reader> UnitAttrs<R> {
             (gimli::DW_AT_name, v) => {
                 self.name = v.string_value(debug_str);
             }
-            (gimli::DW_AT_entry_pc, AttributeValue::Addr(v)) => {
-                self.base_addr = Some(v);
-            }
+            // (gimli::DW_AT_entry_pc, AttributeValue::Addr(v)) => {
+            //     self.base_addr = Some(v);
+            // }
             (gimli::DW_AT_comp_dir, v) => {
                 self.comp_dir = v.string_value(debug_str);
             }
@@ -151,89 +156,22 @@ pub struct Unit<R: Reader> {
 
 impl<R: Reader> Unit<R> {
     pub fn match_range(&self, probe: u64, offset: RangeListsOffset<R::Offset>) -> bool {
-        let mut base_addr = self.attrs.base_addr;
-        if let Ok(mut ranges) = self.range_list.raw_ranges(offset, self.head.encoding()) {
+        if let Ok(mut ranges) = self.range_list.ranges(
+            offset,
+            self.head.encoding(),
+            self.attrs.low_pc.unwrap_or(0),
+            &self.debug_addr,
+            self.attrs.addr_base,
+        ) {
             while let Ok(Some(range)) = ranges.next() {
-                match range {
-                    RawRngListEntry::BaseAddress { addr } => {
-                        base_addr = Some(addr);
-                    }
-                    RawRngListEntry::AddressOrOffsetPair { begin, end } => {
-                        if matches!(base_addr, Some(base_addr) if probe >= begin + base_addr && probe < end + base_addr)
-                        {
-                            return true;
-                        }
-                    }
-                    RawRngListEntry::BaseAddressx { addr } => {
-                        let Ok(addr) = self.debug_addr.get_address(
-                            self.head.encoding().address_size,
-                            self.attrs.addr_base,
-                            addr,
-                        ) else {
-                            return false;
-                        };
-
-                        base_addr = Some(addr);
-                    }
-                    RawRngListEntry::StartxEndx { begin, end } => {
-                        let Ok(begin) = self.debug_addr.get_address(
-                            self.head.encoding().address_size,
-                            self.attrs.addr_base,
-                            begin,
-                        ) else {
-                            return false;
-                        };
-
-                        let Ok(end) = self.debug_addr.get_address(
-                            self.head.encoding().address_size,
-                            self.attrs.addr_base,
-                            end,
-                        ) else {
-                            return false;
-                        };
-
-                        if probe >= begin && probe < end {
-                            return true;
-                        }
-                    }
-                    RawRngListEntry::StartxLength { begin, length } => {
-                        let Ok(begin) = self.debug_addr.get_address(
-                            self.head.encoding().address_size,
-                            self.attrs.addr_base,
-                            begin,
-                        ) else {
-                            return false;
-                        };
-
-                        let end = begin + length;
-                        if begin != end && probe >= begin && probe < end {
-                            return true;
-                        }
-                    }
-                    RawRngListEntry::OffsetPair { begin, end } => {
-                        if matches!(base_addr, Some(base_addr) if probe >= (base_addr + begin) && probe < (base_addr + end))
-                        {
-                            return true;
-                        }
-                    }
-                    RawRngListEntry::StartEnd { begin, end } => {
-                        if probe >= begin && probe < end {
-                            return true;
-                        }
-                    }
-                    RawRngListEntry::StartLength { begin, length } => {
-                        let end = begin + length;
-                        if probe >= begin && probe < end {
-                            return true;
-                        }
-                    }
+                if probe >= range.begin && probe < range.end {
+                    return true;
                 }
             }
         }
 
         false
     }
-
 
     fn find_line(&self, probe: u64) -> gimli::Result<Option<CallLocation>> {
         if let Some(offset) = &self.attrs.debug_line_offset {
@@ -308,9 +246,9 @@ impl<R: Reader> Unit<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         };
@@ -341,5 +279,11 @@ impl<R: Reader> Unit<R> {
 
         inlined_functions.push(location);
         Ok(inlined_functions)
+    }
+
+    pub fn get_address(&self, idx: DebugAddrIndex<R::Offset>) -> u64 {
+        self.debug_addr
+            .get_address(self.head.encoding().address_size, self.attrs.addr_base, idx)
+            .unwrap()
     }
 }

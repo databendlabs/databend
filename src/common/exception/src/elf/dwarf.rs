@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use gimli::{Abbreviations, DebugLineStr, DebugLineStrOffset, DebugStrOffsets};
+use gimli::Abbreviations;
 use gimli::AttributeValue;
 use gimli::DebugAbbrev;
 use gimli::DebugAbbrevOffset;
@@ -24,11 +24,14 @@ use gimli::DebugAranges;
 use gimli::DebugInfo;
 use gimli::DebugInfoOffset;
 use gimli::DebugLine;
+use gimli::DebugLineStr;
+use gimli::DebugLineStrOffset;
 use gimli::DebugLocListsBase;
 use gimli::DebugRanges;
 use gimli::DebugRngLists;
 use gimli::DebugRngListsBase;
 use gimli::DebugStr;
+use gimli::DebugStrOffsets;
 use gimli::DebugStrOffsetsBase;
 use gimli::EndianSlice;
 use gimli::Error;
@@ -65,7 +68,6 @@ pub struct Dwarf {
     debug_abbrev: DebugAbbrev<EndianSlice<'static, NativeEndian>>,
     debug_addr: DebugAddr<EndianSlice<'static, NativeEndian>>,
     debug_range_list: RangeLists<EndianSlice<'static, NativeEndian>>,
-
     // debug_info: &'a [u8],
     // debug_aranges: &'a [u8],
     // debug_ranges: &'a [u8],

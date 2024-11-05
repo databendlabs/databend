@@ -60,9 +60,9 @@ impl<R: Reader> SubprogramAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
@@ -70,7 +70,10 @@ impl<R: Reader> SubprogramAttrs<R> {
 }
 
 impl<R: Reader> Unit<R> {
-    pub(crate) fn find_subprogram(&self, probe: u64) -> gimli::Result<Option<UnitOffset<R::Offset>>> {
+    pub(crate) fn find_subprogram(
+        &self,
+        probe: u64,
+    ) -> gimli::Result<Option<UnitOffset<R::Offset>>> {
         let mut entries = self.head.entries_raw(&self.abbreviations, None)?;
 
         while !entries.is_empty() {
@@ -85,7 +88,7 @@ impl<R: Reader> Unit<R> {
                     }
 
                     let range_match = match self.attrs.ranges_offset {
-                        None => true,
+                        None => false,
                         Some(range_offset) => self.match_range(probe, range_offset),
                     };
 
