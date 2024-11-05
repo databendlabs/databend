@@ -2759,81 +2759,6 @@ CreateTable(
                 protocol: "s3",
                 name: "testbucket",
                 path: "/admin/data/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "aws_key_id": "minioadmin",
-                        "aws_secret_key": "minioadmin",
-                        "endpoint_url": "http://127.0.0.1:9900",
-                    },
-                },
-            },
-        ),
-        cluster_by: None,
-        table_options: {},
-        as_query: None,
-        table_type: Normal,
-    },
-)
-
-
----------- Input ----------
-create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-    connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-    location_prefix = 'db';
----------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
----------- AST ------------
-CreateTable(
-    CreateTableStmt {
-        create_option: CreateIfNotExists,
-        catalog: None,
-        database: Some(
-            Identifier {
-                span: Some(
-                    27..28,
-                ),
-                name: "a",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        table: Identifier {
-            span: Some(
-                29..30,
-            ),
-            name: "b",
-            quote: None,
-            ident_type: None,
-        },
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            span: Some(
-                                32..33,
-                            ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        data_type: Int32,
-                        expr: None,
-                        comment: None,
-                    },
-                ],
-                None,
-            ),
-        ),
-        engine: None,
-        uri_location: Some(
-            UriLocation {
-                protocol: "s3",
-                name: "testbucket",
-                path: "/admin/data/",
-                part_prefix: "db",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11299,7 +11224,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11344,7 +11268,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11389,7 +11312,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11434,7 +11356,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -14050,7 +13971,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14127,7 +14047,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14206,7 +14125,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14287,7 +14205,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14358,7 +14275,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1:9900",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14414,7 +14330,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14562,7 +14477,6 @@ CopyIntoLocation(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {},
@@ -14728,7 +14642,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -15009,7 +14922,6 @@ CopyIntoTable(
                     protocol: "fs",
                     name: "",
                     path: "/path/to/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -15084,7 +14996,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "databend",
                     path: "/books.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -17249,7 +17160,6 @@ Query(
                                 protocol: "s3",
                                 name: "test",
                                 path: "/bucket",
-                                part_prefix: "",
                                 connection: Connection {
                                     visited_keys: {},
                                     conns: {},
@@ -22350,7 +22260,6 @@ AttachTable(
             protocol: "s3",
             name: "a",
             path: "/",
-            part_prefix: "",
             connection: Connection {
                 visited_keys: {},
                 conns: {

@@ -16,7 +16,6 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 
-use bytes::Buf;
 use opendal::Reader;
 
 use super::read_basic::read_u32;
@@ -179,46 +178,6 @@ pub fn read_meta<Reader: Read + Seek>(reader: &mut Reader) -> Result<Vec<ColumnM
     deserialize_meta(meta_buf)
 }
 
-pub async fn read_meta_async(reader: Reader, total_len: usize) -> Result<Vec<ColumnMeta>> {
-    // Pre-read footer data to reduce IO.
-    let pre_read_len = total_len.min(DEFAULT_FOOTER_SIZE as usize);
-
-    let buf = reader
-        .read(total_len as u64 - pre_read_len as u64..total_len as u64)
-        .await
-        .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;
-    if buf.len() < pre_read_len {
-        return Err(Error::OutOfSpec("file is too short".to_string()));
-    }
-
-    let mut footer_reader = std::io::Cursor::new(buf.to_bytes());
-    // EOS(8 bytes) + meta_size(4 bytes) = 12 bytes
-    footer_reader.seek(SeekFrom::End(-12))?;
-    let mut buf = vec![0u8; 4];
-    let meta_size = read_u32(&mut footer_reader, buf.as_mut_slice())? as usize;
-
-    let footer_size = meta_size + 16;
-    if footer_size <= pre_read_len {
-        footer_reader.seek(SeekFrom::End(-16 - meta_size as i64))?;
-        let mut meta_buf = vec![0u8; meta_size];
-        footer_reader.read_exact(&mut meta_buf)?;
-        deserialize_meta(meta_buf)
-    } else {
-        // The readded data is not long enough to hold the meta data.
-        // Should read again.
-        let buf = reader
-            .read(total_len as u64 - footer_size as u64..total_len as u64)
-            .await
-            .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;
-        if buf.len() < footer_size {
-            return Err(Error::OutOfSpec("file is too short".to_string()));
-        }
-
-        let mut final_reader = std::io::Cursor::new(buf.to_bytes());
-        read_meta(&mut final_reader)
-    }
-}
-
 pub fn infer_schema<Reader: Read + Seek>(reader: &mut Reader) -> Result<Schema> {
     // EOS(8 bytes) + meta_size(4 bytes) + schema_size(4bytes) = 16 bytes
     reader.seek(SeekFrom::End(-16))?;
@@ -235,31 +194,52 @@ pub fn infer_schema<Reader: Read + Seek>(reader: &mut Reader) -> Result<Schema> 
     Ok(schema)
 }
 
-pub async fn infer_schema_async(reader: Reader, total_len: u64) -> Result<Schema> {
-    // EOS(8 bytes) + meta_size(4 bytes) + schema_size(4bytes) = 16 bytes
+pub async fn read_meta_async(
+    reader: Reader,
+    total_len: usize,
+) -> Result<(Vec<ColumnMeta>, Schema)> {
+    // Pre-read footer data to reduce IO.
+    let pre_read_len = total_len.min(DEFAULT_FOOTER_SIZE as usize);
+
     let buf = reader
-        .read(total_len - 16..total_len)
+        .read(total_len as u64 - pre_read_len as u64..total_len as u64)
         .await
         .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;
-    if buf.len() != 16 {
+    if buf.len() < pre_read_len {
         return Err(Error::OutOfSpec("file is too short".to_string()));
     }
 
-    let mut memory_reader = buf.reader();
-
+    // EOS(8 bytes) + meta_size(4 bytes) + schema_size(4bytes) = 16 bytes
+    let footer_size = 16;
+    let mut footer_reader = std::io::Cursor::new(buf.to_bytes());
+    footer_reader.seek(SeekFrom::End(-footer_size))?;
     let mut buf = vec![0u8; 4];
-    let schema_size = read_u32(&mut memory_reader, buf.as_mut_slice())? as u64;
-    let column_meta_size = read_u32(&mut memory_reader, buf.as_mut_slice())? as u64;
+    let schema_size = read_u32(&mut footer_reader, buf.as_mut_slice())? as i64;
+    let meta_size = read_u32(&mut footer_reader, buf.as_mut_slice())? as i64;
 
-    let schema_bytes = reader
-        .read(total_len - column_meta_size - schema_size..total_len - column_meta_size)
-        .await
-        .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?
-        .to_vec();
-    if (schema_bytes.len() as u64) < schema_size {
-        return Err(Error::OutOfSpec("file is too short".to_string()));
+    let total_size = schema_size + meta_size + footer_size;
+    if total_size > pre_read_len as i64 {
+        // The readded data is not long enough to hold the meta data.
+        // Should read again.
+        let buf = reader
+            .read(total_len as u64 - total_size as u64..total_len as u64)
+            .await
+            .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;
+        if buf.len() < total_size as usize {
+            return Err(Error::OutOfSpec("file is too short".to_string()));
+        }
+        footer_reader = std::io::Cursor::new(buf.to_bytes());
+    } else {
+        footer_reader.seek(SeekFrom::End(-total_size))?;
     }
 
-    let (schema, _) = deserialize_schema(&schema_bytes).expect("deserialize schema error");
-    Ok(schema)
+    let mut schema_buf = vec![0u8; schema_size as usize];
+    footer_reader.read_exact(&mut schema_buf)?;
+    let (schema, _) = deserialize_schema(&schema_buf)?;
+
+    footer_reader.seek(SeekFrom::End(-footer_size - meta_size))?;
+    let mut meta_buf = vec![0u8; meta_size as usize];
+    footer_reader.read_exact(&mut meta_buf)?;
+    let meta = deserialize_meta(meta_buf)?;
+    Ok((meta, schema))
 }

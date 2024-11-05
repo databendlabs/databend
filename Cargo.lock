@@ -4172,6 +4172,7 @@ dependencies = [
  "arrow",
  "arrow-array",
  "arrow-ipc",
+ "arrow-schema",
  "async-backtrace",
  "async-channel 1.9.0",
  "async-trait",

@@ -36,6 +36,7 @@ use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -139,6 +140,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         schema.clone(),
         data_accessor.clone(),
         &None,
+        FuseStorageFormat::Parquet,
         segment_locations,
     )
     .await?;
@@ -272,6 +274,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             schema.clone(),
             data_accessor.clone(),
             &None,
+            FuseStorageFormat::Parquet,
             segment_locations,
         )
         .await?;
