@@ -71,7 +71,7 @@ impl<R: Reader> SubprogramAttrs<R> {
 
 impl<R: Reader> Unit<R> {
     pub(crate) fn find_subprogram(&self, probe: u64) -> gimli::Result<Option<UnitOffset<R::Offset>>> {
-        let entries = self.head.entries_raw(&self.abbreviations, None)?;
+        let mut entries = self.head.entries_raw(&self.abbreviations, None)?;
 
         while !entries.is_empty() {
             let dw_die_offset = entries.next_offset();

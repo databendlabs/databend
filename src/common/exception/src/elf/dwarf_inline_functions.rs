@@ -262,7 +262,7 @@ impl<R: Reader> Unit<R> {
         Ok(())
     }
 
-    fn inlined_functions(&self, entries: EntriesRaw<R>, probe: u64, depth: isize) -> Result<()> {
+    fn inlined_functions(&self, mut entries: EntriesRaw<R>, probe: u64, depth: isize) -> Result<()> {
         loop {
             let next_depth = entries.next_depth();
 
