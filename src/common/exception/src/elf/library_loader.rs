@@ -15,6 +15,7 @@
 use std::ffi::CStr;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fmt::Write;
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -34,7 +35,6 @@ use crate::elf::library_manager::Library;
 use crate::elf::library_symbol::Symbol;
 use crate::elf::ElfFile;
 use crate::exception_backtrace_elf;
-use std::fmt::Write;
 
 #[derive(Debug)]
 pub struct LibraryLoader {

@@ -16,7 +16,7 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
-use gimli::{Abbreviations, DebugStr, ReaderOffset};
+use gimli::{Abbreviations, DebugInfo, DebugLineStr, DebugLineStrOffset};
 use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::DebugAddr;
@@ -25,6 +25,7 @@ use gimli::DebugLine;
 use gimli::DebugLineOffset;
 use gimli::DebugLocListsBase;
 use gimli::DebugRngListsBase;
+use gimli::DebugStr;
 use gimli::DebugStrOffsetsBase;
 use gimli::EndianSlice;
 use gimli::EntriesTreeNode;
@@ -35,6 +36,7 @@ use gimli::RangeLists;
 use gimli::RangeListsOffset;
 use gimli::RawRngListEntry;
 use gimli::Reader;
+use gimli::ReaderOffset;
 use gimli::UnitHeader;
 use gimli::UnitOffset;
 
@@ -55,7 +57,7 @@ pub struct UnitAttrs<R: Reader> {
     addr_base: DebugAddrBase<R::Offset>,
     loclists_base: DebugLocListsBase<R::Offset>,
     rnglists_base: DebugRngListsBase<R::Offset>,
-    str_offsets_base: DebugStrOffsetsBase<R::Offset>,
+    pub str_offsets_base: DebugStrOffsetsBase<R::Offset>,
     debug_line_offset: Option<DebugLineOffset<R::Offset>>,
 }
 
@@ -75,41 +77,6 @@ impl<R: Reader> UnitAttrs<R> {
             rnglists_base: DebugRngListsBase(R::Offset::from_u8(0)),
             str_offsets_base: DebugStrOffsetsBase(R::Offset::from_u8(0)),
         }
-    }
-
-    pub fn file_name(&self) -> String {
-        // let mut path = PathBuf::new();
-        //
-        // if let Some(AttributeValue::String(ref comp_dir)) = self.comp_dir {
-        //     path.push(comp_dir.to_string_lossy().unwrap().into_owned());
-        // }
-        //
-        // if let Some(ref file) = file {
-        //     path.push(file.to_string_lossy().unwrap().into_owned());
-        //     // if file.directory_index() != 0 {
-        //     //     if let Some(AttributeValue::String(v)) = file.directory(rows.header()) {
-        //     //         path.push(v.to_string_lossy().into_owned());
-        //     //     }
-        //     // }
-        // }
-        //
-        // if let AttributeValue::String(v) = file.path_name() {
-        //     path.push(v.to_string_lossy().into_owned());
-        // }
-        //
-        // if let Some(file_name) = self.name {
-        //     let file_path = Path::new(file_name.to_string().unwrap());
-        //
-        //     return match self.comp_dir {
-        //         None => format!("{}", file_path.display()),
-        //         Some(ref comp_dir) => match comp_dir.to_string() {
-        //             Err(_) => format!("{}", file_path.display()),
-        //             Ok(dir) => format!("{}", Path::new(dir).join(file_path).display()),
-        //         },
-        //     };
-        // }
-
-        String::from("<unknown>")
     }
 
     pub fn set_attr(&mut self, debug_str: &DebugStr<R>, attr: Attribute<R>) {
@@ -167,7 +134,10 @@ pub struct Unit<R: Reader> {
     pub(crate) head: UnitHeader<R>,
 
     pub(crate) debug_str: DebugStr<R>,
+    pub(crate) debug_info: DebugInfo<R>,
     pub(crate) debug_line: DebugLine<R>,
+    pub(crate) debug_line_str: DebugLineStr<R>,
+    pub(crate) debug_line_str_offset: DebugLineStrOffset<R>,
     pub(crate) debug_addr: DebugAddr<R>,
     pub(crate) range_list: RangeLists<R>,
 
@@ -264,10 +234,9 @@ impl<R: Reader> Unit<R> {
         false
     }
 
-    fn find_line(&self, probe: u64) -> gimli::Result<Option<CallLocation>> {
-        // let mut location = Location::unknown();
-        // location.file = self.attrs.file_name(None);
 
+
+    fn find_line(&self, probe: u64) -> gimli::Result<Option<CallLocation>> {
         if let Some(offset) = &self.attrs.debug_line_offset {
             let program = self.debug_line.program(
                 *offset,

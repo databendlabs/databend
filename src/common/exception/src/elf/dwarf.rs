@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use gimli::{Abbreviations, DebugStr};
+use gimli::Abbreviations;
 use gimli::AttributeValue;
 use gimli::DebugAbbrev;
 use gimli::DebugAbbrevOffset;
@@ -28,16 +28,17 @@ use gimli::DebugLocListsBase;
 use gimli::DebugRanges;
 use gimli::DebugRngLists;
 use gimli::DebugRngListsBase;
+use gimli::DebugStr;
 use gimli::DebugStrOffsetsBase;
 use gimli::EndianSlice;
 use gimli::Error;
 use gimli::LittleEndian;
+use gimli::NativeEndian;
 use gimli::RangeLists;
 use gimli::Reader;
 use gimli::UnitHeader;
 use gimli::UnitType;
 use object::CompressionFormat;
-use gimli::NativeEndian;
 use object::Object;
 use object::ObjectSection;
 
@@ -131,7 +132,10 @@ impl Dwarf {
         None
     }
 
-    fn get_unit(&self, head: UnitHeader<EndianSlice<'static, NativeEndian>>) -> gimli::Result<Option<Unit<EndianSlice<'static, NativeEndian>>>> {
+    fn get_unit(
+        &self,
+        head: UnitHeader<EndianSlice<'static, NativeEndian>>,
+    ) -> gimli::Result<Option<Unit<EndianSlice<'static, NativeEndian>>>> {
         let abbrev_offset = head.debug_abbrev_offset();
         let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
             return Ok(None);

@@ -192,39 +192,35 @@ impl StackTrace {
     #[cfg(target_os = "linux")]
     fn fmt_frames(&self, f: &mut String, address: bool) -> std::fmt::Result {
         let mut idx = 0;
-        crate::elf::LibraryManager::instance().resolve_frames(
-            &self.frames,
-            address,
-            |frame| {
-                write!(f, "{:4}: {}", idx, frame.symbol)?;
+        crate::elf::LibraryManager::instance().resolve_frames(&self.frames, address, |frame| {
+            write!(f, "{:4}: {}", idx, frame.symbol)?;
 
-                if frame.inlined {
-                    write!(f, "[inlined]")?;
-                } else if frame.physical_address != frame.virtual_address {
-                    write!(f, "@{:x}", frame.physical_address)?;
+            if frame.inlined {
+                write!(f, "[inlined]")?;
+            } else if frame.physical_address != frame.virtual_address {
+                write!(f, "@{:x}", frame.physical_address)?;
+            }
+
+            #[allow(clippy::writeln_empty_string)]
+            writeln!(f, "")?;
+            // if let Ok(location) = frame.location {
+            write!(f, "             at {}", frame.location.file)?;
+
+            if let Some(line) = frame.location.line {
+                write!(f, ":{}", line)?;
+
+                if let Some(column) = frame.location.column {
+                    write!(f, ":{}", column)?;
                 }
+            }
 
-                #[allow(clippy::writeln_empty_string)]
-                writeln!(f, "")?;
-                // if let Ok(location) = frame.location {
-                write!(f, "             at {}", frame.location.file)?;
+            #[allow(clippy::writeln_empty_string)]
+            writeln!(f, "")?;
+            // }
 
-                if let Some(line) = frame.location.line {
-                    write!(f, ":{}", line)?;
-
-                    if let Some(column) = frame.location.column {
-                        write!(f, ":{}", column)?;
-                    }
-                }
-
-                #[allow(clippy::writeln_empty_string)]
-                writeln!(f, "")?;
-                // }
-
-                idx += 1;
-                Ok(())
-            },
-        )
+            idx += 1;
+            Ok(())
+        })
     }
 }
 

@@ -64,9 +64,9 @@ impl<R: Reader> SubprogramAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
@@ -79,7 +79,11 @@ impl<R: Reader> Unit<R> {
         self.traverse_subprogram(entries.root().ok()?, probe)
     }
 
-    fn traverse_subprogram(&self, mut node: EntriesTreeNode<R>, probe: u64) -> Option<UnitOffset<R::Offset>> {
+    fn traverse_subprogram(
+        &self,
+        mut node: EntriesTreeNode<R>,
+        probe: u64,
+    ) -> Option<UnitOffset<R::Offset>> {
         let mut children = node.children();
         while let Some(child) = children.next().ok()? {
             if child.entry().tag() == gimli::DW_TAG_subprogram {

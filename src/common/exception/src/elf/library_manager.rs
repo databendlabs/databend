@@ -22,9 +22,9 @@ use object::Object;
 use once_cell::sync::OnceCell;
 
 use crate::elf::dwarf::Dwarf;
+use crate::elf::library_loader::LibraryLoader;
 use crate::elf::library_symbol::Symbol;
 use crate::elf::ElfFile;
-use crate::elf::library_loader::LibraryLoader;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
 use crate::exception_backtrace_elf;
