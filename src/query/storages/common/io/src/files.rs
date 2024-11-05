@@ -68,10 +68,12 @@ impl Files {
                     .map(|location| Self::delete_files(self.operator.clone(), location.to_vec()))
             });
 
+            // At most 3 concurrent batch deletions allowed, mitigate rate limit errors
+            let permit = (threads_nums / 2).clamp(1, 3);
             execute_futures_in_parallel(
                 tasks,
                 threads_nums,
-                threads_nums * 2,
+                permit,
                 "batch-remove-files-worker".to_owned(),
             )
             .await?
