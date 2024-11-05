@@ -221,11 +221,10 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
         rule! {
             #literal_string
             ~ (CONNECTION ~ ^"=" ~ ^#connection_options ~ ","?)?
-            ~ (LOCATION_PREFIX ~ ^"=" ~ ^#literal_string ~ ","?)?
         },
-        |(location, connection_opts, location_prefix)| {
+        |(location, connection_opts)| {
             if let Some(stripped) = location.strip_prefix('@') {
-                if location_prefix.is_none() && connection_opts.is_none() {
+                if connection_opts.is_none() {
                     Ok(FileLocation::Stage(stripped.to_string()))
                 } else {
                     Err(nom::Err::Failure(ErrorKind::Other(
@@ -233,16 +232,11 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                     )))
                 }
             } else {
-                let part_prefix = if let Some((_, _, p, _)) = location_prefix {
-                    p
-                } else {
-                    "".to_string()
-                };
                 // fs location is not a valid url, let's check it in advance.
 
                 let conns = connection_opts.map(|v| v.2).unwrap_or_default();
 
-                let uri = UriLocation::from_uri(location, part_prefix, conns)
+                let uri = UriLocation::from_uri(location, conns)
                     .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid uri")))?;
                 Ok(FileLocation::Uri(uri))
             }

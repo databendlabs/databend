@@ -282,14 +282,20 @@ impl Metadata {
 
     pub fn add_virtual_column(
         &mut self,
-        table_index: IndexType,
-        source_column_name: String,
-        source_column_index: IndexType,
+        base_column: &BaseTableColumn,
+        column_id: u32,
         column_name: String,
         data_type: TableDataType,
         key_paths: Scalar,
         old_index: Option<IndexType>,
+        is_created: bool,
     ) -> IndexType {
+        let table_index = base_column.table_index;
+        let source_column_name = base_column.column_name.clone();
+        let source_column_index = base_column.column_index;
+        // The type of source coumn is variant, not a nested type, must have `column_id`.
+        let source_column_id = base_column.column_id.unwrap();
+
         // If the function that generates the virtual column already has an index,
         // we can use that index and avoid generate a new one.
         let column_index = if let Some(old_index) = old_index {
@@ -301,10 +307,13 @@ impl Metadata {
             table_index,
             source_column_name,
             source_column_index,
+            source_column_id,
+            column_id,
             column_index,
             column_name,
             data_type,
             key_paths,
+            is_created,
         });
         if old_index.is_some() {
             self.columns[column_index] = column;
@@ -389,7 +398,6 @@ impl Metadata {
                 None
             };
 
-            // TODO handle Tuple inside Array.
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
@@ -602,12 +610,15 @@ pub struct VirtualColumn {
     pub table_index: IndexType,
     pub source_column_name: String,
     pub source_column_index: IndexType,
+    pub source_column_id: u32,
+    pub column_id: u32,
     pub column_index: IndexType,
     pub column_name: String,
     pub data_type: TableDataType,
 
     /// Paths to generate virtual column from source column
     pub key_paths: Scalar,
+    pub is_created: bool,
 }
 
 #[derive(Clone, Debug)]

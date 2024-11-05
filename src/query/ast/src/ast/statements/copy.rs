@@ -342,7 +342,6 @@ pub struct UriLocation {
     pub protocol: String,
     pub name: String,
     pub path: String,
-    pub part_prefix: String,
     pub connection: Connection,
 }
 
@@ -351,23 +350,17 @@ impl UriLocation {
         protocol: String,
         name: String,
         path: String,
-        part_prefix: String,
         conns: BTreeMap<String, String>,
     ) -> Self {
         Self {
             protocol,
             name,
             path,
-            part_prefix,
             connection: Connection::new(conns),
         }
     }
 
-    pub fn from_uri(
-        uri: String,
-        part_prefix: String,
-        conns: BTreeMap<String, String>,
-    ) -> Result<Self> {
+    pub fn from_uri(uri: String, conns: BTreeMap<String, String>) -> Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
             if !path.starts_with('/') {
@@ -380,7 +373,6 @@ impl UriLocation {
                 "fs".to_string(),
                 "".to_string(),
                 path.to_string(),
-                part_prefix,
                 BTreeMap::default(),
             ));
         }
@@ -411,7 +403,6 @@ impl UriLocation {
             protocol,
             name,
             path,
-            part_prefix,
             connection: Connection::new(conns),
         })
     }
@@ -428,9 +419,6 @@ impl Display for UriLocation {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
         write!(f, "{}", self.connection)?;
-        if !self.part_prefix.is_empty() {
-            write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
-        }
         Ok(())
     }
 }

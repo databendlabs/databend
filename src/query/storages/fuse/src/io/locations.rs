@@ -55,9 +55,6 @@ static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
 pub struct TableMetaLocationGenerator {
     prefix: String,
 
-    // TODO @dantengsky remove this? seems no longer supported https://docs.databend.com/sql/sql-commands/ddl/table/ddl-create-table-external-location
-    part_prefix: String,
-
     block_location_prefix: String,
     segment_info_location_prefix: String,
     bloom_index_location_prefix: String,
@@ -65,42 +62,21 @@ pub struct TableMetaLocationGenerator {
 
 impl TableMetaLocationGenerator {
     pub fn with_prefix(prefix: String) -> Self {
+        let block_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_BLOCK_PREFIX,);
+        let bloom_index_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
+        let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
+
         Self {
             prefix,
-            part_prefix: "".to_string(),
-            block_location_prefix: "".to_string(),
-            segment_info_location_prefix: "".to_string(),
-            bloom_index_location_prefix: "".to_string(),
+            block_location_prefix,
+            segment_info_location_prefix,
+            bloom_index_location_prefix,
         }
-        .gen_prefixes()
-    }
-
-    pub fn with_part_prefix(mut self, part_prefix: String) -> Self {
-        self.part_prefix = part_prefix;
-        self.gen_prefixes()
-    }
-
-    fn gen_prefixes(mut self) -> Self {
-        let block_location_prefix = format!(
-            "{}/{}/{}",
-            &self.prefix, FUSE_TBL_BLOCK_PREFIX, &self.part_prefix,
-        );
-        let bloom_index_location_prefix =
-            format!("{}/{}/", &self.prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
-        let segment_info_location_prefix = format!("{}/{}/", &self.prefix, FUSE_TBL_SEGMENT_PREFIX);
-
-        self.block_location_prefix = block_location_prefix;
-        self.bloom_index_location_prefix = bloom_index_location_prefix;
-        self.segment_info_location_prefix = segment_info_location_prefix;
-        self
     }
 
     pub fn prefix(&self) -> &str {
         &self.prefix
-    }
-
-    pub fn part_prefix(&self) -> &str {
-        &self.part_prefix
     }
 
     pub fn gen_block_location(&self) -> (Location, Uuid) {
