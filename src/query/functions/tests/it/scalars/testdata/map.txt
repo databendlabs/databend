@@ -553,12 +553,13 @@ error:
 
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | map_delete({}, NULL, NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Nothing), NULL, NULL)`, you might need to add explicit type casts.
-
+ast            : map_delete({}, NULL, NULL)
+raw expr       : map_delete(map(array(), array()), NULL, NULL)
+checked expr   : map_delete<Map(Nothing), NULL, NULL>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), NULL, NULL)
+optimized expr : {} :: Map(Nothing)
+output type    : Map(Nothing)
+output domain  : {}
+output         : {}
 
 
 error: 
