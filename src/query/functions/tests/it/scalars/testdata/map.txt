@@ -861,16 +861,16 @@ evaluation:
 | Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | {}                       |
 +--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                                                                                                |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                                                                                                              |
-| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                                                                                                              |
-| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                                                                                                              |
-| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                                                                                                     |
-| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                                                                                                         |
-| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                                                                                                         |
-| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x6162, offsets: [0, 1, 2] }, NullableColumn { column: StringColumn { data: 0x76317632, offsets: [0, 2, 4] }, validity: [0b______11] }]), offsets: [0, 1, 2, 2] } |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: Utf8ViewArray[a, b, c] }                                                                                                                                                       |
+| b_col  | StringColumn { data: Utf8ViewArray[d, e, f] }                                                                                                                                                       |
+| c_col  | StringColumn { data: Utf8ViewArray[x, y, z] }                                                                                                                                                       |
+| d_col  | NullableColumn { column: StringColumn { data: Utf8ViewArray[v1, v2, v3] }, validity: [0b_____111] }                                                                                                 |
+| e_col  | NullableColumn { column: StringColumn { data: Utf8ViewArray[v4, v5, ] }, validity: [0b_____011] }                                                                                                   |
+| f_col  | NullableColumn { column: StringColumn { data: Utf8ViewArray[v6, , v7] }, validity: [0b_____101] }                                                                                                   |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: Utf8ViewArray[a, b] }, NullableColumn { column: StringColumn { data: Utf8ViewArray[v1, v2] }, validity: [0b______11] }]), offsets: [0, 1, 2, 2] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 

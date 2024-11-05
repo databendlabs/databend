@@ -87,8 +87,7 @@ fn generate_random_string_data(rng: &mut StdRng, length: usize) -> (Vec<String>,
             let random_string: String = (0..length)
                 .map(|_| {
                     // Generate a random character (ASCII printable characters)
-                    let random_char = rng.gen_range(32..=126) as u8 as char;
-                    random_char
+                    rng.gen_range(32..=126) as u8 as char
                 })
                 .collect();
             random_string
