@@ -40,6 +40,7 @@ use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -69,9 +70,17 @@ async fn apply_block_pruning(
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, None)?
-        .read_pruning(segment_locs)
-        .await
+    FusePruner::create(
+        &ctx,
+        dal,
+        schema,
+        push_down,
+        bloom_index_cols,
+        None,
+        FuseStorageFormat::Parquet,
+    )?
+    .read_pruning(segment_locs)
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]

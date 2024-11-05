@@ -183,15 +183,14 @@ impl FuseTable {
         let virtual_reader = Arc::new(
             PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
                 .as_ref()
-                .map(|virtual_columns| {
+                .map(|virtual_column| {
                     VirtualColumnReader::try_create(
                         ctx.clone(),
                         self.operator.clone(),
                         block_reader.schema(),
                         plan,
-                        virtual_columns.clone(),
+                        virtual_column.clone(),
                         self.table_compression,
-                        put_cache,
                     )
                 })
                 .transpose()?,
