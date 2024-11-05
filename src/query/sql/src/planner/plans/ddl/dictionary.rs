@@ -59,11 +59,12 @@ pub struct RenameDictionaryPlan {
     pub tenant: Tenant,
     pub if_exists: bool,
     pub catalog: String,
-    pub database: String,
+    pub database_id: u64,
     pub dictionary: String,
-    pub new_database: String,
+    pub new_database_id: u64,
     pub new_dictionary: String,
 }
+
 impl RenameDictionaryPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -48,25 +49,28 @@ impl Interpreter for RenameDictionaryInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let tenant = &self.plan.tenant;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let database = catalog
-            .get_database(&self.plan.tenant, &self.plan.database)
-            .await?;
-        let _resp = catalog
-            .rename_dictionary(RenameDictionaryReq {
-                if_exists: self.plan.if_exists,
-                name_ident: DictionaryNameIdent::new(
-                    self.plan.tenant.clone(),
-                    DictionaryIdentity::new(
-                        database.get_db_info().database_id.db_id,
-                        self.plan.dictionary.clone(),
-                    ),
-                ),
-                new_db_name: self.plan.new_database.clone(),
-                new_dictionary_name: self.plan.new_dictionary.clone(),
-            })
-            .await?;
 
+        let dict_ident =
+            DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
+        let name_ident = DictionaryNameIdent::new(tenant, dict_ident);
+
+        let new_dict_ident =
+            DictionaryIdentity::new(self.plan.new_database_id, self.plan.new_dictionary.clone());
+        let new_name_ident = DictionaryNameIdent::new(tenant, new_dict_ident);
+
+        let req = RenameDictionaryReq {
+            name_ident,
+            new_name_ident,
+        };
+
+        let reply = catalog.rename_dictionary(req).await;
+        if let Err(err) = reply {
+            if !(self.plan.if_exists && err.code() == ErrorCode::UNKNOWN_DICTIONARY) {
+                return Err(err);
+            }
+        }
         Ok(PipelineBuildResult::create())
     }
 }

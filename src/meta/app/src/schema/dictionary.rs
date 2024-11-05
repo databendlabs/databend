@@ -176,131 +176,45 @@ pub struct UpdateDictionaryReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameDictionaryReq {
-    pub if_exists: bool,
     pub name_ident: DictionaryNameIdent,
-    pub new_db_name: String,
-    pub new_dictionary_name: String,
+    pub new_name_ident: DictionaryNameIdent,
 }
 
 impl RenameDictionaryReq {
     pub fn tenant(&self) -> &Tenant {
-        &self.name_ident.tenant()
+        self.name_ident.tenant()
     }
+
     pub fn db_id(&self) -> u64 {
         self.name_ident.db_id()
     }
+
     pub fn dictionary_name(&self) -> String {
         self.name_ident.dict_name().clone()
+    }
+
+    pub fn new_db_id(&self) -> u64 {
+        self.new_name_ident.db_id()
+    }
+
+    pub fn new_dictionary_name(&self) -> String {
+        self.new_name_ident.dict_name().clone()
     }
 }
 
 impl Display for RenameDictionaryReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        // How to get db_name by db_id
         write!(
             f,
             "rename_dictionary:{}/{}-{}=>{}-{}",
             self.tenant().tenant_name(),
             self.db_id(),
             self.dictionary_name(),
-            self.new_db_name,
-            self.new_dictionary_name,
+            self.new_db_id(),
+            self.new_dictionary_name(),
         )
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RenameDictionaryReply {
-    pub dictionary_id: u64,
-}
-
-/// The meta-service key for storing dictionary id history ever used by a dictionary name
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct DictionaryIdHistoryIdent {
-    pub database_id: u64,
-    pub dictionary_name: String,
-}
-
-impl Display for DictionaryIdHistoryIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'.'{}'", self.database_id, self.dictionary_name)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DictionaryIdToName {
-    pub dict_id: u64,
-}
-
-impl Display for DictionaryIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DictionaryIdToName{{{}}}", self.dict_id)
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use super::DictionaryIdHistoryIdent;
-    use super::DictionaryIdToName;
-    use crate::schema::dictionary_name_ident::DictionaryNameIdent;
-    use crate::schema::DatabaseId;
-
-    /// "_fd_dictionary_id_list/<db_id>/<dict_name> -> id_list"
-    impl kvapi::Key for DictionaryIdHistoryIdent {
-        const PREFIX: &'static str = "__fd_dictionary_id_list";
-
-        type ValueType = DictionaryIdToName;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.database_id).to_string_key())
-        }
-    }
-
-    impl kvapi::KeyCodec for DictionaryIdHistoryIdent {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.database_id).push_str(&self.dictionary_name)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-        where Self: Sized {
-            let db_id = parser.next_u64()?;
-            let dictionary_name = parser.next_str()?;
-            Ok(Self {
-                database_id: db_id,
-                dictionary_name,
-            })
-        }
-    }
-
-    impl kvapi::Value for DictionaryIdToName {
-        type KeyType = DictionaryIdHistoryIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            vec![self.dict_id.to_string()]
-        }
-    }
-
-    impl kvapi::KeyCodec for DictionaryIdToName {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.dict_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-        where Self: Sized {
-            let dict_id = parser.next_u64()?;
-            Ok(Self { dict_id })
-        }
-    }
-
-    /// "__fd_dict_id_to_name/<dict_id> -> DictionaryNameIdent"
-    impl kvapi::Key for DictionaryIdToName {
-        const PREFIX: &'static str = "__fd_dictionary_id_to_name";
-
-        type ValueType = DictionaryNameIdent;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.dict_id.to_string())
-        }
-    }
-}
+pub struct RenameDictionaryReply {}

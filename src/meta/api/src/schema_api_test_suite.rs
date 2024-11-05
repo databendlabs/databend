@@ -99,6 +99,7 @@ use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -349,7 +350,7 @@ impl SchemaApiTestSuite {
         suite.test_sequence(&b.build().await).await?;
 
         suite.dictionary_create_list_drop(&b.build().await).await?;
-
+        suite.dictionary_rename(&b.build().await).await?;
         Ok(())
     }
 
@@ -7477,6 +7478,197 @@ impl SchemaApiTestSuite {
             let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
             let res = mt.list_dictionaries(req).await?;
             assert_eq!(0, res.len());
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn dictionary_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let db1_name = "db1";
+        let dict1_name = "dict1";
+        let db2_name = "db2";
+        let dict2_name = "dict2";
+
+        let db1_req = CreateDatabaseReq {
+            create_option: CreateOption::Create,
+            name_ident: DatabaseNameIdent::new(&tenant, db1_name),
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..DatabaseMeta::default()
+            },
+        };
+        let db1_res = mt.create_database(db1_req).await?;
+        let db1_id = db1_res.db_id.db_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let name_ident =
+            DictionaryNameIdent::new(tenant.clone(), DictionaryIdentity::new(db1_id, dict1_name));
+        let new_name_ident =
+            DictionaryNameIdent::new(tenant.clone(), DictionaryIdentity::new(db1_id, dict2_name));
+
+        let rename_db1dict1_to_db1dict2 = RenameDictionaryReq {
+            name_ident: name_ident.clone(),
+            new_name_ident: new_name_ident.clone(),
+        };
+
+        let dict_meta = |created_on| DictionaryMeta {
+            schema: schema(),
+            created_on,
+            ..Default::default()
+        };
+
+        let created_on = Utc::now();
+        let create_dict1_req = CreateDictionaryReq {
+            dictionary_ident: name_ident.clone(),
+            dictionary_meta: dict_meta(created_on).clone(),
+        };
+
+        info!("--- create dictionary for rename");
+        let dict_id = {
+            let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            mt.create_dictionary(create_dict1_req.clone()).await?;
+            let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            assert!(old_db.meta.seq < cur_db.meta.seq);
+
+            let get_dict_req =
+                DictionaryNameIdent::new(&tenant, DictionaryIdentity::new(db1_id, dict1_name));
+            mt.get_dictionary(get_dict_req).await?
+        };
+
+        info!("--- rename dictionary, ok");
+        {
+            let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            mt.rename_dictionary(rename_db1dict1_to_db1dict2.clone())
+                .await?;
+            let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            assert!(old_db.meta.seq < cur_db.meta.seq);
+
+            let get_dict_req =
+                DictionaryNameIdent::new(&tenant, DictionaryIdentity::new(db1_id, dict2_name));
+            let _got = mt.get_dictionary(get_dict_req).await?;
+
+            info!("--- get old dictionary after rename");
+            {
+                let req =
+                    DictionaryNameIdent::new(&tenant, DictionaryIdentity::new(db1_id, dict1_name));
+                let res = mt.get_dictionary(req).await;
+                let err = res.err().unwrap();
+                assert_eq!(
+                    ErrorCode::UnknownDictionary("").code(),
+                    ErrorCode::from(err).code()
+                );
+            }
+        }
+
+        info!("--- db1,dict1(nil) -> db1,dict2(no_nil), error");
+        {
+            let res = mt
+                .rename_dictionary(rename_db1dict1_to_db1dict2.clone())
+                .await;
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UNKNOWN_DICTIONARY,
+                ErrorCode::from(err).code(),
+                "rename dictionary {} again",
+                dict2_name
+            );
+        }
+
+        info!("--- create db1,db2, ok");
+        let _dict_id2 = {
+            let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            mt.create_dictionary(create_dict1_req.clone()).await?;
+            let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            assert!(old_db.meta.seq < cur_db.meta.seq);
+
+            let got = mt
+                .get_dictionary(DictionaryNameIdent::new(
+                    &tenant,
+                    DictionaryIdentity::new(db1_id, dict1_name),
+                ))
+                .await?;
+            assert_ne!(dict_id, got);
+            got
+        };
+
+        info!("--- db1,dict1(no_nil) -> db1,dict2(no_nil), error");
+        {
+            let res = mt
+                .rename_dictionary(rename_db1dict1_to_db1dict2.clone())
+                .await;
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::DICTIONARY_ALREADY_EXISTS,
+                ErrorCode::from(err).code(),
+                "rename dictionary {} again after recreate",
+                dict1_name,
+            );
+        }
+
+        info!("--- rename dictionary to unknown db, error");
+        {
+            let req = RenameDictionaryReq {
+                name_ident: name_ident.clone(),
+                new_name_ident: DictionaryNameIdent::new(
+                    &tenant,
+                    DictionaryIdentity::new(111, dict2_name),
+                ),
+            };
+            let res = mt.rename_dictionary(req.clone()).await;
+            debug!("--- rename dictionary to other db got: {:?}", res);
+
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::UNKNOWN_DATABASE,
+                ErrorCode::from(res.unwrap_err()).code()
+            );
+        }
+
+        info!("--- prepare other db");
+        let db2_id = {
+            let db2_req = CreateDatabaseReq {
+                create_option: CreateOption::Create,
+                name_ident: DatabaseNameIdent::new(&tenant, db2_name),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+            let db2_res = mt.create_database(db2_req).await?;
+            db2_res.db_id.db_id
+        };
+
+        info!("--- rename dictionary to other db, ok");
+        {
+            let req = RenameDictionaryReq {
+                name_ident: name_ident.clone(),
+                new_name_ident: DictionaryNameIdent::new(
+                    &tenant,
+                    DictionaryIdentity::new(db2_id, dict2_name),
+                ),
+            };
+
+            let old_db1 = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            let old_db2 = mt.get_database(Self::req_get_db(&tenant, db2_name)).await?;
+            mt.rename_dictionary(req.clone()).await?;
+            let cur_db1 = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
+            let cur_db2 = mt.get_database(Self::req_get_db(&tenant, db2_name)).await?;
+            assert!(old_db1.meta.seq < cur_db1.meta.seq);
+            assert!(old_db2.meta.seq < cur_db2.meta.seq);
+
+            let get_req =
+                DictionaryNameIdent::new(&tenant, DictionaryIdentity::new(db2_id, dict2_name));
+            let _got = mt.get_dictionary(get_req).await?;
         }
 
         Ok(())

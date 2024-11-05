@@ -454,26 +454,32 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let (catalog, db_name, dictionary) =
+        let (catalog, database, dictionary) =
             self.normalize_object_identifier_triple(catalog, database, dictionary);
 
         let (new_catalog, new_database, new_dictionary) =
             self.normalize_object_identifier_triple(new_catalog, new_database, new_dictionary);
 
-        if new_catalog != catalog || new_database != db_name {
+        if new_catalog != catalog {
             return Err(ErrorCode::BadArguments(
-                "Rename dictionary not allow modify catalog or database",
-            )
-            .set_span(database.as_ref().and_then(|ident| ident.span)));
+                "Rename dictionary not allow modify catalog",
+            ));
         }
+
+        let catalog_info = self.ctx.get_catalog(&catalog).await?;
+        let db = catalog_info.get_database(&tenant, &database).await?;
+        let database_id = db.get_db_info().database_id.db_id;
+
+        let new_db = catalog_info.get_database(&tenant, &new_database).await?;
+        let new_database_id = new_db.get_db_info().database_id.db_id;
 
         Ok(Plan::RenameDictionary(Box::new(RenameDictionaryPlan {
             tenant,
             if_exists: *if_exists,
             catalog,
-            database: db_name,
+            database_id,
             dictionary,
-            new_database,
+            new_database_id,
             new_dictionary,
         })))
     }

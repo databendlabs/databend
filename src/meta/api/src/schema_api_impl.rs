@@ -96,8 +96,6 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
-use databend_common_meta_app::schema::DictionaryIdHistoryIdent;
-use databend_common_meta_app::schema::DictionaryIdToName;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -3045,125 +3043,46 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<RenameDictionaryReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let dict_ident = &req.name_ident;
-        let get_db_req = GetDatabaseReq::new(req.tenant(), req.new_db_name.clone());
-        let new_db_id = self
-            .get_database(get_db_req.clone())
-            .await?
-            .database_id
-            .db_id;
-        let new_dict_ident = DictionaryNameIdent::new(
-            req.name_ident.tenant(),
-            DictionaryIdentity::new(new_db_id, req.new_dictionary_name.clone()),
-        );
-
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-            let (seq_db_id, db_meta) =
-                get_db_or_err(self, &get_db_req.inner, "rename_dictionary").await?;
 
-            let (dict_id_seq, dict_id) = get_u64_value(self, dict_ident).await?;
-            if req.if_exists {
-                if dict_id_seq == 0 {
-                    return Ok(RenameDictionaryReply { dictionary_id: 0 });
-                }
-            } else {
-                assert_dictionary_exist(
-                    dict_id_seq,
-                    dict_ident,
-                    "rename_dictionary: src (db,dictionary)",
-                )?;
-            }
+            let (dict_id_seq, dict_id) = get_u64_value(self, &req.name_ident).await?;
+            assert_dictionary_exist(
+                dict_id_seq,
+                &req.name_ident,
+                "rename_dictionary: src (db,dictionary)",
+            )?;
 
-            let dbid_dictname_idlist = DictionaryIdHistoryIdent {
-                database_id: *seq_db_id.data,
-                dictionary_name: req.name_ident.dict_name().clone(),
+            let new_dict_id_seq = self.get_seq(&req.new_name_ident).await?;
+            dict_has_to_not_exist(new_dict_id_seq, &req.new_name_ident, "rename_dictionary")?;
+
+            let id = serialize_u64(dict_id)?;
+            let condition = vec![txn_cond_seq(&req.name_ident, Eq, dict_id_seq)];
+            let if_then = vec![
+                txn_op_del(&req.name_ident),         // del old_dict_name
+                txn_op_put(&req.new_name_ident, id), // put new dict name
+            ];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
             };
 
-            let seq_dict_history: Option<SeqV<<DictionaryIdHistoryIdent as Key>::ValueType>> =
-                self.get_pb(&dbid_dictname_idlist).await?;
-            let dict_id_list_seq = seq_dict_history.seq();
+            let (succ, _responses) = send_txn(self, txn_req).await?;
 
-            // Get the renaming target db to ensure presence.
-            let tenant_new_dbname = DatabaseNameIdent::new(req.tenant().clone(), &req.new_db_name);
-            let (new_seq_db_id, new_db_meta) =
-                get_db_or_err(self, &tenant_new_dbname, "rename_dictionary: new db").await?;
-
-            // Get the renaming target dictionary to ensure absence
-
-            let (new_dict_id_seq, _new_dict_id) = get_u64_value(self, &new_dict_ident).await?;
-            dict_has_to_not_exist(new_dict_id_seq, &new_dict_ident, "rename_dictionary")?;
-
-            let new_dbid_dictname_idlist = DictionaryIdHistoryIdent {
-                database_id: *new_seq_db_id.data,
-                dictionary_name: req.new_dictionary_name.clone(),
-            };
-
-            let seq_list = self.get_pb(&new_dbid_dictname_idlist).await?;
-            let new_dict_id_list_seq = seq_list.seq();
-
-            // get dictionary id name
-            let dict_id_to_name_key = DictionaryIdToName { dict_id };
-            let dict_id_to_name_seq = self.get_seq(&dict_id_to_name_key).await?;
-            let _db_id_dict_name = DictionaryNameIdent::new(
-                req.tenant(),
-                DictionaryIdentity::new(*new_seq_db_id.data, req.new_dictionary_name.clone()),
+            debug!(
+                name :? =(req.name_ident),
+                to :? =(&req.new_name_ident),
+                succ = succ;
+                "rename_dictionary"
             );
 
-            {
-                let mut txn = TxnRequest {
-                    condition: vec![
-                        // db has not to change, i.e., no new dictionary is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&seq_db_id.data, Eq, db_meta.seq),
-                        txn_cond_seq(&new_seq_db_id.data, Eq, new_db_meta.seq),
-                        txn_cond_seq(&new_dict_ident, Eq, 0),
-                        // no other dictionary id with the same name is append.
-                        txn_cond_seq(&dbid_dictname_idlist, Eq, dict_id_list_seq),
-                        txn_cond_seq(&new_dbid_dictname_idlist, Eq, new_dict_id_list_seq),
-                        // dictionary_id
-                        txn_cond_seq(&dict_id_to_name_key, Eq, dict_id_to_name_seq),
-                    ],
-                    if_then: vec![
-                        txn_op_put(&seq_db_id.data, serialize_struct(&*db_meta)?), /* (db_id) -> db_meta */
-                    ],
-                    else_then: vec![],
-                };
-
-                if *seq_db_id.data != *new_seq_db_id.data {
-                    txn.if_then.push(
-                        txn_op_put(
-                            &new_seq_db_id.data,
-                            serialize_struct(&*new_db_meta)?,
-                        ), // (db_id) -> db_meta
-                    );
-                }
-
-                let (succ, _responses) = send_txn(self, txn).await?;
-
-                debug!(
-                    name :? =(dict_ident),
-                    to :? =(&new_dict_ident),
-                    dict_id :? =(&dict_id),
-                    succ = succ;
-                    "rename_dictionary"
-                );
-
-                if succ {
-                    return Ok(RenameDictionaryReply {
-                        dictionary_id: dict_id,
-                    });
-                }
+            if succ {
+                return Ok(RenameDictionaryReply {});
             }
         }
-    }
-
-    async fn get_table_lvt(
-        &self,
-        name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
-        Ok(self.get(name_ident).await?)
     }
 }
 

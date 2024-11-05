@@ -414,7 +414,6 @@ pub fn assert_dictionary_exist(
     }
 
     debug!(seq = seq, name_ident :? =(name_ident); "does not exist");
-    // Err(AppError::from(name_ident.exist_error(func_name!())).into())
 
-    Err(AppError::from(name_ident.exist_error(func_name!())).into())
+    Err(AppError::from(name_ident.exist_error(func_name!())))
 }

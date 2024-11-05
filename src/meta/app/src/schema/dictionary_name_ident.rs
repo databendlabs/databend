@@ -45,9 +45,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use super::DictionaryNameIdent;
     use crate::schema::dictionary_id_ident::DictionaryId;
-    use crate::schema::DictionaryIdToName;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DictionaryNameRsc;
@@ -60,14 +58,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for DictionaryId {
         type KeyType = super::DictionaryNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for DictionaryNameIdent {
-        type KeyType = DictionaryIdToName;
-
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
