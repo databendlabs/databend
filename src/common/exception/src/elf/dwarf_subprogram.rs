@@ -74,11 +74,12 @@ impl<R: Reader> SubprogramAttrs<R> {
 }
 
 impl<R: Reader> Unit<R> {
-    pub(crate) fn find_subprogram(&self, probe: u64) -> Option<UnitOffset> {
+    pub(crate) fn find_subprogram(&self, probe: u64) -> Option<UnitOffset<R::Offset>> {
         let mut entries = self.head.entries_tree(&self.abbreviations, None).ok()?;
         self.traverse_subprogram(entries.root().ok()?, probe)
     }
-    fn traverse_subprogram(&self, mut node: EntriesTreeNode<R>, probe: u64) -> Option<UnitOffset> {
+
+    fn traverse_subprogram(&self, mut node: EntriesTreeNode<R>, probe: u64) -> Option<UnitOffset<R::Offset>> {
         let mut children = node.children();
         while let Some(child) = children.next().ok()? {
             if child.entry().tag() == gimli::DW_TAG_subprogram {
