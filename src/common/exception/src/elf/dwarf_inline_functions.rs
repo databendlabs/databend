@@ -232,9 +232,13 @@ impl<R: Reader> Unit<R> {
                 continue;
             }
 
+            eprintln!("matched inlined function");
             if let Some(name) = &subroutine_attrs.name {
+                eprintln!("matched inlined function has name");
                 if let Ok(name) = name.to_string_lossy() {
+                    eprintln!("matched inlined function has nor name");
                     if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
+                        eprintln!("matched inlined function has demangle name");
                         if let Some(call_file) = subroutine_attrs.file {
                             // if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
                             //     next.file = lines.files.get(call_file as usize).map(String::as_str);
@@ -249,9 +253,7 @@ impl<R: Reader> Unit<R> {
                         });
                     }
                 }
-                // name.to_string_lossy()
             }
-            // if subroutine_attrs
 
             self.find_inlined(child, probe, res)?;
             return Ok(());
