@@ -21,6 +21,7 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-metrics = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 flagset = { workspace = true }
 futures = { workspace = true }

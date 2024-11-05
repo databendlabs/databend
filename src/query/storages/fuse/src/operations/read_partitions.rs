@@ -24,6 +24,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
+use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -195,6 +196,7 @@ impl FuseTable {
                 &push_downs,
                 self.bloom_index_cols(),
                 bloom_index_builder,
+                self.get_storage_format(),
             )?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
@@ -208,6 +210,7 @@ impl FuseTable {
                 cluster_keys,
                 self.bloom_index_cols(),
                 bloom_index_builder,
+                self.get_storage_format(),
             )?
         };
         let block_metas = pruner.read_pruning(segments_location).await?;
@@ -338,6 +341,8 @@ impl FuseTable {
                     &block_metas,
                     column_nodes,
                     projection,
+                    &extras.output_columns,
+                    &extras.virtual_column,
                     top_k.clone(),
                     limit,
                 ),
@@ -401,6 +406,8 @@ impl FuseTable {
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
         projection: &Projection,
+        output_columns: &Option<Projection>,
+        virtual_column: &Option<VirtualColumnInfo>,
         top_k: Option<(TopK, Scalar)>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
@@ -411,7 +418,13 @@ impl FuseTable {
             return (statistics, partitions);
         }
 
-        let columns = projection.project_column_nodes(column_nodes).unwrap();
+        // Output columns don't have source columns of virtual columns,
+        // which can be ignored if all virtual columns are generated.
+        let columns = if let Some(output_columns) = output_columns {
+            output_columns.project_column_nodes(column_nodes).unwrap()
+        } else {
+            projection.project_column_nodes(column_nodes).unwrap()
+        };
         let mut remaining = limit;
 
         for (block_meta_index, block_meta) in block_metas.iter() {
@@ -429,9 +442,47 @@ impl FuseTable {
             for column in &columns {
                 for column_id in &column.leaf_column_ids {
                     // ignore all deleted field
-                    if let Some(col_metas) = block_meta.col_metas.get(column_id) {
+                    if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
                         let (_, len) = col_metas.offset_length();
                         statistics.read_bytes += len as usize;
+                    }
+                }
+            }
+
+            let virtual_block_meta = if let Some(block_meta_index) = block_meta_index {
+                &block_meta_index.virtual_block_meta
+            } else {
+                &None
+            };
+            if let Some(virtual_column) = virtual_column {
+                if let Some(virtual_block_meta) = virtual_block_meta {
+                    // Add bytes of virtual columns
+                    for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
+                        let (_, len) = virtual_column_meta.offset_length();
+                        statistics.read_bytes += len as usize;
+                    }
+
+                    // Check whether source columns can be ignored.
+                    // If not, add bytes of source columns.
+                    for source_column_id in &virtual_column.source_column_ids {
+                        if virtual_block_meta
+                            .ignored_source_column_ids
+                            .contains(source_column_id)
+                        {
+                            continue;
+                        }
+                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                            let (_, len) = col_metas.offset_length();
+                            statistics.read_bytes += len as usize;
+                        }
+                    }
+                } else {
+                    // If virtual column meta not exist, all source columns are needed.
+                    for source_column_id in &virtual_column.source_column_ids {
+                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                            let (_, len) = col_metas.offset_length();
+                            statistics.read_bytes += len as usize;
+                        }
                     }
                 }
             }

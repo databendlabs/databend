@@ -75,7 +75,6 @@ impl AttachTableHandler for RealAttachTableHandler {
             schema: Arc::new(snapshot.schema.clone()),
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
-            part_prefix: plan.part_prefix.clone(),
             options,
             default_cluster_key: None,
             field_comments,
