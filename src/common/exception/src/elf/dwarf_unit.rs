@@ -16,7 +16,7 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
-use gimli::{Abbreviations, DebugInfo, DebugLineStr, DebugLineStrOffset};
+use gimli::{Abbreviations, DebugInfo, DebugLineStr, DebugLineStrOffset, DebugStrOffsets};
 use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::DebugAddr;
@@ -137,9 +137,9 @@ pub struct Unit<R: Reader> {
     pub(crate) debug_info: DebugInfo<R>,
     pub(crate) debug_line: DebugLine<R>,
     pub(crate) debug_line_str: DebugLineStr<R>,
-    pub(crate) debug_line_str_offset: DebugLineStrOffset<R>,
     pub(crate) debug_addr: DebugAddr<R>,
     pub(crate) range_list: RangeLists<R>,
+    pub(crate) debug_str_offsets: DebugStrOffsets<R>,
 
     // addr_base: DebugAddrBase,
     pub(crate) abbreviations: Abbreviations,
@@ -233,7 +233,6 @@ impl<R: Reader> Unit<R> {
 
         false
     }
-
 
 
     fn find_line(&self, probe: u64) -> gimli::Result<Option<CallLocation>> {

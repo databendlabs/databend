@@ -119,7 +119,7 @@ impl<R: Reader> Unit<R> {
             AttributeValue::DebugStrRef(offset) => self.debug_str.get_str(offset).ok(),
             AttributeValue::DebugLineStrRef(offset) => self.debug_line_str.get_str(offset).ok(),
             AttributeValue::DebugStrOffsetsIndex(index) => {
-                let offset = self.debug_line_str_offset.get_str_offset(
+                let offset = self.debug_str_offsets.get_str_offset(
                     self.head.format(),
                     self.attrs.str_offsets_base.clone(),
                     index,

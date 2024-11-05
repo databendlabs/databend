@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use gimli::Abbreviations;
+use gimli::{Abbreviations, DebugLineStr, DebugLineStrOffset, DebugStrOffsets};
 use gimli::AttributeValue;
 use gimli::DebugAbbrev;
 use gimli::DebugAbbrevOffset;
@@ -59,10 +59,13 @@ pub struct Dwarf {
     debug_str: DebugStr<EndianSlice<'static, NativeEndian>>,
     debug_info: DebugInfo<EndianSlice<'static, NativeEndian>>,
     debug_line: DebugLine<EndianSlice<'static, NativeEndian>>,
+    debug_line_str: DebugLineStr<EndianSlice<'static, NativeEndian>>,
+    debug_str_offsets: DebugStrOffsets<EndianSlice<'static, NativeEndian>>,
     debug_aranges: DebugAranges<EndianSlice<'static, NativeEndian>>,
     debug_abbrev: DebugAbbrev<EndianSlice<'static, NativeEndian>>,
     debug_addr: DebugAddr<EndianSlice<'static, NativeEndian>>,
     debug_range_list: RangeLists<EndianSlice<'static, NativeEndian>>,
+
     // debug_info: &'a [u8],
     // debug_aranges: &'a [u8],
     // debug_ranges: &'a [u8],
@@ -107,6 +110,8 @@ impl Dwarf {
             debug_str: DebugStr::from(get_debug_section(&elf, ".debug_str")),
             debug_info: DebugInfo::from(get_debug_section(&elf, ".debug_info")),
             debug_line: DebugLine::from(get_debug_section(&elf, ".debug_line")),
+            debug_line_str: DebugLineStr::from(get_debug_section(&elf, ".debug_line_str")),
+            debug_str_offsets: DebugStrOffsets::from(get_debug_section(&elf, ".debug_str_offsets")),
             debug_aranges: DebugAranges::from(get_debug_section(&elf, ".debug_aranges")),
             debug_abbrev: DebugAbbrev::from(get_debug_section(&elf, ".debug_abbrev")),
             debug_range_list: RangeLists::new(
@@ -156,7 +161,10 @@ impl Dwarf {
             abbreviations,
             attrs: unit_attrs,
             debug_str: self.debug_str.clone(),
+            debug_info: self.debug_info.clone(),
             debug_line: self.debug_line.clone(),
+            debug_line_str: self.debug_line_str.clone(),
+            debug_str_offsets: self.debug_str_offsets.clone(),
             debug_addr: self.debug_addr.clone(),
             range_list: self.debug_range_list.clone(),
         }))
