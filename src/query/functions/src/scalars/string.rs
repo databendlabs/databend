@@ -19,7 +19,7 @@ use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
-use databend_common_expression::types::string::NewStringColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::NumberType;
@@ -763,12 +763,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 pub(crate) mod soundex {
-    use databend_common_expression::types::string::NewStringColumnBuilder;
+    use databend_common_expression::types::string::StringColumnBuilder;
     use databend_common_expression::EvalContext;
 
     pub fn soundex(
         val: &str,
-        output: &mut NewStringColumnBuilder,
+        output: &mut StringColumnBuilder,
         _eval_context: &mut EvalContext,
     ) {
         let mut last = None;
@@ -829,7 +829,7 @@ pub(crate) mod soundex {
 }
 
 #[inline]
-fn substr(builder: &mut NewStringColumnBuilder, str: &str, pos: i64, len: u64) {
+fn substr(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
     if pos == 0 || len == 0 {
         builder.commit_row();
         return;

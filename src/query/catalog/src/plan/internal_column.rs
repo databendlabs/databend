@@ -226,7 +226,7 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::BlockName => {
-                let mut builder = StringColumnBuilder::with_capacity(1, meta.block_location.len());
+                let mut builder = StringColumnBuilder::with_capacity(1);
                 builder.put_str(&meta.block_location);
                 builder.commit_row();
                 BlockEntry::new(
@@ -235,8 +235,7 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::SegmentName => {
-                let mut builder =
-                    StringColumnBuilder::with_capacity(1, meta.segment_location.len());
+                let mut builder = StringColumnBuilder::with_capacity(1);
                 builder.put_str(&meta.segment_location);
                 builder.commit_row();
                 BlockEntry::new(
@@ -245,13 +244,7 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::SnapshotName => {
-                let mut builder = StringColumnBuilder::with_capacity(
-                    1,
-                    meta.snapshot_location
-                        .clone()
-                        .unwrap_or("".to_string())
-                        .len(),
-                );
+                let mut builder = StringColumnBuilder::with_capacity(1);
                 builder.put_str(&meta.snapshot_location.clone().unwrap_or("".to_string()));
                 builder.commit_row();
                 BlockEntry::new(

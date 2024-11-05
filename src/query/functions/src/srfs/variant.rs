@@ -678,7 +678,7 @@ fn unnest_variant_obj(
         Some(vals) if !vals.is_empty() => {
             let len = vals.len();
             let mut val_builder = BinaryColumnBuilder::with_capacity(0, 0);
-            let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut key_builder = StringColumnBuilder::with_capacity(0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
@@ -908,7 +908,7 @@ impl FlattenGenerator {
             None
         };
         let mut path_builder = if params.is_empty() || params.contains(&3) {
-            Some(StringColumnBuilder::with_capacity(0, 0))
+            Some(StringColumnBuilder::with_capacity(0))
         } else {
             None
         };

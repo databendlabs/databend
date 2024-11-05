@@ -33,7 +33,7 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use string::NewStringColumnBuilder;
+use string::StringColumnBuilder;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("concat", |_, args_type| {
@@ -114,7 +114,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .collect::<Vec<_>>();
 
                     let size = len.unwrap_or(1);
-                    let mut builder = NewStringColumnBuilder::with_capacity(size);
+                    let mut builder = StringColumnBuilder::with_capacity(size);
 
                     match &args[0] {
                         ValueRef::Scalar(sep) => {
@@ -430,7 +430,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> 
         .collect::<Vec<_>>();
 
     let size = len.unwrap_or(1);
-    let mut builder = NewStringColumnBuilder::with_capacity(size);
+    let mut builder = StringColumnBuilder::with_capacity(size);
     for idx in 0..size {
         for arg in &args {
             builder.put_str(unsafe { arg.index_unchecked(idx) });
@@ -641,7 +641,7 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
     };
 
     let size = len.unwrap_or(1);
-    let mut builder = NewStringColumnBuilder::with_capacity(size);
+    let mut builder = StringColumnBuilder::with_capacity(size);
 
     let cached_reg = match (&pat_arg, &mt_arg) {
         (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
@@ -766,7 +766,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
     };
 
     let size = len.unwrap_or(1);
-    let mut builder = NewStringColumnBuilder::with_capacity(size);
+    let mut builder = StringColumnBuilder::with_capacity(size);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
@@ -846,7 +846,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
 }
 
 pub mod regexp {
-    use databend_common_expression::types::string::NewStringColumnBuilder;
+    use databend_common_expression::types::string::StringColumnBuilder;
     use regex::Regex;
     use regex::RegexBuilder;
 
@@ -969,7 +969,7 @@ pub mod regexp {
         repl: &str,
         pos: i64,
         occur: i64,
-        builder: &mut NewStringColumnBuilder,
+        builder: &mut StringColumnBuilder,
     ) {
         let pos = (pos - 1) as usize; // set the index start from 0
         // the 'pos' position is the character index,

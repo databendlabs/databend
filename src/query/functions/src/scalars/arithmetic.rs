@@ -976,20 +976,21 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
 
                                 type Native = <NUM_TYPE as Number>::Native;
 
-                                let mut builder =
-                                    StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                                let mut buffer =
-                                    vec![0u8; <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL];
+                                let mut builder = StringColumnBuilder::with_capacity(from.len());
 
                                 unsafe {
                                     for x in from.iter() {
+                                        builder.row_buffer.resize(
+                                            <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
+                                            0,
+                                        );
                                         let len = lexical_core::write_with_options::<_, FORMAT>(
                                             Native::from(*x),
-                                            &mut buffer,
+                                            &mut builder.row_buffer,
                                             &options,
                                         )
                                         .len();
-                                        builder.put_slice(&buffer[..len]);
+                                        builder.row_buffer.truncate(len);
                                         builder.commit_row();
                                     }
                                 }

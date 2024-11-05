@@ -78,13 +78,13 @@ impl TableMetaFunc for FuseColumn {
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
-        let mut block_location = StringColumnBuilder::with_capacity(len, len);
+        let mut block_location = StringColumnBuilder::with_capacity(len);
         let mut block_size = vec![];
         let mut file_size = vec![];
         let mut row_count = vec![];
 
-        let mut column_name = StringColumnBuilder::with_capacity(len, len);
-        let mut column_type = StringColumnBuilder::with_capacity(len, len);
+        let mut column_name = StringColumnBuilder::with_capacity(len);
+        let mut column_type = StringColumnBuilder::with_capacity(len);
         let mut column_id = vec![];
         let mut block_offset = vec![];
         let mut bytes_compressed = vec![];

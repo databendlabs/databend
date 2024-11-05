@@ -36,7 +36,7 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::geography::GeographyColumn;
 use crate::types::nullable::NullableColumn;
-use crate::types::string::NewStringColumnBuilder;
+use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -748,7 +748,7 @@ impl Column {
 }
 
 fn binary_array_to_string_column<O: Offset>(array: &BinaryArray<O>) -> StringColumn {
-    let mut builder = NewStringColumnBuilder::with_capacity(array.len());
+    let mut builder = StringColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
         builder.put_str(std::str::from_utf8(value).unwrap());
         builder.commit_row();
@@ -757,7 +757,7 @@ fn binary_array_to_string_column<O: Offset>(array: &BinaryArray<O>) -> StringCol
 }
 
 fn utf8_array_to_string_column<O: Offset>(array: &Utf8Array<O>) -> StringColumn {
-    let mut builder = NewStringColumnBuilder::with_capacity(array.len());
+    let mut builder = StringColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
         builder.put_str(value);
         builder.commit_row();
@@ -766,7 +766,7 @@ fn utf8_array_to_string_column<O: Offset>(array: &Utf8Array<O>) -> StringColumn 
 }
 
 fn fixed_size_binary_array_to_string_column(array: &FixedSizeBinaryArray) -> StringColumn {
-    let mut builder = NewStringColumnBuilder::with_capacity(array.len());
+    let mut builder = StringColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
         builder.put_str(std::str::from_utf8(value).unwrap());
         builder.commit_row();

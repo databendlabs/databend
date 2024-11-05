@@ -44,7 +44,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
-use string::NewStringColumnBuilder;
+use string::StringColumnBuilder;
 
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
@@ -206,7 +206,7 @@ pub enum ColumnBuilder {
     Decimal(DecimalColumnBuilder),
     Boolean(MutableBitmap),
     Binary(BinaryColumnBuilder),
-    String(NewStringColumnBuilder),
+    String(StringColumnBuilder),
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
@@ -1441,11 +1441,12 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Boolean(c) => c.len(),
+            // 8 * len + size of bytes
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col) => col.memory_size(),
-            Column::String(col) => col.memory_size(),
+            Column::String(col) => col.len() * 8 + col.current_buffer_len(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
@@ -1532,7 +1533,7 @@ impl ColumnBuilder {
             Column::Decimal(col) => ColumnBuilder::Decimal(DecimalColumnBuilder::from_column(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::Binary(col) => ColumnBuilder::Binary(BinaryColumnBuilder::from_column(col)),
-            Column::String(col) => ColumnBuilder::String(NewStringColumnBuilder::from_column(col)),
+            Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Array(box col) => {
@@ -1590,7 +1591,7 @@ impl ColumnBuilder {
             }
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
             ScalarRef::Binary(s) => ColumnBuilder::Binary(BinaryColumnBuilder::repeat(s, n)),
-            ScalarRef::String(s) => ColumnBuilder::String(NewStringColumnBuilder::repeat(s, n)),
+            ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
             ScalarRef::Array(col) => {
@@ -1741,9 +1742,7 @@ impl ColumnBuilder {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
-            DataType::String => {
-                ColumnBuilder::String(NewStringColumnBuilder::with_capacity(capacity))
-            }
+            DataType::String => ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity)),
             DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
             DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
@@ -1827,7 +1826,7 @@ impl ColumnBuilder {
 
             // binary based
             DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
-            DataType::String => ColumnBuilder::String(NewStringColumnBuilder::repeat_default(len)),
+            DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_default(len)),
             DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
             DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),

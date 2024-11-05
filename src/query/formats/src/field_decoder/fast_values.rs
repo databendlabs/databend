@@ -35,7 +35,7 @@ use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
-use databend_common_expression::types::string::NewStringColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -266,7 +266,7 @@ impl FastFieldDecoderValues {
 
     fn read_string<R: AsRef<[u8]>>(
         &self,
-        column: &mut NewStringColumnBuilder,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {

@@ -190,7 +190,11 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
             // buffer index + offset -> real binary data
             self.total_buffer_len += bytes.len();
             let required_cap = self.in_progress_buffer.len() + bytes.len();
-            if self.in_progress_buffer.capacity() < required_cap {
+
+            let does_not_fit_in_buffer = self.in_progress_buffer.capacity() < required_cap;
+            let offset_will_not_fit = self.in_progress_buffer.len() > u32::MAX as usize;
+
+            if does_not_fit_in_buffer || offset_will_not_fit {
                 let new_capacity = (self.in_progress_buffer.capacity() * 2)
                     .clamp(DEFAULT_BLOCK_SIZE, 16 * 1024 * 1024)
                     .max(bytes.len());

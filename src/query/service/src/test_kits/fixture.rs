@@ -738,10 +738,8 @@ impl TestFixture {
             schema,
             (0..num_of_block)
                 .map(|idx| {
-                    let mut title_builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
-                    let mut content_builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                    let mut title_builder = StringColumnBuilder::with_capacity(rows_per_block);
+                    let mut content_builder = StringColumnBuilder::with_capacity(rows_per_block);
 
                     for i in 0..rows_per_block {
                         let j = (idx * rows_per_block + i) % sample_books.len();

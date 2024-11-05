@@ -4402,7 +4402,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-settings",
- "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-cache",
  "databend-storages-common-pruner",

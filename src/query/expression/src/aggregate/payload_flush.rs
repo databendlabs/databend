@@ -25,7 +25,7 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
-use crate::types::string::NewStringColumnBuilder;
+use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringColumn;
 use crate::types::ArgType;
 use crate::types::BooleanType;
@@ -323,7 +323,7 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> StringColumn {
         let len = state.probe_state.row_count;
-        let mut binary_builder = NewStringColumnBuilder::with_capacity(len);
+        let mut binary_builder = StringColumnBuilder::with_capacity(len);
 
         unsafe {
             for idx in 0..len {

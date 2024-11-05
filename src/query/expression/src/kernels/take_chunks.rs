@@ -20,7 +20,7 @@ use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
 use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
-use string::NewStringColumnBuilder;
+use string::StringColumnBuilder;
 
 use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
@@ -791,7 +791,7 @@ impl Column {
     }
 
     pub fn take_block_vec_string_types(col: &[StringColumn], indices: &[RowPtr]) -> StringColumn {
-        let mut builder = NewStringColumnBuilder::with_capacity(indices.len());
+        let mut builder = StringColumnBuilder::with_capacity(indices.len());
         for row_ptr in indices {
             unsafe {
                 builder.put_str(

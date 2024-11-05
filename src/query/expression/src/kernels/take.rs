@@ -20,7 +20,7 @@ use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
-use string::NewStringColumnBuilder;
+use string::StringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
@@ -264,7 +264,7 @@ where I: databend_common_arrow::arrow::types::Index
             };
             StringColumn::new(new_col)
         } else {
-            let mut builder = NewStringColumnBuilder::with_capacity(num_rows);
+            let mut builder = StringColumnBuilder::with_capacity(num_rows);
             for index in self.indices.iter() {
                 unsafe {
                     builder.put_str(col.index_unchecked(index.to_usize()));

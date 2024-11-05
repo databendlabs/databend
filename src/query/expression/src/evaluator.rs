@@ -613,7 +613,7 @@ impl<'a> Evaluator<'a> {
                         };
                         let validity = None;
 
-                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len(), 0);
+                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len());
                         for k in obj.keys() {
                             key_builder.put_str(k.as_str());
                             key_builder.commit_row();

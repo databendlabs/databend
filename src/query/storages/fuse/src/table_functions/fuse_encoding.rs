@@ -233,11 +233,11 @@ impl<'a> FuseEncodingImpl<'a> {
         let mut validity_size = Vec::new();
         let mut compressed_size = Vec::new();
         let mut uncompressed_size = Vec::new();
-        let mut l1 = StringColumnBuilder::with_capacity(0, 0);
+        let mut l1 = StringColumnBuilder::with_capacity(0);
         let mut l2 = NullableColumnBuilder::<StringType>::with_capacity(0, &[]);
-        let mut table_name = StringColumnBuilder::with_capacity(0, 0);
-        let mut column_name = StringColumnBuilder::with_capacity(0, 0);
-        let mut column_type = StringColumnBuilder::with_capacity(0, 0);
+        let mut table_name = StringColumnBuilder::with_capacity(0);
+        let mut column_name = StringColumnBuilder::with_capacity(0);
+        let mut column_type = StringColumnBuilder::with_capacity(0);
         let mut all_num_rows = 0;
         for (table, columns_info) in info {
             for (type_str, column_info) in columns_info {
@@ -248,7 +248,8 @@ impl<'a> FuseEncodingImpl<'a> {
                 compressed_size.reserve(num_row);
                 uncompressed_size.reserve(num_row);
                 let tmp_table_name = StringColumnBuilder::repeat(table, num_row);
-                let tmp_column_name = StringColumnBuilder::repeat(&column_info.field.name, num_row);
+                let tmp_column_name =
+                    StringColumnBuilder::repeat(&column_info.field.name, num_row);
                 let tmp_column_type = StringColumnBuilder::repeat(type_str, num_row);
                 for p in pages_info {
                     validity_size.push(p.validity_size);

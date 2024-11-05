@@ -159,7 +159,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
         let mut segment_name = Vec::with_capacity(len);
-        let mut block_name = StringColumnBuilder::with_capacity(len, len);
+        let mut block_name = StringColumnBuilder::with_capacity(len);
         let mut max = Vec::with_capacity(len);
         let mut min = Vec::with_capacity(len);
         let mut level = Vec::with_capacity(len);

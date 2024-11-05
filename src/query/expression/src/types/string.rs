@@ -20,8 +20,6 @@ use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -45,7 +43,7 @@ impl ValueType for StringType {
     type Column = StringColumn;
     type Domain = StringDomain;
     type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = NewStringColumnBuilder;
+    type ColumnBuilder = StringColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long str) -> &'short str {
@@ -127,7 +125,7 @@ impl ValueType for StringType {
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        NewStringColumnBuilder::from_column(col)
+        StringColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -216,7 +214,7 @@ impl ArgType for StringType {
     }
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        NewStringColumnBuilder::with_capacity(capacity)
+        StringColumnBuilder::with_capacity(capacity)
     }
 }
 
@@ -290,7 +288,7 @@ impl StringColumn {
     }
 
     pub fn try_from_binary(col: BinaryColumn) -> Result<Self> {
-        let builder = NewStringColumnBuilder::try_from_bin_column(col)?;
+        let builder = StringColumnBuilder::try_from_bin_column(col)?;
         Ok(builder.build())
     }
 }
@@ -336,170 +334,18 @@ unsafe impl<'a> TrustedLen for StringIterator<'a> {}
 
 unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StringColumnBuilder {
-    inner: BinaryColumnBuilder,
-}
-
-impl StringColumnBuilder {
-    pub fn with_capacity(len: usize, data_capacity: usize) -> Self {
-        StringColumnBuilder {
-            inner: BinaryColumnBuilder::with_capacity(len, data_capacity),
-        }
-    }
-
-    pub fn from_column(col: StringColumn) -> Self {
-        let builder = BinaryColumnBuilder::from_column(col.into());
-        unsafe { StringColumnBuilder::from_binary_unchecked(builder) }
-    }
-
-    pub fn from_data(data: Vec<u8>, offsets: Vec<u64>) -> Self {
-        let builder = BinaryColumnBuilder::from_data(data, offsets);
-        builder.check_utf8().unwrap();
-        unsafe { StringColumnBuilder::from_binary_unchecked(builder) }
-    }
-
-    /// # Safety
-    /// This function is unsound iff:
-    /// * the offsets are not monotonically increasing
-    /// * The `data` between two consecutive `offsets` are not valid utf8
-    pub unsafe fn from_binary_unchecked(col: BinaryColumnBuilder) -> Self {
-        #[cfg(debug_assertions)]
-        col.check_utf8().unwrap();
-
-        StringColumnBuilder { inner: col }
-    }
-
-    pub fn repeat(scalar: &str, n: usize) -> Self {
-        let builder = BinaryColumnBuilder::repeat(scalar.as_bytes(), n);
-        unsafe { StringColumnBuilder::from_binary_unchecked(builder) }
-    }
-
-    pub fn repeat_default(n: usize) -> Self {
-        let builder = BinaryColumnBuilder::repeat_default(n);
-        unsafe { StringColumnBuilder::from_binary_unchecked(builder) }
-    }
-
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub fn memory_size(&self) -> usize {
-        self.inner.memory_size()
-    }
-
-    pub fn put_char(&mut self, item: char) {
-        self.inner.put_char(item);
-    }
-
-    pub fn put_slice(&mut self, item: &[u8]) {
-        self.inner.put_slice(item);
-    }
-
-    pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
-        self.inner.put_char_iter(iter)
-    }
-
-    #[inline]
-    pub fn put_str(&mut self, item: &str) {
-        self.inner.put_str(item);
-    }
-
-    #[inline]
-    pub fn commit_row(&mut self) {
-        self.inner.commit_row();
-    }
-
-    pub fn append_column(&mut self, other: &StringColumn) {
-        let b = BinaryColumn::from(other.clone());
-        self.inner.append_column(&b);
-    }
-
-    pub fn build(self) -> StringColumn {
-        let col = self.inner.build();
-        StringColumn::try_from_binary(col).unwrap()
-    }
-
-    pub fn build_scalar(self) -> String {
-        let bytes = self.inner.build_scalar();
-
-        String::from_utf8(bytes).unwrap()
-    }
-
-    #[inline]
-    pub fn may_resize(&self, add_size: usize) -> bool {
-        self.inner.may_resize(add_size)
-    }
-
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, row: usize) -> &str {
-        let bytes = self.inner.index_unchecked(row);
-
-        #[cfg(debug_assertions)]
-        bytes.check_utf8().unwrap();
-
-        std::str::from_utf8_unchecked(bytes)
-    }
-
-    pub fn push_repeat(&mut self, item: &str, n: usize) {
-        self.inner.push_repeat(item.as_bytes(), n);
-    }
-
-    pub fn pop(&mut self) -> Option<String> {
-        self.inner.pop().map(|bytes| unsafe {
-            #[cfg(debug_assertions)]
-            bytes.check_utf8().unwrap();
-
-            String::from_utf8_unchecked(bytes)
-        })
-    }
-
-    pub fn as_inner_mut(&mut self) -> &mut BinaryColumnBuilder {
-        &mut self.inner
-    }
-}
-
-impl<'a> FromIterator<&'a str> for StringColumnBuilder {
-    fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
-        let iter = iter.into_iter();
-        let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);
-        for item in iter {
-            builder.put_str(item);
-            builder.commit_row();
-        }
-        builder
-    }
-}
-
-impl From<StringColumnBuilder> for BinaryColumnBuilder {
-    fn from(builder: StringColumnBuilder) -> BinaryColumnBuilder {
-        builder.inner
-    }
-}
-
-impl TryFrom<BinaryColumnBuilder> for StringColumnBuilder {
-    type Error = ErrorCode;
-
-    fn try_from(builder: BinaryColumnBuilder) -> Result<StringColumnBuilder> {
-        builder.check_utf8()?;
-        Ok(StringColumnBuilder { inner: builder })
-    }
-}
-
 type MutableUtf8ViewArray = MutableBinaryViewArray<str>;
 
 #[derive(Debug, Clone)]
-pub struct NewStringColumnBuilder {
+pub struct StringColumnBuilder {
     pub data: MutableUtf8ViewArray,
     pub row_buffer: Vec<u8>,
 }
 
-impl NewStringColumnBuilder {
+impl StringColumnBuilder {
     pub fn with_capacity(len: usize) -> Self {
         let data = MutableUtf8ViewArray::with_capacity(len);
-        NewStringColumnBuilder {
+        StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
         }
@@ -507,7 +353,7 @@ impl NewStringColumnBuilder {
 
     pub fn from_column(col: StringColumn) -> Self {
         let data = col.data.make_mut();
-        NewStringColumnBuilder {
+        StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
         }
@@ -520,7 +366,7 @@ impl NewStringColumnBuilder {
             data.push_value(unsafe { std::str::from_utf8_unchecked(v) });
         }
 
-        Ok(NewStringColumnBuilder {
+        Ok(StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
         })
@@ -529,7 +375,7 @@ impl NewStringColumnBuilder {
     pub fn repeat(scalar: &str, n: usize) -> Self {
         let mut data = MutableUtf8ViewArray::with_capacity(n);
         data.extend_constant(n, Some(scalar));
-        NewStringColumnBuilder {
+        StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
         }
@@ -538,7 +384,7 @@ impl NewStringColumnBuilder {
     pub fn repeat_default(n: usize) -> Self {
         let mut data = MutableUtf8ViewArray::with_capacity(n);
         data.extend_constant(n, Some(""));
-        NewStringColumnBuilder {
+        StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
         }
@@ -564,6 +410,11 @@ impl NewStringColumnBuilder {
     #[inline]
     pub fn put_str(&mut self, item: &str) {
         self.row_buffer.extend_from_slice(item.as_bytes());
+    }
+
+    #[inline]
+    pub fn put_slice(&mut self, item: &[u8]) {
+        self.row_buffer.extend_from_slice(item);
     }
 
     pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
@@ -612,10 +463,10 @@ impl NewStringColumnBuilder {
     }
 }
 
-impl<'a> FromIterator<&'a str> for NewStringColumnBuilder {
+impl<'a> FromIterator<&'a str> for StringColumnBuilder {
     fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
         let iter = iter.into_iter();
-        let mut builder = NewStringColumnBuilder::with_capacity(iter.size_hint().0);
+        let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0);
         for item in iter {
             builder.put_str(item);
             builder.commit_row();
@@ -624,13 +475,13 @@ impl<'a> FromIterator<&'a str> for NewStringColumnBuilder {
     }
 }
 
-impl PartialEq for NewStringColumnBuilder {
+impl PartialEq for StringColumnBuilder {
     fn eq(&self, other: &Self) -> bool {
         self.data.values_iter().eq(other.data.values_iter())
     }
 }
 
-impl Eq for NewStringColumnBuilder {}
+impl Eq for StringColumnBuilder {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {

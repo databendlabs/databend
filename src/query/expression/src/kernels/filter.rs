@@ -21,7 +21,7 @@ use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::bitmap::TrueIdxIter;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
-use string::NewStringColumnBuilder;
+use string::StringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
@@ -339,7 +339,7 @@ impl<'a> FilterVisitor<'a> {
     fn filter_string_types(&mut self, values: &StringColumn) -> StringColumn {
         match self.strategy {
             IterationStrategy::IndexIterator => {
-                let mut builder = NewStringColumnBuilder::with_capacity(self.filter_rows);
+                let mut builder = StringColumnBuilder::with_capacity(self.filter_rows);
 
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 for i in iter {

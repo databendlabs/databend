@@ -501,6 +501,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn storage_format_as_parquet(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Parquet)
+    }
+
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
