@@ -71,20 +71,8 @@ use object::ObjectSymbolTable;
 use once_cell::sync::OnceCell;
 use tantivy::HasLen;
 
-use crate::elf::library_loader::LibraryLoader;
-use crate::elf::library_manager::Library;
-use crate::elf::library_manager::LibraryManager;
-use crate::elf::library_symbol::Symbol;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
-
-#[cfg(target_pointer_width = "32")]
-type ElfFile = object::read::elf::ElfFile32<'static, object::NativeEndian, &'static [u8]>;
-
-#[cfg(target_pointer_width = "64")]
-type ElfFile = object::read::elf::ElfFile64<'static, object::NativeEndian, &'static [u8]>;
-
-static INSTANCE: OnceCell<Arc<LibraryManager>> = OnceCell::new();
 
 pub struct Location {
     pub file: String,
@@ -102,73 +90,8 @@ impl Location {
     }
 }
 
-struct Unit<'a> {
-    debug_line: &'a [u8],
-    debug_addr: DebugAddr<EndianSlice<'a, NativeEndian>>,
-    range_list: RangeLists<EndianSlice<'a, NativeEndian>>,
-    addr_base: DebugAddrBase,
-
-    abbreviations: Abbreviations,
-    loclists_base: DebugLocListsBase,
-    rnglists_base: DebugRngListsBase,
-    str_offsets_base: DebugStrOffsetsBase,
-
-    pub head: UnitHeader<EndianSlice<'a, NativeEndian>>,
-}
-
+#[derive(Copy, Clone)]
 pub enum HighPc {
     Addr(u64),
     Offset(u64),
-}
-
-struct LocationDieAttrs<'a> {
-    high_pc: Option<AttributeValue<EndianSlice<'a, NativeEndian>>>,
-    low_pc: Option<u64>,
-    base_addr: Option<u64>,
-    name: Option<EndianSlice<'a, NativeEndian>>,
-    comp_dir: Option<EndianSlice<'a, NativeEndian>>,
-    ranges_offset: Option<RangeListsOffset>,
-    debug_line_offset: Option<DebugLineOffset>,
-}
-
-impl<'a> LocationDieAttrs<'a> {
-    pub fn create() -> LocationDieAttrs<'a> {
-        LocationDieAttrs {
-            high_pc: None,
-            low_pc: None,
-            base_addr: None,
-            name: None,
-            comp_dir: None,
-            ranges_offset: None,
-            debug_line_offset: None,
-        }
-    }
-
-    pub fn set_attr<R: Reader>(&mut self, attr: Attribute<R>) {
-        match (attr.name(), attr.value()) {
-            (gimli::DW_AT_high_pc, v) => {
-                self.high_pc = Some(v);
-            }
-            (gimli::DW_AT_low_pc, AttributeValue::Addr(v)) => {
-                self.low_pc = Some(v);
-                self.base_addr = Some(v);
-            }
-            (gimli::DW_AT_name, AttributeValue::String(v)) => {
-                self.name = Some(v);
-            }
-            (gimli::DW_AT_entry_pc, AttributeValue::Addr(v)) => {
-                self.base_addr = Some(v);
-            }
-            (gimli::DW_AT_comp_dir, AttributeValue::String(v)) => {
-                self.comp_dir = Some(v);
-            }
-            (gimli::DW_AT_ranges, AttributeValue::RangeListsRef(v)) => {
-                self.ranges_offset = Some(RangeListsOffset(v.0));
-            }
-            (gimli::DW_AT_stmt_list, AttributeValue::DebugLineRef(v)) => {
-                self.debug_line_offset = Some(v);
-            }
-            _ => {}
-        }
-    }
 }

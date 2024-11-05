@@ -43,14 +43,16 @@ pub struct LibraryLoader {
 
 impl LibraryLoader {
     pub fn load() -> LibraryLoader {
-        let loader = LibraryLoader {
-            symbols: vec![],
-            libraries: vec![],
-        };
+        unsafe {
+            let mut loader = LibraryLoader {
+                symbols: vec![],
+                libraries: vec![],
+            };
 
-        dl_iterate_phdr(Some(callback), std::ptr::addr_of_mut!(loader).cast());
+            dl_iterate_phdr(Some(callback), std::ptr::addr_of_mut!(loader).cast());
 
-        loader
+            loader
+        }
     }
 
     pub unsafe fn load_symbols(&mut self, library: &mut Library) {
