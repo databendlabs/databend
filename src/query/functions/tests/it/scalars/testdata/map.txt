@@ -896,7 +896,7 @@ error:
   --> SQL:1:1
   |
 1 | map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', false)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map key `'k1'` duplicte while evaluating function `map_insert({'k1':'v1', 'k2':'v2'}, 'k1', 'v10', false)` in expr `map_insert(CAST(map(array('k1', 'k2'), array('v1', 'v2')) AS Map(String, String) NULL), 'k1', 'v10', false)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map key `'k1'` duplicate while evaluating function `map_insert({'k1':'v1', 'k2':'v2'}, 'k1', 'v10', false)` in expr `map_insert(CAST(map(array('k1', 'k2'), array('v1', 'v2')) AS Map(String, String) NULL), 'k1', 'v10', false)`
 
 
 
@@ -969,7 +969,7 @@ error:
   --> SQL:1:1
   |
 1 | map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'v10', false)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map key `'a'` duplicte while evaluating function `map_insert({'a':'v1', 'd':'v4', 'x':'v6'}, 'a', 'v10', false)` in expr `map_insert(CAST(map(array(a_col, b_col, c_col), array(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), 'a', CAST('v10' AS String NULL), false)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map key `'a'` duplicate while evaluating function `map_insert({'a':'v1', 'd':'v4', 'x':'v6'}, 'a', 'v10', false)` in expr `map_insert(CAST(map(array(a_col, b_col, c_col), array(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), 'a', CAST('v10' AS String NULL), false)`
 
 
 

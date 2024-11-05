@@ -375,7 +375,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if let Some(map) = map {
                     for (k, _) in map.iter() {
                         if k == key {
-                            ctx.set_error(output.len(), format!("map key `{}` duplicte", key));
+                            ctx.set_error(output.len(), format!("map key `{}` duplicate", key));
                             output.commit_row();
                             return;
                         }
@@ -415,7 +415,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if let Some(map) = map {
                     for (k, _) in map.iter() {
                         if k == key && !update_flag {
-                            ctx.set_error(output.len(), format!("map key `{}` duplicte", key));
+                            ctx.set_error(output.len(), format!("map key `{}` duplicate", key));
                             output.commit_row();
                             return;
                         }
