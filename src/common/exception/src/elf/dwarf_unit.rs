@@ -112,7 +112,7 @@ impl<R: Reader> UnitAttrs<R> {
         String::from("<unknown>")
     }
 
-    pub fn set_attr<R: Reader>(&mut self, debug_str: &DebugStr<R>, attr: Attribute<R>) {
+    pub fn set_attr(&mut self, debug_str: &DebugStr<R>, attr: Attribute<R>) {
         match (attr.name(), attr.value()) {
             (gimli::DW_AT_high_pc, v) => {
                 self.high_pc = match v {

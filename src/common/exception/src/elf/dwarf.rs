@@ -133,7 +133,7 @@ impl Dwarf {
 
     fn get_unit(&self, head: UnitHeader<EndianSlice<'static, NativeEndian>>) -> gimli::Result<Option<Unit<EndianSlice<'static, NativeEndian>>>> {
         let abbrev_offset = head.debug_abbrev_offset();
-        let Some(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset)? else {
+        let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
             return Ok(None);
         };
 

@@ -192,7 +192,7 @@ impl StackTrace {
     #[cfg(target_os = "linux")]
     fn fmt_frames(&self, f: &mut String, address: bool) -> std::fmt::Result {
         let mut idx = 0;
-        crate::elf::library_manager::LibraryManager::instance().resolve_frames(
+        crate::elf::LibraryManager::instance().resolve_frames(
             &self.frames,
             address,
             |frame| {

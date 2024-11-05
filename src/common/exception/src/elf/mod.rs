@@ -24,3 +24,5 @@ type ElfFile = object::read::elf::ElfFile32<'static, object::NativeEndian, &'sta
 
 #[cfg(target_pointer_width = "64")]
 type ElfFile = object::read::elf::ElfFile64<'static, object::NativeEndian, &'static [u8]>;
+
+pub use library_manager::LibraryManager;

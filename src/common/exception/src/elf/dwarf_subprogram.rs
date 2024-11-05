@@ -37,7 +37,7 @@ impl<R: Reader> SubprogramAttrs<R> {
         }
     }
 
-    pub fn set_attr<R: Reader>(&mut self, attr: Attribute<R>) {
+    pub fn set_attr(&mut self, attr: Attribute<R>) {
         match (attr.name(), attr.value()) {
             (gimli::DW_AT_high_pc, AttributeValue::Addr(addr)) => {
                 self.high_pc = Some(HighPc::Addr(addr));
@@ -78,11 +78,7 @@ impl<R: Reader> Unit<R> {
         let mut entries = self.head.entries_tree(&self.abbreviations, None).ok()?;
         self.traverse_subprogram(entries.root().ok()?, probe)
     }
-    fn traverse_subprogram<R: Reader>(
-        &self,
-        mut node: EntriesTreeNode<R>,
-        probe: u64,
-    ) -> Option<UnitOffset> {
+    fn traverse_subprogram(&self, mut node: EntriesTreeNode<R>, probe: u64) -> Option<UnitOffset> {
         let mut children = node.children();
         while let Some(child) = children.next().ok()? {
             if child.entry().tag() == gimli::DW_TAG_subprogram {
