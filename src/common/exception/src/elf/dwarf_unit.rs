@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use gimli::Abbreviations;
 use gimli::Attribute;
 use gimli::AttributeValue;
+use gimli::DebugAbbrev;
 use gimli::DebugAddr;
 use gimli::DebugAddrBase;
 use gimli::DebugAddrIndex;
@@ -140,6 +141,7 @@ pub struct Unit<R: Reader> {
 
     pub(crate) debug_str: DebugStr<R>,
     pub(crate) debug_info: DebugInfo<R>,
+    pub(crate) debug_abbrev: DebugAbbrev<R>,
     pub(crate) debug_line: DebugLine<R>,
     pub(crate) debug_line_str: DebugLineStr<R>,
     pub(crate) debug_addr: DebugAddr<R>,

@@ -24,6 +24,7 @@ use gimli::UnitOffset;
 use crate::elf::dwarf::CallLocation;
 use crate::elf::dwarf_subprogram::SubprogramAttrs;
 use crate::elf::dwarf_unit::Unit;
+use crate::elf::dwarf_unit::UnitAttrs;
 use crate::exception_backtrace_elf::HighPc;
 
 pub struct SubroutineAttrs<R: Reader> {
@@ -207,9 +208,47 @@ impl<R: Reader> Unit<R> {
         match v {
             AttributeValue::UnitRef(offset) => self.name_entry(offset, recursion),
             AttributeValue::DebugInfoRef(dr) => {
-                if let Ok(head) = self.debug_info.header_from_offset(dr) {
-                    if let Some(offset) = dr.to_unit_offset(&head) {
-                        return self.name_entry(offset, recursion);
+                let mut units = self.debug_info.units();
+
+                while let Ok(Some(head)) = units.next() {
+                    if let Some(offset) = head.offset().as_debug_info_offset() {
+                        if offset.0 + head.length_including_self() > dr.0 {
+                            let unit_offset = dr
+                                .to_unit_offset(&head)
+                                .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
+
+                            let abbrev_offset = head.debug_abbrev_offset();
+                            let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset)
+                            else {
+                                return Ok(None);
+                            };
+
+                            let mut cursor = head.entries(&abbreviations);
+                            let (_idx, root) = cursor.next_dfs()?.unwrap();
+
+                            let mut attrs = root.attrs();
+                            let mut unit_attrs = UnitAttrs::create();
+
+                            while let Some(attr) = attrs.next()? {
+                                unit_attrs.set_attr(&self.debug_str, attr);
+                            }
+
+                            let unit = Unit {
+                                head,
+                                abbreviations,
+                                attrs: unit_attrs,
+                                debug_str: self.debug_str.clone(),
+                                debug_info: self.debug_info.clone(),
+                                debug_abbrev: self.debug_abbrev.clone(),
+                                debug_line: self.debug_line.clone(),
+                                debug_line_str: self.debug_line_str.clone(),
+                                debug_str_offsets: self.debug_str_offsets.clone(),
+                                debug_addr: self.debug_addr.clone(),
+                                range_list: self.range_list.clone(),
+                            };
+
+                            return unit.name_entry(unit_offset, recursion);
+                        }
                     }
                 }
 

@@ -164,6 +164,7 @@ impl Dwarf {
             attrs: unit_attrs,
             debug_str: self.debug_str.clone(),
             debug_info: self.debug_info.clone(),
+            debug_abbrev: self.debug_abbrev.clone(),
             debug_line: self.debug_line.clone(),
             debug_line_str: self.debug_line_str.clone(),
             debug_str_offsets: self.debug_str_offsets.clone(),
