@@ -183,29 +183,35 @@ impl LibraryManager {
                 if let Some(dwarf) = dwarf {
                     let adjusted_addr = (physical_address - 1) as u64;
 
-                    if let Ok(mut locations) = dwarf.find_location(adjusted_addr) {
-                        if let Some(top_location) = locations.pop() {
-                            location = Location {
-                                file: top_location.file.unwrap_or("<unknwon>".to_string()),
-                                line: top_location.line,
-                                column: top_location.column,
+                    match dwarf.find_location(adjusted_addr) {
+                        Ok(mut locations) => {
+                            if let Some(top_location) = locations.pop() {
+                                location = Location {
+                                    file: top_location.file.unwrap_or("<unknwon>".to_string()),
+                                    line: top_location.line,
+                                    column: top_location.column,
+                                }
+                            }
+
+                            for location in locations {
+                                f(ResolvedStackFrame {
+                                    virtual_address: 0,
+                                    physical_address,
+                                    symbol: location.symbol.unwrap_or("<unknown>".to_string()),
+                                    inlined: true,
+                                    location: Location {
+                                        file: location.file.unwrap_or("<unknwon>".to_string()),
+                                        line: location.line,
+                                        column: location.column,
+                                    },
+                                })?;
                             }
                         }
-
-                        for location in locations {
-                            f(ResolvedStackFrame {
-                                virtual_address: 0,
-                                physical_address,
-                                symbol: location.symbol.unwrap_or("<unknown>".to_string()),
-                                inlined: true,
-                                location: Location {
-                                    file: location.file.unwrap_or("<unknwon>".to_string()),
-                                    line: location.line,
-                                    column: location.column,
-                                },
-                            })?;
+                        Err(error) => {
+                            eprintln!("get location error: {:?}", error);
                         }
                     }
+                    // if let Ok(mut locations) = dwarf.find_location(adjusted_addr) {}
                 }
 
                 if let Some(symbol) = self.find_symbol(*addr) {
