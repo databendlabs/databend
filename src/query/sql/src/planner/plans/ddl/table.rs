@@ -50,7 +50,6 @@ pub struct CreateTablePlan {
     pub engine: Engine,
     pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
-    pub part_prefix: String,
     pub options: TableOptions,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,

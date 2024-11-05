@@ -448,13 +448,12 @@ impl Binder {
             )?;
         }
 
-        let (mut storage_params, part_prefix) = match (uri_location, engine) {
+        let mut storage_params = match (uri_location, engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
-                    part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
                 let sp = parse_storage_params_from_uri(
@@ -467,24 +466,17 @@ impl Binder {
                 // create a temporary op to check if params is correct
                 let data_operator = DataOperator::try_create(&sp).await?;
 
-                // Path ends with "/" means it's a directory.
-                let fp = if uri.path.ends_with('/') {
-                    uri.part_prefix.clone()
-                } else {
-                    "".to_string()
-                };
-
                 // Verify essential privileges.
                 // The permission check might fail for reasons other than the permissions themselves,
                 // such as network communication issues.
                 verify_external_location_privileges(data_operator.operator()).await?;
-                (Some(sp), fp)
+                Some(sp)
             }
             (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
                 "Incorrect CREATE query: CREATE TABLE with external location is only supported for FUSE engine, but got {:?} for {:?}",
                 engine, uri
             )))?,
-            _ => (None, "".to_string()),
+            _ => None,
         };
 
         match table_type {
@@ -694,7 +686,6 @@ impl Binder {
             engine,
             engine_options,
             storage_params,
-            part_prefix,
             options,
             field_comments,
             cluster_key,
@@ -756,13 +747,6 @@ impl Binder {
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
 
-        // Path ends with "/" means it's a directory.
-        let part_prefix = if uri.path.ends_with('/') {
-            uri.part_prefix.clone()
-        } else {
-            "".to_string()
-        };
-
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
             create_option: CreateOption::Create,
             tenant: self.ctx.get_tenant(),
@@ -773,7 +757,6 @@ impl Binder {
             engine: Engine::Fuse,
             engine_options: BTreeMap::new(),
             storage_params: Some(sp),
-            part_prefix,
             options,
             field_comments: vec![],
             cluster_key: None,
