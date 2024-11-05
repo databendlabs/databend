@@ -3781,7 +3781,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "databend-common-exception",
- "prost",
  "serde_json",
  "sled",
  "thiserror",

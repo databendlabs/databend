@@ -828,7 +828,7 @@ impl MetaNode {
 
     fn get_db_size(&self) -> Result<u64, MetaError> {
         self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
+            let se = MetaStorageError::Damaged(AnyError::new(&e).add_context(|| "get db_size"));
             MetaError::StorageError(se)
         })
     }

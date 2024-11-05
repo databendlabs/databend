@@ -74,7 +74,9 @@ impl Files {
                 threads_nums * 2,
                 "batch-remove-files-worker".to_owned(),
             )
-            .await?;
+            .await?
+            .into_iter()
+            .collect::<Result<_>>()?
         }
 
         Ok(())

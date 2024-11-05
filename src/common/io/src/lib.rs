@@ -43,6 +43,7 @@ pub mod geography;
 pub mod geometry;
 mod position;
 mod stat_buffer;
+
 pub mod wkb;
 
 pub use bitmap::deserialize_bitmap;
