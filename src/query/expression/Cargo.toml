@@ -65,10 +65,15 @@ unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
 arrow-ord = { workspace = true }
+criterion = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 rmp-serde = { workspace = true }
+
+[[bench]]
+name = "bench"
+harness = false
 
 [lints]
 workspace = true
