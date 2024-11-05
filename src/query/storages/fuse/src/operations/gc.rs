@@ -709,6 +709,8 @@ impl FuseTable {
         let mut blooms = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
+        let mut num_segments_processed = 0;
+        let total_num_segments = segment_locations.len();
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             let results = fuse_segments
@@ -731,7 +733,27 @@ impl FuseTable {
                 blocks.extend(location_tuple.block_location.into_iter());
                 blooms.extend(location_tuple.bloom_location.into_iter());
             }
+
+            num_segments_processed += chunk.len();
+
+            if (num_segments_processed + 1) % 10000 == 0 {
+                ctx.set_status_info(&format!(
+                    "collecting block locations: {}/{} segment read, found {} blocks, {} bloom indexes",
+                    num_segments_processed,
+                    total_num_segments,
+                    blocks.len(),
+                    blooms.len()
+                ));
+            }
         }
+
+        ctx.set_status_info(&format!(
+            "block locations collected. {}/{} segment read, found {} blocks, {} bloom indexes",
+            num_segments_processed,
+            total_num_segments,
+            blocks.len(),
+            blooms.len()
+        ));
 
         Ok(LocationTuple {
             block_location: blocks,
