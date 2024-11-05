@@ -253,7 +253,7 @@ impl<R: Reader> Unit<R> {
             }
             // if subroutine_attrs
 
-            self.find_inlined(node, probe, res)?;
+            self.find_inlined(child, probe, res)?;
             return Ok(());
         }
 
