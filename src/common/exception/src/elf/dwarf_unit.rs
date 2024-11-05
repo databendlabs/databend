@@ -50,17 +50,17 @@ pub struct UnitAttrs<R: Reader> {
     pub name: Option<AttributeValue<R>>,
     pub comp_dir: Option<AttributeValue<R>>,
 
-    pub ranges_offset: Option<RangeListsOffset>,
+    pub ranges_offset: Option<RangeListsOffset<R::Offset>>,
 
-    addr_base: DebugAddrBase,
-    loclists_base: DebugLocListsBase,
-    rnglists_base: DebugRngListsBase,
-    str_offsets_base: DebugStrOffsetsBase,
-    debug_line_offset: Option<DebugLineOffset>,
+    addr_base: DebugAddrBase<R::Offset>,
+    loclists_base: DebugLocListsBase<R::Offset>,
+    rnglists_base: DebugRngListsBase<R::Offset>,
+    str_offsets_base: DebugStrOffsetsBase<R::Offset>,
+    debug_line_offset: Option<DebugLineOffset<R::Offset>>,
 }
 
 impl<R: Reader> UnitAttrs<R> {
-    pub fn create() -> UnitAttrs {
+    pub fn create() -> UnitAttrs<R> {
         UnitAttrs {
             high_pc: None,
             low_pc: None,
@@ -291,16 +291,16 @@ impl<R: Reader> Unit<R> {
                         }
 
                         let header = rows.header();
-                        let file = header.file(file_idx)?;
+                        if let Some(file) = header.file(file_idx) {
+                            if file.directory_index() != 0 {
+                                if let Some(AttributeValue::String(ref v)) = file.directory(header) {
+                                    path_buf.push(v.to_string_lossy().unwrap().into_owned());
+                                }
+                            }
 
-                        if file.directory_index() != 0 {
-                            if let Some(AttributeValue::String(ref v)) = file.directory(header) {
+                            if let AttributeValue::String(ref v) = file.path_name() {
                                 path_buf.push(v.to_string_lossy().unwrap().into_owned());
                             }
-                        }
-
-                        if let AttributeValue::String(ref v) = file.path_name() {
-                            path_buf.push(v.to_string_lossy().unwrap().into_owned());
                         }
 
                         return Ok(Some(CallLocation {
@@ -333,9 +333,9 @@ impl<R: Reader> Unit<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         };

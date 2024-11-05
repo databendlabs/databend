@@ -34,6 +34,7 @@ use crate::elf::library_manager::Library;
 use crate::elf::library_symbol::Symbol;
 use crate::elf::ElfFile;
 use crate::exception_backtrace_elf;
+use std::fmt::Write;
 
 #[derive(Debug)]
 pub struct LibraryLoader {
