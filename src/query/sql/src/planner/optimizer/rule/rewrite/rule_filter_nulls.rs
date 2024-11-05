@@ -31,17 +31,18 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::ScalarExpr;
 
-const NULL_THRESHOLD_RATIO: f64 = 0.02;
+const NULL_THRESHOLD_RATIO: f64 = 0.2;
 
 /// A rule that filters out NULL values from join keys when they exceed a certain threshold.
 /// This optimization can improve join performance by reducing the amount of data processed.
 pub struct RuleFilterNulls {
     id: RuleID,
     matchers: Vec<Matcher>,
+    is_distributed: bool,
 }
 
 impl RuleFilterNulls {
-    pub fn new() -> Self {
+    pub fn new(is_distributed: bool) -> Self {
         Self {
             id: RuleID::FilterNulls,
             // Join
@@ -51,6 +52,7 @@ impl RuleFilterNulls {
                 op_type: RelOp::Join,
                 children: vec![Matcher::Leaf, Matcher::Leaf],
             }],
+            is_distributed,
         }
     }
 
@@ -93,6 +95,10 @@ impl Rule for RuleFilterNulls {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        if !self.is_distributed {
+            state.add_result(s_expr.clone());
+            return Ok(());
+        }
         let join: Join = s_expr.plan().clone().try_into()?;
         if !matches!(
             join.join_type,

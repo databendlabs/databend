@@ -123,7 +123,7 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -132,8 +132,8 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [and_filters(t2.a (#2) > 0, is_not_null(t2.a (#2)))], limit: NONE]
-│   └── estimated rows: 2.00
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
@@ -142,8 +142,8 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [and_filters(t1.a (#0) > 0, is_not_null(t1.a (#0)))], limit: NONE]
-    └── estimated rows: 3.00
+    ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    └── estimated rows: 4.00
 
 # convert left outer join to inner join, can not propagate t2.b > 0
 query T
@@ -155,7 +155,7 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -164,8 +164,8 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [and_filters(t2.b (#3) > 0, is_not_null(t2.a (#2)))], limit: NONE]
-│   └── estimated rows: 2.00
+│   ├── push downs: [filters: [is_true(t2.b (#3) > 0)], limit: NONE]
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
@@ -174,8 +174,8 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_not_null(t1.a (#0))], limit: NONE]
-    └── estimated rows: 3.00
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
 
 statement ok
 drop table if exists t1;

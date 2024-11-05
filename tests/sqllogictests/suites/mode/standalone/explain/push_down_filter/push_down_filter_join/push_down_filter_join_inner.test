@@ -64,18 +64,18 @@ explain select * from t1 inner join t2 on t1.a = t2.a where t2.a <= 2 or (t1.a >
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── filters: [is_true((t2.a (#2) <= 2 OR (t1.a (#0) > 1 AND t2.a (#2) > 1)))]
-├── estimated rows: 2.00
+├── estimated rows: 3.11
 └── HashJoin
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
-    ├── estimated rows: 2.00
+    ├── estimated rows: 3.11
     ├── Filter(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
-    │   ├── filters: [is_not_null(t2.a (#2)), is_true((t2.a (#2) <= 2 OR t2.a (#2) > 1))]
-    │   ├── estimated rows: 2.00
+    │   ├── filters: [is_true((t2.a (#2) <= 2 OR t2.a (#2) > 1))]
+    │   ├── estimated rows: 3.00
     │   └── TableScan
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
@@ -84,12 +84,12 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    │       ├── push downs: [filters: [and_filters((t2.a (#2) <= 2 OR t2.a (#2) > 1), is_not_null(t2.a (#2)))], limit: NONE]
+    │       ├── push downs: [filters: [is_true((t2.a (#2) <= 2 OR t2.a (#2) > 1))], limit: NONE]
     │       └── estimated rows: 3.00
     └── Filter(Probe)
         ├── output columns: [t1.a (#0), t1.b (#1)]
-        ├── filters: [is_not_null(t1.a (#0)), is_true((t1.a (#0) <= 2 OR t1.a (#0) > 1))]
-        ├── estimated rows: 3.00
+        ├── filters: [is_true((t1.a (#0) <= 2 OR t1.a (#0) > 1))]
+        ├── estimated rows: 3.11
         └── TableScan
             ├── table: default.default.t1
             ├── output columns: [a (#0), b (#1)]
@@ -98,7 +98,7 @@ Filter
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            ├── push downs: [filters: [and_filters((t1.a (#0) <= 2 OR t1.a (#0) > 1), is_not_null(t1.a (#0)))], limit: NONE]
+            ├── push downs: [filters: [is_true((t1.a (#0) <= 2 OR t1.a (#0) > 1))], limit: NONE]
             └── estimated rows: 4.00
 
 statement ok
