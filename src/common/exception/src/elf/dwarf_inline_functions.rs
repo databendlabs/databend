@@ -72,42 +72,21 @@ impl<R: Reader> SubroutineAttrs<R> {
                 }
             }
             gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
-                eprintln!(
-                    "DW_AT_linkage_name | DW_AT_MIPS_linkage_name before: {:?}",
-                    self.name
-                );
                 if let Some(val) = unit.attr_str(attr.value()) {
                     self.name = Some(val);
                 }
-
-                eprintln!(
-                    "DW_AT_linkage_name | DW_AT_MIPS_linkage_name after: {:?}",
-                    self.name
-                );
             }
             gimli::DW_AT_name => {
-                eprintln!("DW_AT_name before : {:?}", self.name);
                 if self.name.is_none() {
                     self.name = unit.attr_str(attr.value());
                 }
-
-                eprintln!("DW_AT_name after : {:?}", self.name);
             }
             gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                eprintln!(
-                    "DW_AT_abstract_origin | DW_AT_specification before : {:?}",
-                    self.name
-                );
                 if self.name.is_none() {
                     if let Ok(Some(v)) = unit.name_attr(attr.value(), 16) {
                         self.name = Some(v);
                     }
                 }
-
-                eprintln!(
-                    "DW_AT_abstract_origin | DW_AT_specification aftere : {:?}",
-                    self.name
-                );
             }
             gimli::DW_AT_call_file => {
                 if let AttributeValue::FileIndex(idx) = attr.value() {
@@ -129,9 +108,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -219,9 +198,9 @@ impl<R: Reader> Unit<R> {
 
                             let abbrev_offset = head.debug_abbrev_offset();
                             let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset)
-                            else {
-                                return Ok(None);
-                            };
+                                else {
+                                    return Ok(None);
+                                };
 
                             let mut cursor = head.entries(&abbreviations);
                             let (_idx, root) = cursor.next_dfs()?.unwrap();
@@ -258,80 +237,12 @@ impl<R: Reader> Unit<R> {
         }
     }
 
-    // pub(crate) fn find_inlined_functions(&self, probe: u64, offset: UnitOffset<R::Offset>, res: &mut Vec<CallLocation>) -> Result<()> {
-    //     let mut tree = self.head.entries_tree(&self.abbreviations, Some(offset))?;
-    //     self.find_inlined(tree.root()?, probe, res)?;
-    //     Ok(())
-    // }
-    //
-    // fn find_inlined(&self, mut node: EntriesTreeNode<R>, probe: u64, res: &mut Vec<CallLocation>) -> Result<()> {
-    //     let mut children = node.children();
-    //     while let Some(child) = children.next()? {
-    //         // Searching child.
-    //         if matches!(
-    //             child.entry().tag(),
-    //             gimli::DW_TAG_try_block
-    //                 | gimli::DW_TAG_catch_block
-    //                 | gimli::DW_TAG_lexical_block
-    //                 | gimli::DW_TAG_common_block
-    //                 | gimli::DW_TAG_entry_point
-    //         ) {
-    //             self.find_inlined(child, probe, res)?;
-    //             continue;
-    //         }
-    //
-    //         let mut attrs = child.entry().attrs();
-    //         let mut subroutine_attrs = SubroutineAttrs::<R>::create();
-    //
-    //         while let Some(attr) = attrs.next()? {
-    //             subroutine_attrs.set_attr(attr, self);
-    //         }
-    //
-    //         let range_match = match self.attrs.ranges_offset {
-    //             None => true,
-    //             Some(range_offset) => self.match_range(probe, range_offset),
-    //         };
-    //
-    //         // doesn't match. But we'll keep searching
-    //         if !subroutine_attrs.match_pc(probe) && !range_match {
-    //             continue;
-    //         }
-    //
-    //         eprintln!("matched inlined function");
-    //         if let Some(name) = &subroutine_attrs.name {
-    //             eprintln!("matched inlined function has name");
-    //             if let Ok(name) = name.to_string_lossy() {
-    //                 eprintln!("matched inlined function has nor name");
-    //                 if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
-    //                     eprintln!("matched inlined function has demangle name");
-    //                     if let Some(call_file) = subroutine_attrs.file {
-    //                         // if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
-    //                         //     next.file = lines.files.get(call_file as usize).map(String::as_str);
-    //                         // }
-    //                     }
-    //
-    //                     res.push(CallLocation {
-    //                         symbol: Some(format!("{:#}", name)),
-    //                         file: None,
-    //                         line: subroutine_attrs.line,
-    //                         column: subroutine_attrs.column,
-    //                     });
-    //                 }
-    //             }
-    //         }
-    //
-    //         self.find_inlined(child, probe, res)?;
-    //         return Ok(());
-    //     }
-    //
-    //     Ok(())
-    // }
-
     fn inlined_functions(
         &self,
         mut entries: EntriesRaw<R>,
         probe: u64,
         depth: isize,
+        res: &mut Vec<CallLocation>,
     ) -> Result<()> {
         loop {
             let next_depth = entries.next_depth();
@@ -363,36 +274,31 @@ impl<R: Reader> Unit<R> {
                         };
 
                         if attrs.match_pc(probe) || range_match {
-                            eprintln!("matched inlined function");
                             if let Some(name) = &attrs.name {
-                                eprintln!(
-                                    "matched inlined function has name {:?} {:?} {:?}",
-                                    name, attrs.line, attrs.column
-                                );
-                                // if let Ok(name) = name.to_string_lossy() {
-                                //     eprintln!("matched inlined function has nor name");
-                                //     if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
-                                //         eprintln!("matched inlined function has demangle name");
-                                //         if let Some(call_file) = subroutine_attrs.file {
-                                //             // if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
-                                //             //     next.file = lines.files.get(call_file as usize).map(String::as_str);
-                                //             // }
-                                //         }
-                                //
-                                //         res.push(CallLocation {
-                                //             symbol: Some(format!("{:#}", name)),
-                                //             file: None,
-                                //             line: subroutine_attrs.line,
-                                //             column: subroutine_attrs.column,
-                                //         });
-                                //     }
-                                // }
+                                if let Ok(name) = name.to_string_lossy() {
+                                    if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
+                                        // eprintln!("matched inlined function has demangle name");
+                                        // if let Some(call_file) = subroutine_attrs.file {
+                                        //     // if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
+                                        //     //     next.file = lines.files.get(call_file as usize).map(String::as_str);
+                                        //     // }
+                                        // }
+
+
+                                        res.push(CallLocation {
+                                            symbol: Some(format!("{:#}", name)),
+                                            file: None,
+                                            line: attrs.line,
+                                            column: attrs.column,
+                                        });
+                                    }
+                                }
                             }
-
-                            self.inlined_functions(entries, probe, next_depth)?;
-
-                            return Ok(());
                         }
+
+                        self.inlined_functions(entries, probe, next_depth, res)?;
+
+                        return Ok(());
                     }
                     _ => {
                         entries.skip_attributes(abbrev.attributes())?;
@@ -436,6 +342,6 @@ impl<R: Reader> Unit<R> {
             };
         }
 
-        self.inlined_functions(entries, probe, depth)
+        self.inlined_functions(entries, probe, depth, res)
     }
 }
