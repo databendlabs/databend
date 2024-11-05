@@ -766,11 +766,7 @@ pub(crate) mod soundex {
     use databend_common_expression::types::string::StringColumnBuilder;
     use databend_common_expression::EvalContext;
 
-    pub fn soundex(
-        val: &str,
-        output: &mut StringColumnBuilder,
-        _eval_context: &mut EvalContext,
-    ) {
+    pub fn soundex(val: &str, output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
         let mut last = None;
         let mut count = 0;
 

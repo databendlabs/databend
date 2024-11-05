@@ -248,8 +248,7 @@ impl<'a> FuseEncodingImpl<'a> {
                 compressed_size.reserve(num_row);
                 uncompressed_size.reserve(num_row);
                 let tmp_table_name = StringColumnBuilder::repeat(table, num_row);
-                let tmp_column_name =
-                    StringColumnBuilder::repeat(&column_info.field.name, num_row);
+                let tmp_column_name = StringColumnBuilder::repeat(&column_info.field.name, num_row);
                 let tmp_column_type = StringColumnBuilder::repeat(type_str, num_row);
                 for p in pages_info {
                     validity_size.push(p.validity_size);
