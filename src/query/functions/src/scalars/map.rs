@@ -34,6 +34,8 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -347,6 +349,92 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .any(|(k, _)| k == key)
             },
         );
+
+    registry.register_3_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>, _, _>(
+        "map_insert",
+        |_, map_domain, key_domain, value_domain| {
+            let domain = map_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
+                        .unwrap_or((key_domain.clone(), value_domain.clone()))
+                });
+            FunctionDomain::Domain(domain)
+        },
+        vectorize_with_builder_3_arg::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>>(
+            |map, key, val, output, ctx| {
+                let key_type = &ctx.generics[0];
+                if !check_valid_map_key_type(key_type) {
+                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+                    output.commit_row();
+                    return;
+                }
+                if let Some(map) = map {
+                    for (k, _) in map.iter() {
+                        if k == key {
+                            ctx.set_error(output.len(), format!("map key `{}` duplicate", key));
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                    for (k, v) in map.iter() {
+                        output.put_item((k, v));
+                    }
+                }
+                output.put_item((key, val));
+                output.commit_row();
+        })
+    );
+
+    registry.register_4_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, BooleanType, MapType<GenericType<0>, GenericType<1>>, _, _>(
+        "map_insert",
+        |_, map_domain, key_domain, value_domain, _| {
+            let domain = map_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
+                        .unwrap_or((key_domain.clone(), value_domain.clone()))
+                });
+            FunctionDomain::Domain(domain)
+        },
+        vectorize_with_builder_4_arg::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, BooleanType, MapType<GenericType<0>, GenericType<1>>>(
+            |map, key, val, update_flag, output, ctx| {
+                let key_type = &ctx.generics[0];
+                if !check_valid_map_key_type(key_type) {
+                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+                    output.commit_row();
+                    return;
+                }
+                let mut is_duplicate = false;
+                if let Some(map) = map {
+                    for (k, _) in map.iter() {
+                        if k == key && !update_flag {
+                            ctx.set_error(output.len(), format!("map key `{}` duplicate", key));
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                    for (k, v) in map.iter() {
+                        if k == key {
+                            is_duplicate = true;
+                            output.put_item((k, val.clone()));
+                        } else {
+                            output.put_item((k, v));
+                        }
+                    }
+                }
+                if !is_duplicate {
+                    output.put_item((key, val));
+                }
+                output.commit_row();
+        })
+    );
 
     registry.register_function_factory("map_pick", |_, args_type: &[DataType]| {
         let return_type = check_map_arg_types(args_type)?;
