@@ -49,7 +49,7 @@ impl<R: Reader> SubroutineAttrs<R> {
         }
     }
 
-    pub fn set_attr<R: Reader>(&mut self, attr: Attribute<R>, unit: &Unit<R>) {
+    pub fn set_attr(&mut self, attr: Attribute<R>, unit: &Unit<R>) {
         match attr.name() {
             gimli::DW_AT_low_pc => {
                 if let AttributeValue::Addr(value) = attr.value() {
@@ -123,7 +123,7 @@ impl<R: Reader> Unit<R> {
                     self.head.format(),
                     self.attrs.str_offsets_base.clone(),
                     index,
-                )?;
+                ).ok()?;
                 self.debug_str.get_str(offset).ok()
             }
             _ => None,
@@ -144,14 +144,12 @@ impl<R: Reader> Unit<R> {
             match entries.read_attribute(*spec) {
                 Ok(ref attr) => match attr.name() {
                     gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
-                        if let Ok(val) = self.attr_str(attr.value()) {
+                        if let Some(val) = self.attr_str(attr.value()) {
                             return Ok(Some(val));
                         }
                     }
                     gimli::DW_AT_name => {
-                        if let Ok(val) = self.attr_str(attr.value()) {
-                            name = Some(val);
-                        }
+                        name = self.attr_str(attr.value());
                     }
                     gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
                         next = Some(attr.value());
@@ -195,7 +193,7 @@ impl<R: Reader> Unit<R> {
         }
     }
 
-    pub(crate) fn find_inlined_functions(&self, probe: u64, offset: UnitOffset, res: &mut Vec<CallLocation>) -> Result<()> {
+    pub(crate) fn find_inlined_functions(&self, probe: u64, offset: UnitOffset<R::Offset>, res: &mut Vec<CallLocation>) -> Result<()> {
         let tree = self.head.entries_tree(&self.abbreviations, Some(offset))?;
         self.find_inlined(tree.root()?, probe, res)?;
         Ok(())
