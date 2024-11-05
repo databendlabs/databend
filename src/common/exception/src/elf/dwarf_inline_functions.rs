@@ -67,7 +67,7 @@ impl<R: Reader> SubroutineAttrs<R> {
                 }
             }
             gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
-                if let Ok(val) = unit.attr_str(attr.value()) {
+                if let Some(val) = unit.attr_str(attr.value()) {
                     self.name = Some(val);
                 }
             }
@@ -194,7 +194,7 @@ impl<R: Reader> Unit<R> {
     }
 
     pub(crate) fn find_inlined_functions(&self, probe: u64, offset: UnitOffset<R::Offset>, res: &mut Vec<CallLocation>) -> Result<()> {
-        let tree = self.head.entries_tree(&self.abbreviations, Some(offset))?;
+        let mut tree = self.head.entries_tree(&self.abbreviations, Some(offset))?;
         self.find_inlined(tree.root()?, probe, res)?;
         Ok(())
     }
