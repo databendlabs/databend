@@ -20,6 +20,7 @@ use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::Result;
 
 use crate::types::binary::BinaryColumn;
@@ -158,8 +159,19 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
     }
 
     fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
-        let mut builder = MutableBitmap::with_capacity(self.num_rows);
+        // Fast path: avoid iterating column to generate a new bitmap.
+        // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
+        // we can just slice it.
+        if self.num_rows <= bitmap.len()
+            && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+        {
+            self.result = Some(Value::Column(BooleanType::upcast_column(
+                bitmap.sliced(0, self.num_rows),
+            )));
+            return Ok(());
+        }
 
+        let mut builder = MutableBitmap::with_capacity(self.num_rows);
         let src = bitmap.values();
         let offset = bitmap.offset();
         self.ranges.iter().for_each(|range| {
@@ -199,7 +211,10 @@ impl<'a> TakeRangeVisitor<'a> {
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
         let values = buffer.as_slice();
         for range in self.ranges {
-            builder.extend(&values[range.start as usize..range.end as usize]);
+            unsafe {
+                builder
+                    .extend_from_slice_unchecked(&values[range.start as usize..range.end as usize])
+            };
         }
         builder.into()
     }

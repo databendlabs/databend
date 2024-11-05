@@ -19,8 +19,8 @@ use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_exception::Result;
-use string::StringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
@@ -31,7 +31,6 @@ use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
-use crate::SELECTIVITY_THRESHOLD;
 
 pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
@@ -163,9 +162,9 @@ where I: databend_common_arrow::arrow::types::Index
         // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
         // we can just slice it.
         if num_rows <= col.len() && (col.unset_bits() == 0 || col.unset_bits() == col.len()) {
-            let mut bitmap = col.clone();
-            bitmap.slice(0, num_rows);
-            self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
+            self.result = Some(Value::Column(BooleanType::upcast_column(
+                col.sliced(0, num_rows),
+            )));
             return Ok(());
         }
 
@@ -230,7 +229,7 @@ where I: databend_common_arrow::arrow::types::Index
         let result: Vec<T> = self
             .indices
             .iter()
-            .map(|index| unsafe { *col.get_unchecked(index.to_usize()) })
+            .map(|index| unsafe { *col.get_unchecked_release(index.to_usize()) })
             .collect();
         result.into()
     }
@@ -248,30 +247,39 @@ where I: databend_common_arrow::arrow::types::Index
     }
 
     fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
-        let num_rows = self.indices.len();
-
-        if num_rows as f64 > col.len() as f64 * SELECTIVITY_THRESHOLD {
-            // reuse the buffers
-            let new_views = self.take_primitive_types(col.data.views().clone());
-            let new_col = unsafe {
-                Utf8ViewArray::new_unchecked_unknown_md(
-                    col.data.data_type().clone(),
-                    new_views,
-                    col.data.data_buffers().clone(),
-                    None,
-                    Some(col.data.total_buffer_len()),
-                )
-            };
-            StringColumn::new(new_col)
-        } else {
-            let mut builder = StringColumnBuilder::with_capacity(num_rows);
-            for index in self.indices.iter() {
-                unsafe {
-                    builder.put_str(col.index_unchecked(index.to_usize()));
-                    builder.commit_row();
-                }
-            }
-            builder.build()
-        }
+        let new_views = self.take_primitive_types(col.data.views().clone());
+        let new_col = unsafe {
+            Utf8ViewArray::new_unchecked_unknown_md(
+                col.data.data_type().clone(),
+                new_views,
+                col.data.data_buffers().clone(),
+                None,
+                Some(col.data.total_buffer_len()),
+            )
+        };
+        StringColumn::new(new_col)
+        // if num_rows as f64 > col.len() as f64 * SELECTIVITY_THRESHOLD {
+        //     // reuse the buffers
+        //     let new_views = self.take_primitive_types(col.data.views().clone());
+        //     let new_col = unsafe {
+        //         Utf8ViewArray::new_unchecked_unknown_md(
+        //             col.data.data_type().clone(),
+        //             new_views,
+        //             col.data.data_buffers().clone(),
+        //             None,
+        //             Some(col.data.total_buffer_len()),
+        //         )
+        //     };
+        //     StringColumn::new(new_col)
+        // } else {
+        //     let mut builder = StringColumnBuilder::with_capacity(num_rows);
+        //     for index in self.indices.iter() {
+        //         unsafe {
+        //             builder.put_str(col.index_unchecked(index.to_usize()));
+        //             builder.commit_row();
+        //         }
+        //     }
+        //     builder.build()
+        // }
     }
 }
