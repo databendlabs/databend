@@ -235,11 +235,11 @@ impl<R: Reader> Unit<R> {
             if let Some(name) = &subroutine_attrs.name {
                 if let Ok(name) = name.to_string_lossy() {
                     if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
-                        // if let Some(call_file) = subroutine_attrs.file {
-                        //     if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
-                        //         next.file = lines.files.get(call_file as usize).map(String::as_str);
-                        //     }
-                        // }
+                        if let Some(call_file) = subroutine_attrs.file {
+                            // if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
+                            //     next.file = lines.files.get(call_file as usize).map(String::as_str);
+                            // }
+                        }
 
                         res.push(CallLocation {
                             symbol: Some(format!("{:#}", name)),
