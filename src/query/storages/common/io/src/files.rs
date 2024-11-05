@@ -70,9 +70,12 @@ impl Files {
 
             // At most 3 concurrent batch deletions allowed, mitigate rate limit errors
             let permit = (threads_nums / 2).clamp(1, 3);
+
+            // IO tasks, 2 threads should be enough
+            let pool_thread_number = 2;
             execute_futures_in_parallel(
                 tasks,
-                threads_nums,
+                pool_thread_number,
                 permit,
                 "batch-remove-files-worker".to_owned(),
             )
