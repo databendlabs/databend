@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_meta_raft_store::log::RaftLog;
-use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
 use test_harness::test;

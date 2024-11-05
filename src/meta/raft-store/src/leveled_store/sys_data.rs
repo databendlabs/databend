@@ -14,11 +14,11 @@
 
 use std::collections::BTreeMap;
 
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::LogId;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::StoredMembership;
 
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 
