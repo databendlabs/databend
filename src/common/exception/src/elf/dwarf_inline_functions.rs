@@ -335,7 +335,7 @@ impl<R: Reader> Unit<R> {
         let abbrev = entries.read_abbreviation()?.unwrap();
         debug_assert_eq!(abbrev.tag(), gimli::DW_TAG_subprogram);
 
-        let mut name = None;
+        // let mut name = None;
         for spec in abbrev.attributes() {
             let attr = entries.read_attribute(*spec)?;
             match attr.name() {
