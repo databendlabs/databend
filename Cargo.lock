@@ -4097,6 +4097,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",
+ "databend-common-metrics",
  "databend-enterprise-storage-encryption",
  "flagset",
  "futures",

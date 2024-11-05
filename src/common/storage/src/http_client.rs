@@ -17,6 +17,7 @@ use std::mem;
 use std::str::FromStr;
 
 use databend_common_base::http_client::GLOBAL_HTTP_CLIENT;
+use databend_common_metrics::storage::metrics_inc_storage_http_requests_count;
 use futures::TryStreamExt;
 use http::Request;
 use http::Response;
@@ -44,6 +45,19 @@ impl HttpFetch for StorageHttpClient {
         // the clone here is cheap.
         let uri = req.uri().clone();
         let is_head = req.method() == http::Method::HEAD;
+
+        let host = uri.host().unwrap_or_default();
+        let method = match req.method() {
+            &http::Method::GET => {
+                if uri.path() == "/" {
+                    "LIST"
+                } else {
+                    "GET"
+                }
+            }
+            m => m.as_str(),
+        };
+        metrics_inc_storage_http_requests_count(host.to_string(), method.to_string());
 
         let (parts, body) = req.into_parts();
 
