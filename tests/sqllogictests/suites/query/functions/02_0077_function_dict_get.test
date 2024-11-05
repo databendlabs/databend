@@ -1,56 +1,173 @@
 statement ok
-create or replace table t(a string)
+CREATE OR REPLACE DICTIONARY redis_d1(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 statement ok
-insert into t values('a'),('b'),('%c')
+CREATE OR REPLACE DICTIONARY redis_d2(key string not null, value string null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
+CREATE OR REPLACE DICTIONARY redis_d3(key string null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement ok
+CREATE OR REPLACE DICTIONARY redis_d4(key string null, value string null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement ok
+CREATE OR REPLACE DICTIONARY redis_d5(key string not null, value string not null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement ok
+CREATE OR REPLACE DICTIONARY redis_d6(key string not null, value string null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement ok
+CREATE OR REPLACE DICTIONARY redis_d7(key string null, value string not null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement ok
+CREATE OR REPLACE DICTIONARY redis_d8(key string null, value string null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 query T
-select a, dict_get(d, 'value', a) from t
-----
-a a_value
-b b_value
-%c (empty)
-
-query T
-SELECT dict_get(d, 'value', 'b')
+SELECT dict_get(redis_d1, 'value', 'b')
 ----
 b_value
 
 statement error 1006
-select dict_get(d, 'value11', 'a')
+select dict_get(redis_d1, 'value11', 'a')
 
 statement error 3114
 select dict_get(test, 'value', 'b')
 
 query T
-SELECT dict_get(d, 'value', 1)
+SELECT dict_get(redis_d1, 'value', 1)
 ----
 1_value
 
 statement ok
-create or replace table t2(id int, name string)
+create or replace table redis_t1(key string null)
 
 statement ok
-insert into t2 values(1, 'Alice'),(2, 'Bob'),(3, 'Lily'),(4, 'Tom'),(5, 'Tim')
+insert into redis_t1 values('a'),('b'),('%c'),(null)
+
+query T
+select key, dict_get(redis_d1, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c (empty)
+NULL (empty)
+
+query T
+select key, dict_get(redis_d2, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c NULL
+NULL NULL
+
+query T
+select key, dict_get(redis_d3, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c (empty)
+NULL (empty)
+
+query T
+select key, dict_get(redis_d4, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c NULL
+NULL NULL
+
+query T
+select key, dict_get(redis_d5, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c default_value
+NULL default_value
+
+query T
+select key, dict_get(redis_d6, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c default_value
+NULL default_value
+
+query T
+select key, dict_get(redis_d7, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c default_value
+NULL default_value
+
+query T
+select key, dict_get(redis_d8, 'value', key) from redis_t1
+----
+a a_value
+b b_value
+%c default_value
+NULL default_value
 
 statement ok
-CREATE OR REPLACE DICTIONARY d2(id int, name string, age uint16, salary float, active bool) PRIMARY KEY id SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
+create or replace table redis_t2(key string not null)
+
+statement ok
+insert into redis_t2 values('a'),('a'),('b'),('b'),('%c')
+
+query T
+select key, dict_get(redis_d1, 'value', key) from redis_t2
+----
+a a_value
+a a_value
+b b_value
+b b_value
+%c (empty)
+
+statement ok
+create or replace table redis_t3(key string null)
+
+statement ok
+insert into redis_t3 values(null),(null)
+
+query T
+select key, dict_get(redis_d2, 'value', key) from redis_t3
+----
+NULL NULL
+NULL NULL
+
+query T
+select key, dict_get(redis_d3, 'value', key) from redis_t3
+----
+NULL (empty)
+NULL (empty)
+
+query T
+select key, dict_get(redis_d7, 'value', key) from redis_t3
+----
+NULL default_value
+NULL default_value
+
+statement ok
+create or replace table mysql_t1(id int, name string)
+
+statement ok
+insert into mysql_t1 values(1, 'Alice'),(2, 'Bob'),(3, 'Lily'),(4, 'Tom'),(5, 'Tim')
+
+statement ok
+CREATE OR REPLACE DICTIONARY mysql_d1(id int, name string, age uint16, salary float, active bool) PRIMARY KEY id SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
 
 query TIFT
-select dict_get(d2, 'name', 1), dict_get(d2, 'age', 1), dict_get(d2, 'salary', 1), dict_get(d2, 'active', 1)
+select dict_get(mysql_d1, 'name', 1), dict_get(mysql_d1, 'age', 1), dict_get(mysql_d1, 'salary', 1), dict_get(mysql_d1, 'active', 1)
 ----
 Alice 24 100.0 1
 
 query TIFT
-select dict_get(d2, 'name', 5), dict_get(d2, 'age', 5), dict_get(d2, 'salary', 5), dict_get(d2, 'active', 5)
+select dict_get(mysql_d1, 'name', 5), dict_get(mysql_d1, 'age', 5), dict_get(mysql_d1, 'salary', 5), dict_get(mysql_d1, 'active', 5)
 ----
 NULL NULL NULL NULL
 
 query ITIFT
-select id, dict_get(d2, 'name', id), dict_get(d2, 'age', id), dict_get(d2, 'salary', id), dict_get(d2, 'active', id) from t2
+select id, dict_get(mysql_d1, 'name', id), dict_get(mysql_d1, 'age', id), dict_get(mysql_d1, 'salary', id), dict_get(mysql_d1, 'active', id) from mysql_t1
 ----
 1 Alice 24 100.0 1
 2 Bob 35 200.1 0
@@ -59,26 +176,26 @@ select id, dict_get(d2, 'name', id), dict_get(d2, 'age', id), dict_get(d2, 'sala
 5 NULL NULL NULL NULL
 
 query ITI
-select id, name, dict_get(d2, 'age', id) as age from t2 where age > 35
+select id, name, dict_get(mysql_d1, 'age', id) as age from mysql_t1 where age > 35
 ----
 3 Lily 41
 4 Tom 55
 
 statement ok
-CREATE OR REPLACE DICTIONARY d3(id int, name string, age uint16, salary float, active bool) PRIMARY KEY name SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
+CREATE OR REPLACE DICTIONARY mysql_d2(id int, name string, age uint16, salary float, active bool) PRIMARY KEY name SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
 
 query TIFT
-select dict_get(d3, 'id', 'Alice'), dict_get(d3, 'age', 'Alice'), dict_get(d3, 'salary', 'Alice'), dict_get(d3, 'active', 'Alice')
+select dict_get(mysql_d2, 'id', 'Alice'), dict_get(mysql_d2, 'age', 'Alice'), dict_get(mysql_d2, 'salary', 'Alice'), dict_get(mysql_d2, 'active', 'Alice')
 ----
 1 24 100.0 1
 
 query TIFT
-select dict_get(d3, 'id', 'Nancy'), dict_get(d3, 'age', 'Nancy'), dict_get(d3, 'salary', 'Nancy'), dict_get(d3, 'active', 'Nancy')
+select dict_get(mysql_d2, 'id', 'Nancy'), dict_get(mysql_d2, 'age', 'Nancy'), dict_get(mysql_d2, 'salary', 'Nancy'), dict_get(mysql_d2, 'active', 'Nancy')
 ----
 NULL NULL NULL NULL
 
 query ITIFT
-select name, dict_get(d3, 'id', name), dict_get(d3, 'age', name), dict_get(d3, 'salary', name), dict_get(d3, 'active', name) from t2
+select name, dict_get(mysql_d2, 'id', name), dict_get(mysql_d2, 'age', name), dict_get(mysql_d2, 'salary', name), dict_get(mysql_d2, 'active', name) from mysql_t1
 ----
 Alice 1 24 100.0 1
 Bob 2 35 200.1 0

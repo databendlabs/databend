@@ -118,7 +118,7 @@ impl DictionaryMeta {
             .options
             .get("port")
             .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
-        Ok(format!("tcp://{}:{}", host, port))
+        Ok(format!("redis://{}:{}", host, port))
     }
 }
 

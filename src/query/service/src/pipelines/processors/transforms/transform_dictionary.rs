@@ -13,27 +13,33 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::string::String;
 use std::sync::Arc;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringColumn;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_storage::build_operator;
 use jiff::tz::TimeZone;
-use opendal::services::Redis;
-use opendal::Operator;
+use redis::aio::ConnectionManager;
+use redis::AsyncCommands;
+use redis::Client;
 use sqlx::MySqlPool;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
@@ -44,11 +50,253 @@ use crate::sql::plans::DictionarySource;
 use crate::sql::IndexType;
 
 pub(crate) enum DictionaryOperator {
-    Operator(Operator),
+    Redis(ConnectionManager),
     Mysql((MySqlPool, String)),
 }
 
 impl DictionaryOperator {
+    async fn dict_get(
+        &self,
+        value: &Value<AnyType>,
+        data_type: &DataType,
+        default_value: &Scalar,
+    ) -> Result<Value<AnyType>> {
+        match self {
+            DictionaryOperator::Redis(connection) => match value {
+                Value::Scalar(scalar) => match scalar {
+                    Scalar::String(str) => {
+                        self.get_scalar_value_from_redis(str, connection, data_type, default_value)
+                            .await
+                    }
+                    Scalar::Null => Ok(Value::Scalar(default_value.clone())),
+                    _ => Err(ErrorCode::DictionarySourceError(format!(
+                        "Redis dictionary operator currently does not support value type {}",
+                        scalar.as_ref().infer_data_type(),
+                    ))),
+                },
+                Value::Column(column) => match column {
+                    Column::Nullable(box nullable_col) => match &nullable_col.column {
+                        Column::String(str_col) => {
+                            self.get_column_values_from_redis(
+                                str_col,
+                                &Some(nullable_col.validity.clone()),
+                                data_type,
+                                connection,
+                                default_value,
+                            )
+                            .await
+                        }
+                        _ => Err(ErrorCode::DictionarySourceError(format!(
+                            "Redis dictionary operator currently does not support value type {}",
+                            column.data_type()
+                        ))),
+                    },
+                    Column::String(str_col) => {
+                        self.get_column_values_from_redis(
+                            str_col,
+                            &None,
+                            data_type,
+                            connection,
+                            default_value,
+                        )
+                        .await
+                    }
+                    _ => Err(ErrorCode::DictionarySourceError(format!(
+                        "Redis dictionary operator currently does not support value type {}",
+                        column.data_type()
+                    ))),
+                },
+            },
+            DictionaryOperator::Mysql((pool, sql)) => match value {
+                Value::Scalar(scalar) => {
+                    let value = self
+                        .get_data_from_mysql(scalar.as_ref(), data_type, pool, sql)
+                        .await?
+                        .unwrap_or(default_value.clone());
+                    Ok(Value::Scalar(value))
+                }
+                Value::Column(column) => {
+                    let mut builder = ColumnBuilder::with_capacity(data_type, column.len());
+                    for scalar_ref in column.iter() {
+                        let value = self
+                            .get_data_from_mysql(scalar_ref, data_type, pool, sql)
+                            .await?
+                            .unwrap_or(default_value.clone());
+                        builder.push(value.as_ref());
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+            },
+        }
+    }
+
+    async fn get_scalar_value_from_redis(
+        &self,
+        key: &String,
+        connection: &ConnectionManager,
+        data_type: &DataType,
+        default_value: &Scalar,
+    ) -> Result<Value<AnyType>> {
+        let mut conn = connection.clone();
+        let redis_val: redis::Value = conn.get(key).await.unwrap();
+        let res = Self::from_redis_value_to_scalar(&redis_val, data_type, default_value)?;
+        match res {
+            Scalar::String(str) => Ok(Value::Scalar(Scalar::String(str))),
+            _ => unreachable!(),
+        }
+    }
+
+    async fn get_column_values_from_redis(
+        &self,
+        str_col: &StringColumn,
+        validity: &Option<Bitmap>,
+        data_type: &DataType,
+        connection: &ConnectionManager,
+        default_value: &Scalar,
+    ) -> Result<Value<AnyType>> {
+        // step-1: deduplicate the keys in the column.
+        let key_cnt = str_col.len();
+        let mut keys: Vec<&str> = vec![];
+        let mut key_map = HashMap::new();
+        for i in 0..key_cnt {
+            if self.check_validity(validity, i) {
+                let key = unsafe { str_col.index_unchecked(i) };
+                if !key_map.contains_key(key) {
+                    keys.push(key);
+                    let index = key_map.len();
+                    key_map.insert(key, index);
+                }
+            }
+        }
+
+        // step-2: get the values from redis via mget.
+        let mut builder = ColumnBuilder::with_capacity(data_type, key_cnt);
+        if keys.is_empty() {
+            // keys in the column only have null.
+            for _ in 0..key_cnt {
+                builder.push(default_value.as_ref());
+            }
+        } else {
+            let mut conn = connection.clone();
+            let redis_val: redis::Value = conn.get(keys).await.unwrap();
+            let res = Self::from_redis_value_to_scalar(&redis_val, data_type, default_value)?;
+            match res {
+                Scalar::Array(arr) => {
+                    for i in 0..key_cnt {
+                        if self.check_validity(validity, i) {
+                            let key = unsafe { str_col.index_unchecked(i) };
+                            let index = key_map[key];
+                            let val = unsafe { arr.index_unchecked(index) };
+                            builder.push(val);
+                        } else {
+                            builder.push(default_value.as_ref());
+                        }
+                    }
+                }
+                Scalar::String(str) => {
+                    let val = Scalar::String(str);
+                    for i in 0..key_cnt {
+                        if self.check_validity(validity, i) {
+                            builder.push(val.as_ref());
+                        } else {
+                            builder.push(default_value.as_ref());
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        Ok(Value::Column(builder.build()))
+    }
+
+    #[inline]
+    fn from_redis_value_to_scalar(
+        rv: &redis::Value,
+        data_type: &DataType,
+        default_value: &Scalar,
+    ) -> Result<Scalar> {
+        match rv {
+            redis::Value::BulkString(bs) => {
+                let str = unsafe { String::from_utf8_unchecked(bs.to_vec()) };
+                Ok(Scalar::String(str))
+            }
+            redis::Value::Array(arr) => {
+                let mut builder = ColumnBuilder::with_capacity(data_type, 1);
+                for item in arr {
+                    let scalar = Self::from_redis_value_to_scalar(item, data_type, default_value)?;
+                    builder.push(scalar.as_ref());
+                }
+                Ok(Scalar::Array(builder.build()))
+            }
+            redis::Value::Nil => Ok(default_value.clone()),
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn check_validity(&self, validity: &Option<Bitmap>, i: usize) -> bool {
+        match validity {
+            Some(vali_bitmap) => vali_bitmap.get_bit(i),
+            None => true,
+        }
+    }
+
+    async fn get_data_from_mysql(
+        &self,
+        key: ScalarRef<'_>,
+        data_type: &DataType,
+        pool: &MySqlPool,
+        sql: &String,
+    ) -> Result<Option<Scalar>> {
+        if key == ScalarRef::Null {
+            return Ok(None);
+        }
+        match data_type.remove_nullable() {
+            DataType::Boolean => {
+                let value: Option<bool> = sqlx::query_scalar(sql)
+                    .bind(self.format_key(key))
+                    .fetch_optional(pool)
+                    .await?;
+                Ok(value.map(Scalar::Boolean))
+            }
+            DataType::String => {
+                let value: Option<String> = sqlx::query_scalar(sql)
+                    .bind(self.format_key(key))
+                    .fetch_optional(pool)
+                    .await?;
+                Ok(value.map(Scalar::String))
+            }
+            DataType::Number(num_ty) => {
+                with_integer_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => {
+                        let value: Option<NUM_TYPE> = sqlx::query_scalar(&sql)
+                            .bind(self.format_key(key))
+                            .fetch_optional(pool)
+                            .await?;
+                        Ok(value.map(|v| Scalar::Number(NUM_TYPE::upcast_scalar(v))))
+                    }
+                    NumberDataType::Float32 => {
+                        let value: Option<f32> = sqlx::query_scalar(sql)
+                            .bind(self.format_key(key))
+                            .fetch_optional(pool)
+                            .await?;
+                        Ok(value.map(|v| Scalar::Number(NumberScalar::Float32(v.into()))))
+                    }
+                    NumberDataType::Float64 => {
+                        let value: Option<f64> = sqlx::query_scalar(sql)
+                            .bind(self.format_key(key))
+                            .fetch_optional(pool)
+                            .await?;
+                        Ok(value.map(|v| Scalar::Number(NumberScalar::Float64(v.into()))))
+                    }
+                })
+            }
+            _ => Err(ErrorCode::DictionarySourceError(format!(
+                "MySQL dictionary operator currently does not support value type {data_type}"
+            ))),
+        }
+    }
+
     fn format_key(&self, key: ScalarRef<'_>) -> String {
         match key {
             ScalarRef::String(s) => s.to_string(),
@@ -57,81 +305,6 @@ impl DictionaryOperator {
                 format!("{}", timestamp_to_string(t, &TimeZone::UTC))
             }
             _ => format!("{}", key),
-        }
-    }
-
-    async fn dict_get(&self, key: ScalarRef<'_>, data_type: &DataType) -> Result<Option<Scalar>> {
-        if key == ScalarRef::Null {
-            return Ok(None);
-        }
-        match self {
-            DictionaryOperator::Operator(op) => {
-                if let ScalarRef::String(key) = key {
-                    let buffer = op.read(key).await;
-                    match buffer {
-                        Ok(res) => {
-                            let value =
-                                unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
-                            Ok(Some(Scalar::String(value)))
-                        }
-                        Err(e) => {
-                            if e.kind() == opendal::ErrorKind::NotFound {
-                                Ok(None)
-                            } else {
-                                Err(ErrorCode::DictionarySourceError(format!(
-                                    "dictionary source error: {e}"
-                                )))
-                            }
-                        }
-                    }
-                } else {
-                    Ok(None)
-                }
-            }
-            DictionaryOperator::Mysql((pool, sql)) => match data_type.remove_nullable() {
-                DataType::Boolean => {
-                    let value: Option<bool> = sqlx::query_scalar(sql)
-                        .bind(self.format_key(key))
-                        .fetch_optional(pool)
-                        .await?;
-                    Ok(value.map(Scalar::Boolean))
-                }
-                DataType::String => {
-                    let value: Option<String> = sqlx::query_scalar(sql)
-                        .bind(self.format_key(key))
-                        .fetch_optional(pool)
-                        .await?;
-                    Ok(value.map(Scalar::String))
-                }
-                DataType::Number(num_ty) => {
-                    with_integer_mapped_type!(|NUM_TYPE| match num_ty {
-                        NumberDataType::NUM_TYPE => {
-                            let value: Option<NUM_TYPE> = sqlx::query_scalar(&sql)
-                                .bind(self.format_key(key))
-                                .fetch_optional(pool)
-                                .await?;
-                            Ok(value.map(|v| Scalar::Number(NUM_TYPE::upcast_scalar(v))))
-                        }
-                        NumberDataType::Float32 => {
-                            let value: Option<f32> = sqlx::query_scalar(sql)
-                                .bind(self.format_key(key))
-                                .fetch_optional(pool)
-                                .await?;
-                            Ok(value.map(|v| Scalar::Number(NumberScalar::Float32(v.into()))))
-                        }
-                        NumberDataType::Float64 => {
-                            let value: Option<f64> = sqlx::query_scalar(sql)
-                                .bind(self.format_key(key))
-                                .fetch_optional(pool)
-                                .await?;
-                            Ok(value.map(|v| Scalar::Number(NumberScalar::Float64(v.into()))))
-                        }
-                    })
-                }
-                _ => Err(ErrorCode::DictionarySourceError(format!(
-                    "unsupported value type {data_type}"
-                ))),
-            },
         }
     }
 }
@@ -145,18 +318,11 @@ impl TransformAsyncFunction {
             if let AsyncFunctionArgument::DictGetFunction(dict_arg) = &async_func_desc.func_arg {
                 match &dict_arg.dict_source {
                     DictionarySource::Redis(redis_source) => {
-                        let mut builder = Redis::default().endpoint(&redis_source.connection_url);
-                        if let Some(ref username) = redis_source.username {
-                            builder = builder.username(username);
-                        }
-                        if let Some(ref password) = redis_source.password {
-                            builder = builder.password(password);
-                        }
-                        if let Some(db_index) = redis_source.db_index {
-                            builder = builder.db(db_index);
-                        }
-                        let op = build_operator(builder)?;
-                        operators.insert(i, Arc::new(DictionaryOperator::Operator(op)));
+                        let client = Client::open(redis_source.connection_url.clone())?;
+                        let conn = databend_common_base::runtime::block_on(
+                            ConnectionManager::new(client),
+                        )?;
+                        operators.insert(i, Arc::new(DictionaryOperator::Redis(conn)));
                     }
                     DictionarySource::Mysql(sql_source) => {
                         let mysql_pool = databend_common_base::runtime::block_on(
@@ -187,26 +353,8 @@ impl TransformAsyncFunction {
         // only support one key field.
         let arg_index = arg_indices[0];
         let entry = data_block.get_by_offset(arg_index);
-        let value = match &entry.value {
-            Value::Scalar(scalar) => {
-                let value = op
-                    .dict_get(scalar.as_ref(), data_type)
-                    .await?
-                    .unwrap_or(dict_arg.default_value.clone());
-                Value::Scalar(value)
-            }
-            Value::Column(column) => {
-                let mut builder = ColumnBuilder::with_capacity(data_type, column.len());
-                for scalar_ref in column.iter() {
-                    let value = op
-                        .dict_get(scalar_ref, data_type)
-                        .await?
-                        .unwrap_or(dict_arg.default_value.clone());
-                    builder.push(value.as_ref());
-                }
-                Value::Column(builder.build())
-            }
-        };
+        let default_value = dict_arg.default_value.clone();
+        let value = op.dict_get(&entry.value, data_type, &default_value).await?;
         let entry = BlockEntry {
             data_type: data_type.clone(),
             value,
