@@ -71,41 +71,31 @@ impl<R: Reader> SubprogramAttrs<R> {
 
 impl<R: Reader> Unit<R> {
     pub(crate) fn find_subprogram(&self, probe: u64) -> gimli::Result<Option<UnitOffset<R::Offset>>> {
-        let mut entries = self.head.entries_tree(&self.abbreviations, None)?;
-        self.traverse_subprogram(entries.root()?, probe)
-    }
+        let entries = self.head.entries_raw(&self.abbreviations, None)?;
 
-    fn traverse_subprogram(
-        &self,
-        mut node: EntriesTreeNode<R>,
-        probe: u64,
-    ) -> gimli::Result<Option<UnitOffset<R::Offset>>> {
-        let mut children = node.children();
-        while let Some(child) = children.next()? {
-            if child.entry().tag() == gimli::DW_TAG_subprogram {
-                let mut attrs = child.entry().attrs();
-                let mut subprogram_attrs = SubprogramAttrs::<R>::create();
+        while !entries.is_empty() {
+            let dw_die_offset = entries.next_offset();
+            if let Some(abbrev) = entries.read_abbreviation()? {
+                if abbrev.tag() == gimli::DW_TAG_subprogram {
+                    let mut attrs = SubprogramAttrs::create();
 
-                while let Some(attr) = attrs.next()? {
-                    subprogram_attrs.set_attr(attr);
+                    for spec in abbrev.attributes() {
+                        let attr = entries.read_attribute(*spec)?;
+                        attrs.set_attr(attr);
+                    }
+
+                    let range_match = match self.attrs.ranges_offset {
+                        None => true,
+                        Some(range_offset) => self.match_range(probe, range_offset),
+                    };
+
+                    if attrs.match_pc(probe) || range_match {
+                        eprintln!("matched subprogram");
+                        return Ok(Some(dw_die_offset));
+                    }
+                } else {
+                    entries.skip_attributes(abbrev.attributes())?;
                 }
-
-                let range_match = match self.attrs.ranges_offset {
-                    None => true,
-                    Some(range_offset) => self.match_range(probe, range_offset),
-                };
-
-                if subprogram_attrs.match_pc(probe) || range_match {
-                    eprintln!("matched");
-                    return Ok(Some(child.entry().offset()));
-                }
-
-                eprintln!("match missing");
-            }
-
-            // Recursively process a child.
-            if let Some(offset) = self.traverse_subprogram(child, probe)? {
-                return Ok(Some(offset));
             }
         }
 

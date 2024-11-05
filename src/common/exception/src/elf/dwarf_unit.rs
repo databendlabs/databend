@@ -336,7 +336,7 @@ impl<R: Reader> Unit<R> {
         // }
         if let Some(offset) = self.find_subprogram(probe)? {
             eprintln!("begin find inlined functions");
-            let _ = self.find_inlined_functions(probe, offset, &mut inlined_functions);
+            let _ = self.find_function(offset, probe, &mut inlined_functions);
         }
 
         inlined_functions.push(location);

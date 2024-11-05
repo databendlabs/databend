@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gimli::Attribute;
+use gimli::{Attribute, EntriesRaw};
 use gimli::AttributeValue;
 use gimli::EntriesTreeNode;
 use gimli::RangeListsOffset;
@@ -260,5 +260,104 @@ impl<R: Reader> Unit<R> {
         }
 
         Ok(())
+    }
+
+    fn inlined_functions(&self, entries: EntriesRaw<R>, probe: u64, depth: isize) -> Result<()> {
+        loop {
+            let next_depth = entries.next_depth();
+
+            if next_depth <= depth {
+                return Ok(());
+            }
+
+            if let Some(abbrev) = entries.read_abbreviation()? {
+                match abbrev.tag() {
+                    gimli::DW_TAG_subprogram => {
+                        entries.skip_attributes(abbrev.attributes())?;
+                        while entries.next_depth() > depth {
+                            if let Some(abbrev) = entries.read_abbreviation()? {
+                                entries.skip_attributes(abbrev.attributes())?;
+                            }
+                        }
+                    }
+                    gimli::DW_TAG_inlined_subroutine => {
+                        let mut attrs = SubroutineAttrs::create();
+                        for spec in abbrev.attributes() {
+                            let attr = entries.read_attribute(*spec)?;
+                            attrs.set_attr(attr, self);
+                        }
+
+                        let range_match = match self.attrs.ranges_offset {
+                            None => true,
+                            Some(range_offset) => self.match_range(probe, range_offset),
+                        };
+
+                        if attrs.match_pc(probe) || range_match {
+                            eprintln!("matched inlined function");
+                            if let Some(name) = &attrs.name {
+                                eprintln!("matched inlined function has name {:?} {:?} {:?}", name, attrs.line, attrs.column);
+                                // if let Ok(name) = name.to_string_lossy() {
+                                //     eprintln!("matched inlined function has nor name");
+                                //     if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
+                                //         eprintln!("matched inlined function has demangle name");
+                                //         if let Some(call_file) = subroutine_attrs.file {
+                                //             // if let Some(lines) = frames.unit.parse_lines(frames.sections)? {
+                                //             //     next.file = lines.files.get(call_file as usize).map(String::as_str);
+                                //             // }
+                                //         }
+                                //
+                                //         res.push(CallLocation {
+                                //             symbol: Some(format!("{:#}", name)),
+                                //             file: None,
+                                //             line: subroutine_attrs.line,
+                                //             column: subroutine_attrs.column,
+                                //         });
+                                //     }
+                                // }
+                            }
+
+                            self.inlined_functions(entries, probe, next_depth)?;
+
+                            return Ok(());
+                        }
+                    }
+                    _ => {
+                        entries.skip_attributes(abbrev.attributes())?;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn find_function(&self, offset: UnitOffset<R::Offset>, probe: u64, res: &mut Vec<CallLocation>) -> Result<()> {
+        let mut entries = self.head.entries_raw(&self.abbreviations, Some(offset))?;
+        let depth = entries.next_depth();
+        let abbrev = entries.read_abbreviation()?.unwrap();
+        debug_assert_eq!(abbrev.tag(), gimli::DW_TAG_subprogram);
+
+        let mut name = None;
+        for spec in abbrev.attributes() {
+            let attr = entries.read_attribute(*spec)?;
+            match attr.name() {
+                gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
+                    // if let Ok(val) = sections.attr_string(unit, attr.value()) {
+                    //     name = Some(val);
+                    // }
+                }
+                gimli::DW_AT_name => {
+                    // if name.is_none() {
+                    //     name = sections.attr_string(unit, attr.value()).ok();
+                    // }
+                }
+                gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
+                    // if name.is_none() {
+                    //     name = name_attr(attr.value(), file, unit, ctx, sections, 16)?;
+                    // }
+                }
+                _ => {}
+            };
+        }
+
+        self.inlined_functions(entries, probe, depth)
     }
 }
