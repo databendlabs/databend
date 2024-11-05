@@ -93,7 +93,6 @@ impl<R: Reader> Unit<R> {
                     };
 
                     if attrs.match_pc(probe) || range_match {
-                        eprintln!("matched subprogram");
                         return Ok(Some(dw_die_offset));
                     }
                 } else {

@@ -248,9 +248,9 @@ impl<R: Reader> Unit<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         };
@@ -268,12 +268,7 @@ impl<R: Reader> Unit<R> {
             return Ok(vec![]);
         };
 
-        // probe inlined functions
         let mut inlined_functions = vec![];
-        eprintln!("begin find subprogram");
-        // match self.find_subprogram(probe) {
-        //
-        // }
         if let Some(offset) = self.find_subprogram(probe)? {
             eprintln!("begin find inlined functions");
             let _ = self.find_function(offset, probe, &mut inlined_functions);
