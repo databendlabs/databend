@@ -16,7 +16,7 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
-use gimli::{Abbreviations, DebugStr};
+use gimli::{Abbreviations, DebugStr, ReaderOffset};
 use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::DebugAddr;
@@ -70,44 +70,44 @@ impl<R: Reader> UnitAttrs<R> {
             ranges_offset: None,
 
             debug_line_offset: None,
-            addr_base: DebugAddrBase(0),
-            loclists_base: DebugLocListsBase(0),
-            rnglists_base: DebugRngListsBase(0),
-            str_offsets_base: DebugStrOffsetsBase(0),
+            addr_base: DebugAddrBase(R::Offset::from_u8(0)),
+            loclists_base: DebugLocListsBase(R::Offset::from_u8(0)),
+            rnglists_base: DebugRngListsBase(R::Offset::from_u8(0)),
+            str_offsets_base: DebugStrOffsetsBase(R::Offset::from_u8(0)),
         }
     }
 
-    pub fn file_name(&self, file: Option<AttributeValue<R>>) -> String {
-        let mut path = PathBuf::new();
-
-        if let Some(AttributeValue::String(ref comp_dir)) = self.comp_dir {
-            path.push(comp_dir.to_string_lossy().unwrap().into_owned());
-        }
-
-        if let Some(ref file) = file {
-            path.push(file.to_string_lossy().unwrap().into_owned());
-            // if file.directory_index() != 0 {
-            //     if let Some(AttributeValue::String(v)) = file.directory(rows.header()) {
-            //         path.push(v.to_string_lossy().into_owned());
-            //     }
-            // }
-        }
-
-        if let AttributeValue::String(v) = file.path_name() {
-            path.push(v.to_string_lossy().into_owned());
-        }
-
-        if let Some(file_name) = self.name {
-            let file_path = Path::new(file_name.to_string().unwrap());
-
-            return match self.comp_dir {
-                None => format!("{}", file_path.display()),
-                Some(ref comp_dir) => match comp_dir.to_string() {
-                    Err(_) => format!("{}", file_path.display()),
-                    Ok(dir) => format!("{}", Path::new(dir).join(file_path).display()),
-                },
-            };
-        }
+    pub fn file_name(&self) -> String {
+        // let mut path = PathBuf::new();
+        //
+        // if let Some(AttributeValue::String(ref comp_dir)) = self.comp_dir {
+        //     path.push(comp_dir.to_string_lossy().unwrap().into_owned());
+        // }
+        //
+        // if let Some(ref file) = file {
+        //     path.push(file.to_string_lossy().unwrap().into_owned());
+        //     // if file.directory_index() != 0 {
+        //     //     if let Some(AttributeValue::String(v)) = file.directory(rows.header()) {
+        //     //         path.push(v.to_string_lossy().into_owned());
+        //     //     }
+        //     // }
+        // }
+        //
+        // if let AttributeValue::String(v) = file.path_name() {
+        //     path.push(v.to_string_lossy().into_owned());
+        // }
+        //
+        // if let Some(file_name) = self.name {
+        //     let file_path = Path::new(file_name.to_string().unwrap());
+        //
+        //     return match self.comp_dir {
+        //         None => format!("{}", file_path.display()),
+        //         Some(ref comp_dir) => match comp_dir.to_string() {
+        //             Err(_) => format!("{}", file_path.display()),
+        //             Ok(dir) => format!("{}", Path::new(dir).join(file_path).display()),
+        //         },
+        //     };
+        // }
 
         String::from("<unknown>")
     }
@@ -272,8 +272,8 @@ impl<R: Reader> Unit<R> {
             let program = self.debug_line.program(
                 *offset,
                 self.head.address_size(),
-                self.attrs.comp_dir.map(|x| x.string_value()),
-                self.attrs.name,
+                self.attrs.comp_dir.clone(),
+                self.attrs.name.clone(),
             )?;
 
             let mut is_candidate: bool = false;
@@ -291,19 +291,21 @@ impl<R: Reader> Unit<R> {
                     if row.address() > probe {
                         let mut path_buf = PathBuf::new();
 
-                        if let Some(AttributeValue::String(ref dir)) = self.attrs.comp_dir {
+                        if let Some(dir) = self.attrs.comp_dir {
                             path_buf.push(dir.to_string_lossy().unwrap().into_owned());
                         }
 
                         let header = rows.header();
                         if let Some(file) = header.file(file_idx) {
                             if file.directory_index() != 0 {
-                                if let Some(AttributeValue::String(ref v)) = file.directory(header) {
-                                    path_buf.push(v.to_string_lossy().unwrap().into_owned());
+                                if let Some(v) = file.directory(header) {
+                                    if let Some(v) = v.string_value(&self.debug_str) {
+                                        path_buf.push(v.to_string_lossy().unwrap().into_owned());
+                                    }
                                 }
                             }
 
-                            if let AttributeValue::String(ref v) = file.path_name() {
+                            if let Some(v) = file.path_name().string_value(&self.debug_str) {
                                 path_buf.push(v.to_string_lossy().unwrap().into_owned());
                             }
                         }

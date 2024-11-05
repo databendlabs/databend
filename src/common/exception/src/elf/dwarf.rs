@@ -37,7 +37,7 @@ use gimli::Reader;
 use gimli::UnitHeader;
 use gimli::UnitType;
 use object::CompressionFormat;
-use object::NativeEndian;
+use gimli::NativeEndian;
 use object::Object;
 use object::ObjectSection;
 

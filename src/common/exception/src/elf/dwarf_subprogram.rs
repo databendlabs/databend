@@ -22,14 +22,14 @@ use gimli::UnitOffset;
 use crate::elf::dwarf_unit::Unit;
 use crate::exception_backtrace_elf::HighPc;
 
-pub struct SubprogramAttrs<'a> {
+pub struct SubprogramAttrs<R: Reader> {
     high_pc: Option<HighPc>,
     low_pc: Option<u64>,
-    ranges_offset: Option<RangeListsOffset>,
+    ranges_offset: Option<RangeListsOffset<R::Offset>>,
 }
 
-impl<'a> SubprogramAttrs<'a> {
-    pub fn create() -> SubprogramAttrs<'a> {
+impl<R: Reader> SubprogramAttrs<R> {
+    pub fn create() -> SubprogramAttrs<R> {
         SubprogramAttrs {
             high_pc: None,
             low_pc: None,
@@ -64,9 +64,9 @@ impl<'a> SubprogramAttrs<'a> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -87,7 +87,7 @@ impl<R: Reader> Unit<R> {
         while let Some(child) = children.next().ok()? {
             if child.entry().tag() == gimli::DW_TAG_subprogram {
                 let mut attrs = child.entry().attrs();
-                let mut subprogram_attrs = SubprogramAttrs::create();
+                let mut subprogram_attrs = SubprogramAttrs::<R>::create();
 
                 while let Some(attr) = attrs.next().ok()? {
                     subprogram_attrs.set_attr(attr);
