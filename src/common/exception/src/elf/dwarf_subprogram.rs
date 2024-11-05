@@ -86,7 +86,7 @@ impl<R: Reader> Unit<R> {
                 let mut attrs = child.entry().attrs();
                 let mut subprogram_attrs = SubprogramAttrs::<R>::create();
 
-                while let Some(attr) = attrs.next().ok()? {
+                while let Some(attr) = attrs.next()? {
                     subprogram_attrs.set_attr(attr);
                 }
 
@@ -104,7 +104,7 @@ impl<R: Reader> Unit<R> {
             }
 
             // Recursively process a child.
-            if let Some(offset) = self.traverse_subprogram(child, probe) {
+            if let Some(offset) = self.traverse_subprogram(child, probe)? {
                 return Ok(Some(offset));
             }
         }
