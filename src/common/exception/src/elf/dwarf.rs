@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use gimli::Abbreviations;
+use gimli::{Abbreviations, DebugStr};
 use gimli::AttributeValue;
 use gimli::DebugAbbrev;
 use gimli::DebugAbbrevOffset;
@@ -55,6 +55,7 @@ pub struct CallLocation {
 
 pub struct Dwarf {
     elf: Arc<ElfFile>,
+    debug_str: DebugStr<EndianSlice<'static, NativeEndian>>,
     debug_info: DebugInfo<EndianSlice<'static, NativeEndian>>,
     debug_line: DebugLine<EndianSlice<'static, NativeEndian>>,
     debug_aranges: DebugAranges<EndianSlice<'static, NativeEndian>>,
@@ -110,6 +111,7 @@ impl Dwarf {
         }
 
         Some(Dwarf {
+            debug_str: DebugStr::from(get_debug_section(&elf, ".debug_str")),
             debug_info: DebugInfo::from(get_debug_section(&elf, ".debug_info")),
             debug_line: DebugLine::from(get_debug_section(&elf, ".debug_line")),
             debug_aranges: DebugAranges::from(get_debug_section(&elf, ".debug_aranges")),
@@ -150,16 +152,17 @@ impl Dwarf {
         let mut unit_attrs = UnitAttrs::create();
 
         while let Some(attr) = attrs.next()? {
-            unit_attrs.set_attr(attr);
+            unit_attrs.set_attr(&self.debug_str, attr);
         }
 
         Ok(Some(Unit {
             head,
             abbreviations,
             attrs: unit_attrs,
+            debug_str: self.debug_str.clone(),
+            debug_line: self.debug_line.clone(),
             debug_addr: self.debug_addr.clone(),
             range_list: self.debug_range_list.clone(),
-            debug_line: self.debug_line.clone(),
         }))
     }
 

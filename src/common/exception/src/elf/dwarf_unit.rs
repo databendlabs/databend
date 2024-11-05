@@ -16,7 +16,7 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
-use gimli::Abbreviations;
+use gimli::{Abbreviations, DebugStr};
 use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::DebugAddr;
@@ -47,8 +47,8 @@ pub struct UnitAttrs<R: Reader> {
     pub high_pc: Option<HighPc>,
     pub low_pc: Option<u64>,
     pub base_addr: Option<u64>,
-    pub name: Option<AttributeValue<R>>,
-    pub comp_dir: Option<AttributeValue<R>>,
+    pub name: Option<R>,
+    pub comp_dir: Option<R>,
 
     pub ranges_offset: Option<RangeListsOffset<R::Offset>>,
 
@@ -112,23 +112,27 @@ impl<R: Reader> UnitAttrs<R> {
         String::from("<unknown>")
     }
 
-    pub fn set_attr<R: Reader>(&mut self, attr: Attribute<R>) {
+    pub fn set_attr<R: Reader>(&mut self, debug_str: &DebugStr<R>, attr: Attribute<R>) {
         match (attr.name(), attr.value()) {
             (gimli::DW_AT_high_pc, v) => {
-                self.high_pc = Some(v);
+                self.high_pc = match v {
+                    AttributeValue::Addr(v) => Some(HighPc::Addr(v)),
+                    AttributeValue::Udata(v) => Some(HighPc::Offset(v)),
+                    _ => unreachable!(),
+                };
             }
             (gimli::DW_AT_low_pc, AttributeValue::Addr(v)) => {
                 self.low_pc = Some(v);
                 self.base_addr = Some(v);
             }
             (gimli::DW_AT_name, v) => {
-                self.name = Some(v);
+                self.name = v.string_value(debug_str);
             }
             (gimli::DW_AT_entry_pc, AttributeValue::Addr(v)) => {
                 self.base_addr = Some(v);
             }
             (gimli::DW_AT_comp_dir, v) => {
-                self.comp_dir = Some(v);
+                self.comp_dir = v.string_value(debug_str);
             }
             (gimli::DW_AT_ranges, AttributeValue::RangeListsRef(v)) => {
                 self.ranges_offset = Some(RangeListsOffset(v.0));
@@ -162,6 +166,7 @@ impl<R: Reader> UnitAttrs<R> {
 pub struct Unit<R: Reader> {
     pub(crate) head: UnitHeader<R>,
 
+    pub(crate) debug_str: DebugStr<R>,
     pub(crate) debug_line: DebugLine<R>,
     pub(crate) debug_addr: DebugAddr<R>,
     pub(crate) range_list: RangeLists<R>,
@@ -175,7 +180,7 @@ pub struct Unit<R: Reader> {
 }
 
 impl<R: Reader> Unit<R> {
-    pub fn match_range(&self, probe: u64, offset: RangeListsOffset) -> bool {
+    pub fn match_range(&self, probe: u64, offset: RangeListsOffset<R::Offset>) -> bool {
         let mut base_addr = self.attrs.base_addr;
         if let Ok(mut ranges) = self.range_list.raw_ranges(offset, self.head.encoding()) {
             while let Ok(Some(range)) = ranges.next() {
@@ -267,7 +272,7 @@ impl<R: Reader> Unit<R> {
             let program = self.debug_line.program(
                 *offset,
                 self.head.address_size(),
-                self.attrs.comp_dir,
+                self.attrs.comp_dir.map(|x| x.string_value()),
                 self.attrs.name,
             )?;
 
