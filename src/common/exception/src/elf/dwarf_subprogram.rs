@@ -55,18 +55,14 @@ impl<R: Reader> SubprogramAttrs<R> {
         }
     }
 
-    // pub fn match_range(&self, probe: u64) -> bool {
-    //
-    // }
-
     pub fn match_pc(&self, probe: u64) -> bool {
         match (self.low_pc, self.high_pc) {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -102,6 +98,8 @@ impl<R: Reader> Unit<R> {
                 if subprogram_attrs.match_pc(probe) || range_match {
                     return Some(child.entry().offset());
                 }
+
+                eprintln!("match missing");
             }
 
             // Recursively process a child.

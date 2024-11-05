@@ -331,6 +331,7 @@ impl<R: Reader> Unit<R> {
         // probe inlined functions
         let mut inlined_functions = vec![];
         if let Some(offset) = self.find_subprogram(probe) {
+            eprintln!("begin find inlined functions");
             let _ = self.find_inlined_functions(probe, offset, &mut inlined_functions);
         }
 
