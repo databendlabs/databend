@@ -104,7 +104,7 @@ impl<R: Reader> Unit<R> {
             }
 
             // Recursively process a child.
-            if let Some(offset) = self.traverse(child, probe) {
+            if let Some(offset) = self.traverse_subprogram(child, probe) {
                 return Some(offset);
             }
         }

@@ -96,14 +96,6 @@ impl Dwarf {
             }
         }
 
-        // debug_info: get_debug_section(elf, ".debug_info"),
-        // debug_aranges: get_debug_section(elf, ".debug_aranges"),
-        // debug_ranges: get_debug_section(elf, ".debug_ranges"),
-        // debug_rnglists: get_debug_section(elf, ".debug_rnglists"),
-        // debug_addr: get_debug_section(elf, ".debug_addr"),
-        // debug_abbrev: get_debug_section(elf, ".debug_abbrev"),
-        // debug_line: get_debug_section(elf, ".debug_line"),
-
         for name in [".debug_info", ".debug_abbrev", ".debug_line"] {
             if get_debug_section(&elf, name).is_empty() {
                 return None;
@@ -125,7 +117,7 @@ impl Dwarf {
         })
     }
 
-    fn find_debug_info_offset(&mut self, probe: u64) -> Option<DebugInfoOffset<usize>> {
+    fn find_debug_info_offset(&self, probe: u64) -> Option<DebugInfoOffset<usize>> {
         let mut heads = self.debug_aranges.headers();
         while let Some(head) = heads.next().ok()? {
             let mut entries = head.entries();
@@ -139,7 +131,7 @@ impl Dwarf {
         None
     }
 
-    fn get_unit<R: Reader>(&self, head: UnitHeader<R>) -> gimli::Result<Option<Unit<R>>> {
+    fn get_unit(&self, head: UnitHeader<EndianSlice<'static, NativeEndian>>) -> gimli::Result<Option<Unit<EndianSlice<'static, NativeEndian>>>> {
         let abbrev_offset = head.debug_abbrev_offset();
         let Some(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset)? else {
             return Ok(None);
@@ -182,7 +174,7 @@ impl Dwarf {
     }
 
     fn slow_find_location(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
-        let units = self.debug_info.units();
+        let mut units = self.debug_info.units();
         while let Some(head) = units.next()? {
             if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {

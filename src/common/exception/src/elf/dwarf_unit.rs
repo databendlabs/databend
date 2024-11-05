@@ -291,7 +291,7 @@ impl<R: Reader> Unit<R> {
                     if row.address() > probe {
                         let mut path_buf = PathBuf::new();
 
-                        if let Some(dir) = self.attrs.comp_dir {
+                        if let Some(dir) = &self.attrs.comp_dir {
                             path_buf.push(dir.to_string_lossy().unwrap().into_owned());
                         }
 
