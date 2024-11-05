@@ -292,6 +292,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         }
                                     }
                                 }
+                                if delete_key_list.is_empty() {
+                                    output_map_builder.push(input_map);
+                                    continue;
+                                }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
                                     DataType::Map(box typ) => typ,
@@ -400,6 +404,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         }
                                     }
                                 }
+                                if pick_key_list.is_empty() {
+                                    output_map_builder.push_default();
+                                    continue;
+                                }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
                                     DataType::Map(box typ) => typ,
@@ -456,7 +464,7 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
 
     // the second argument can be an array of keys.
     let (is_array, array_key_type) = match args_type[1].remove_nullable() {
-        DataType::Array(box key_type) => (true, Some(key_type.clone())),
+        DataType::Array(box key_type) => (true, Some(key_type.remove_nullable())),
         DataType::EmptyArray => (true, None),
         _ => (false, None),
     };
@@ -466,30 +474,28 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
     if let Some(map_key_type) = map_key_type {
         if is_array {
             if let Some(array_key_type) = array_key_type {
-                if map_key_type != array_key_type {
+                if array_key_type != DataType::Null && array_key_type != map_key_type {
                     return None;
                 }
             }
         } else {
             for arg_type in args_type.iter().skip(1) {
-                if arg_type != &map_key_type {
+                let arg_type = arg_type.remove_nullable();
+                if arg_type != DataType::Null && arg_type != map_key_type {
                     return None;
                 }
             }
         }
     } else if is_array {
         if let Some(array_key_type) = array_key_type {
-            if !check_valid_map_key_type(&array_key_type) {
+            if array_key_type != DataType::Null && !check_valid_map_key_type(&array_key_type) {
                 return None;
             }
         }
     } else {
-        let key_type = &args_type[1];
-        if !check_valid_map_key_type(key_type) {
-            return None;
-        }
-        for arg_type in args_type.iter().skip(2) {
-            if arg_type != key_type {
+        for arg_type in args_type.iter().skip(1) {
+            let arg_type = arg_type.remove_nullable();
+            if arg_type != DataType::Null && !check_valid_map_key_type(&arg_type) {
                 return None;
             }
         }
