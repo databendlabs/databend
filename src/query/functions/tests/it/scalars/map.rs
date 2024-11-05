@@ -397,7 +397,6 @@ fn test_map_pick(file: &mut impl Write) {
     run_ast(file, "map_pick({}, 'a', 'b')", &[]);
     run_ast(file, "map_pick({}, [])", &[]);
 
->>>>>>> main
     let columns = [
         ("a_col", StringType::from_data(vec!["a", "b", "c"])),
         ("b_col", StringType::from_data(vec!["d", "e", "f"])),
@@ -469,4 +468,3 @@ fn test_map_insert(file: &mut impl Write) {
         &columns,
     );
 }
-

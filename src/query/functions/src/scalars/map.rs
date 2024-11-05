@@ -16,13 +16,7 @@ use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
-<<<<<<< HEAD
-use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::map::KvColumn;
-use databend_common_expression::types::map::KvPair;
-=======
-use databend_common_expression::types::map::KvColumn;
->>>>>>> main
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
@@ -40,21 +34,14 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-<<<<<<< HEAD
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
-use databend_common_expression::EvalContext;
-=======
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Function;
->>>>>>> main
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
-<<<<<<< HEAD
-=======
 use databend_common_expression::FunctionSignature;
->>>>>>> main
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
@@ -363,145 +350,91 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         );
 
-    registry.register_3_arg_core::<EmptyMapType, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>, _, _>(
-        "map_insert",
-        |_, _, insert_key_domain, insert_value_domain| {
-            FunctionDomain::Domain(Some((
-                insert_key_domain.clone(),
-                insert_value_domain.clone(),
-            )))
-        },
-        |_, key, value, ctx| {
-            let key_type = &ctx.generics[0];
-            if !key_type.is_boolean()
-                && !key_type.is_string()
-                && !key_type.is_numeric()
-                && !key_type.is_decimal()
-                && !key_type.is_date_or_date_time()
-            {
-                ctx.set_error(0, format!("map keys can not be {}", key_type));
-            }
-
-            let mut b = ArrayType::create_builder(1, ctx.generics);
-            b.put_item((key.into_scalar().unwrap(), value.into_scalar().unwrap()));
-            b.commit_row();
-            return Value::Scalar(MapType::build_scalar(b));
-        },
-    );
-
     registry.register_3_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>, _, _>(
         "map_insert",
-        |_, source_domain, insert_key_domain, insert_value_domain| {
-            FunctionDomain::Domain(match source_domain.has_null {
-                true => Some((
-                    insert_key_domain.clone(),
-                    insert_value_domain.clone(),
-                )),
-                false => source_domain.value.as_ref().map(|v| {
-                    let a = v.clone().unwrap();
-                    (a.0.clone(), a.1.clone())
-                }),
-            })
+        |_, map_domain, key_domain, value_domain| {
+            let domain = map_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
+                        .unwrap_or((key_domain.clone(), value_domain.clone()))
+                });
+            FunctionDomain::Domain(domain)
         },
-        vectorize_with_builder_3_arg::<
-            NullableType<MapType<GenericType<0>, GenericType<1>>>,
-            GenericType<0>,
-            GenericType<1>,
-            MapType<GenericType<0>, GenericType<1>>,
-        >(|source, key, value, output, ctx| {
-            match source {
-                Some(source) => {
-                    output.append_column(&build_new_map(&source, key, value, ctx));
-                },
-                None => {
-                    let mut b = ArrayType::create_builder(1, ctx.generics);
-                    b.put_item((key.clone(), value.clone()));
-                    b.commit_row();
-                    output.append_column(&b.build());
-                },
-            };
-        }),
+        vectorize_with_builder_3_arg::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>>(
+            |map, key, val, output, ctx| {
+                let key_type = &ctx.generics[0];
+                if !check_valid_map_key_type(key_type) {
+                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+                    output.commit_row();
+                    return;
+                }
+                if let Some(map) = map {
+                    for (k, _) in map.iter() {
+                        if k == key {
+                            ctx.set_error(output.len(), format!("map key `{}` duplicte", key));
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                    for (k, v) in map.iter() {
+                        output.put_item((k, v));
+                    }
+                }
+                output.put_item((key, val));
+                output.commit_row();
+        })
     );
 
-    registry.register_passthrough_nullable_3_arg(
+    registry.register_4_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, BooleanType, MapType<GenericType<0>, GenericType<1>>, _, _>(
         "map_insert",
-        |_, domain1, key_domain, value_domain| {
-            FunctionDomain::Domain(match (domain1, key_domain, value_domain) {
-                (Some((key_domain, val_domain)), insert_key_domain, insert_value_domain) => Some((
-                    key_domain.merge(insert_key_domain),
-                    val_domain.merge(insert_value_domain),
-                )),
-                (None, _, _) => None,
-            })
+        |_, map_domain, key_domain, value_domain, _| {
+            let domain = map_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
+                        .unwrap_or((key_domain.clone(), value_domain.clone()))
+                });
+            FunctionDomain::Domain(domain)
         },
-        vectorize_with_builder_3_arg::<
-            MapType<GenericType<0>, GenericType<1>>,
-            GenericType<0>,
-            GenericType<1>,
-            MapType<GenericType<0>, GenericType<1>>,
-        >(|source, key, value, output, ctx| {
-            // default behavior is to insert new key-value pair, and if the key already exists, update the value.
-            output.append_column(&build_new_map(&source, key, value, ctx));
-        }),
+        vectorize_with_builder_4_arg::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, BooleanType, MapType<GenericType<0>, GenericType<1>>>(
+            |map, key, val, update_flag, output, ctx| {
+                let key_type = &ctx.generics[0];
+                if !check_valid_map_key_type(key_type) {
+                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+                    output.commit_row();
+                    return;
+                }
+                let mut is_duplicate = false;
+                if let Some(map) = map {
+                    for (k, _) in map.iter() {
+                        if k == key && !update_flag {
+                            ctx.set_error(output.len(), format!("map key `{}` duplicte", key));
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                    for (k, v) in map.iter() {
+                        if k == key {
+                            is_duplicate = true;
+                            output.put_item((k, val.clone()));
+                        } else {
+                            output.put_item((k, v));
+                        }
+                    }
+                }
+                if !is_duplicate {
+                    output.put_item((key, val));
+                }
+                output.commit_row();
+        })
     );
-
-    // grammar: map_insert(map, insert_key, insert_value, allow_update)
-    registry.register_passthrough_nullable_4_arg(
-        "map_insert",
-        |_, domain1, key_domain, value_domain, _| {
-            FunctionDomain::Domain(match (domain1, key_domain, value_domain) {
-                (Some((key_domain, val_domain)), insert_key_domain, insert_value_domain) => Some((
-                    key_domain.merge(insert_key_domain),
-                    val_domain.merge(insert_value_domain),
-                )),
-                (None, _, _) => None,
-            })
-        },
-        vectorize_with_builder_4_arg::<
-            MapType<GenericType<0>, GenericType<1>>,
-            GenericType<0>,
-            GenericType<1>,
-            BooleanType,
-            MapType<GenericType<0>, GenericType<1>>,
-        >(|source, key, value, allow_update, output, ctx| {
-            let duplicate_key = source.iter().any(|(k, _)| k == key);
-            // if duplicate_key is true and allow_update is false, return the original map
-            if duplicate_key && !allow_update {
-                let mut new_builder = ArrayType::create_builder(source.len(), ctx.generics);
-                source
-                    .iter()
-                    .for_each(|(k, v)| new_builder.put_item((k.clone(), v.clone())));
-                new_builder.commit_row();
-                output.append_column(&new_builder.build());
-                return;
-            }
-
-            output.append_column(&build_new_map(&source, key, value, ctx));
-        }),
-    );
-
-    fn build_new_map(
-        source: &KvColumn<GenericType<0>, GenericType<1>>,
-        insert_key: ScalarRef,
-        insert_value: ScalarRef,
-        ctx: &EvalContext,
-    ) -> ArrayColumn<KvPair<GenericType<0>, GenericType<1>>> {
-        let duplicate_key = source.iter().any(|(k, _)| k == insert_key);
-        let mut new_map = ArrayType::create_builder(source.len() + 1, ctx.generics);
-        for (k, v) in source.iter() {
-            if k == insert_key {
-                new_map.put_item((k.clone(), insert_value.clone()));
-                continue;
-            }
-            new_map.put_item((k.clone(), v.clone()));
-        }
-        if !duplicate_key {
-            new_map.put_item((insert_key.clone(), insert_value.clone()));
-        }
-        new_map.commit_row();
-
-        new_map.build()
-    }
 
     registry.register_function_factory("map_pick", |_, args_type: &[DataType]| {
         let return_type = check_map_arg_types(args_type)?;
