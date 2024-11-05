@@ -574,7 +574,7 @@ error:
   --> SQL:1:1
   |
 1 | factorial(30)
-  | ^^^^^^^^^^^^^ factorial number is out of range, max is: 20 while evaluating function `factorial(30)`
+  | ^^^^^^^^^^^^^ factorial number is out of range, max is: 20 while evaluating function `factorial(30)` in expr `factorial(30)`
 
 
 

@@ -137,6 +137,23 @@ impl GrpcHelper {
         }
     }
 
+    /// Parse RaftReply to `Result<T,E>`
+    pub fn parse_raft_reply_generic<T, E>(
+        reply: RaftReply,
+    ) -> Result<Result<T, E>, serde_json::Error>
+    where
+        T: serde::de::DeserializeOwned,
+        E: serde::Serialize + serde::de::DeserializeOwned,
+    {
+        if !reply.error.is_empty() {
+            let e: E = serde_json::from_str(&reply.error)?;
+            Ok(Err(e))
+        } else {
+            let d: T = serde_json::from_str(&reply.data)?;
+            Ok(Ok(d))
+        }
+    }
+
     /// Parse tonic::Request and decode it into required type.
     pub fn parse_req<T>(request: tonic::Request<RaftRequest>) -> Result<T, tonic::Status>
     where T: serde::de::DeserializeOwned {

@@ -20,7 +20,6 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_formats::FieldJsonAstDecoder;
 use databend_common_meta_app::principal::NullAs;
-use databend_common_pipeline_sources::input_formats::error_utils::truncate_column_data;
 use databend_common_storage::FileParseError;
 
 use crate::read::load_context::LoadContext;
@@ -28,6 +27,7 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::ndjson::format::NdJsonInputFormat;
 use crate::read::row_based::processors::BlockBuilderState;
+use crate::read::row_based::utils::truncate_column_data;
 
 pub struct NdJsonDecoder {
     pub load_context: Arc<LoadContext>,
@@ -103,11 +103,8 @@ impl NdJsonDecoder {
                             }
                         }
                         NullAs::FieldDefault => {
-                            if let Some(values) = &self.load_context.default_values {
-                                column.push(values[column_index].as_ref());
-                            } else {
-                                column.push_default();
-                            }
+                            self.load_context
+                                .push_default_value(column, column_index, false)?;
                         }
                     },
                     Some(serde_json::Value::Null) => match self.fmt.params.null_field_as {
@@ -126,11 +123,8 @@ impl NdJsonDecoder {
                             }
                         }
                         NullAs::FieldDefault => {
-                            if let Some(values) = &self.load_context.default_values {
-                                column.push(values[column_index].as_ref());
-                            } else {
-                                column.push_default();
-                            }
+                            self.load_context
+                                .push_default_value(column, column_index, false)?;
                         }
                     },
                     Some(value) => {

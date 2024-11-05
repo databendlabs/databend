@@ -83,7 +83,7 @@ error:
   --> SQL:1:16
   |
 1 | if(false, 1, 1 / 0)
-  |                ^ divided by zero while evaluating function `divide(1, 0)`
+  |                ^ divided by zero while evaluating function `divide(1, 0)` in expr `1 / 0`, during run expr: `if(CAST(false AS Boolean NULL), to_float64(1), 1 / 0)`
 
 
 
@@ -221,7 +221,7 @@ error:
   --> SQL:1:14
   |
 1 | if(cond_a, 1 / expr_a, expr_else)
-  |              ^ divided by zero while evaluating function `divide(1, 0)`
+  |              ^ divided by zero while evaluating function `divide(1, 0)` in expr `1 / expr_a`, during run expr: `if(CAST(cond_a AS Boolean NULL), 1 / expr_a, to_float64(expr_else))`
 
 
 

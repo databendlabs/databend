@@ -20,8 +20,6 @@ use bytes::Bytes;
 use crossbeam_channel::TrySendError;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -35,7 +33,7 @@ use crate::LruDiskCacheBuilder;
 
 struct CacheItem {
     key: String,
-    value: Arc<Bytes>,
+    value: Bytes,
 }
 
 #[derive(Clone)]
@@ -70,7 +68,7 @@ pub struct TableDataCache<T = LruDiskCacheHolder> {
     _cache_populator: DiskCachePopulator,
 }
 
-const TABLE_DATA_CACHE_NAME: &str = "table_data";
+pub const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
 
 pub struct TableDataCacheBuilder;
 
@@ -78,13 +76,15 @@ impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
         path: &PathBuf,
         population_queue_size: u32,
-        disk_cache_bytes_size: u64,
+        disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(
             path,
             disk_cache_bytes_size,
             disk_cache_reload_policy,
+            sync_data,
         )?;
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
@@ -96,38 +96,57 @@ impl TableDataCacheBuilder {
     }
 }
 
-impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
+impl CacheAccessor for TableDataCache {
+    type V = Bytes;
+
+    fn name(&self) -> &str {
+        DISK_TABLE_DATA_CACHE_NAME
+    }
+
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
-        metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
+        metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
-            metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
             Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
+            metrics_inc_cache_hit_count(1, DISK_TABLE_DATA_CACHE_NAME);
             Some(item)
         } else {
-            metrics_inc_cache_miss_count(1, TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_miss_count(1, DISK_TABLE_DATA_CACHE_NAME);
             None
         }
     }
 
-    fn put(&self, k: String, v: Arc<Bytes>) {
+    fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+        let Some(cached_value) = self.get(k) else {
+            metrics_inc_cache_miss_bytes(len, DISK_TABLE_DATA_CACHE_NAME);
+            return None;
+        };
+
+        Some(cached_value)
+    }
+
+    fn insert(&self, k: String, v: Bytes) -> Arc<Bytes> {
         // check if already cached
         if !self.external_cache.contains_key(&k) {
             // populate the cache is necessary
-            let msg = CacheItem { key: k, value: v };
+            let msg = CacheItem {
+                key: k,
+                value: v.clone(),
+            };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
-                    metrics_inc_cache_population_pending_count(1, TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(TrySendError::Full(_)) => {
-                    metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
-                    metrics_inc_cache_population_overflow_count(1, TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_overflow_count(1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     error!("table data cache population thread is down");
                 }
             }
         }
+        Arc::new(v)
     }
 
     fn evict(&self, k: &str) -> bool {
@@ -138,8 +157,16 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         self.external_cache.contains_key(k)
     }
 
-    fn size(&self) -> u64 {
-        self.external_cache.size()
+    fn bytes_size(&self) -> u64 {
+        self.external_cache.bytes_size()
+    }
+
+    fn items_capacity(&self) -> u64 {
+        self.external_cache.items_capacity()
+    }
+
+    fn bytes_capacity(&self) -> u64 {
+        self.external_cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {
@@ -152,9 +179,7 @@ struct CachePopulationWorker<T> {
     population_queue: crossbeam_channel::Receiver<CacheItem>,
 }
 
-impl<T> CachePopulationWorker<T>
-where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static
-{
+impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<T> {
     fn populate(&self) {
         loop {
             match self.population_queue.recv() {
@@ -164,8 +189,8 @@ where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync +
                             continue;
                         }
                     }
-                    self.cache.put(key, value);
-                    metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
+                    self.cache.insert(key, value);
+                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(_) => {
                     info!("table data cache worker shutdown");
@@ -194,7 +219,7 @@ impl DiskCachePopulator {
         _num_worker_thread: usize,
     ) -> Result<Self>
     where
-        T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static,
+        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
     {
         let worker = Arc::new(CachePopulationWorker {
             cache,

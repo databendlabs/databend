@@ -317,6 +317,16 @@ select skewness (10) from numbers(5)
 ----
 0.0
 
+query I
+select skewness(number), kurtosis(number) from (select if(number > 5, number::double, 'NAN'::Double) as number from numbers(100));
+----
+NaN NaN
+
+query I
+select skewness(number), kurtosis(number) from (select if(number > 5, number::double, 'INF'::Double) as number from numbers(100));
+----
+NaN NaN
+
 query III
 select skewness(k), skewness(v), skewness(v2) from aggr
 ----
@@ -389,19 +399,66 @@ statement ok
 DROP TABLE IF EXISTS d
 
 statement ok
-create table d(value decimal(10, 2))
+create table d(a decimal(10, 2), b string, c int, d variant, e array(string))
 
 statement ok
-insert into d values(20), (10)
+insert into d values
+    (20, 'abc', null, '{"k":"v"}', ['a','b']),
+    (10, 'de', 100, 'null', []),
+    (4.23, null, 200, '"uvw"', ['x','y']),
+    (5.99, 'xyz', 300, '[1,2,3]', ['z'])
+
 
 query F
-select stddev_samp(value) from d;
+select stddev_samp(a) from d;
 ----
-7.0710678118654755
+7.055988000745655
+
+query TTTTT
+select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
+----
+[20.0,10.0,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
+
+query TTTTT
+select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json_object_agg(b, e), json_object_agg(b, 'a') from d
+----
+{"abc":20.0,"de":10.0,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
 
 statement ok
 DROP TABLE d
 
 statement ok
-DROP DATABASE db1
+create or replace table aggr(k int, v decimal(10,2));
 
+query I
+select mode(v) from aggr;
+----
+NULL
+
+statement ok
+insert into aggr (k, v) values
+    (1, 10),
+    (1, 10),
+    (1, 10),
+    (2, 20),
+    (2, 20),
+    (2, 21),
+    (3, null);
+
+query I
+select mode(v) from aggr;
+----
+10.00
+
+query II
+select k, mode(v) from aggr group by k order by k;
+----
+1 10.00
+2 20.00
+3 NULL
+
+statement ok
+DROP TABLE aggr
+
+statement ok
+DROP DATABASE db1

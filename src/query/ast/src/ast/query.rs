@@ -12,27 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use super::Lambda;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
 use crate::ast::Identifier;
+use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
+use crate::ParseError;
+use crate::Result;
 use crate::Span;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Query {
-    #[drive(skip)]
     pub span: Span,
     // With clause, common table expression
     pub with: Option<With>,
@@ -48,7 +51,6 @@ pub struct Query {
     pub offset: Option<Expr>,
 
     // If ignore the result (not output).
-    #[drive(skip)]
     pub ignore_result: bool,
 }
 
@@ -79,15 +81,17 @@ impl Display for Query {
             write!(f, " OFFSET {offset}")?;
         }
 
+        if self.ignore_result {
+            write!(f, " IGNORE_RESULT")?;
+        }
+
         Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct With {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub recursive: bool,
     pub ctes: Vec<CTE>,
 }
@@ -105,10 +109,8 @@ impl Display for With {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CTE {
-    #[drive(skip)]
     pub span: Span,
     pub alias: TableAlias,
-    #[drive(skip)]
     pub materialized: bool,
     pub query: Box<Query>,
 }
@@ -126,10 +128,8 @@ impl Display for CTE {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SetOperation {
-    #[drive(skip)]
     pub span: Span,
     pub op: SetOperator,
-    #[drive(skip)]
     pub all: bool,
     pub left: Box<SetExpr>,
     pub right: Box<SetExpr>,
@@ -138,12 +138,9 @@ pub struct SetOperation {
 /// A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SelectStmt {
-    #[drive(skip)]
     pub span: Span,
     pub hints: Option<Hint>,
-    #[drive(skip)]
     pub distinct: bool,
-    #[drive(skip)]
     pub top_n: Option<u64>,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
@@ -235,8 +232,8 @@ impl Display for SelectStmt {
             write_comma_separated_list(f, windows)?;
         }
 
-        if let Some(quailfy) = &self.qualify {
-            write!(f, " QUALIFY {quailfy}")?;
+        if let Some(qualify) = &self.qualify {
+            write!(f, " QUALIFY {qualify}")?;
         }
         Ok(())
     }
@@ -267,11 +264,7 @@ pub enum SetExpr {
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
     // Values clause
-    Values {
-        #[drive(skip)]
-        span: Span,
-        values: Vec<Vec<Expr>>,
-    },
+    Values { span: Span, values: Vec<Vec<Expr>> },
 }
 
 impl Display for SetExpr {
@@ -329,10 +322,8 @@ pub enum SetOperator {
 pub struct OrderByExpr {
     pub expr: Expr,
     /// `ASC` or `DESC`
-    #[drive(skip)]
     pub asc: Option<bool>,
     /// `NULLS FIRST` or `NULLS LAST`
-    #[drive(skip)]
     pub nulls_first: Option<bool>,
 }
 
@@ -397,7 +388,7 @@ impl SelectTarget {
 
     pub fn has_window(&self) -> bool {
         match self {
-            SelectTarget::AliasedExpr { box expr, .. } => match expr {
+            SelectTarget::AliasedExpr { expr, .. } => match &**expr {
                 Expr::FunctionCall { func, .. } => func.window.is_some(),
                 _ => false,
             },
@@ -407,7 +398,7 @@ impl SelectTarget {
 
     pub fn function_call_name(&self) -> Option<String> {
         match self {
-            SelectTarget::AliasedExpr { box expr, .. } => match expr {
+            SelectTarget::AliasedExpr { expr, .. } => match &**expr {
                 Expr::FunctionCall { func, .. } if func.window.is_none() => {
                     Some(func.name.name.to_lowercase())
                 }
@@ -482,7 +473,7 @@ pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star(#[drive(skip)] Span),
+    Star(Span),
 }
 
 impl Display for Indirection {
@@ -502,7 +493,7 @@ impl Display for Indirection {
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
-    Snapshot(#[drive(skip)] String),
+    Snapshot(String),
     Timestamp(Box<Expr>),
     Offset(Box<Expr>),
     Stream {
@@ -543,16 +534,29 @@ impl Display for TimeTravelPoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum PivotValues {
+    ColumnValues(Vec<Expr>),
+    Subquery(Box<Query>),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Pivot {
     pub aggregate: Expr,
     pub value_column: Identifier,
-    pub values: Vec<Expr>,
+    pub values: PivotValues,
 }
 
 impl Display for Pivot {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
-        write_comma_separated_list(f, &self.values)?;
+        match &self.values {
+            PivotValues::ColumnValues(column_values) => {
+                write_comma_separated_list(f, column_values)?;
+            }
+            PivotValues::Subquery(subquery) => {
+                write!(f, "{}", subquery)?;
+            }
+        }
         write!(f, "))")?;
         Ok(())
     }
@@ -578,9 +582,21 @@ impl Display for Unpivot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+pub struct WithOptions {
+    pub options: BTreeMap<String, String>,
+}
+
+impl Display for WithOptions {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "WITH (")?;
+        write_comma_separated_string_map(f, &self.options)?;
+        write!(f, ")")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
-    #[drive(skip)]
     pub append_only: bool,
     pub at_point: TimeTravelPoint,
     pub end_point: Option<TimeTravelPoint>,
@@ -622,53 +638,129 @@ impl Display for TemporalClause {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SampleRowLevel {
+    RowsNum(f64),
+    Probability(f64),
+}
+
+impl SampleRowLevel {
+    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Result<Option<f64>> {
+        let rand = match &self {
+            SampleRowLevel::Probability(probability) => probability / 100.0,
+            SampleRowLevel::RowsNum(rows) => {
+                if let Some(row_num) = stats_rows {
+                    if row_num > 0 {
+                        rows / row_num as f64
+                    } else {
+                        return Ok(None);
+                    }
+                } else {
+                    return Ok(None);
+                }
+            }
+        };
+        if rand > 1.0 {
+            return Err(ParseError(
+                None,
+                format!(
+                    "Sample value should be less than or equal to 100, but got {}",
+                    rand * 100.0
+                ),
+            ));
+        }
+        Ok(Some(rand))
+    }
+}
+
+impl Eq for SampleRowLevel {}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Default,
+)]
+pub struct SampleConfig {
+    pub row_level: Option<SampleRowLevel>,
+    pub block_level: Option<f64>,
+}
+
+impl SampleConfig {
+    pub fn set_row_level_sample(&mut self, value: f64, rows: bool) {
+        if rows {
+            self.row_level = Some(SampleRowLevel::RowsNum(value));
+        } else {
+            self.row_level = Some(SampleRowLevel::Probability(value));
+        }
+    }
+
+    pub fn set_block_level_sample(&mut self, probability: f64) {
+        self.block_level = Some(probability);
+    }
+}
+
+impl Eq for SampleConfig {}
+
+impl Display for SampleConfig {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SAMPLE ")?;
+        if let Some(block_level) = self.block_level {
+            write!(f, "BLOCK ({}) ", block_level)?;
+        }
+        if let Some(row_level) = &self.row_level {
+            match row_level {
+                SampleRowLevel::RowsNum(rows) => {
+                    write!(f, "ROW ({} ROWS)", rows)?;
+                }
+                SampleRowLevel::Probability(probability) => {
+                    write!(f, "ROW ({})", probability)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
     // Table name
     Table {
-        #[drive(skip)]
         span: Span,
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        /// whether consume the table
-        #[drive(skip)]
-        consume: bool,
+        with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
+        sample: Option<SampleConfig>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
-        #[drive(skip)]
         span: Span,
         /// Whether the table function is a lateral table function
-        #[drive(skip)]
         lateral: bool,
         name: Identifier,
         params: Vec<Expr>,
         named_params: Vec<(Identifier, Expr)>,
         alias: Option<TableAlias>,
+        sample: Option<SampleConfig>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
-        #[drive(skip)]
         span: Span,
         /// Whether the subquery is a lateral subquery
-        #[drive(skip)]
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     Join {
-        #[drive(skip)]
         span: Span,
         join: Join,
     },
     Location {
-        #[drive(skip)]
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
@@ -680,6 +772,7 @@ impl TableReference {
     pub fn pivot(&self) -> Option<&Pivot> {
         match self {
             TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
+            TableReference::Subquery { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
@@ -687,6 +780,7 @@ impl TableReference {
     pub fn unpivot(&self) -> Option<&Unpivot> {
         match self {
             TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
+            TableReference::Subquery { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
@@ -694,6 +788,13 @@ impl TableReference {
     pub fn is_lateral_table_function(&self) -> bool {
         match self {
             TableReference::TableFunction { lateral, .. } => *lateral,
+            _ => false,
+        }
+    }
+
+    pub fn is_lateral_subquery(&self) -> bool {
+        match self {
+            TableReference::Subquery { lateral, .. } => *lateral,
             _ => false,
         }
     }
@@ -709,9 +810,10 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
-                consume,
+                with_options,
                 pivot,
                 unpivot,
+                sample,
             } => {
                 write_dot_separated_list(
                     f,
@@ -722,8 +824,8 @@ impl Display for TableReference {
                     write!(f, " {temporal}")?;
                 }
 
-                if *consume {
-                    write!(f, " WITH CONSUME")?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
                 }
 
                 if let Some(alias) = alias {
@@ -736,6 +838,10 @@ impl Display for TableReference {
                 if let Some(unpivot) = unpivot {
                     write!(f, " {unpivot}")?;
                 }
+
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
+                }
             }
             TableReference::TableFunction {
                 span: _,
@@ -744,6 +850,7 @@ impl Display for TableReference {
                 params,
                 named_params,
                 alias,
+                sample,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -763,12 +870,17 @@ impl Display for TableReference {
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
+                }
             }
             TableReference::Subquery {
                 span: _,
                 lateral,
                 subquery,
                 alias,
+                pivot,
+                unpivot,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -776,6 +888,14 @@ impl Display for TableReference {
                 write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+
+                if let Some(pivot) = pivot {
+                    write!(f, " {pivot}")?;
+                }
+
+                if let Some(unpivot) = unpivot {
+                    write!(f, " {unpivot}")?;
                 }
             }
             TableReference::Join { span: _, join } => {

@@ -21,7 +21,7 @@ pub fn parse_bitmap(buf: &[u8]) -> Result<RoaringTreemap> {
         .map_err(|e| e.to_string())
         .and_then(|s| {
             let s: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            let result: Result<Vec<u64>, String> = s
+            let result: std::result::Result<Vec<u64>, String> = s
                 .split(',')
                 .map(|v| v.parse::<u64>().map_err(|e| e.to_string()))
                 .collect();
@@ -39,4 +39,16 @@ pub fn parse_bitmap(buf: &[u8]) -> Result<RoaringTreemap> {
                 Ok(rb)
             },
         )
+}
+
+pub fn deserialize_bitmap(buf: &[u8]) -> databend_common_exception::Result<RoaringTreemap> {
+    if buf.is_empty() {
+        Ok(RoaringTreemap::new())
+    } else {
+        RoaringTreemap::deserialize_from(buf).map_err(|e| {
+            let len = buf.len();
+            let msg = format!("fail to decode bitmap from buffer of size {len}: {e}");
+            ErrorCode::BadBytes(msg)
+        })
+    }
 }

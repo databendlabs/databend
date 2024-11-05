@@ -28,12 +28,16 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::Planner;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
+use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -148,36 +152,79 @@ impl ColumnsTable {
         let mut rows: Vec<(String, String, String, TableField)> = vec![];
         for (database, tables) in database_and_tables {
             for table in tables {
-                if table.engine() != VIEW_ENGINE {
-                    let schema = table.schema();
-                    let field_comments = table.field_comments();
-                    let n_fields = schema.fields().len();
-                    for (idx, field) in schema.fields().iter().enumerate() {
-                        // compatibility: creating table in the old planner will not have `fields_comments`
-                        let comment = if field_comments.len() == n_fields
-                            && !field_comments[idx].is_empty()
-                        {
-                            // can not use debug print, will add double quote
-                            format!("'{}'", &field_comments[idx].as_str().replace('\'', "\\'"))
+                match table.engine() {
+                    VIEW_ENGINE => {
+                        let fields = if let Some(query) = table.options().get(QUERY) {
+                            let mut planner = Planner::new(ctx.clone());
+                            match planner.plan_sql(query).await {
+                                Ok((plan, _)) => {
+                                    infer_table_schema(&plan.schema())?.fields().clone()
+                                }
+                                Err(e) => {
+                                    // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
+                                    warn!(
+                                        "failed to get columns for {}: {}",
+                                        table.get_table_info().desc,
+                                        e
+                                    );
+                                    vec![]
+                                }
+                            }
                         } else {
-                            "".to_string()
+                            vec![]
                         };
-                        rows.push((
-                            database.clone(),
-                            table.name().into(),
-                            comment,
-                            field.clone(),
-                        ))
+                        for field in fields {
+                            rows.push((
+                                database.clone(),
+                                table.name().into(),
+                                "".to_string(),
+                                field.clone(),
+                            ))
+                        }
                     }
-                } else {
-                    let fields = generate_fields(&ctx, &table).await?;
-                    for field in fields {
-                        rows.push((
-                            database.clone(),
-                            table.name().into(),
-                            "".to_string(),
-                            field.clone(),
-                        ))
+                    STREAM_ENGINE => {
+                        let stream = StreamTable::try_from_table(table.as_ref())?;
+                        match stream.source_table(ctx.clone()).await {
+                            Ok(source_table) => {
+                                for field in source_table.schema().fields() {
+                                    rows.push((
+                                        database.clone(),
+                                        table.name().into(),
+                                        "".to_string(),
+                                        field.clone(),
+                                    ))
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "failed to get columns for {}: {}",
+                                    table.get_table_info().desc,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                    _ => {
+                        let schema = table.schema();
+                        let field_comments = table.field_comments();
+                        let n_fields = schema.fields().len();
+                        for (idx, field) in schema.fields().iter().enumerate() {
+                            // compatibility: creating table in the old planner will not have `fields_comments`
+                            let comment = if field_comments.len() == n_fields
+                                && !field_comments[idx].is_empty()
+                            {
+                                // can not use debug print, will add double quote
+                                format!("{}", &field_comments[idx].as_str().replace('\'', "\\'"))
+                            } else {
+                                "".to_string()
+                            };
+                            rows.push((
+                                database.clone(),
+                                table.name().into(),
+                                comment,
+                                field.clone(),
+                            ))
+                        }
                     }
                 }
             }
@@ -192,7 +239,15 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
 ) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
     let tenant = ctx.get_tenant();
-    let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
+
+    // For performance considerations, we do not require the most up-to-date table information here:
+    // - for regular tables, the data is certainly fresh
+    // - for read-only attached tables, the data may be outdated
+
+    let catalog = ctx
+        .get_catalog(CATALOG_DEFAULT)
+        .await?
+        .disable_table_info_refresh()?;
 
     let mut tables: Vec<String> = Vec::new();
     let mut databases: Vec<String> = Vec::new();
@@ -214,6 +269,7 @@ pub(crate) async fn dump_tables(
                         }
                     }
                 }
+                Ok(())
             });
         }
     }
@@ -222,25 +278,62 @@ pub(crate) async fn dump_tables(
 
     let mut final_dbs: Vec<(String, u64)> = Vec::new();
 
-    if databases.is_empty() {
-        let all_databases = catalog.list_databases(&tenant).await?;
-        for db in all_databases {
-            let db_id = db.get_db_info().ident.db_id;
-            let db_name = db.name();
-            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
-                final_dbs.push((db_name.to_string(), db_id));
-            }
-        }
-    } else {
+    if !databases.is_empty() {
         for db in databases {
             let db_id = catalog
                 .get_database(&tenant, &db)
                 .await?
                 .get_db_info()
-                .ident
+                .database_id
                 .db_id;
             if visibility_checker.check_database_visibility(CATALOG_DEFAULT, &db, db_id) {
                 final_dbs.push((db.to_string(), db_id));
+            }
+        }
+    } else {
+        let catalog_dbs = visibility_checker.get_visibility_database();
+        // None means has global level privileges
+        if let Some(catalog_dbs) = catalog_dbs {
+            for (catalog_name, dbs) in catalog_dbs {
+                if catalog_name == CATALOG_DEFAULT {
+                    let mut catalog_db_ids = vec![];
+                    let mut catalog_db_names = vec![];
+                    catalog_db_names.extend(
+                        dbs.iter()
+                            .filter_map(|(db_name, _)| *db_name)
+                            .map(|db_name| db_name.to_string()),
+                    );
+                    catalog_db_ids.extend(dbs.iter().filter_map(|(_, db_id)| *db_id));
+                    if let Ok(databases) = catalog
+                        .mget_database_names_by_ids(&tenant, &catalog_db_ids)
+                        .await
+                    {
+                        catalog_db_names.extend(databases.into_iter().flatten());
+                    } else {
+                        let msg = format!("Failed to get database name by id: {}", catalog.name());
+                        warn!("{}", msg);
+                    }
+                    let db_idents = catalog_db_names
+                        .iter()
+                        .map(|name| DatabaseNameIdent::new(&tenant, name))
+                        .collect::<Vec<DatabaseNameIdent>>();
+                    let dbs: Vec<(String, u64)> = catalog
+                        .mget_databases(&tenant, &db_idents)
+                        .await?
+                        .iter()
+                        .map(|db| (db.name().to_string(), db.get_db_info().database_id.db_id))
+                        .collect();
+                    final_dbs.extend(dbs);
+                }
+            }
+        } else {
+            let all_databases = catalog.list_databases(&tenant).await?;
+            for db in all_databases {
+                let db_id = db.get_db_info().database_id.db_id;
+                let db_name = db.name();
+                if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
+                    final_dbs.push((db_name.to_string(), db_id));
+                }
             }
         }
     }
@@ -248,11 +341,10 @@ pub(crate) async fn dump_tables(
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
     for (database, db_id) in final_dbs {
         let tables = if tables.is_empty() {
-            if let Ok(table) = catalog.list_tables(&tenant, &database).await {
-                table
-            } else {
-                vec![]
-            }
+            catalog
+                .list_tables(&tenant, &database)
+                .await
+                .unwrap_or_default()
         } else {
             let mut res = Vec::new();
             for table in &tables {
@@ -277,26 +369,4 @@ pub(crate) async fn dump_tables(
         final_tables.push((database, filtered_tables));
     }
     Ok(final_tables)
-}
-
-async fn generate_fields(
-    ctx: &Arc<dyn TableContext>,
-    table: &Arc<dyn Table>,
-) -> Result<Vec<TableField>> {
-    if table.engine() != VIEW_ENGINE {
-        return Ok(table.schema().fields().clone());
-    }
-
-    Ok(if let Some(query) = table.options().get(QUERY) {
-        let mut planner = Planner::new(ctx.clone());
-        match planner.plan_sql(query).await {
-            Ok((plan, _)) => infer_table_schema(&plan.schema())?.fields().clone(),
-            Err(_) => {
-                // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
-                vec![]
-            }
-        }
-    } else {
-        vec![]
-    })
 }

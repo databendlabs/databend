@@ -16,7 +16,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

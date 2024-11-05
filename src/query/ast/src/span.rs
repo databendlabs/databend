@@ -16,9 +16,14 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+use serde::Deserialize;
+use serde::Serialize;
+
 pub type Span = Option<Range>;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Drive, DriveMut)]
 pub struct Range {
     pub start: u32,
     pub end: u32,
@@ -81,13 +86,13 @@ pub fn merge_span(lhs: Span, rhs: Span) -> Span {
 }
 
 pub fn pretty_print_error(source: &str, labels: Vec<(Range, String)>) -> String {
-    use codespan_reporting::diagnostic::Diagnostic;
-    use codespan_reporting::diagnostic::Label;
-    use codespan_reporting::files::SimpleFile;
-    use codespan_reporting::term;
-    use codespan_reporting::term::termcolor::Buffer;
-    use codespan_reporting::term::Chars;
-    use codespan_reporting::term::Config;
+    use rspack_codespan_reporting::diagnostic::Diagnostic;
+    use rspack_codespan_reporting::diagnostic::Label;
+    use rspack_codespan_reporting::files::SimpleFile;
+    use rspack_codespan_reporting::term;
+    use rspack_codespan_reporting::term::termcolor::Buffer;
+    use rspack_codespan_reporting::term::Chars;
+    use rspack_codespan_reporting::term::Config;
 
     let mut writer = Buffer::no_color();
     let file = SimpleFile::new("SQL", source);

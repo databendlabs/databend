@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cluster;
+mod quota;
 mod role;
 mod setting;
 mod stage;

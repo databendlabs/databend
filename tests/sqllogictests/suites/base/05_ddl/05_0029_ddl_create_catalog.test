@@ -9,13 +9,8 @@ SHOW CATALOGS;
 ----
 default
 
-statement ok
-CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=( URL='fs:///tmp/test/' );
-
-query T
-SHOW CATALOGS LIKE 'ctl';
-----
-ctl
+statement error 1001
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(TYPE='REST' ADDRESS='http://127.0.0.1:1000' WAREHOUSE='default' );
 
 statement ok
 DROP CATALOG IF EXISTS ctl;

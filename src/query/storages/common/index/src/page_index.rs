@@ -85,7 +85,7 @@ impl PageIndex {
         }))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
         let stats = match stats {
             Some(stats) => stats,

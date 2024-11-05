@@ -20,12 +20,13 @@ use crate::optimizer::hyper_dp::join_relation::JoinRelation;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct JoinNode {
     pub join_type: JoinType,
     pub leaves: Arc<Vec<IndexType>>,
@@ -38,7 +39,7 @@ pub struct JoinNode {
 }
 
 impl JoinNode {
-    pub fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
+    pub async fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
         if let Some(card) = self.cardinality {
             return Ok(card);
         }
@@ -48,6 +49,7 @@ impl JoinNode {
             self.s_expr = Some(self.s_expr(relations));
             self.s_expr.as_ref().unwrap()
         };
+
         let rel_expr = RelExpr::with_s_expr(s_expr);
         let card = rel_expr.derive_cardinality()?.cardinality;
         self.cardinality = Some(card);
@@ -80,8 +82,11 @@ impl JoinNode {
             .map(|(_, r)| r.clone())
             .collect();
         let rel_op = RelOperator::Join(Join {
-            left_conditions,
-            right_conditions,
+            equi_conditions: JoinEquiCondition::new_conditions(
+                left_conditions,
+                right_conditions,
+                vec![],
+            ),
             non_equi_conditions: vec![],
             join_type: self.join_type.clone(),
             marker_index: None,
@@ -89,6 +94,7 @@ impl JoinNode {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
         });
         let children = self
             .children

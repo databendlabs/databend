@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::hash::Hash;
 use std::marker::PhantomData;
 
 use databend_common_expression::converts::datavalues::from_scalar;
@@ -24,6 +23,11 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use log::info;
+use serde::de::Error;
+
+use crate::meta::supported_stat_type;
+use crate::meta::v0;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -58,7 +62,10 @@ pub struct ClusterStatistics {
     pub max: Vec<Scalar>,
     pub level: i32,
 
-    // currently it's only used in native engine
+    #[serde(
+        serialize_with = "serialize_index_scalar_option_vec",
+        deserialize_with = "deserialize_index_scalar_option_vec"
+    )]
     pub pages: Option<Vec<Scalar>>,
 }
 
@@ -206,16 +213,22 @@ impl ClusterStatistics {
 }
 
 impl Statistics {
-    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
-        let col_stats = v0
-            .col_stats
-            .into_iter()
-            .filter_map(|(k, v)| {
-                let t = fields[k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(&v, t);
-                stats.map(|s| (k, s))
+    pub(crate) fn convert_column_stats(
+        v0: &HashMap<ColumnId, v0::statistics::ColumnStatistics>,
+        fields: &[TableField],
+    ) -> HashMap<ColumnId, ColumnStatistics> {
+        fields
+            .iter()
+            .filter_map(|f| {
+                v0.get(&f.column_id).and_then(|v| {
+                    ColumnStatistics::from_v0(v, f.data_type()).map(|v2| (f.column_id, v2))
+                })
             })
-            .collect();
+            .collect()
+    }
+
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
+        let col_stats = Self::convert_column_stats(&v0.col_stats, fields);
         Self {
             row_count: v0.row_count,
             block_count: v0.block_count,
@@ -241,8 +254,9 @@ fn serialize_index_scalar<S>(scalar: &Scalar, serializer: S) -> Result<S::Ok, S:
 where S: serde::Serializer {
     match IndexScalar::try_from(scalar.clone()) {
         Ok(index_scalar) => serde::Serialize::serialize(&index_scalar, serializer),
-        Err(_) => Err(serde::ser::Error::custom(format!(
-            "Failed to convert {scalar} to IndexScalar"
+        Err(e) => Err(serde::ser::Error::custom(format!(
+            "Failed to convert scalar to IndexScalar: {:?}",
+            e
         ))),
     }
 }
@@ -254,7 +268,8 @@ where S: serde::Serializer {
 fn deserialize_index_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
 where D: serde::Deserializer<'de> {
     let index_scalar = <IndexScalar as serde::Deserialize>::deserialize(deserializer)?;
-    Ok(Scalar::from(index_scalar))
+    Scalar::try_from(index_scalar)
+        .map_err(|e| D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e)))
 }
 
 /// Serializes a vector of `Scalar` values by first converting each to `IndexScalar`.
@@ -267,17 +282,17 @@ where D: serde::Deserializer<'de> {
 /// `IndexScalar`.
 fn serialize_index_scalar_vec<S>(scalars: &[Scalar], serializer: S) -> Result<S::Ok, S::Error>
 where S: serde::Serializer {
-    let mut index_scalars = Vec::with_capacity(scalars.len());
-    for scalar in scalars {
-        match IndexScalar::try_from(scalar.clone()) {
-            Ok(index_scalar) => index_scalars.push(index_scalar),
-            Err(_) => {
-                return Err(serde::ser::Error::custom(format!(
-                    "Failed to convert {scalar} to IndexScalar"
-                )));
-            }
-        }
-    }
+    let index_scalars = scalars
+        .iter()
+        .map(|scalar| {
+            IndexScalar::try_from(scalar.clone()).map_err(|e| {
+                serde::ser::Error::custom(format!(
+                    "Failed to convert Scalar to IndexScalar: {:?}",
+                    e
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     serde::Serialize::serialize(&index_scalars, serializer)
 }
 
@@ -291,9 +306,46 @@ where D: serde::Deserializer<'de> {
         <Vec<IndexScalar> as serde::Deserialize>::deserialize(deserializer)?;
     index_scalars
         .into_iter()
-        .map(Scalar::try_from)
+        .map(|index_scalar| {
+            Scalar::try_from(index_scalar).map_err(|e| {
+                D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e))
+            })
+        })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(serde::de::Error::custom)
+}
+
+fn serialize_index_scalar_option_vec<S>(
+    scalars: &Option<Vec<Scalar>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match scalars {
+        Some(scalars) => serialize_index_scalar_vec(scalars, serializer),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_index_scalar_option_vec<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<Scalar>>, D::Error>
+where D: serde::Deserializer<'de> {
+    <Option<Vec<IndexScalar>> as serde::Deserialize>::deserialize(deserializer)?
+        .map(|index_scalars| {
+            index_scalars
+                .into_iter()
+                .map(|index_scalar| {
+                    Scalar::try_from(index_scalar).map_err(|e| {
+                        D::Error::custom(format!(
+                            "Failed to convert IndexScalar to Scalar: {:?}",
+                            e
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()
 }
 
 /// Deserializes the `col_stats` field of the `BlockMeta` and `Statistics` struct.
@@ -316,12 +368,11 @@ pub fn deserialize_col_stats<'de, D>(
 where D: serde::Deserializer<'de> {
     deserializer.deserialize_map(ColStatsVisitor::new())
 }
-
-struct ColStatsVisitor<K, V> {
-    marker: PhantomData<fn() -> HashMap<K, V>>,
+struct ColStatsVisitor {
+    marker: PhantomData<fn() -> HashMap<ColumnId, ColumnStatistics>>,
 }
 
-impl<K, V> ColStatsVisitor<K, V> {
+impl ColStatsVisitor {
     fn new() -> Self {
         ColStatsVisitor {
             marker: PhantomData,
@@ -329,12 +380,8 @@ impl<K, V> ColStatsVisitor<K, V> {
     }
 }
 
-impl<'de, K, V> serde::de::Visitor<'de> for ColStatsVisitor<K, V>
-where
-    K: serde::Deserialize<'de> + Hash + Eq,
-    V: serde::Deserialize<'de>,
-{
-    type Value = HashMap<K, V>;
+impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
+    type Value = HashMap<ColumnId, ColumnStatistics>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a map")
@@ -344,9 +391,27 @@ where
     where M: serde::de::MapAccess<'de> {
         let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
 
-        while let Some(key) = access.next_key()? {
-            if let Ok(value) = access.next_value() {
-                map.insert(key, value);
+        while let Some(key) = access.next_key::<ColumnId>()? {
+            if let Ok(value) = access.next_value::<ColumnStatistics>() {
+                if value.max.is_null() && value.min.is_null() {
+                    // If scalar values of min and max are all NULL, they should be retained.
+                    //
+                    // This ensures that columns with only NULL values have their column statistics
+                    // recorded, which is essential for pruning on these columns, and without this,
+                    // column statistics like NDV (Number of Distinct Values) and null_count
+                    // would be missing as well.
+                    map.insert(key, value);
+                } else {
+                    let data_type = value.max.as_ref().infer_data_type();
+                    if supported_stat_type(&data_type) {
+                        map.insert(key, value);
+                    } else {
+                        info!(
+                            "column of id {} is excluded from column statistics, unsupported data type {}",
+                            key, data_type
+                        );
+                    }
+                }
             }
         }
 

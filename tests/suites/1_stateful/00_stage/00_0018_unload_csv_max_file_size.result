@@ -1,0 +1,6 @@
+>>>> drop stage if exists unload_csv_max_file_size;
+>>>> create stage unload_csv_max_file_size url='fs:///tmp/unload_csv_max_file_size/'
+>>>> copy into @unload_csv_max_file_size from (select * from numbers(100000000)) max_file_size=100000 file_format=(type=csv)
+100000000	888888890	888888890
+100000000
+>>>> drop stage if exists unload_csv_max_file_size;

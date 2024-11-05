@@ -113,12 +113,13 @@ impl SnapshotGenerator for AppendGenerator {
         Ok(())
     }
 
-    fn generate_new_snapshot(
+    fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
-        previous: Option<Arc<TableSnapshot>>,
+        previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        table_name: &str,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -133,7 +134,7 @@ impl SnapshotGenerator for AppendGenerator {
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
-        if let Some(snapshot) = &previous {
+        if let Some(snapshot) = previous {
             prev_timestamp = snapshot.timestamp;
             prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
             table_statistics_location = snapshot.table_statistics_location.clone();
@@ -210,16 +211,20 @@ impl SnapshotGenerator for AppendGenerator {
             .get_auto_compaction_imperfect_blocks_threshold()?;
 
         if imperfect_count >= auto_compaction_imperfect_blocks_threshold {
-            // if imperfect_count is larger, slightly increase the number of blocks
-            // eligible for auto-compaction.
-            // this adjustment is intended to help reduce fragmentation over time.
+            // If imperfect_count is larger, SLIGHTLY increase the number of blocks
+            // eligible for auto-compaction, this adjustment is intended to help reduce
+            // fragmentation over time.
+            //
+            // To prevent the off-by-one mistake, we need to add 1 to it;
+            // this way, the potentially previously left non-compacted segment will
+            // also be included.
             let compact_num_block_hint = std::cmp::min(
                 imperfect_count,
                 (auto_compaction_imperfect_blocks_threshold as f64 * 1.5).ceil() as u64,
-            );
+            ) + 1;
             info!("set compact_num_block_hint to {compact_num_block_hint }");
             self.ctx
-                .set_compaction_num_block_hint(compact_num_block_hint);
+                .set_compaction_num_block_hint(table_name, compact_num_block_hint);
         }
 
         Ok(TableSnapshot::new(

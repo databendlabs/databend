@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(test DATE NULL)
+
+statement ok
+INSERT INTO test SELECT IF(number % 999=0 and number != 0,'2024-01-01', NULL) FROM numbers(10000)
+
+statement error 1006
+SELECT count(1) FROM test WHERE test IS NOT NULL AND NOT test = ''
+
+query ITIT
+SELECT count(1) FROM test WHERE test IS NOT NULL AND test != '2024-01-01' AND NOT test = ''
+----
+0
+
+statement ok
+drop table test;
+

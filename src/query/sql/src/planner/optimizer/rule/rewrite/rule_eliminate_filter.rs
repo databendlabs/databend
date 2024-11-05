@@ -15,24 +15,33 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use itertools::Itertools;
 
 use crate::optimizer::extract::Matcher;
+use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
+use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::MetadataRef;
 
 pub struct RuleEliminateFilter {
     id: RuleID,
     matchers: Vec<Matcher>,
+    metadata: MetadataRef,
 }
 
 impl RuleEliminateFilter {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::EliminateFilter,
             // Filter
@@ -42,6 +51,7 @@ impl RuleEliminateFilter {
                 op_type: RelOp::Filter,
                 children: vec![Matcher::Leaf],
             }],
+            metadata,
         }
     }
 }
@@ -55,11 +65,34 @@ impl Rule for RuleEliminateFilter {
         let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
         // First, de-duplication predicates.
         let origin_predicates = eval_scalar.predicates.clone();
-        let predicates = eval_scalar
-            .predicates
+        let predicates = origin_predicates
+            .clone()
             .into_iter()
             .unique()
             .collect::<Vec<ScalarExpr>>();
+
+        // Rewrite false filter to be empty scan
+        if predicates.iter().any(is_falsy) {
+            let output_columns = eval_scalar
+                .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
+                .output_columns
+                .clone();
+            let metadata = self.metadata.read();
+            let mut fields = Vec::with_capacity(output_columns.len());
+
+            for col in output_columns.iter().sorted() {
+                fields.push(DataField::new(
+                    &col.to_string(),
+                    metadata.column(*col).data_type(),
+                ));
+            }
+            let empty_scan =
+                ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
+            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            state.add_result(result);
+            return Ok(());
+        }
+
         // Delete identically equal predicate
         // After constant fold is ready, we can delete the following code
         let predicates = predicates

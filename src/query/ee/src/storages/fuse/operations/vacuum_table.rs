@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::DateTime;
-use chrono::Duration;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -30,7 +29,7 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::storages::fuse::get_snapshot_referenced_segments;
 
@@ -140,28 +139,16 @@ pub async fn get_snapshot_referenced_files(
 #[async_backtrace::framed]
 async fn get_orphan_files_to_be_purged(
     fuse_table: &FuseTable,
+    prefix: &str,
     referenced_files: HashSet<String>,
     retention_time: DateTime<Utc>,
 ) -> Result<Vec<String>> {
-    let files_to_be_purged = match referenced_files.iter().next().cloned() {
-        Some(location) => {
-            let prefix = SnapshotsIO::get_s3_prefix_from_file(&location);
-            if let Some(prefix) = prefix {
-                fuse_table
-                    .list_files(prefix, |location, modified| {
-                        modified <= retention_time && !referenced_files.contains(&location)
-                    })
-                    .await?
-            } else {
-                vec![]
-            }
-        }
-        None => {
-            vec![]
-        }
-    };
-
-    Ok(files_to_be_purged)
+    let prefix = prefix.to_string();
+    fuse_table
+        .list_files(prefix, |location, modified| {
+            modified <= retention_time && !referenced_files.contains(&location)
+        })
+        .await
 }
 
 #[async_backtrace::framed]
@@ -187,9 +174,14 @@ pub async fn do_gc_orphan_files(
 
     // 2. Purge orphan segment files.
     // 2.1 Get orphan segment files to be purged
-    let segment_locations_to_be_purged =
-        get_orphan_files_to_be_purged(fuse_table, referenced_files.segments, retention_time)
-            .await?;
+    let location_gen = fuse_table.meta_location_generator();
+    let segment_locations_to_be_purged = get_orphan_files_to_be_purged(
+        fuse_table,
+        location_gen.segment_info_prefix(),
+        referenced_files.segments,
+        retention_time,
+    )
+    .await?;
     let status = format!(
         "gc orphan: read segment_locations_to_be_purged:{}, cost:{:?}, retention_time: {}",
         segment_locations_to_be_purged.len(),
@@ -201,11 +193,12 @@ pub async fn do_gc_orphan_files(
     // 2.2 Delete all the orphan segment files to be purged
     let purged_file_num = segment_locations_to_be_purged.len();
     fuse_table
-        .try_purge_location_files_and_cache::<CompactSegmentInfo, _, _>(
+        .try_purge_location_files_and_cache::<SegmentInfo, _>(
             ctx.clone(),
             HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
         )
         .await?;
+
     let status = format!(
         "gc orphan: purged segment files:{}, cost:{:?}",
         purged_file_num,
@@ -215,8 +208,13 @@ pub async fn do_gc_orphan_files(
 
     // 3. Purge orphan block files.
     // 3.1 Get orphan block files to be purged
-    let block_locations_to_be_purged =
-        get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks, retention_time).await?;
+    let block_locations_to_be_purged = get_orphan_files_to_be_purged(
+        fuse_table,
+        location_gen.block_location_prefix(),
+        referenced_files.blocks,
+        retention_time,
+    )
+    .await?;
     let status = format!(
         "gc orphan: read block_locations_to_be_purged:{}, cost:{:?}",
         block_locations_to_be_purged.len(),
@@ -241,9 +239,13 @@ pub async fn do_gc_orphan_files(
 
     // 4. Purge orphan block index files.
     // 4.1 Get orphan block index files to be purged
-    let index_locations_to_be_purged =
-        get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks_index, retention_time)
-            .await?;
+    let index_locations_to_be_purged = get_orphan_files_to_be_purged(
+        fuse_table,
+        location_gen.block_bloom_index_prefix(),
+        referenced_files.blocks_index,
+        retention_time,
+    )
+    .await?;
     let status = format!(
         "gc orphan: read index_locations_to_be_purged:{}, cost:{:?}",
         index_locations_to_be_purged.len(),
@@ -292,10 +294,15 @@ pub async fn do_dry_run_orphan_files(
     );
     ctx.set_status_info(&status);
 
+    let location_gen = fuse_table.meta_location_generator();
     // 2. Get purge orphan segment files.
-    let segment_locations_to_be_purged =
-        get_orphan_files_to_be_purged(fuse_table, referenced_files.segments, retention_time)
-            .await?;
+    let segment_locations_to_be_purged = get_orphan_files_to_be_purged(
+        fuse_table,
+        location_gen.segment_info_prefix(),
+        referenced_files.segments,
+        retention_time,
+    )
+    .await?;
     let status = format!(
         "dry_run orphan: read segment_locations_to_be_purged:{}, cost:{:?}",
         segment_locations_to_be_purged.len(),
@@ -309,8 +316,13 @@ pub async fn do_dry_run_orphan_files(
     }
 
     // 3. Get purge orphan block files.
-    let block_locations_to_be_purged =
-        get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks, retention_time).await?;
+    let block_locations_to_be_purged = get_orphan_files_to_be_purged(
+        fuse_table,
+        location_gen.block_location_prefix(),
+        referenced_files.blocks,
+        retention_time,
+    )
+    .await?;
     let status = format!(
         "dry_run orphan: read block_locations_to_be_purged:{}, cost:{:?}",
         block_locations_to_be_purged.len(),
@@ -323,9 +335,13 @@ pub async fn do_dry_run_orphan_files(
     }
 
     // 4. Get purge orphan block index files.
-    let index_locations_to_be_purged =
-        get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks_index, retention_time)
-            .await?;
+    let index_locations_to_be_purged = get_orphan_files_to_be_purged(
+        fuse_table,
+        location_gen.block_bloom_index_prefix(),
+        referenced_files.blocks_index,
+        retention_time,
+    )
+    .await?;
     let status = format!(
         "dry_run orphan: read index_locations_to_be_purged:{}, cost:{:?}",
         index_locations_to_be_purged.len(),
@@ -354,7 +370,7 @@ pub async fn do_vacuum(
         .await?;
     let status = format!("do_vacuum: purged table, cost:{:?}", start.elapsed());
     ctx.set_status_info(&status);
-    let retention = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+    let retention = fuse_table.get_data_retention_period(ctx.as_ref())?;
     // use min(now - get_retention_period(), retention_time) as gc orphan files retention time
     // to protect files that generated by txn which has not been committed being gc.
     let retention_time = std::cmp::min(chrono::Utc::now() - retention, retention_time);

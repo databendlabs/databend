@@ -18,13 +18,13 @@ use std::fmt::Formatter;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::seq_value::SeqV;
 use crate::ConflictSeq;
-use crate::SeqV;
 
 /// Describes what `seq` an operation must match to take effect.
 /// Every value written to meta data has a unique `seq` bound.
 /// Any conditioned or non-conditioned write operation can be done through the corresponding MatchSeq.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub enum MatchSeq {
     // TODO(xp): remove Any, it is equivalent to GE(0)
     /// Any value is acceptable, i.e. does not check seq at all.
@@ -92,10 +92,10 @@ impl MatchSeqExt<u64> for MatchSeq {
 #[cfg(test)]
 mod tests {
 
+    use crate::seq_value::SeqV;
     use crate::ConflictSeq;
     use crate::MatchSeq;
     use crate::MatchSeqExt;
-    use crate::SeqV;
 
     #[derive(serde::Serialize)]
     struct Foo {

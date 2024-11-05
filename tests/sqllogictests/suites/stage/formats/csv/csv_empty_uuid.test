@@ -1,0 +1,49 @@
+statement ok
+drop table if exists t_uuid
+
+statement ok
+create table t_uuid(id string default uuid(), a int)
+
+statement ok
+remove @data/csv/unload/uuid
+
+query
+copy into @data/csv/unload/uuid/ from (select '',1 )  file_format = (type = CSV)
+----
+1 5 5
+
+
+query
+copy into t_uuid from @data/csv/unload/uuid file_format = (type = CSV) RETURN_FAILED_ONLY=TRUE
+----
+
+query
+select * from t_uuid
+----
+NULL 1
+
+query
+copy into t_uuid from @data/csv/unload/uuid file_format = (type = CSV  empty_field_as=null) force=true RETURN_FAILED_ONLY=TRUE
+----
+
+query
+select * from t_uuid
+----
+NULL 1
+NULL 1
+
+query
+copy into @data/csv/unload/uuid/ from (select '',1 )  file_format = (type = CSV)
+----
+1 5 5
+
+statement ok
+truncate table t_uuid
+
+query
+copy into t_uuid from @data/csv/unload/uuid file_format = (type = CSV  empty_field_as=field_default) force=true RETURN_FAILED_ONLY=TRUE
+
+query
+select uniq(id) from t_uuid
+----
+2

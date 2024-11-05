@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,6 +31,41 @@ use crate::SettingMode;
 pub enum FlightCompression {
     Lz4,
     Zstd,
+}
+
+#[derive(Clone, Copy)]
+pub enum SpillFileFormat {
+    Arrow,
+    Parquet,
+}
+
+impl SpillFileFormat {
+    pub fn range() -> Vec<String> {
+        ["arrow", "parquet"]
+            .iter()
+            .copied()
+            .map(String::from)
+            .collect()
+    }
+
+    pub fn is_parquet(&self) -> bool {
+        matches!(self, SpillFileFormat::Parquet)
+    }
+}
+
+impl FromStr for SpillFileFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "arrow" => Ok(SpillFileFormat::Arrow),
+            "parquet" => Ok(Self::Parquet),
+            _ => Err(ErrorCode::InvalidConfig(format!(
+                "invalid SpillFileFormat: {:?}",
+                s
+            ))),
+        }
+    }
 }
 
 impl Settings {
@@ -55,7 +92,7 @@ impl Settings {
         unsafe { self.unchecked_try_get_string(key) }
     }
 
-    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
+    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
             None => match self.configs.get(key) {
@@ -131,6 +168,11 @@ impl Settings {
     pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
     }
+
+    pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
+    }
+
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
@@ -260,6 +302,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
+    pub fn get_enable_dio(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_dio")? != 0)
+    }
+
     /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
@@ -275,6 +321,18 @@ impl Settings {
 
     pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
+    }
+
+    pub fn get_join_spilling_buffer_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
+    }
+
+    pub fn get_spilling_file_format(&self) -> Result<SpillFileFormat> {
+        self.try_get_string("spilling_file_format")?.parse()
+    }
+
+    pub fn get_spilling_to_disk_vacuum_unknown_temp_dirs_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spilling_to_disk_vacuum_unknown_temp_dirs_limit")? as usize)
     }
 
     pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
@@ -293,8 +351,16 @@ impl Settings {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
-    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
-        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    pub fn get_enforce_shuffle_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_shuffle_join")? != 0)
+    }
+
+    pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_merge_into_row_fetch")? != 0)
+    }
+
+    pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -334,6 +400,14 @@ impl Settings {
         Ok(self.try_get_u64("hide_options_in_show_create_table")? != 0)
     }
 
+    pub fn get_enable_planner_cache(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_planner_cache")? != 0)
+    }
+
+    pub fn get_enable_experimental_procedure(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_procedure")? != 0)
+    }
+
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_query_result_cache")? != 0)
     }
@@ -366,8 +440,36 @@ impl Settings {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_window_partition_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_window_partition_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_to_disk_bytes_limit")? as usize)
+    }
+
+    pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_window_num_partitions(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_num_partitions")? as usize)
+    }
+
+    pub fn get_window_spill_unit_size_mb(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_spill_unit_size_mb")? as usize)
+    }
+
+    pub fn get_window_partition_sort_block_size(&self) -> Result<u64> {
+        self.try_get_u64("window_partition_sort_block_size")
+    }
+
     pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_sort_spilling_batch_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_batch_bytes")? as usize)
     }
 
     pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
@@ -459,6 +561,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
+    pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
+    }
+
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
@@ -467,12 +573,20 @@ impl Settings {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
 
+    pub fn get_enable_compact_after_multi_table_insert(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_compact_after_multi_table_insert")? != 0)
+    }
+
     pub fn get_auto_compaction_imperfect_blocks_threshold(&self) -> Result<u64> {
         self.try_get_u64("auto_compaction_imperfect_blocks_threshold")
     }
 
     pub fn set_auto_compaction_imperfect_blocks_threshold(&self, val: u64) -> Result<()> {
         self.try_set_u64("auto_compaction_imperfect_blocks_threshold", val)
+    }
+
+    pub fn get_auto_compaction_segments_limit(&self) -> Result<u64> {
+        self.try_get_u64("auto_compaction_segments_limit")
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
@@ -508,6 +622,14 @@ impl Settings {
         self.try_get_u64("recluster_block_size")
     }
 
+    pub fn set_compact_max_block_selection(&self, val: u64) -> Result<()> {
+        self.try_set_u64("compact_max_block_selection", val)
+    }
+
+    pub fn get_compact_max_block_selection(&self) -> Result<u64> {
+        self.try_get_u64("compact_max_block_selection")
+    }
+
     pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
@@ -532,6 +654,21 @@ impl Settings {
         self.try_get_string("numeric_cast_option")
     }
 
+    pub fn get_nulls_first(&self) -> impl Fn(bool) -> bool {
+        match self
+            .try_get_string("default_order_by_null")
+            .unwrap_or("nulls_last".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "nulls_last" => |_| false,
+            "nulls_first" => |_| true,
+            "nulls_first_on_asc_last_on_desc" => |asc: bool| asc,
+            "nulls_last_on_asc_first_on_desc" => |asc: bool| !asc,
+            _ => |_| false,
+        }
+    }
+
     pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("external_server_connect_timeout_secs")
     }
@@ -542,6 +679,10 @@ impl Settings {
 
     pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_batch_rows")
+    }
+
+    pub fn get_external_server_request_retry_times(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_retry_times")
     }
 
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
@@ -573,6 +714,13 @@ impl Settings {
         Ok(self.try_get_u64("parse_datetime_ignore_remainder")? != 0)
     }
 
+    pub fn get_enable_strict_datetime_parser(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_strict_datetime_parser")? != 0)
+    }
+
+    pub fn get_enable_dst_hour_fix(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_dst_hour_fix")? != 0)
+    }
     pub fn get_disable_variant_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
     }
@@ -616,5 +764,49 @@ impl Settings {
 
     pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_temp_files_after_query")
+    }
+
+    pub fn get_max_set_operator_count(&self) -> Result<u64> {
+        self.try_get_u64("max_set_operator_count")
+    }
+
+    pub fn get_enable_loser_tree_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
+    }
+
+    pub fn get_enable_parallel_multi_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parallel_multi_merge_sort")? == 1)
+    }
+
+    pub fn get_format_null_as_str(&self) -> Result<bool> {
+        Ok(self.try_get_u64("format_null_as_str")? == 1)
+    }
+
+    pub fn get_enable_last_snapshot_location_hint(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_last_snapshot_location_hint")? == 1)
+    }
+
+    pub fn get_max_data_retention_period_in_days() -> u64 {
+        DefaultSettings::data_retention_time_in_days_max()
+    }
+
+    pub fn get_random_function_seed(&self) -> Result<bool> {
+        Ok(self.try_get_u64("random_function_seed")? == 1)
+    }
+
+    pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {
+        self.try_get_u64("dynamic_sample_time_budget_ms")
+    }
+
+    pub fn get_max_spill_io_requests(&self) -> Result<u64> {
+        self.try_get_u64("max_spill_io_requests")
+    }
+
+    pub fn get_short_sql_max_length(&self) -> Result<u64> {
+        self.try_get_u64("short_sql_max_length")
+    }
+
+    pub fn set_short_sql_max_length(&self, val: u64) -> Result<()> {
+        self.try_set_u64("short_sql_max_length", val)
     }
 }

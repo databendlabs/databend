@@ -67,6 +67,52 @@ select * from ts1
 2023-02-17 07:56:36.564000
 
 statement ok
+create table my_table(column1 string, column2 string, column3 string);
+
+statement ok
+INSERT INTO my_table (column1, column2, column3) VALUES
+('value1_1', 'value1_2', 'value1_3'),
+('value2_1', 'value2_2', 'value2_3'),
+('value3_1', 'value3_2', 'value3_3'),
+('value4_1', 'value4_2', 'value4_3'),
+('value5_1', 'value5_2', 'value5_3'),
+('value6_1', 'value6_2', 'value6_3'),
+('value7_1', 'value7_2', 'value7_3'),
+('value8_1', 'value8_2', 'value8_3'),
+('value9_1', 'value9_2', 'value9_3'),
+('value10_1', 'value10_2', 'value10_3'),
+('value11_1', 'value11_2', 'value11_3'),
+('value12_1', 'value12_2', 'value12_3'),
+('value13_1', 'value13_2', 'value13_3'),
+('value14_1', 'value14_2', 'value14_3'),
+('value15_1', 'value15_2', 'value15_3'),
+('value16_1', 'value16_2', 'value16_3'),
+('value17_1', 'value17_2', 'value17_3'),
+('value18_1', 'value18_2', 'value18_3'),
+('value19_1', 'value19_2', 'value19_3'),
+('value20_1', 'value20_2', 'value20_3'),
+('value21_1', 'value21_2', 'value21_3'),
+('value22_1', 'value22_2', 'value22_3'),
+('value23_1', 'value23_2', 'value23_3'),
+('value24_1', 'value24_2', 'value24_3'),
+('value25_1', 'value25_2', 'value25_3'),
+('value26_1', 'value26_2', 'value26_3'),
+('value27_1', 'value27_2', 'value27_3'),
+('value28_1', 'value28_2', 'value28_3'),
+('value29_1', 'value29_2', 'value29_3'),
+('value30_1', 'value30_2', 'value30_3'),
+('value31_1', 'value31_2', 'value31_3'),
+('value32_1', 'value32_2', 'value32_3');
+
+query TTTI
+select max(column1), max(column2), max(column3), count() from my_table
+----
+value9_1 value9_2 value9_3 32
+
+statement ok
+drop table my_table
+
+statement ok
 drop table ts1
 
 statement ok

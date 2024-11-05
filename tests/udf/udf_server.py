@@ -21,7 +21,6 @@ from typing import List, Dict, Any, Tuple, Optional
 # https://github.com/datafuselabs/databend-udf
 from databend_udf import udf, UDFServer
 
-
 logging.basicConfig(level=logging.INFO)
 
 
@@ -52,6 +51,25 @@ def bool_select(condition, a, b):
     skip_null=True,
 )
 def gcd(x: int, y: int) -> int:
+    while y != 0:
+        (x, y) = (y, x % y)
+    return x
+
+
+gcd_error_cnt = 0
+
+
+@udf(
+    name="gcd_error",
+    input_types=["INT", "INT"],
+    result_type="INT",
+    skip_null=True,
+)
+def gcd_error(x: int, y: int) -> int:
+    global gcd_error_cnt
+    if y % 2 == 0 and gcd_error_cnt <= 3:
+        gcd_error_cnt += 1
+        raise ValueError("gcd_error")
     while y != 0:
         (x, y) = (y, x % y)
     return x
@@ -290,6 +308,52 @@ def return_all_non_nullable(
     )
 
 
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import time
+
+executor = ThreadPoolExecutor()
+executor2 = ProcessPoolExecutor()
+
+
+def cal_multi_thread(row):
+    r = sum(range(3500000 + row))
+    return r
+
+
+def cal_sleep(row):
+    time.sleep(0.2)
+    return row
+
+
+@udf(input_types=["INT"], result_type="BIGINT", batch_mode=True)
+def fib_async(x: List[int]) -> List[int]:
+    current_thread = threading.current_thread()
+    print("batchs {} {}".format(len(x), current_thread.name))
+
+    tasks = [executor2.submit(cal_multi_thread, row) for row in x]
+    result = [future.result() for future in tasks]
+
+    tasks2 = [executor.submit(lambda row: cal_sleep(row), row) for row in x]
+    result2 = [future.result() for future in tasks]
+
+    print("batchs done {}".format(len(x)))
+    return result
+
+
+import threading
+
+
+@udf(input_types=["INT"], result_type="BIGINT", batch_mode=True)
+def fib(x: List[int]) -> List[int]:
+    current_thread = threading.current_thread()
+    print("batchs {} {}".format(len(x), current_thread.name))
+    result = [sum(range(3500000 + row)) for row in x]
+    print("batchs done {}".format(len(x)))
+    # tasks = [executor.submit(lambda row: cal_sleep(row), row) for row in x]
+    # _column = [future.result() for future in tasks]
+    return result
+
+
 @udf(input_types=["INT"], result_type="INT")
 def wait(x):
     time.sleep(0.1)
@@ -302,6 +366,11 @@ def wait_concurrent(x):
     return x
 
 
+@udf(input_types=["VARCHAR"], result_type="VARCHAR")
+def ping(s: str) -> str:
+    return s
+
+
 if __name__ == "__main__":
     udf_server = UDFServer("0.0.0.0:8815")
     udf_server.add_function(add_signed)
@@ -310,6 +379,7 @@ if __name__ == "__main__":
     udf_server.add_function(binary_reverse)
     udf_server.add_function(bool_select)
     udf_server.add_function(gcd)
+    udf_server.add_function(gcd_error)
     udf_server.add_function(split_and_join)
     udf_server.add_function(decimal_div)
     udf_server.add_function(hex_to_dec)
@@ -327,4 +397,7 @@ if __name__ == "__main__":
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
     udf_server.add_function(url_len)
+
+    # Built-in function
+    udf_server.add_function(ping)
     udf_server.serve()

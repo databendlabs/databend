@@ -46,7 +46,7 @@ impl Interpreter for AlterUserUDFScript {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // Alter udf only modify the UserDefinedFunction, no need to modify ownership.

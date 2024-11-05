@@ -19,7 +19,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
@@ -35,7 +34,6 @@ pub struct ReplaceDeduplicate {
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
     pub table_is_empty: bool,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
     pub target_schema: TableSchemaRef,
     pub select_ctx: Option<ReplaceSelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,

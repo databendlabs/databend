@@ -52,9 +52,6 @@ impl Display for CreateVirtualColumnReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateVirtualColumnReply {}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateVirtualColumnReq {
     pub if_exists: bool,
@@ -73,9 +70,6 @@ impl Display for UpdateVirtualColumnReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UpdateVirtualColumnReply {}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnReq {
     pub if_exists: bool,
@@ -87,9 +81,6 @@ impl Display for DropVirtualColumnReq {
         write!(f, "drop_virtual_column for {}", self.name_ident.display())
     }
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropVirtualColumnReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListVirtualColumnsReq {

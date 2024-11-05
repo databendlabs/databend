@@ -37,6 +37,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
+    use super::StageIdent;
     use crate::principal::StageInfo;
     use crate::tenant_key::resource::TenantResource;
 
@@ -49,7 +50,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for StageInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = StageIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

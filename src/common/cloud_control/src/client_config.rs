@@ -15,12 +15,12 @@
 use std::fmt::Debug;
 use std::time::Duration;
 
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_TENANT;
+use databend_common_base::headers::HEADER_USER;
 use tonic::Request;
 
 use crate::cloud_api::CLOUD_REQUEST_TIMEOUT_SEC;
-use crate::cloud_api::QUERY_ID;
-use crate::cloud_api::REQUESTER;
-use crate::cloud_api::TENANT_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClientConfig {
@@ -82,9 +82,9 @@ pub fn build_client_config(
     timeout: Duration,
 ) -> ClientConfig {
     let mut config = ClientConfig::new(timeout);
-    config.add_metadata(TENANT_ID, tenant);
-    config.add_metadata(REQUESTER, user);
-    config.add_metadata(QUERY_ID, query_id);
+    config.add_metadata(HEADER_TENANT, tenant);
+    config.add_metadata(HEADER_USER, user);
+    config.add_metadata(HEADER_QUERY_ID, query_id);
     config
 }
 

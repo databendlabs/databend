@@ -15,7 +15,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -27,11 +26,13 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -47,8 +48,8 @@ use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
@@ -66,6 +67,8 @@ type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
 pub struct QueryContextShared {
+    // Query level
+    pub(crate) query_settings: Arc<Settings>,
     /// total_scan_values for scan stats
     pub(in crate::sessions) total_scan_values: Arc<Progress>,
     /// scan_progress for scan metrics of datablocks (uncompressed)
@@ -78,9 +81,11 @@ pub struct QueryContextShared {
     pub(in crate::sessions) agg_spill_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in group by
     pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in window partition
+    pub(in crate::sessions) window_partition_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
-    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
+    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode<ContextError>>>>,
     pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
@@ -107,13 +112,13 @@ pub struct QueryContextShared {
         Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     pub(in crate::sessions) copy_status: Arc<CopyStatus>,
-    pub(in crate::sessions) merge_status: Arc<RwLock<MergeStatus>>,
+    pub(in crate::sessions) mutation_status: Arc<RwLock<MutationStatus>>,
     pub(in crate::sessions) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
-    pub(in crate::sessions) num_fragmented_block_hint: Arc<AtomicU64>,
+    pub(in crate::sessions) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(in crate::sessions) enable_sort_spill: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
@@ -141,6 +146,7 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
+            query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache,
@@ -167,11 +173,11 @@ impl QueryContextShared {
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
             copy_status: Arc::new(Default::default()),
-            merge_status: Arc::new(Default::default()),
+            mutation_status: Arc::new(Default::default()),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
-            num_fragmented_block_hint: Arc::new(AtomicU64::new(0)),
+            num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
@@ -179,6 +185,7 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
@@ -188,12 +195,14 @@ impl QueryContextShared {
         }))
     }
 
-    pub fn set_error(&self, err: ErrorCode) {
+    pub fn set_error<C>(&self, err: ErrorCode<C>) {
+        let err = err.with_context("query context error");
+
         let mut guard = self.error.lock();
         *guard = Some(err);
     }
 
-    pub fn get_error(&self) -> Option<ErrorCode> {
+    pub fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         let guard = self.error.lock();
         (*guard).clone()
     }
@@ -228,13 +237,14 @@ impl QueryContextShared {
         *guard = Some(mode);
     }
 
-    pub fn kill(&self, cause: ErrorCode) {
+    pub fn kill<C>(&self, cause: ErrorCode<C>) {
         self.set_error(cause.clone());
-        self.aborting.store(true, Ordering::Release);
 
         if let Some(executor) = self.executor.read().upgrade() {
             executor.finish(Some(cause));
         }
+
+        self.aborting.store(true, Ordering::Release);
 
         // TODO: Wait for the query to be processed (write out the last error)
     }
@@ -251,12 +261,13 @@ impl QueryContextShared {
         self.aborting.clone()
     }
 
-    pub fn check_aborting(&self) -> Result<()> {
+    pub fn check_aborting(&self) -> Result<(), ContextError> {
         if self.aborting.load(Ordering::Acquire) {
             Err(self.get_error().unwrap_or_else(|| {
                 ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 )
+                .with_context("query aborted")
             }))
         } else {
             Ok(())
@@ -315,6 +326,7 @@ impl QueryContextShared {
         catalog: &str,
         database: &str,
         table: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
 
@@ -322,7 +334,10 @@ impl QueryContextShared {
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
         let res = match already_in_cache {
-            false => self.get_table_to_cache(catalog, database, table).await?,
+            false => {
+                self.get_table_to_cache(catalog, database, table, max_batch_size)
+                    .await?
+            }
             true => self
                 .tables_refs
                 .lock()
@@ -331,28 +346,35 @@ impl QueryContextShared {
                 .clone(),
         };
 
-        self.cache_stream_source_table(res.clone(), catalog).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
     async fn get_table_to_cache(
         &self,
-        catalog: &str,
+        catalog_name: &str,
         database: &str,
         table: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
-        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let table_meta_key = (
+            catalog_name.to_string(),
+            database.to_string(),
+            table.to_string(),
+        );
         let catalog = self
             .catalog_manager
             .get_catalog(
                 tenant.tenant_name(),
-                catalog,
-                self.session.session_ctx.txn_mgr(),
+                catalog_name,
+                self.session.session_ctx.session_state(),
             )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;
+        let cache_table = self
+            .cache_stream_source_table(catalog, cache_table, max_batch_size)
+            .await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -364,56 +386,70 @@ impl QueryContextShared {
 
     // Cache the source table of a stream table to ensure can get the same table metadata.
     #[async_backtrace::framed]
-    async fn cache_stream_source_table(&self, table: Arc<dyn Table>, catalog: &str) -> Result<()> {
-        if table.engine() == "STREAM" {
-            let stream = StreamTable::try_from_table(table.as_ref())?;
-            let table_name = stream.source_table_name();
-            let database = stream.source_table_database();
-            let meta_key = (
-                catalog.to_string(),
-                database.to_string(),
-                table_name.to_string(),
-            );
-            let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
-            if !already_in_cache {
+    async fn cache_stream_source_table(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        table: Arc<dyn Table>,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        if !table.is_stream() {
+            return Ok(table);
+        }
+
+        let stream = StreamTable::try_from_table(table.as_ref())?;
+        let source_database_name = stream.source_database_name(catalog.as_ref()).await?;
+        let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
+        let meta_key = (
+            catalog.name(),
+            source_database_name.to_string(),
+            source_table_name.to_string(),
+        );
+        let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
+        let source_table = match already_in_cache {
+            false => {
                 let stream_desc = &stream.get_table_info().desc;
-                let tenant = self.get_tenant();
-                let catalog = self
-                    .catalog_manager
-                    .get_catalog(
-                        tenant.tenant_name(),
-                        catalog,
-                        self.session.session_ctx.txn_mgr(),
-                    )
-                    .await?;
-                let source_table = match catalog.get_stream_source_table(stream_desc)? {
-                    Some(source_table) => source_table,
-                    None => {
-                        let source_table = catalog
-                            .get_table(&tenant, database, table_name)
-                            .await
-                            .map_err(|err| {
-                            ErrorCode::IllegalStream(format!(
-                                "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
-                                database,
-                                table_name,
-                                stream_desc,
-                                err.message()
-                            ))
-                        })?;
-                        catalog.cache_stream_source_table(
-                            stream.get_table_info().clone(),
-                            source_table.get_table_info().clone(),
-                        );
-                        source_table
-                    }
-                };
+                let source_table =
+                    match catalog.get_stream_source_table(stream_desc, max_batch_size)? {
+                        Some(source_table) => source_table,
+                        None => {
+                            let source_table = stream
+                                .navigate_within_batch_limit(
+                                    catalog.as_ref(),
+                                    &self.get_tenant(),
+                                    &source_database_name,
+                                    &source_table_name,
+                                    max_batch_size,
+                                )
+                                .await?;
+                            catalog.cache_stream_source_table(
+                                stream.get_table_info().clone(),
+                                source_table.get_table_info().clone(),
+                                max_batch_size,
+                            );
+                            source_table
+                        }
+                    };
 
                 let mut tables_refs = self.tables_refs.lock();
                 tables_refs.entry(meta_key).or_insert(source_table.clone());
+                source_table
             }
-        }
-        Ok(())
+            true => self
+                .tables_refs
+                .lock()
+                .get(&meta_key)
+                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
+                .clone(),
+        };
+
+        let mut stream_info = stream.get_table_info().to_owned();
+        stream_info.meta.schema = source_table.schema();
+
+        Ok(StreamTable::create(
+            stream_info,
+            max_batch_size,
+            Some(source_table),
+        ))
     }
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
@@ -454,7 +490,12 @@ impl QueryContextShared {
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
         {
             let mut running_query = self.running_query.write();
-            *running_query = Some(short_sql(query));
+            *running_query = Some(short_sql(
+                query,
+                self.get_settings()
+                    .get_short_sql_max_length()
+                    .unwrap_or(1000),
+            ));
         }
 
         {
@@ -528,7 +569,7 @@ impl QueryContextShared {
             }
             Err(err) => {
                 executor.finish(Some(err.clone()));
-                Err(err)
+                Err(err.with_context("failed to set executor"))
             }
         }
     }
@@ -564,6 +605,29 @@ impl QueryContextShared {
     pub fn set_priority(&self, priority: u8) {
         if let Some(executor) = self.executor.read().upgrade() {
             executor.change_priority(priority)
+        }
+    }
+
+    pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        if let Some(executor) = self.executor.read().upgrade() {
+            self.add_query_profiles(&executor.fetch_profiling(false));
+        }
+
+        self.query_profiles.read().values().cloned().collect()
+    }
+
+    pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        let mut merged_profiles = self.query_profiles.write();
+
+        for query_profile in profiles.values() {
+            match merged_profiles.entry(query_profile.id) {
+                Entry::Vacant(v) => {
+                    v.insert(query_profile.clone());
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().merge(query_profile);
+                }
+            };
         }
     }
 }

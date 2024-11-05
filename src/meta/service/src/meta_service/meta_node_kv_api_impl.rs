@@ -55,7 +55,7 @@ impl kvapi::KVApi for MetaNode {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let req = MGetKVReq {
             keys: keys.to_vec(),
@@ -74,7 +74,7 @@ impl kvapi::KVApi for MetaNode {
         Ok(strm.boxed())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let req = ListKVReq {
             prefix: prefix.to_string(),
@@ -93,7 +93,7 @@ impl kvapi::KVApi for MetaNode {
         Ok(strm.boxed())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         info!("MetaNode::transaction(): {}", txn);
 

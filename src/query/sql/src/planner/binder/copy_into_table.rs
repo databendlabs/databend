@@ -26,6 +26,7 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -42,13 +43,12 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::shrink_scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -64,8 +64,8 @@ use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
+use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
-use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -75,7 +75,6 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
-use crate::UdfRewriter;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -87,7 +86,7 @@ impl<'a> Binder {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
                 let mut plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .bind_copy_into_table_common(bind_context, stmt, location, false)
                     .await?;
 
                 // for copy from location, collect files explicitly
@@ -96,9 +95,7 @@ impl<'a> Binder {
                     .await
             }
             CopyIntoTableSource::Query(query) => {
-                if let Some(with) = &stmt.with {
-                    self.add_cte(with, bind_context)?;
-                }
+                self.init_cte(bind_context, &stmt.with)?;
 
                 let mut max_column_position = MaxColumnPosition::new();
                 query.drive(&mut max_column_position);
@@ -107,11 +104,31 @@ impl<'a> Binder {
                     .set_max_column_position(max_column_position.max_pos);
                 let (select_list, location, alias) = check_transform_query(query)?;
                 let plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .bind_copy_into_table_common(bind_context, stmt, location, true)
                     .await?;
 
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
+            }
+        }
+    }
+
+    pub(crate) fn resolve_copy_pattern(
+        ctx: Arc<dyn TableContext>,
+        pattern: &LiteralStringOrVariable,
+    ) -> Result<String> {
+        match pattern {
+            LiteralStringOrVariable::Literal(s) => Ok(s.clone()),
+            LiteralStringOrVariable::Variable(var_name) => {
+                let var_value = ctx.get_variable(var_name).unwrap_or(Scalar::Null);
+                let var_value = shrink_scalar(var_value);
+                if let Scalar::String(s) = var_value {
+                    Ok(s)
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "invalid pattern expr: {var_value}"
+                    )))
+                }
             }
         }
     }
@@ -121,6 +138,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
+        is_transform: bool,
     ) -> Result<CopyIntoTablePlan> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
@@ -140,10 +158,15 @@ impl<'a> Binder {
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
         self.apply_copy_into_table_options(stmt, &mut stage_info)
             .await?;
+        let pattern = match &stmt.pattern {
+            None => None,
+            Some(pattern) => Some(Self::resolve_copy_pattern(self.ctx.clone(), pattern)?),
+        };
+
         let files_info = StageFilesInfo {
             path,
             files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
+            pattern,
         };
         let required_values_schema: DataSchemaRef = Arc::new(
             match &stmt.dst_columns {
@@ -154,15 +177,22 @@ impl<'a> Binder {
         );
 
         let stage_schema = infer_table_schema(&required_values_schema)?;
-        let default_values = self
-            .prepare_default_values(bind_context, &required_values_schema)
-            .await?;
+
+        let default_values = if stage_info.file_format_params.need_field_default() {
+            Some(
+                self.prepare_default_values(bind_context, &required_values_schema)
+                    .await?,
+            )
+        } else {
+            None
+        };
 
         Ok(CopyIntoTablePlan {
             catalog_info,
             database_name,
             table_name,
             validation_mode,
+            is_transform,
             no_file_to_copy: false,
             from_attachment: false,
             force: stmt.force,
@@ -173,7 +203,8 @@ impl<'a> Binder {
                 files_to_copy: None,
                 duplicated_files_detected: vec![],
                 is_select: false,
-                default_values: Some(default_values),
+                default_values,
+                copy_into_location_options: Default::default(),
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -192,9 +223,10 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params
-            && fmt.missing_field_as == NullAs::Error
-        {
+        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
+
+        if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
@@ -332,12 +364,14 @@ impl<'a> Binder {
                 duplicated_files_detected,
                 is_select: false,
                 default_values: Some(default_values),
+                copy_into_location_options: Default::default(),
             },
             write_mode,
             query: None,
             validation_mode: ValidationMode::None,
 
             enable_distributed: false,
+            is_transform: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
@@ -371,9 +405,7 @@ impl<'a> Binder {
             .await?;
 
         // Generate an analyzed select list with from context
-        let select_list = self
-            .normalize_select_list(&mut from_context, select_list)
-            .await?;
+        let select_list = self.normalize_select_list(&mut from_context, select_list)?;
 
         for item in select_list.items.iter() {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
@@ -400,17 +432,13 @@ impl<'a> Binder {
 
         let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
+
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
-
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
@@ -428,11 +456,7 @@ impl<'a> Binder {
                     },
                 }],
             };
-            if let Some(e) = self
-                .opt_hints_set_var(&mut output_context, &hints)
-                .await
-                .err()
-            {
+            if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
                 warn!(
                     "In COPY resolve optimize hints {:?} failed, err: {:?}",
                     hints, e
@@ -541,7 +565,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         data_schema: &DataSchemaRef,
-    ) -> Result<Vec<Scalar>> {
+    ) -> Result<Vec<RemoteExpr>> {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -551,14 +575,10 @@ impl<'a> Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        let func_ctx = self.ctx.get_function_context()?;
-        let input = DataBlock::empty();
-        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
-
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(data_schema.fields.len());
         for field in &data_schema.fields {
             let expr = scalar_binder.get_default_value(field, data_schema).await?;
-            values.push(evaluator.run(&expr)?.as_scalar().unwrap().clone());
+            values.push(expr.as_remote_expr());
         }
         Ok(values)
     }

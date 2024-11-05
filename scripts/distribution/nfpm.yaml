@@ -9,7 +9,7 @@ description: |
   Databend is a powerful cloud data warehouse. Built for elasticity and efficiency.
   Free and open. Also available in the cloud: https://app.databend.com
 vendor: "Datafuse Labs"
-homepage: "https://databend.rs"
+homepage: "https://databend.com"
 license: "Apache-2.0"
 depends:
   - libc6 (>= 2.31)

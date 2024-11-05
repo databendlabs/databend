@@ -14,12 +14,23 @@
 
 use std::collections::HashMap;
 
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 #[test]
 fn test_find_all_related_roles() {
+    // Init.
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+
+    // Init with default.
+    {
+        GlobalConfig::init(&InnerConfig::default()).unwrap();
+    }
+
     // Create some test RoleInfo instances for the cache
     let mut role1 = RoleInfo::new("role1");
     let role2 = RoleInfo::new("role2");

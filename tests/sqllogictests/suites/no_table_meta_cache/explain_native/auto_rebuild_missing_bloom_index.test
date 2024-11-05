@@ -1,0 +1,169 @@
+statement ok
+create or replace database test_auto_rebuild_missing
+
+statement ok
+use test_auto_rebuild_missing;
+
+
+statement ok
+create or replace table t(c int) 'fs:///tmp/test_auto_rebuild_missing/';
+
+statement ok
+create or replace stage rebuild_missing_bloom_index_stage 'fs:///tmp/test_auto_rebuild_missing/';
+
+# check table meta cache is disabled
+query TT
+select name, value from system.configs where  name = 'enable_table_meta_cache';
+----
+enable_table_meta_cache false
+
+statement ok
+insert into t values(1), (3), (5), (7), (9);
+
+# bloom index exists, expect one block pruned by bloom filter
+query T
+explain select * from t where c = 6;
+----
+TableScan
+├── table: default.test_auto_rebuild_missing.t
+├── output columns: [c (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
+└── estimated rows: 1.00
+
+# disable auto fix missing bloom index
+statement ok
+set enable_auto_fix_missing_bloom_index = 0;
+
+# remove bloom index files
+statement ok
+remove @rebuild_missing_bloom_index_stage pattern = '.*/_i_b_v2/.*.parquet';
+
+# bloom index does not exist, expect no block pruned by bloom filter
+query T
+explain select * from t where c = 6;
+----
+TableScan
+├── table: default.test_auto_rebuild_missing.t
+├── output columns: [c (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
+└── estimated rows: 1.00
+
+# expects empty result set
+query I
+select * from t where c = 6;
+----
+
+# enable auto fix missing bloom index
+statement ok
+set enable_auto_fix_missing_bloom_index = 1;
+
+# bloom index should be re-built during pruning, expect 1 block pruned by bloom filter
+query T
+explain select * from t where c = 6;
+----
+TableScan
+├── table: default.test_auto_rebuild_missing.t
+├── output columns: [c (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
+└── estimated rows: 1.00
+
+# expects empty result set
+query I
+select * from t where c = 6;
+----
+
+#############################
+# with altered table schema #
+#############################
+
+statement ok
+alter table t add column s string;
+
+statement ok
+insert into t values (10, '10'), (11, '11'), (13,'13');
+
+# remove bloom index files
+statement ok
+remove @rebuild_missing_bloom_index_stage pattern = '.*/_i_b_v2/.*.parquet';
+
+# prune using newly added column
+# expects one block pruned by bloom filter
+
+query T
+explain select * from t where s = '12';
+----
+TableScan
+├── table: default.test_auto_rebuild_missing.t
+├── output columns: [c (#0), s (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 1, bloom pruning: 1 to 0>]
+├── push downs: [filters: [is_true(t.s (#1) = '12')], limit: NONE]
+└── estimated rows: 2.00
+
+query TT
+select * from t where s = '12';
+----
+
+# since
+# - bloom index always have one row per index file
+# - s = '12' will only trigger the re-building of bloom index for only one block
+# expects 1 row
+query I
+select count() from @rebuild_missing_bloom_index_stage (pattern => '.*/_i_b_v2/.*.parquet');
+----
+1
+
+# expects one block pruned by bloom filter
+query T
+explain select * from t where c = 6;
+----
+TableScan
+├── table: default.test_auto_rebuild_missing.t
+├── output columns: [c (#0), s (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
+└── estimated rows: 1.00
+
+query TT
+select * from t where c = 6;
+----
+
+statement ok
+create or replace table t_index(`bloom(0)` binary, `bloom(1)` binary);
+
+statement ok
+copy into t_index from  @rebuild_missing_bloom_index_stage pattern = '.*/_i_b_v2/.*.parquet' file_format=(type=parquet missing_field_as=field_default);
+
+query I
+select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
+----
+0 0
+0 1
+
+
+# re-generate other bloom index
+query TT
+select * from t where c = 12;
+----

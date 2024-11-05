@@ -90,6 +90,7 @@ impl<'a> BlockWriter<'a> {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
@@ -113,7 +114,7 @@ impl<'a> BlockWriter<'a> {
         let maybe_bloom_index = BloomIndex::try_create(
             FunctionContext::default(),
             location.1,
-            &[block],
+            block,
             bloom_columns_map,
         )?;
         if let Some(bloom_index) = maybe_bloom_index {

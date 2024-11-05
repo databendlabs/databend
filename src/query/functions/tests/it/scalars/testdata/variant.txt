@@ -11,7 +11,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('nuLL')
-  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')`
+  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')` in expr `parse_json('nuLL')`
 
 
 
@@ -28,7 +28,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('  ')
-  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')`
+  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')` in expr `parse_json('  ')`
 
 
 
@@ -1532,7 +1532,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean(parse_json('123'))`
 
 
 
@@ -1540,7 +1540,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean(parse_json('"abc"'))`
 
 
 
@@ -1557,7 +1557,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('-123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64(parse_json('-123'))`
 
 
 
@@ -1565,7 +1565,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64(parse_json('"abc"'))`
 
 
 
@@ -1591,7 +1591,7 @@ error:
   --> SQL:1:1
   |
 1 | to_int64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64(parse_json('"abc"'))`
 
 
 
@@ -1608,7 +1608,7 @@ error:
   --> SQL:1:1
   |
 1 | to_float64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64(parse_json('"abc"'))`
 
 
 
@@ -1625,7 +1625,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
 
 
 
@@ -1642,7 +1642,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
 
 
 
@@ -2191,7 +2191,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object('k1', 1, 'k1')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object('k1', 1, 'k1')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object('k1', 1, 'k1')` in expr `json_object('k1', 1, 'k1')`
 
 
 
@@ -2199,7 +2199,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object('k1', 1, 'k1', 2)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object('k1', 1, 'k1', 2)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object('k1', 1, 'k1', 2)` in expr `json_object('k1', 1, 'k1', 2)`
 
 
 
@@ -2207,7 +2207,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object(1, 'k1', 2, 'k2')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object(1, 'k1', 2, 'k2')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object(1, 'k1', 2, 'k2')` in expr `json_object(1, 'k1', 2, 'k2')`
 
 
 
@@ -2348,7 +2348,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_keep_null('k1', 1, 'k1')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object_keep_null('k1', 1, 'k1')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object_keep_null('k1', 1, 'k1')` in expr `json_object_keep_null('k1', 1, 'k1')`
 
 
 
@@ -2356,7 +2356,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_keep_null('k1', 1, 'k1', 2)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object_keep_null('k1', 1, 'k1', 2)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object_keep_null('k1', 1, 'k1', 2)` in expr `json_object_keep_null('k1', 1, 'k1', 2)`
 
 
 
@@ -2364,7 +2364,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_keep_null(1, 'k1', 2, 'k2')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object_keep_null(1, 'k1', 2, 'k2')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object_keep_null(1, 'k1', 2, 'k2')` in expr `json_object_keep_null(1, 'k1', 2, 'k2')`
 
 
 
@@ -3300,7 +3300,7 @@ error:
   --> SQL:1:28
   |
 1 | parse_json('[10, 20, 30]') #> '1'
-  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')`
+  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')` in expr `get_by_keypath(parse_json('[10, 20, 30]'), '1')`
 
 
 
@@ -4593,7 +4593,7 @@ error:
   --> SQL:1:20
   |
 1 | parse_json('true') - '1'
-  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')` in expr `parse_json('true') - '1'`
 
 
 
@@ -4664,7 +4664,7 @@ error:
   --> SQL:1:20
   |
 1 | parse_json('true') - 1
-  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)` in expr `parse_json('true') - to_int32(1)`
 
 
 
@@ -4893,5 +4893,817 @@ evaluation (internal):
 | k      | NullableColumn { column: StringColumn { data: 0x7b312c617d7b6b2c2d317d7b6b7d7b637d, offsets: [0, 5, 11, 14, 17] }, validity: [0b____1011] }                                                                                                      |
 | Output | NullableColumn { column: BinaryColumn { data: 0x8000000320000002500000042000000250014000000050034000000110000001500000106b800000022000000220000002500150024000000110000001100000016162, offsets: [0, 24, 53, 53, 67] }, validity: [0b____1011] } |
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_array_insert('[0,1,2,3]'::variant, 2, '"hello"'::variant)
+raw expr       : json_array_insert(CAST('[0,1,2,3]' AS Variant), 2, CAST('"hello"' AS Variant))
+checked expr   : json_array_insert<Variant, Int32, Variant>(parse_json<String>("[0,1,2,3]"), to_int32<UInt8>(2_u8), parse_json<String>("\"hello\""))
+optimized expr : 0x80000005200000012000000210000005200000022000000200500168656c6c6f50025003
+output type    : Variant
+output domain  : Undefined
+output         : '[0,1,"hello",2,3]'
+
+
+ast            : json_array_insert('[0,1,2,3]'::variant, 10, '100'::variant)
+raw expr       : json_array_insert(CAST('[0,1,2,3]' AS Variant), 10, CAST('100' AS Variant))
+checked expr   : json_array_insert<Variant, Int32, Variant>(parse_json<String>("[0,1,2,3]"), to_int32<UInt8>(10_u8), parse_json<String>("100"))
+optimized expr : 0x800000052000000120000002200000022000000220000002005001500250035064
+output type    : Variant
+output domain  : Undefined
+output         : '[0,1,2,3,100]'
+
+
+ast            : json_array_insert('[0,1,2,3]'::variant, 0, 'true'::variant)
+raw expr       : json_array_insert(CAST('[0,1,2,3]' AS Variant), 0, CAST('true' AS Variant))
+checked expr   : json_array_insert<Variant, Int32, Variant>(parse_json<String>("[0,1,2,3]"), to_int32<UInt8>(0_u8), parse_json<String>("true"))
+optimized expr : 0x80000005400000002000000120000002200000022000000200500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[true,0,1,2,3]'
+
+
+ast            : json_array_insert('[0,1,2,3]'::variant, -1, '{"k":"v"}'::variant)
+raw expr       : json_array_insert(CAST('[0,1,2,3]' AS Variant), minus(1), CAST('{"k":"v"}' AS Variant))
+checked expr   : json_array_insert<Variant, Int32, Variant>(parse_json<String>("[0,1,2,3]"), to_int32<Int16>(minus<UInt8>(1_u8)), parse_json<String>("{\"k\":\"v\"}"))
+optimized expr : 0x800000052000000120000002200000025000000e2000000200500150024000000110000001100000016b765003
+output type    : Variant
+output domain  : Undefined
+output         : '[0,1,2,{"k":"v"},3]'
+
+
+ast            : json_array_insert('1'::variant, 1, '{"k":"v"}'::variant)
+raw expr       : json_array_insert(CAST('1' AS Variant), 1, CAST('{"k":"v"}' AS Variant))
+checked expr   : json_array_insert<Variant, Int32, Variant>(parse_json<String>("1"), to_int32<UInt8>(1_u8), parse_json<String>("{\"k\":\"v\"}"))
+optimized expr : 0x80000002200000025000000e50014000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '[1,{"k":"v"}]'
+
+
+ast            : json_array_insert('{"k":"v"}'::variant, 2, 'true'::variant)
+raw expr       : json_array_insert(CAST('{"k":"v"}' AS Variant), 2, CAST('true' AS Variant))
+checked expr   : json_array_insert<Variant, Int32, Variant>(parse_json<String>("{\"k\":\"v\"}"), to_int32<UInt8>(2_u8), parse_json<String>("true"))
+optimized expr : 0x800000025000000e400000004000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '[{"k":"v"},true]'
+
+
+ast            : json_array_insert(parse_json(v), 2, parse_json(n))
+raw expr       : json_array_insert(parse_json(v::String NULL), 2, parse_json(n::String NULL))
+checked expr   : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(parse_json<String NULL>(v), CAST(2_u8 AS Int32 NULL), parse_json<String NULL>(n))
+optimized expr : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(parse_json<String NULL>(v), 2_i32, parse_json<String NULL>(n))
+evaluation:
++--------+---------------------------------+------------------------+-----------------------+
+|        | v                               | n                      | Output                |
++--------+---------------------------------+------------------------+-----------------------+
+| Type   | String NULL                     | String NULL            | Variant NULL          |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="true"} ∪ {NULL} | Unknown               |
+| Row 0  | '[1,2,3,null]'                  | '"hi"'                 | '[1,2,"hi",3,null]'   |
+| Row 1  | '["A","B"]'                     | NULL                   | NULL                  |
+| Row 2  | NULL                            | 'true'                 | NULL                  |
+| Row 3  | '{"a":"b"}'                     | '[1,2,3]'              | '[{"a":"b"},[1,2,3]]' |
++--------+---------------------------------+------------------------+-----------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                       |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x5b312c322c332c6e756c6c5d5b2241222c2242225d7b2261223a2262227d, offsets: [0, 12, 21, 21, 30] }, validity: [0b____1011] }                                                                                                     |
+| n      | NullableColumn { column: StringColumn { data: 0x22686922747275655b312c322c335d, offsets: [0, 4, 4, 8, 15] }, validity: [0b____1101] }                                                                                                                                      |
+| Output | NullableColumn { column: BinaryColumn { data: 0x8000000520000002200000021000000220000002000000005001500268695003800000025000000e50000016400000011000000110000001616280000003200000022000000220000002500150025003, offsets: [0, 32, 32, 32, 80] }, validity: [0b____1001] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_array_distinct('[0,1,1,2,2,2,3,4]'::variant)
+raw expr       : json_array_distinct(CAST('[0,1,1,2,2,2,3,4]' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("[0,1,1,2,2,2,3,4]"))
+optimized expr : 0x800000052000000120000002200000022000000220000002005001500250035004
+output type    : Variant
+output domain  : Undefined
+output         : '[0,1,2,3,4]'
+
+
+ast            : json_array_distinct('["A","A","B","C","A","C"]'::variant)
+raw expr       : json_array_distinct(CAST('["A","A","B","C","A","C"]' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("[\"A\",\"A\",\"B\",\"C\",\"A\",\"C\"]"))
+optimized expr : 0x80000003100000011000000110000001414243
+output type    : Variant
+output domain  : Undefined
+output         : '["A","B","C"]'
+
+
+ast            : json_array_distinct('["A","A",10,false,null,false,null,10]'::variant)
+raw expr       : json_array_distinct(CAST('["A","A",10,false,null,false,null,10]' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("[\"A\",\"A\",10,false,null,false,null,10]"))
+optimized expr : 0x800000041000000120000002300000000000000041500a
+output type    : Variant
+output domain  : Undefined
+output         : '["A",10,false,null]'
+
+
+ast            : json_array_distinct('[[1,2,2],3,4,[1,2,2]]'::variant)
+raw expr       : json_array_distinct(CAST('[[1,2,2],3,4,[1,2,2]]' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("[[1,2,2],3,4,[1,2,2]]"))
+optimized expr : 0x800000035000001620000002200000028000000320000002200000022000000250015002500250035004
+output type    : Variant
+output domain  : Undefined
+output         : '[[1,2,2],3,4]'
+
+
+ast            : json_array_distinct('[{"k":"v"},"A","A","B",{"k":"v"}]'::variant)
+raw expr       : json_array_distinct(CAST('[{"k":"v"},"A","A","B",{"k":"v"}]' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("[{\"k\":\"v\"},\"A\",\"A\",\"B\",{\"k\":\"v\"}]"))
+optimized expr : 0x800000035000000e10000001100000014000000110000001100000016b764142
+output type    : Variant
+output domain  : Undefined
+output         : '[{"k":"v"},"A","B"]'
+
+
+ast            : json_array_distinct('1'::variant)
+raw expr       : json_array_distinct(CAST('1' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("1"))
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : json_array_distinct('{"k":"v"}'::variant)
+raw expr       : json_array_distinct(CAST('{"k":"v"}' AS Variant))
+checked expr   : json_array_distinct<Variant>(parse_json<String>("{\"k\":\"v\"}"))
+optimized expr : 0x800000015000000e4000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '[{"k":"v"}]'
+
+
+ast            : json_array_distinct(parse_json(v))
+raw expr       : json_array_distinct(parse_json(v::String NULL))
+checked expr   : json_array_distinct<Variant NULL>(parse_json<String NULL>(v))
+evaluation:
++--------+---------------------------------+-----------------+
+|        | v                               | Output          |
++--------+---------------------------------+-----------------+
+| Type   | String NULL                     | Variant NULL    |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown         |
+| Row 0  | '[1,1,2,3,3,null,2,1,null]'     | '[1,2,3,null]'  |
+| Row 1  | '["A","B","A","B","C"]'         | '["A","B","C"]' |
+| Row 2  | NULL                            | NULL            |
+| Row 3  | '{"a":"b"}'                     | '[{"a":"b"}]'   |
++--------+---------------------------------+-----------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x5b312c312c322c332c332c6e756c6c2c322c312c6e756c6c5d5b2241222c2242222c2241222c2242222c2243225d7b2261223a2262227d, offsets: [0, 25, 46, 46, 55] }, validity: [0b____1011] }                         |
+| Output | NullableColumn { column: BinaryColumn { data: 0x800000042000000220000002200000020000000050015002500380000003100000011000000110000001414243800000015000000e4000000110000001100000016162, offsets: [0, 26, 45, 45, 67] }, validity: [0b____1011] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_array_intersection('["A","B","C"]'::variant, '["B","C"]'::variant)
+raw expr       : json_array_intersection(CAST('["A","B","C"]' AS Variant), CAST('["B","C"]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[\"A\",\"B\",\"C\"]"), parse_json<String>("[\"B\",\"C\"]"))
+optimized expr : 0x8000000210000001100000014243
+output type    : Variant
+output domain  : Undefined
+output         : '["B","C"]'
+
+
+ast            : json_array_intersection('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
+raw expr       : json_array_intersection(CAST('["A","B","B","B","C"]' AS Variant), CAST('["B","B"]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[\"A\",\"B\",\"B\",\"B\",\"C\"]"), parse_json<String>("[\"B\",\"B\"]"))
+optimized expr : 0x8000000210000001100000014242
+output type    : Variant
+output domain  : Undefined
+output         : '["B","B"]'
+
+
+ast            : json_array_intersection('[1,2]'::variant, '[3,4]'::variant)
+raw expr       : json_array_intersection(CAST('[1,2]' AS Variant), CAST('[3,4]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[1,2]"), parse_json<String>("[3,4]"))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : json_array_intersection('[null,102,null]'::variant, '[null,null,103]'::variant)
+raw expr       : json_array_intersection(CAST('[null,102,null]' AS Variant), CAST('[null,null,103]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[null,102,null]"), parse_json<String>("[null,null,103]"))
+optimized expr : 0x800000020000000000000000
+output type    : Variant
+output domain  : Undefined
+output         : '[null,null]'
+
+
+ast            : json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
+raw expr       : json_array_intersection(CAST('[{"a":1,"b":2},1,2]' AS Variant), CAST('[{"a":1,"b":2},3,4]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2},1,2]"), parse_json<String>("[{\"a\":1,\"b\":2},3,4]"))
+optimized expr : 0x800000015000001a4000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[{"a":1,"b":2}]'
+
+
+ast            : json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":2,"c":3},3,4]'::variant)
+raw expr       : json_array_intersection(CAST('[{"a":1,"b":2},1,2]' AS Variant), CAST('[{"a":2,"c":3},3,4]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2},1,2]"), parse_json<String>("[{\"a\":2,\"c\":3},3,4]"))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : json_array_intersection('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1},3,4]'::variant)
+raw expr       : json_array_intersection(CAST('[{"a":1,"b":2,"c":3}]' AS Variant), CAST('[{"c":3,"b":2,"a":1},3,4]' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2,\"c\":3}]"), parse_json<String>("[{\"c\":3,\"b\":2,\"a\":1},3,4]"))
+optimized expr : 0x800000015000002540000003100000011000000110000001200000022000000220000002616263500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[{"a":1,"b":2,"c":3}]'
+
+
+ast            : json_array_intersection('1'::variant, '1'::variant)
+raw expr       : json_array_intersection(CAST('1' AS Variant), CAST('1' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("1"), parse_json<String>("1"))
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : json_array_intersection('1'::variant, '2'::variant)
+raw expr       : json_array_intersection(CAST('1' AS Variant), CAST('2' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("1"), parse_json<String>("2"))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : json_array_intersection('{"k":"v"}'::variant, '{"k":"v"}'::variant)
+raw expr       : json_array_intersection(CAST('{"k":"v"}' AS Variant), CAST('{"k":"v"}' AS Variant))
+checked expr   : json_array_intersection<Variant, Variant>(parse_json<String>("{\"k\":\"v\"}"), parse_json<String>("{\"k\":\"v\"}"))
+optimized expr : 0x800000015000000e4000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '[{"k":"v"}]'
+
+
+ast            : json_array_intersection(parse_json(v1), parse_json(v2))
+raw expr       : json_array_intersection(parse_json(v1::String NULL), parse_json(v2::String NULL))
+checked expr   : json_array_intersection<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
+evaluation:
++--------+---------------------------------+---------------------------------+----------------+
+|        | v1                              | v2                              | Output         |
++--------+---------------------------------+---------------------------------+----------------+
+| Type   | String NULL                     | String NULL                     | Variant NULL   |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown        |
+| Row 0  | '[1,2,3,3,null,null]'           | '[1,1,2,3,4,5,null]'            | '[1,2,3,null]' |
+| Row 1  | '["A","B","A","B","C"]'         | '["X","Y","Z"]'                 | '[]'           |
+| Row 2  | NULL                            | NULL                            | NULL           |
+| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'                     | '[{"a":"b"}]'  |
++--------+---------------------------------+---------------------------------+----------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                               |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v1     | NullableColumn { column: StringColumn { data: 0x5b312c322c332c332c6e756c6c2c6e756c6c5d5b2241222c2242222c2241222c2242222c2243225d7b2261223a2262227d, offsets: [0, 19, 40, 40, 49] }, validity: [0b____1011] }       |
+| v2     | NullableColumn { column: StringColumn { data: 0x5b312c312c322c332c342c352c6e756c6c5d5b2258222c2259222c225a225d7b2261223a2262227d, offsets: [0, 18, 31, 31, 40] }, validity: [0b____1011] }                         |
+| Output | NullableColumn { column: BinaryColumn { data: 0x800000042000000220000002200000020000000050015002500380000000800000015000000e4000000110000001100000016162, offsets: [0, 26, 30, 30, 52] }, validity: [0b____1011] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_array_except('["A","B","C"]'::variant, '["B","C"]'::variant)
+raw expr       : json_array_except(CAST('["A","B","C"]' AS Variant), CAST('["B","C"]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[\"A\",\"B\",\"C\"]"), parse_json<String>("[\"B\",\"C\"]"))
+optimized expr : 0x800000011000000141
+output type    : Variant
+output domain  : Undefined
+output         : '["A"]'
+
+
+ast            : json_array_except('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
+raw expr       : json_array_except(CAST('["A","B","B","B","C"]' AS Variant), CAST('["B","B"]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[\"A\",\"B\",\"B\",\"B\",\"C\"]"), parse_json<String>("[\"B\",\"B\"]"))
+optimized expr : 0x80000003100000011000000110000001414243
+output type    : Variant
+output domain  : Undefined
+output         : '["A","B","C"]'
+
+
+ast            : json_array_except('[1,2]'::variant, '[3,4]'::variant)
+raw expr       : json_array_except(CAST('[1,2]' AS Variant), CAST('[3,4]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[1,2]"), parse_json<String>("[3,4]"))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2]'
+
+
+ast            : json_array_except('[null,102,null]'::variant, '[null,null,103]'::variant)
+raw expr       : json_array_except(CAST('[null,102,null]' AS Variant), CAST('[null,null,103]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[null,102,null]"), parse_json<String>("[null,null,103]"))
+optimized expr : 0x80000001200000025066
+output type    : Variant
+output domain  : Undefined
+output         : '[102]'
+
+
+ast            : json_array_except('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
+raw expr       : json_array_except(CAST('[{"a":1,"b":2},1,2]' AS Variant), CAST('[{"a":1,"b":2},3,4]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2},1,2]"), parse_json<String>("[{\"a\":1,\"b\":2},3,4]"))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2]'
+
+
+ast            : json_array_except('[{"a":1,"b":2},1,2]'::variant, '[{"a":2,"c":3},3,4]'::variant)
+raw expr       : json_array_except(CAST('[{"a":1,"b":2},1,2]' AS Variant), CAST('[{"a":2,"c":3},3,4]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2},1,2]"), parse_json<String>("[{\"a\":2,\"c\":3},3,4]"))
+optimized expr : 0x800000035000001a2000000220000002400000021000000110000001200000022000000261625001500250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[{"a":1,"b":2},1,2]'
+
+
+ast            : json_array_except('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1},3,4]'::variant)
+raw expr       : json_array_except(CAST('[{"a":1,"b":2,"c":3}]' AS Variant), CAST('[{"c":3,"b":2,"a":1},3,4]' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2,\"c\":3}]"), parse_json<String>("[{\"c\":3,\"b\":2,\"a\":1},3,4]"))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : json_array_except('1'::variant, '1'::variant)
+raw expr       : json_array_except(CAST('1' AS Variant), CAST('1' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("1"), parse_json<String>("1"))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : json_array_except('1'::variant, '2'::variant)
+raw expr       : json_array_except(CAST('1' AS Variant), CAST('2' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("1"), parse_json<String>("2"))
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : json_array_except('{"k":"v"}'::variant, '{"k":"v"}'::variant)
+raw expr       : json_array_except(CAST('{"k":"v"}' AS Variant), CAST('{"k":"v"}' AS Variant))
+checked expr   : json_array_except<Variant, Variant>(parse_json<String>("{\"k\":\"v\"}"), parse_json<String>("{\"k\":\"v\"}"))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : json_array_except(parse_json(v1), parse_json(v2))
+raw expr       : json_array_except(parse_json(v1::String NULL), parse_json(v2::String NULL))
+checked expr   : json_array_except<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
+evaluation:
++--------+---------------------------------+---------------------------------+-------------------------+
+|        | v1                              | v2                              | Output                  |
++--------+---------------------------------+---------------------------------+-------------------------+
+| Type   | String NULL                     | String NULL                     | Variant NULL            |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown                 |
+| Row 0  | '[1,2,3,3,null,null]'           | '[1,1,2,3,4,5,null]'            | '[3,null]'              |
+| Row 1  | '["A","B","A","B","C"]'         | '["X","Y","Z"]'                 | '["A","B","A","B","C"]' |
+| Row 2  | NULL                            | NULL                            | NULL                    |
+| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'                     | '[]'                    |
++--------+---------------------------------+---------------------------------+-------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v1     | NullableColumn { column: StringColumn { data: 0x5b312c322c332c332c6e756c6c2c6e756c6c5d5b2241222c2242222c2241222c2242222c2243225d7b2261223a2262227d, offsets: [0, 19, 40, 40, 49] }, validity: [0b____1011] } |
+| v2     | NullableColumn { column: StringColumn { data: 0x5b312c312c322c332c342c352c6e756c6c5d5b2258222c2259222c225a225d7b2261223a2262227d, offsets: [0, 18, 31, 31, 40] }, validity: [0b____1011] }                   |
+| Output | NullableColumn { column: BinaryColumn { data: 0x8000000220000002000000005003800000051000000110000001100000011000000110000001414241424380000000, offsets: [0, 14, 43, 43, 47] }, validity: [0b____1011] }     |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_array_overlap('["A","B","C"]'::variant, '["B","C"]'::variant)
+raw expr       : json_array_overlap(CAST('["A","B","C"]' AS Variant), CAST('["B","C"]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[\"A\",\"B\",\"C\"]"), parse_json<String>("[\"B\",\"C\"]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
+raw expr       : json_array_overlap(CAST('["A","B","B","B","C"]' AS Variant), CAST('["B","B"]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[\"A\",\"B\",\"B\",\"B\",\"C\"]"), parse_json<String>("[\"B\",\"B\"]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap('[1,2]'::variant, '[3,4]'::variant)
+raw expr       : json_array_overlap(CAST('[1,2]' AS Variant), CAST('[3,4]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[1,2]"), parse_json<String>("[3,4]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : json_array_overlap('[null,102,null]'::variant, '[null,null,103]'::variant)
+raw expr       : json_array_overlap(CAST('[null,102,null]' AS Variant), CAST('[null,null,103]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[null,102,null]"), parse_json<String>("[null,null,103]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
+raw expr       : json_array_overlap(CAST('[{"a":1,"b":2},1,2]' AS Variant), CAST('[{"a":1,"b":2},3,4]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2},1,2]"), parse_json<String>("[{\"a\":1,\"b\":2},3,4]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":2,"c":3},3,4]'::variant)
+raw expr       : json_array_overlap(CAST('[{"a":1,"b":2},1,2]' AS Variant), CAST('[{"a":2,"c":3},3,4]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2},1,2]"), parse_json<String>("[{\"a\":2,\"c\":3},3,4]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : json_array_overlap('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1},3,4]'::variant)
+raw expr       : json_array_overlap(CAST('[{"a":1,"b":2,"c":3}]' AS Variant), CAST('[{"c":3,"b":2,"a":1},3,4]' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("[{\"a\":1,\"b\":2,\"c\":3}]"), parse_json<String>("[{\"c\":3,\"b\":2,\"a\":1},3,4]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap('1'::variant, '1'::variant)
+raw expr       : json_array_overlap(CAST('1' AS Variant), CAST('1' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("1"), parse_json<String>("1"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap('1'::variant, '2'::variant)
+raw expr       : json_array_overlap(CAST('1' AS Variant), CAST('2' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("1"), parse_json<String>("2"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : json_array_overlap('{"k":"v"}'::variant, '{"k":"v"}'::variant)
+raw expr       : json_array_overlap(CAST('{"k":"v"}' AS Variant), CAST('{"k":"v"}' AS Variant))
+checked expr   : json_array_overlap<Variant, Variant>(parse_json<String>("{\"k\":\"v\"}"), parse_json<String>("{\"k\":\"v\"}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_array_overlap(parse_json(v1), parse_json(v2))
+raw expr       : json_array_overlap(parse_json(v1::String NULL), parse_json(v2::String NULL))
+checked expr   : json_array_overlap<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
+evaluation:
++--------+---------------------------------+---------------------------------+--------------+
+|        | v1                              | v2                              | Output       |
++--------+---------------------------------+---------------------------------+--------------+
+| Type   | String NULL                     | String NULL                     | Boolean NULL |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3,3,null,null]'           | '[1,1,2,3,4,5,null]'            | true         |
+| Row 1  | '["A","B","A","B","C"]'         | '["X","Y","Z"]'                 | false        |
+| Row 2  | NULL                            | NULL                            | NULL         |
+| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'                     | true         |
++--------+---------------------------------+---------------------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v1     | NullableColumn { column: StringColumn { data: 0x5b312c322c332c332c6e756c6c2c6e756c6c5d5b2241222c2242222c2241222c2242222c2243225d7b2261223a2262227d, offsets: [0, 19, 40, 40, 49] }, validity: [0b____1011] } |
+| v2     | NullableColumn { column: StringColumn { data: 0x5b312c312c322c332c342c352c6e756c6c5d5b2258222c2259222c225a225d7b2261223a2262227d, offsets: [0, 18, 31, 31, 40] }, validity: [0b____1011] }                   |
+| Output | NullableColumn { column: Boolean([0b____1001]), validity: [0b____1011] }                                                                                                                                     |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'hello')
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'a', 'hello')
+checked expr   : json_object_insert<Variant, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "a", "hello")
+optimized expr : 0x400000051000000110000001100000011000000110000001100000052000000220000002500000105000000e6162646d7868656c6c6f500c5022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"a":"hello","b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'n', 100)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'n', 100)
+checked expr   : json_object_insert<Variant, String, UInt8>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "n", 100_u8)
+optimized expr : 0x400000051000000110000001100000011000000110000001200000022000000250000010200000025000000e62646d6e78500c50228000000220000002200000025001500250644000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"n":100,"x":{"k":"v"}}'
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', [10,20])
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'z', array(10, 20))
+checked expr   : json_object_insert<Variant, String, Array(UInt8)>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "z", array<T0=UInt8><T0, T0>(10_u8, 20_u8))
+optimized expr : 0x4000000510000001100000011000000110000001100000012000000220000002500000105000000e5000001062646d787a500c5022800000022000000220000002500150024000000110000001100000016b76800000022000000220000002500a5014
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"k":"v"},"z":[10,20]}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'x', '{"a":"b"}'::variant)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ObjectDuplicateKey while evaluating function `json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}', 'x', '{"a":"b"}')` in expr `json_object_insert(parse_json('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'), 'x', parse_json('{"a":"b"}'))`
+
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'v', null)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'v', NULL)
+checked expr   : json_object_insert<Variant, String, NULL>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "v", NULL)
+optimized expr : 0x40000004100000011000000110000001100000012000000220000002500000105000000e62646d78500c5022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_insert('{}'::variant, 'v', 'vv')
+raw expr       : json_object_insert(CAST('{}' AS Variant), 'v', 'vv')
+checked expr   : json_object_insert<Variant, String, String>(parse_json<String>("{}"), "v", "vv")
+optimized expr : 0x400000011000000110000002767676
+output type    : Variant
+output domain  : Undefined
+output         : '{"v":"vv"}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_insert('123'::variant, 'v', 'vv')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_insert('123', 'v', 'vv')` in expr `json_object_insert(parse_json('123'), 'v', 'vv')`
+
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'hello', true)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'a', 'hello', true)
+checked expr   : json_object_insert<Variant, String, String, Boolean>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "a", "hello", true)
+optimized expr : 0x400000051000000110000001100000011000000110000001100000052000000220000002500000105000000e6162646d7868656c6c6f500c5022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"a":"hello","b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'n', 100, true)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'n', 100, true)
+checked expr   : json_object_insert<Variant, String, UInt8, Boolean>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "n", 100_u8, true)
+optimized expr : 0x400000051000000110000001100000011000000110000001200000022000000250000010200000025000000e62646d6e78500c50228000000220000002200000025001500250644000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"n":100,"x":{"k":"v"}}'
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', [10,20], true)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'z', array(10, 20), true)
+checked expr   : json_object_insert<Variant, String, Array(UInt8), Boolean>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "z", array<T0=UInt8><T0, T0>(10_u8, 20_u8), true)
+optimized expr : 0x4000000510000001100000011000000110000001100000012000000220000002500000105000000e5000001062646d787a500c5022800000022000000220000002500150024000000110000001100000016b76800000022000000220000002500a5014
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"k":"v"},"z":[10,20]}'
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'x', '{"a":"b"}'::variant, true)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'x', CAST('{"a":"b"}' AS Variant), true)
+checked expr   : json_object_insert<Variant, String, Variant, Boolean>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "x", parse_json<String>("{\"a\":\"b\"}"), true)
+optimized expr : 0x40000004100000011000000110000001100000012000000220000002500000105000000e62646d78500c5022800000022000000220000002500150024000000110000001100000016162
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"a":"b"}}'
+
+
+ast            : json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'v', null, true)
+raw expr       : json_object_insert(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'v', NULL, true)
+checked expr   : json_object_insert<Variant, String, NULL, Boolean>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "v", NULL, true)
+optimized expr : 0x40000004100000011000000110000001100000012000000220000002500000105000000e62646d78500c5022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_insert('{}'::variant, 'v', 'vv', true)
+raw expr       : json_object_insert(CAST('{}' AS Variant), 'v', 'vv', true)
+checked expr   : json_object_insert<Variant, String, String, Boolean>(parse_json<String>("{}"), "v", "vv", true)
+optimized expr : 0x400000011000000110000002767676
+output type    : Variant
+output domain  : Undefined
+output         : '{"v":"vv"}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_insert('123'::variant, 'v', 'vv', true)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_insert('123', 'v', 'vv', true)` in expr `json_object_insert(parse_json('123'), 'v', 'vv', true)`
+
+
+
+ast            : json_object_insert(parse_json(v), 'x', parse_json(n))
+raw expr       : json_object_insert(parse_json(v::String NULL), 'x', parse_json(n::String NULL))
+checked expr   : json_object_insert<Variant NULL, String, Variant NULL>(parse_json<String NULL>(v), "x", parse_json<String NULL>(n))
+evaluation:
++--------+---------------------------------+------------------------+-----------------------------------------+
+|        | v                               | n                      | Output                                  |
++--------+---------------------------------+------------------------+-----------------------------------------+
+| Type   | String NULL                     | String NULL            | Variant NULL                            |
+| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | {""..="true"} ∪ {NULL} | Unknown                                 |
+| Row 0  | '{"k":"v"}'                     | '"hi"'                 | '{"k":"v","x":"hi"}'                    |
+| Row 1  | '{"m":"n"}'                     | NULL                   | '{"m":"n"}'                             |
+| Row 2  | NULL                            | 'true'                 | NULL                                    |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '[1,2,3]'              | '{"a":"b","c":"d","x":[1,2,3],"y":"z"}' |
++--------+---------------------------------+------------------------+-----------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                        |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x7b226b223a2276227d7b226d223a226e227d7b2261223a2262222c2263223a2264222c2279223a227a227d, offsets: [0, 9, 18, 18, 43] }, validity: [0b____1011] }                                                                                                                             |
+| n      | NullableColumn { column: StringColumn { data: 0x22686922747275655b312c322c335d, offsets: [0, 4, 4, 8, 15] }, validity: [0b____1101] }                                                                                                                                                                                       |
+| Output | NullableColumn { column: BinaryColumn { data: 0x40000002100000011000000110000001100000026b787668694000000110000001100000016d6e400000041000000110000001100000011000000110000001100000015000001610000001616378796264800000032000000220000002200000025001500250037a, offsets: [0, 25, 39, 39, 104] }, validity: [0b____1011] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object_insert(parse_json(v), 'c', parse_json(n), true)
+raw expr       : json_object_insert(parse_json(v::String NULL), 'c', parse_json(n::String NULL), true)
+checked expr   : json_object_insert<Variant NULL, String, Variant NULL, Boolean>(parse_json<String NULL>(v), "c", parse_json<String NULL>(n), true)
+evaluation:
++--------+---------------------------------+------------------------+---------------------------------+
+|        | v                               | n                      | Output                          |
++--------+---------------------------------+------------------------+---------------------------------+
+| Type   | String NULL                     | String NULL            | Variant NULL                    |
+| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | {""..="true"} ∪ {NULL} | Unknown                         |
+| Row 0  | '{"k":"v"}'                     | '"hi"'                 | '{"c":"hi","k":"v"}'            |
+| Row 1  | '{"m":"n"}'                     | NULL                   | '{"m":"n"}'                     |
+| Row 2  | NULL                            | 'true'                 | NULL                            |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '[1,2,3]'              | '{"a":"b","c":[1,2,3],"y":"z"}' |
++--------+---------------------------------+------------------------+---------------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x7b226b223a2276227d7b226d223a226e227d7b2261223a2262222c2263223a2264222c2279223a227a227d, offsets: [0, 9, 18, 18, 43] }, validity: [0b____1011] }                                                                                                        |
+| n      | NullableColumn { column: StringColumn { data: 0x22686922747275655b312c322c335d, offsets: [0, 4, 4, 8, 15] }, validity: [0b____1101] }                                                                                                                                                                  |
+| Output | NullableColumn { column: BinaryColumn { data: 0x4000000210000001100000011000000210000001636b6869764000000110000001100000016d6e4000000310000001100000011000000110000001500000161000000161637962800000032000000220000002200000025001500250037a, offsets: [0, 25, 39, 39, 94] }, validity: [0b____1011] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object_delete('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'b', 'c')
+raw expr       : json_object_delete(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'a', 'b', 'c')
+checked expr   : json_object_delete<Variant, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "a", "b", "c")
+optimized expr : 0x4000000310000001100000011000000120000002500000105000000e646d785022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_delete('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'm', 'n', 'm', 'x')
+raw expr       : json_object_delete(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'm', 'n', 'm', 'x')
+checked expr   : json_object_delete<Variant, String, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "m", "n", "m", "x")
+optimized expr : 0x40000002100000011000000120000002200000026264500c5022
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34}'
+
+
+ast            : json_object_delete('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', null)
+raw expr       : json_object_delete(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'z', NULL)
+checked expr   : json_object_delete<Variant, String, NULL>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "z", NULL)
+optimized expr : 0x40000004100000011000000110000001100000012000000220000002500000105000000e62646d78500c5022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_delete('{}'::variant, 'v', 'vv')
+raw expr       : json_object_delete(CAST('{}' AS Variant), 'v', 'vv')
+checked expr   : json_object_delete<Variant, String, String>(parse_json<String>("{}"), "v", "vv")
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : '{}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_delete('123'::variant, 'v', 'vv')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_delete('123', 'v', 'vv')` in expr `json_object_delete(parse_json('123'), 'v', 'vv')`
+
+
+
+ast            : json_object_delete(parse_json(v), 'a', 'm')
+raw expr       : json_object_delete(parse_json(v::String NULL), 'a', 'm')
+checked expr   : json_object_delete<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
+evaluation:
++--------+---------------------------------+---------------------+
+|        | v                               | Output              |
++--------+---------------------------------+---------------------+
+| Type   | String NULL                     | Variant NULL        |
+| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown             |
+| Row 0  | '{"k":"v"}'                     | '{"k":"v"}'         |
+| Row 1  | '{"m":"n"}'                     | '{}'                |
+| Row 2  | NULL                            | NULL                |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '{"c":"d","y":"z"}' |
++--------+---------------------------------+---------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                            |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x7b226b223a2276227d7b226d223a226e227d7b2261223a2262222c2263223a2264222c2279223a227a227d, offsets: [0, 9, 18, 18, 43] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: BinaryColumn { data: 0x4000000110000001100000016b764000000040000002100000011000000110000001100000016379647a, offsets: [0, 14, 18, 18, 42] }, validity: [0b____1011] }  |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object_pick('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'b', 'c')
+raw expr       : json_object_pick(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'a', 'b', 'c')
+checked expr   : json_object_pick<Variant, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "a", "b", "c")
+optimized expr : 0x40000001100000012000000262500c
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12}'
+
+
+ast            : json_object_pick('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'm', 'n', 'm', 'x')
+raw expr       : json_object_pick(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'm', 'n', 'm', 'x')
+checked expr   : json_object_pick<Variant, String, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "m", "n", "m", "x")
+optimized expr : 0x400000021000000110000001500000105000000e6d78800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_pick('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', null)
+raw expr       : json_object_pick(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'z', NULL)
+checked expr   : json_object_pick<Variant, String, NULL>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "z", NULL)
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : '{}'
+
+
+ast            : json_object_pick('{}'::variant, 'v', 'vv')
+raw expr       : json_object_pick(CAST('{}' AS Variant), 'v', 'vv')
+checked expr   : json_object_pick<Variant, String, String>(parse_json<String>("{}"), "v", "vv")
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : '{}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_pick('123'::variant, 'v', 'vv')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_pick('123', 'v', 'vv')` in expr `json_object_pick(parse_json('123'), 'v', 'vv')`
+
+
+
+ast            : json_object_pick(parse_json(v), 'a', 'm')
+raw expr       : json_object_pick(parse_json(v::String NULL), 'a', 'm')
+checked expr   : json_object_pick<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
+evaluation:
++--------+---------------------------------+--------------+
+|        | v                               | Output       |
++--------+---------------------------------+--------------+
+| Type   | String NULL                     | Variant NULL |
+| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '{"k":"v"}'                     | '{}'         |
+| Row 1  | '{"m":"n"}'                     | '{"m":"n"}'  |
+| Row 2  | NULL                            | NULL         |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '{"a":"b"}'  |
++--------+---------------------------------+--------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                            |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x7b226b223a2276227d7b226d223a226e227d7b2261223a2262222c2263223a2264222c2279223a227a227d, offsets: [0, 9, 18, 18, 43] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: BinaryColumn { data: 0x400000004000000110000001100000016d6e4000000110000001100000016162, offsets: [0, 4, 18, 18, 32] }, validity: [0b____1011] }                       |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 

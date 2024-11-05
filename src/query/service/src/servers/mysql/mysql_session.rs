@@ -23,6 +23,8 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_users::UserApiProvider;
+use databend_storages_common_session::drop_all_temp_tables;
 use log::error;
 use log::warn;
 use opensrv_mysql::plain_run_with_options;
@@ -64,11 +66,13 @@ impl MySQLConnection {
                     }
                 };
 
-                let mut interactive_worker = InteractiveWorker::create(session, client_addr);
+                let mut interactive_worker =
+                    InteractiveWorker::create(session.clone(), client_addr);
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,
                     reject_connection_on_dbname_absence: false,
                 };
+
                 let (r, w) = non_blocking_stream.into_split();
                 let mut w = BufWriter::with_capacity(DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE, w);
 
@@ -87,6 +91,17 @@ impl MySQLConnection {
                     }
                     _ => plain_run_with_options(interactive_worker, w, opts, init_params).await,
                 }
+                .ok();
+
+                let tenant = session.get_current_tenant();
+                let session_id = session.get_id();
+                let user = session.get_current_user()?.name;
+                UserApiProvider::instance()
+                    .client_session_api(&tenant)
+                    .drop_client_session_id(&session_id, &user)
+                    .await
+                    .ok();
+                drop_all_temp_tables(&session_id, session.temp_tbl_mgr()).await
             });
             let _ = futures::executor::block_on(join_handle);
         });

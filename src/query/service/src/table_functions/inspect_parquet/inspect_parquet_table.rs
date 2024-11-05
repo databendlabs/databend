@@ -37,6 +37,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
+use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -199,7 +200,6 @@ impl InspectParquetSource {
 impl AsyncSource for InspectParquetSource {
     const NAME: &'static str = INSPECT_PARQUET;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
@@ -214,8 +214,10 @@ impl AsyncSource for InspectParquetSource {
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
             let visibility_checker = self.ctx.get_visibility_checker().await?;
-            if !stage_info.is_temporary
-                && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+            if !(stage_info.is_temporary
+                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                || stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
             {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",

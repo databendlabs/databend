@@ -20,12 +20,6 @@ call system$search_tables('call_t')
 
 
 query T
-call system$clustering_information('default', 'call_t')
-----
-(a + 1) 0 0 0 0.0 0.0 {}
-
-
-query T
 call admin$tenant_quota('admin')
 ----
 0 0 0 0

@@ -52,7 +52,6 @@ impl InternalSeq {
         self.seq
     }
 
-    #[allow(dead_code)]
     pub fn is_tombstone(&self) -> bool {
         self.tombstone
     }

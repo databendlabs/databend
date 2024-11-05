@@ -121,7 +121,7 @@ pub async fn check_data_dir(
             } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
                 let content = fixture
                     .default_ctx
-                    .get_data_operator()?
+                    .get_application_level_data_operator()?
                     .operator()
                     .read(entry_path)
                     .await?

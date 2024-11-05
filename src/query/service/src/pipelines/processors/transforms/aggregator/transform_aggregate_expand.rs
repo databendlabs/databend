@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -22,11 +20,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 
 pub struct TransformExpandGroupingSets {
     group_bys: Vec<usize>,
@@ -34,20 +28,11 @@ pub struct TransformExpandGroupingSets {
 }
 
 impl TransformExpandGroupingSets {
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        group_bys: Vec<usize>,
-        grouping_ids: Vec<usize>,
-    ) -> ProcessorPtr {
-        ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            TransformExpandGroupingSets {
-                grouping_ids,
-                group_bys,
-            },
-        ))
+    pub fn new(group_bys: Vec<usize>, grouping_ids: Vec<usize>) -> Self {
+        TransformExpandGroupingSets {
+            grouping_ids,
+            group_bys,
+        }
     }
 }
 

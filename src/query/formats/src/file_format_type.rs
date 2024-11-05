@@ -49,6 +49,7 @@ pub struct FileFormatOptionsExt {
     pub is_clickhouse: bool,
     pub is_rounding_mode: bool,
     pub geometry_format: GeometryDataType,
+    pub enable_dst_hour_fix: bool,
 }
 
 impl FileFormatOptionsExt {
@@ -57,6 +58,7 @@ impl FileFormatOptionsExt {
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let geometry_format = settings.get_geometry_output_format()?;
         let numeric_cast_option = settings
             .get_numeric_cast_option()
@@ -74,6 +76,7 @@ impl FileFormatOptionsExt {
             is_clickhouse: false,
             is_rounding_mode,
             geometry_format,
+            enable_dst_hour_fix,
         };
         Ok(options)
     }
@@ -84,6 +87,7 @@ impl FileFormatOptionsExt {
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
         let geometry_format = settings.get_geometry_output_format()?;
+        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
@@ -95,6 +99,7 @@ impl FileFormatOptionsExt {
             is_clickhouse: true,
             is_rounding_mode: true,
             geometry_format,
+            enable_dst_hour_fix,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(try_blocks)]
 // TODO(xuanwo): Add crate level documents here.
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::type_complexity)]
 
 pub mod ast;
 mod error;

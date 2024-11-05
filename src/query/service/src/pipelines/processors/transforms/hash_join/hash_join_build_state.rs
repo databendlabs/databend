@@ -14,8 +14,8 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::atomic::AtomicU32;
-use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -64,6 +64,7 @@ use xorf::BinaryFuse16;
 
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
+use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
 use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
 use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
 use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
@@ -83,18 +84,19 @@ pub struct HashJoinBuildState {
     pub(crate) func_ctx: FunctionContext,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
+    /// The counters will be increased by 1 when a new hash join build processor is created.
+    /// After the processor finished Collect/Finalize/NextRound step, it will be decreased by 1.
+    /// When the counter is 0, it means all processors have finished their work.
+    pub(crate) collect_counter: AtomicUsize,
+    pub(crate) finalize_counter: AtomicUsize,
+    pub(crate) next_round_counter: AtomicUsize,
+    /// The barrier is used to synchronize build side processors.
+    pub(crate) barrier: Barrier,
     // When build side input data is coming, will put it into chunks.
     // To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
     // Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
     // After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
     pub(crate) chunk_size_limit: usize,
-    /// Wait util all processors finish row space build, then go to next phase.
-    pub(crate) barrier: Barrier,
-    /// It will be increased by 1 when a new hash join build processor is created.
-    /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
-    /// The processor will wait other processors to finish their work before starting to build hash table.
-    /// When the counter is 0, it means all hash join build processors have input their data to `RowSpace`.
-    pub(crate) row_space_builders: AtomicUsize,
     /// Hash method for hash join keys.
     pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
@@ -108,17 +110,11 @@ pub struct HashJoinBuildState {
     pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
     pub(crate) mutex: Mutex<()>,
 
-    /// Spill related states
-    /// `send_val` is the message which will be sent into `build_done_watcher` channel.
-    pub(crate) send_val: AtomicU8,
-    /// Wait all processors finish read spilled data, then go to new round build
-    pub(crate) restore_barrier: Barrier,
-    // Max memory usage for join
-    pub(crate) max_memory_usage: usize,
-    // Spilling threshold for each processor
-    pub(crate) spilling_threshold_per_proc: usize,
-    /// Spilled partition set, it contains all spilled_partition_sets from all processors
-    pub(crate) spilled_partition_set: RwLock<HashSet<u8>>,
+    /// Spill related states.
+    /// Max memory usage threshold for join.
+    pub(crate) global_memory_threshold: usize,
+    /// Max memory usage threshold for each processor.
+    pub(crate) processor_memory_threshold: usize,
 
     /// Runtime filter related states
     pub(crate) enable_inlist_runtime_filter: bool,
@@ -161,18 +157,21 @@ impl HashJoinBuildState {
                     hash_join_state.hash_join_desc.enable_bloom_runtime_filter;
             }
         }
-        let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
-        let (max_memory_usage, spilling_threshold_per_proc) =
-            Self::max_memory_usage(ctx.clone(), num_threads)?;
+
+        let settings = ctx.get_settings();
+        let chunk_size_limit = settings.get_max_block_size()? as usize * 16;
+        let (global_memory_threshold, processor_memory_threshold) =
+            Self::get_memory_threshold(ctx.clone(), num_threads)?;
+
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
             hash_join_state,
-            chunk_size_limit,
+            collect_counter: AtomicUsize::new(0),
+            finalize_counter: AtomicUsize::new(0),
+            next_round_counter: AtomicUsize::new(0),
             barrier: Barrier::new(num_threads),
-            restore_barrier: Barrier::new(num_threads),
-            max_memory_usage,
-            row_space_builders: Default::default(),
+            chunk_size_limit,
             method,
             entry_size: Default::default(),
             raw_entry_spaces: Default::default(),
@@ -180,17 +179,16 @@ impl HashJoinBuildState {
             build_worker_num: Default::default(),
             build_hash_table_tasks: Default::default(),
             mutex: Default::default(),
-            send_val: AtomicU8::new(1),
+            global_memory_threshold,
+            processor_memory_threshold,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
-            spilling_threshold_per_proc,
-            spilled_partition_set: Default::default(),
         }))
     }
 
     // Get max memory usage for settings
-    fn max_memory_usage(ctx: Arc<QueryContext>, num_threads: usize) -> Result<(usize, usize)> {
+    fn get_memory_threshold(ctx: Arc<QueryContext>, num_threads: usize) -> Result<(usize, usize)> {
         debug_assert!(num_threads != 0);
         let settings = ctx.get_settings();
         let spilling_threshold_per_proc = settings.get_join_spilling_bytes_threshold_per_proc()?;
@@ -219,13 +217,12 @@ impl HashJoinBuildState {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
 
         let input_rows = input.num_rows();
+        // We have acquired the lock, so we can use Ordering::Relaxed here.
         let old_size = self
             .hash_join_state
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
-
-        self.merge_into_try_build_block_info_index(input.clone(), old_size);
         buffer.push(input);
 
         if old_size + input_rows < self.chunk_size_limit {
@@ -234,11 +231,14 @@ impl HashJoinBuildState {
 
         let data_block = DataBlock::concat(buffer.as_slice())?;
         buffer.clear();
+        drop(buffer);
+
+        // We have acquired the lock, so we can use Ordering::Relaxed here.
         self.hash_join_state
             .row_space
             .buffer_row_size
             .store(0, Ordering::Relaxed);
-        drop(buffer);
+
         self.add_build_block(data_block)
     }
 
@@ -284,20 +284,18 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    /// Attach to state: `row_space_builders` and `hash_table_builders`.
-    pub fn build_attach(&self) -> usize {
-        let worker_id = self.row_space_builders.fetch_add(1, Ordering::Relaxed);
-        self.hash_join_state
-            .hash_table_builders
-            .fetch_add(1, Ordering::Relaxed);
-        self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        worker_id
+    /// Attach to state: `collect_counter` and `finalize_counter`.
+    pub fn build_attach(&self) {
+        self.build_worker_num.fetch_add(1, Ordering::AcqRel);
+        self.collect_counter.fetch_add(1, Ordering::AcqRel);
+        self.finalize_counter.fetch_add(1, Ordering::AcqRel);
+        self.next_round_counter.fetch_add(1, Ordering::AcqRel);
     }
 
-    /// Detach to state: `row_space_builders`,
+    /// Detach to state: `collect_counter`,
     /// create finalize task and initialize the hash table.
-    pub(crate) fn row_space_build_done(&self) -> Result<()> {
-        let old_count = self.row_space_builders.fetch_sub(1, Ordering::Relaxed);
+    pub(crate) fn collect_done(&self) -> Result<()> {
+        let old_count = self.collect_counter.fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
@@ -321,15 +319,22 @@ impl HashJoinBuildState {
                     self.hash_join_state.hash_join_desc.join_type,
                     JoinType::LeftMark | JoinType::RightMark
                 )
-                && self.spilled_partition_set.read().is_empty()
+                && !self
+                    .hash_join_state
+                    .is_spill_happened
+                    .load(Ordering::Acquire)
             {
                 self.hash_join_state
                     .fast_return
-                    .store(true, Ordering::Relaxed);
+                    .store(true, Ordering::Release);
                 self.hash_join_state
-                    .build_done_watcher
-                    .send(self.send_val.load(Ordering::Acquire))
-                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
+                    .build_watcher
+                    .send(HashTableType::Empty)
+                    .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
+                return Ok(());
+            }
+
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
             }
 
@@ -341,87 +346,76 @@ impl HashJoinBuildState {
             };
 
             // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
-            if self.spilled_partition_set.read().is_empty() {
+            if self.hash_join_state.spilled_partitions.read().is_empty() {
                 self.add_runtime_filter(&build_chunks, build_num_rows)?;
-            }
-
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
-                return Ok(());
             }
 
             // Divide the finalize phase into multiple tasks.
             self.generate_finalize_task()?;
 
             // Create a fixed size hash table.
-            let hashjoin_hashtable = match self.method.clone() {
-                HashMethodKind::Serializer(_) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
+            let (hash_join_hash_table, entry_size) = match self.method.clone() {
+                HashMethodKind::Serializer(_) => (
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
                         hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSerializer::default(),
-                    })
-                }
-                HashMethodKind::SingleBinary(_) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<StringRawEntry>(),
+                ),
+                HashMethodKind::SingleBinary(_) => (
                     HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable {
                         hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSingleBinary::default(),
-                    })
-                }
-                HashMethodKind::KeysU8(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u8>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<StringRawEntry>(),
+                ),
+                HashMethodKind::KeysU8(hash_method) => (
                     HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU16(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u16>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u8>>(),
+                ),
+                HashMethodKind::KeysU16(hash_method) => (
                     HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU32(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u32>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u16>>(),
+                ),
+                HashMethodKind::KeysU32(hash_method) => (
                     HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU64(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u64>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u32>>(),
+                ),
+                HashMethodKind::KeysU64(hash_method) => (
                     HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU128(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u128>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u64>>(),
+                ),
+                HashMethodKind::KeysU128(hash_method) => (
                     HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU256(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<U256>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u128>>(),
+                ),
+                HashMethodKind::KeysU256(hash_method) => (
                     HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
+                    }),
+                    std::mem::size_of::<RawEntry<U256>>(),
+                ),
                 HashMethodKind::DictionarySerializer(_) => unimplemented!(),
             };
-            let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
-            *hashtable = hashjoin_hashtable;
+            self.entry_size.store(entry_size, Ordering::Release);
+            let hash_table = unsafe { &mut *self.hash_join_state.hash_table.get() };
+            *hash_table = hash_join_hash_table;
             self.merge_into_try_generate_matched_memory();
         }
         Ok(())
@@ -443,14 +437,14 @@ impl HashJoinBuildState {
 
     /// Get the finalize task and using the `chunks` in `hash_join_state.row_space` to build hash table in parallel.
     pub(crate) fn finalize(&self, task: usize) -> Result<()> {
-        let entry_size = self.entry_size.load(Ordering::Relaxed);
+        let entry_size = self.entry_size.load(Ordering::Acquire);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
-                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
+                let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let valid_num = match &$valids {
@@ -516,7 +510,7 @@ impl HashJoinBuildState {
 
         macro_rules! insert_binary_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
+                let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
@@ -637,21 +631,15 @@ impl HashJoinBuildState {
         } else {
             Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let mut build_keys: Vec<(Column, DataType)> = self
-            .hash_join_state
-            .hash_join_desc
-            .build_keys
+        let build_keys = &self.hash_join_state.hash_join_desc.build_keys;
+        let mut keys_columns = build_keys
             .iter()
             .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, chunk.num_rows()),
-                    return_type.clone(),
-                ))
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), chunk.num_rows()))
             })
-            .collect::<Result<_>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let column_nums = chunk.num_columns();
         let mut block_entries = Vec::with_capacity(self.build_projections.len());
@@ -666,44 +654,53 @@ impl HashJoinBuildState {
         }
         *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
-        let mut valids = None;
-        if build_keys
-            .iter()
-            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-        {
-            for (col, _) in build_keys.iter() {
-                let (is_all_null, tmp_valids) = col.validity();
-                if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
-                    break;
-                } else {
-                    valids = and_validities(valids, tmp_valids.cloned());
+        let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
+        let may_null = build_keys.iter().any(|expr| {
+            let ty = expr.data_type();
+            ty.is_nullable() || ty.is_null()
+        });
+        let valids = if !may_null {
+            None
+        } else {
+            let valids = keys_columns
+                .iter()
+                .zip(is_null_equal.iter().copied())
+                .filter(|(_, is_null_equal)| !is_null_equal)
+                .map(|(col, _)| col.validity())
+                .try_fold(None, |valids, (is_all_null, tmp_valids)| {
+                    if is_all_null {
+                        ControlFlow::Break(Some(Bitmap::new_constant(false, chunk.num_rows())))
+                    } else {
+                        ControlFlow::Continue(and_validities(valids, tmp_valids.cloned()))
+                    }
+                });
+            match valids {
+                ControlFlow::Continue(Some(valids)) | ControlFlow::Break(Some(valids)) => {
+                    if valids.unset_bits() == valids.len() {
+                        return Ok(());
+                    }
+                    if valids.unset_bits() != 0 {
+                        Some(valids)
+                    } else {
+                        None
+                    }
                 }
+                _ => None,
             }
-        }
-
-        valids = match valids {
-            Some(valids) => {
-                if valids.unset_bits() == valids.len() {
-                    return Ok(());
-                } else if valids.unset_bits() == 0 {
-                    None
-                } else {
-                    Some(valids)
-                }
-            }
-            None => None,
         };
 
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
                 let markers = &mut build_state.mark_scan_map[chunk_index];
-                self.hash_join_state
-                    .init_markers(&build_keys, chunk.num_rows(), markers);
+                self.hash_join_state.init_markers(
+                    (&keys_columns).into(),
+                    chunk.num_rows(),
+                    markers,
+                );
             }
             JoinType::RightMark => {
-                if !_has_null && !build_keys.is_empty() {
-                    if let Some(validity) = build_keys[0].0.validity().1 {
+                if !_has_null && !keys_columns.is_empty() {
+                    if let Some(validity) = keys_columns[0].validity().1 {
                         if validity.unset_bits() > 0 {
                             _has_null = true;
                             let mut has_null_ref = self
@@ -720,10 +717,12 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        for (col, ty) in build_keys.iter_mut() {
-            *col = col.remove_nullable();
-            *ty = ty.remove_nullable();
-        }
+        keys_columns
+            .iter_mut()
+            .zip(is_null_equal.iter().copied())
+            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
+            .for_each(|(col, _)| *col = col.remove_nullable());
+        let build_keys = (&keys_columns).into();
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
@@ -770,58 +769,68 @@ impl HashJoinBuildState {
         tasks.pop_front()
     }
 
-    /// Detach to state: `hash_table_builders`.
-    pub(crate) fn build_done(&self) -> Result<()> {
-        let old_count = self
-            .hash_join_state
-            .hash_table_builders
-            .fetch_sub(1, Ordering::Relaxed);
-        if old_count == 1 {
-            self.hash_join_state
-                .set_spilled_partition(&self.spilled_partition_set.read());
+    // Build `BuildBlockGenerationState`.
+    fn build_generation_state(&self) {
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let build_num_rows = build_state.generation_state.build_num_rows;
+        info!("finish build hash table with {} rows", build_num_rows);
 
-            let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
-            let build_num_rows = build_state.generation_state.build_num_rows;
-            info!("finish build hash table with {} rows", build_num_rows);
+        let data_blocks = &mut build_state.generation_state.chunks;
+        if !data_blocks.is_empty()
+            && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
+        {
+            let num_columns = data_blocks[0].num_columns();
+            let columns_data_type: Vec<DataType> = (0..num_columns)
+                .map(|index| data_blocks[0].get_by_offset(index).data_type.clone())
+                .collect();
+            let columns: Vec<ColumnVec> = (0..num_columns)
+                .map(|index| {
+                    let columns = data_blocks
+                        .iter()
+                        .map(|block| (block.get_by_offset(index), block.num_rows()))
+                        .collect_vec();
+                    let full_columns: Vec<Column> = columns
+                        .iter()
+                        .map(|(entry, rows)| match &entry.value {
+                            Value::Scalar(s) => {
+                                let builder =
+                                    ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
+                                builder.build()
+                            }
+                            Value::Column(c) => c.clone(),
+                        })
+                        .collect();
+                    Column::take_downcast_column_vec(&full_columns, columns[0].0.data_type.clone())
+                })
+                .collect();
+            build_state.generation_state.build_columns_data_type = columns_data_type;
+            build_state.generation_state.build_columns = columns;
+        }
+    }
 
-            let data_blocks = &mut build_state.generation_state.chunks;
-
-            if !data_blocks.is_empty()
-                && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
-            {
-                let num_columns = data_blocks[0].num_columns();
-                let columns_data_type: Vec<DataType> = (0..num_columns)
-                    .map(|index| data_blocks[0].get_by_offset(index).data_type.clone())
-                    .collect();
-                let columns: Vec<ColumnVec> = (0..num_columns)
-                    .map(|index| {
-                        let columns = data_blocks
-                            .iter()
-                            .map(|block| (block.get_by_offset(index), block.num_rows()))
-                            .collect_vec();
-                        let full_columns: Vec<Column> = columns
-                            .iter()
-                            .map(|(entry, rows)| match &entry.value {
-                                Value::Scalar(s) => {
-                                    let builder =
-                                        ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
-                                    builder.build()
-                                }
-                                Value::Column(c) => c.clone(),
-                            })
-                            .collect();
-                        Column::take_downcast_column_vec(
-                            &full_columns,
-                            columns[0].0.data_type.clone(),
-                        )
-                    })
-                    .collect();
-                build_state.generation_state.build_columns_data_type = columns_data_type;
-                build_state.generation_state.build_columns = columns;
+    /// Detach to state: `finalize_counter`.
+    pub(crate) fn finalize_done(&self, hash_table_type: HashTableType) -> Result<()> {
+        if self.finalize_counter.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.build_generation_state();
+            if self.hash_join_state.need_next_round.load(Ordering::Acquire) {
+                let partition_id = if self.join_type() != JoinType::Cross {
+                    // If build side has spilled data, we need to wait build side to next round.
+                    // Set partition id to `HashJoinState`
+                    let mut spill_partitions = self.hash_join_state.spilled_partitions.write();
+                    let partition_id = spill_partitions.iter().next().cloned().unwrap();
+                    spill_partitions.remove(&partition_id);
+                    partition_id
+                } else {
+                    0
+                };
+                // The next partition to read.
+                self.hash_join_state
+                    .partition_id
+                    .store(partition_id, Ordering::Release);
             }
             self.hash_join_state
-                .build_done_watcher
-                .send(self.send_val.load(Ordering::Acquire))
+                .build_watcher
+                .send(hash_table_type)
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
         }
         Ok(())
@@ -893,16 +902,12 @@ impl HashJoinBuildState {
             }
             let build_key_column = Column::concat_columns(columns.into_iter())?;
             // Generate bloom filter using build column
-            let data_type = build_key.data_type().clone();
+            let data_type = build_key.data_type();
             let num_rows = build_key_column.len();
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut hashes = HashSet::with_capacity(num_rows);
-            hash_by_method(
-                &method,
-                &[(build_key_column, data_type)],
-                num_rows,
-                &mut hashes,
-            )?;
+            let key_columns = &[build_key_column];
+            hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
             let mut hashes_vec = Vec::with_capacity(num_rows);
             hashes.into_iter().for_each(|hash| {
                 hashes_vec.push(hash);

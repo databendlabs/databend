@@ -11,9 +11,11 @@ doctest = false
 test = true
 
 [dependencies]
-# Workspace dependencies
-databend-common-base = { path = "../base" }
-databend-common-exception = { path = "../exception" }
-jwt-simple = "0.11.0"
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+jwt-simple = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

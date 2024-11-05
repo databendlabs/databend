@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
@@ -21,7 +22,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use arrow_flight::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::tokio::task::JoinHandle;
@@ -31,6 +32,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 pub use databend_common_catalog::cluster_info::Cluster;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
@@ -49,18 +51,23 @@ use futures::Future;
 use futures::StreamExt;
 use log::error;
 use log::warn;
+use parking_lot::RwLock;
 use rand::thread_rng;
 use rand::Rng;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::servers::flight::FlightClient;
 
 pub struct ClusterDiscovery {
     local_id: String,
+    local_secret: String,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
+    cached_cluster: RwLock<Option<Arc<Cluster>>>,
 }
 
 // avoid leak FlightClient to common-xxx
@@ -71,8 +78,15 @@ pub trait ClusterHelper {
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient>;
+
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
+
+    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+        &self,
+        path: &str,
+        message: HashMap<String, T>,
+        timeout: u64,
+    ) -> Result<HashMap<String, Res>>;
 }
 
 #[async_trait::async_trait]
@@ -100,39 +114,51 @@ impl ClusterHelper for Cluster {
         self.local_id.clone()
     }
 
-    #[async_backtrace::framed]
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient> {
-        for node in &self.nodes {
-            if node.id == name {
-                return match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            None,
-                        )
-                        .await?,
-                    ))),
-                };
-            }
-        }
-
-        Err(ErrorCode::NotFoundClusterNode(format!(
-            "The node \"{}\" not found in the cluster",
-            name
-        )))
-    }
-
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
         self.nodes.to_vec()
+    }
+
+    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+        &self,
+        path: &str,
+        message: HashMap<String, T>,
+        timeout: u64,
+    ) -> Result<HashMap<String, Res>> {
+        fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
+            for node in nodes {
+                if node.id == id {
+                    return Ok(node);
+                }
+            }
+
+            Err(ErrorCode::NotFoundClusterNode(format!(
+                "Not found node {} in cluster",
+                id
+            )))
+        }
+
+        let mut futures = Vec::with_capacity(message.len());
+        for (id, message) in message {
+            let node = get_node(&self.nodes, &id)?;
+
+            futures.push({
+                let config = GlobalConfig::instance();
+                let flight_address = node.flight_address.clone();
+                let node_secret = node.secret.clone();
+
+                async move {
+                    let mut conn = create_client(&config, &flight_address).await?;
+                    Ok::<_, ErrorCode>((
+                        id,
+                        conn.do_action::<_, Res>(path, node_secret, message, timeout)
+                            .await?,
+                    ))
+                }
+            });
+        }
+
+        let responses: Vec<(String, Res)> = futures::future::try_join_all(futures).await?;
+        Ok(responses.into_iter().collect::<HashMap<String, Res>>())
     }
 }
 
@@ -165,6 +191,7 @@ impl ClusterDiscovery {
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
+            local_secret: cfg.query.node_secret.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -175,6 +202,7 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             flight_address: cfg.query.flight_api_address.clone(),
+            cached_cluster: Default::default(),
         }))
     }
 
@@ -236,9 +264,37 @@ impl ClusterDiscovery {
                     &self.flight_address,
                     cluster_nodes.len() as f64,
                 );
-                Ok(Cluster::create(res, self.local_id.clone()))
+                let res = Cluster::create(res, self.local_id.clone());
+                *self.cached_cluster.write() = Some(res.clone());
+                Ok(res)
             }
         }
+    }
+
+    fn cached_cluster(self: &Arc<Self>) -> Option<Arc<Cluster>> {
+        (*self.cached_cluster.read()).clone()
+    }
+
+    pub async fn find_node_by_id(
+        self: Arc<Self>,
+        id: &str,
+        config: &InnerConfig,
+    ) -> Result<Option<Arc<NodeInfo>>> {
+        let (mut cluster, mut is_cached) = if let Some(cluster) = self.cached_cluster() {
+            (cluster, true)
+        } else {
+            (self.discover(config).await?, false)
+        };
+        while is_cached {
+            for node in cluster.get_nodes() {
+                if node.id == id {
+                    return Ok(Some(node.clone()));
+                }
+            }
+            cluster = self.discover(config).await?;
+            is_cached = false;
+        }
+        Ok(None)
     }
 
     #[async_backtrace::framed]
@@ -311,29 +367,49 @@ impl ClusterDiscovery {
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
+        let mut http_address = format!(
+            "{}:{}",
+            cfg.query.http_handler_host, cfg.query.http_handler_port
+        );
+        let mut discovery_address = match cfg.query.discovery_address.is_empty() {
+            true => format!(
+                "{}:{}",
+                cfg.query.http_handler_host, cfg.query.http_handler_port
+            ),
+            false => cfg.query.discovery_address.clone(),
+        };
 
-        if let Ok(socket_addr) = SocketAddr::from_str(&address) {
-            let ip_addr = socket_addr.ip();
-            if ip_addr.is_loopback() || ip_addr.is_unspecified() {
-                if let Some(local_addr) = self.api_provider.get_local_addr().await? {
-                    let local_socket_addr = SocketAddr::from_str(&local_addr)?;
-                    let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
-                    warn!(
-                        "Detected loopback or unspecified address as cluster flight endpoint. \
-                        We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
-                        If there are proxies between nodes, you can specify endpoint with --flight-api-address.",
-                        address, new_addr
-                    );
+        for (lookup_ip, typ) in [
+            (&mut address, "flight-api-address"),
+            (&mut discovery_address, "discovery-address"),
+            (&mut http_address, "http-address"),
+        ] {
+            if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
+                let ip_addr = socket_addr.ip();
+                if ip_addr.is_loopback() || ip_addr.is_unspecified() {
+                    if let Some(local_addr) = self.api_provider.get_local_addr().await? {
+                        let local_socket_addr = SocketAddr::from_str(&local_addr)?;
+                        let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
+                        warn!(
+                            "Detected loopback or unspecified address as {} endpoint. \
+                            We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
+                            If there are proxies between nodes, you can specify endpoint with --{}.",
+                            typ, lookup_ip, new_addr, typ
+                        );
 
-                    address = new_addr;
+                        *lookup_ip = new_addr;
+                    }
                 }
             }
         }
 
         let node_info = NodeInfo::create(
             self.local_id.clone(),
+            self.local_secret.clone(),
             cpus,
+            http_address,
             address,
+            discovery_address,
             DATABEND_COMMIT_VERSION.to_string(),
         );
 

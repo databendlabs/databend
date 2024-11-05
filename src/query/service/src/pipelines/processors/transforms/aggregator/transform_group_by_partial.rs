@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec;
 
 use bumpalo::Bump;
@@ -23,9 +24,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_hashtable::HashtableLike;
@@ -107,6 +108,11 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     probe_state: ProbeState,
     settings: GroupBySettings,
     params: Arc<AggregatorParams>,
+
+    start: Instant,
+    first_block_start: Option<Instant>,
+    processed_rows: usize,
+    processed_bytes: usize,
 }
 
 impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
@@ -142,6 +148,10 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
                 probe_state: ProbeState::default(),
                 params,
                 settings: GroupBySettings::try_from(ctx)?,
+                start: Instant::now(),
+                first_block_start: None,
+                processed_bytes: 0,
+                processed_rows: 0,
             },
         ))
     }
@@ -151,44 +161,43 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
     const NAME: &'static str = "TransformPartialGroupBy";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
-        let block = block.convert_to_full();
-        let group_columns = self
-            .params
-            .group_columns
-            .iter()
-            .map(|&index| block.get_by_offset(index))
-            .collect::<Vec<_>>();
+        let block = block.consume_convert_to_full();
 
-        let group_columns = group_columns
-            .iter()
-            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
-            .collect::<Vec<_>>();
+        let rows_num = block.num_rows();
 
-        unsafe {
-            let rows_num = block.num_rows();
+        self.processed_bytes += block.memory_size();
+        self.processed_rows += rows_num;
+        if self.first_block_start.is_none() {
+            self.first_block_start = Some(Instant::now());
+        }
 
+        let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
+
+        {
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
-                        let _ = cell.hashtable.insert_and_entry(key);
+                        unsafe {
+                            let _ = cell.hashtable.insert_and_entry(key);
+                        }
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
-                        let _ = cell.hashtable.insert_and_entry(key);
+                        unsafe {
+                            let _ = cell.hashtable.insert_and_entry(key);
+                        }
                     }
                 }
                 HashTable::AggregateHashTable(hashtable) => {
-                    let group_columns: Vec<Column> =
-                        group_columns.into_iter().map(|c| c.0).collect();
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
-                        &group_columns,
-                        &[vec![]],
-                        &[],
+                        group_columns,
+                        &[(&[]).into()],
+                        (&[]).into(),
                         rows_num,
                     )?;
                 }
@@ -313,6 +322,26 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
+
+                log::info!(
+                    "Aggregated {} to {} rows in {} sec(real: {}). ({} rows/sec, {}/sec, {})",
+                    self.processed_rows,
+                    hashtable.payload.len(),
+                    self.start.elapsed().as_secs_f64(),
+                    if let Some(t) = &self.first_block_start {
+                        t.elapsed().as_secs_f64()
+                    } else {
+                        self.start.elapsed().as_secs_f64()
+                    },
+                    convert_number_size(
+                        self.processed_rows as f64 / self.start.elapsed().as_secs_f64()
+                    ),
+                    convert_byte_size(
+                        self.processed_bytes as f64 / self.start.elapsed().as_secs_f64()
+                    ),
+                    convert_byte_size(self.processed_bytes as f64),
+                );
+
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
@@ -324,7 +353,6 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                         ));
                     }
                 }
-
                 blocks
             }
         })

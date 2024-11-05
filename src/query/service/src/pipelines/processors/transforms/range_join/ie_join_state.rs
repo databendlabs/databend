@@ -82,19 +82,16 @@ impl IEJoinState {
                 offset: 0,
                 asc: l1_order,
                 nulls_first: false,
-                is_nullable: l1_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 1,
                 asc: l2_order,
                 nulls_first: false,
-                is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 2,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             },
         ];
 
@@ -103,20 +100,17 @@ impl IEJoinState {
                 offset: 1,
                 asc: l2_order,
                 nulls_first: false,
-                is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 0,
                 asc: l1_order,
                 nulls_first: false,
-                is_nullable: l1_data_type.is_nullable(),
             },
             // `_tuple_id` column
             SortColumnDescription {
                 offset: 2,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             },
         ];
 
@@ -204,6 +198,9 @@ impl RangeJoinState {
             block_size,
             ie_join_state.l1_sort_descriptions.clone(),
             left_sorted_blocks,
+            self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
+            self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
+            false,
         )?;
 
         // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
@@ -249,6 +246,9 @@ impl RangeJoinState {
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
             l2_sorted_blocks,
+            self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
+            self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
+            false,
         )?)?;
 
         // The pos col of l2 sorted blocks is permutation array

@@ -21,9 +21,9 @@ use databend_common_management::*;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_add_node() -> Result<()> {
@@ -33,7 +33,7 @@ async fn test_successfully_add_node() -> Result<()> {
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
     let value = kv_api
-        .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
+        .get_kv("__fd_clusters_v4/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
     match value {
@@ -122,7 +122,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     cluster_api.add_node(node_info.clone()).await?;
 
     let value = kv_api
-        .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
+        .get_kv("__fd_clusters_v4/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
     let meta = value.unwrap().meta.unwrap();
@@ -133,7 +133,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     cluster_api.heartbeat(&node_info, MatchSeq::GE(1)).await?;
 
     let value = kv_api
-        .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
+        .get_kv("__fd_clusters_v4/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
     assert!(value.unwrap().meta.unwrap().get_expire_at_ms().unwrap() - now_ms >= 59_000);
@@ -143,9 +143,12 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
 fn create_test_node_info() -> NodeInfo {
     NodeInfo {
         id: String::from("test_node"),
+        secret: "".to_string(),
         cpu_nums: 0,
         version: 0,
+        http_address: "ip3:port".to_string(),
         flight_address: String::from("ip:port"),
+        discovery_address: "ip2:port".to_string(),
         binary_version: "binary_version".to_string(),
     }
 }

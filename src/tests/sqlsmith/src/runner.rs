@@ -28,7 +28,7 @@ use databend_common_sql::resolve_type_name;
 use databend_driver::Client;
 use databend_driver::Connection;
 use databend_driver::Error;
-use databend_sql::value::Value;
+use databend_driver_core::value::Value;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;

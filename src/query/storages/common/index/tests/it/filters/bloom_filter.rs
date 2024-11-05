@@ -145,14 +145,14 @@ fn test_bloom_filter() -> Result<()> {
             )),
         ]),
     ];
-    let blocks_ref = blocks.iter().collect::<Vec<_>>();
+    let block = DataBlock::concat(&blocks)?;
 
     let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1, 2, 3]);
     let bloom_fields = bloom_columns.values().cloned().collect::<Vec<_>>();
     let index = BloomIndex::try_create(
         FunctionContext::default(),
         LatestBloom::VERSION,
-        &blocks_ref,
+        &block,
         bloom_columns,
     )?
     .unwrap();
@@ -317,14 +317,14 @@ fn test_specify_bloom_filter() -> Result<()> {
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec!["a", "b"]),
     ])];
-    let blocks_ref = blocks.iter().collect::<Vec<_>>();
+    let block = DataBlock::concat(&blocks)?;
 
     let bloom_columns = bloom_columns_map(schema.clone(), vec![0]);
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
     let specify_index = BloomIndex::try_create(
         FunctionContext::default(),
         LatestBloom::VERSION,
-        &blocks_ref,
+        &block,
         bloom_columns,
     )?
     .unwrap();
@@ -356,7 +356,7 @@ fn test_string_bloom_filter() -> Result<()> {
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec![&val, "bc"]),
     ])];
-    let blocks_ref = blocks.iter().collect::<Vec<_>>();
+    let block = DataBlock::concat(&blocks)?;
 
     // The average length of the string column exceeds 256 bytes.
     let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1]);
@@ -364,7 +364,7 @@ fn test_string_bloom_filter() -> Result<()> {
     let index = BloomIndex::try_create(
         FunctionContext::default(),
         LatestBloom::VERSION,
-        &blocks_ref,
+        &block,
         bloom_columns,
     )?
     .unwrap();

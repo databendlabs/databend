@@ -17,6 +17,8 @@
 mod frozen;
 mod segment;
 mod snapshot;
+mod table_snapshot_statistics;
 
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
+pub use table_snapshot_statistics::TableSnapshotStatistics;

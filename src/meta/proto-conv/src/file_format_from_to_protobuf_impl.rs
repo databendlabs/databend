@@ -21,7 +21,6 @@ use databend_common_io::GeometryDataType;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::EmptyFieldAs;
-use databend_common_meta_app::principal::NullAs;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -215,6 +214,11 @@ impl FromToProto for mt::principal::FileFormatParams {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.format {
+            Some(pb::file_format_params::Format::Orc(p)) => {
+                Ok(mt::principal::FileFormatParams::Orc(
+                    mt::principal::OrcFileFormatParams::from_pb(p)?,
+                ))
+            }
             Some(pb::file_format_params::Format::Parquet(p)) => {
                 Ok(mt::principal::FileFormatParams::Parquet(
                     mt::principal::ParquetFileFormatParams::from_pb(p)?,
@@ -283,7 +287,37 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::XmlFileFormatParams::to_pb(p)?,
                 )),
             }),
+            Self::Orc(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Orc(
+                    mt::principal::OrcFileFormatParams::to_pb(p)?,
+                )),
+            }),
         }
+    }
+}
+
+impl FromToProto for mt::principal::OrcFileFormatParams {
+    type PB = pb::OrcFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::OrcFileFormatParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        mt::principal::OrcFileFormatParams::try_create(p.missing_field_as.as_deref()).map_err(|e| {
+            Incompatible {
+                reason: format!("{e}"),
+            }
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::OrcFileFormatParams, Incompatible> {
+        Ok(pb::OrcFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            missing_field_as: Some(self.missing_field_as.to_string()),
+        })
     }
 }
 
@@ -296,15 +330,18 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
     fn from_pb(p: pb::ParquetFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::principal::ParquetFileFormatParams {
-            missing_field_as: NullAs::Error,
-        })
+        mt::principal::ParquetFileFormatParams::try_create(p.missing_field_as.as_deref(), p.null_if)
+            .map_err(|e| Incompatible {
+                reason: format!("{e}"),
+            })
     }
 
     fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
         Ok(pb::ParquetFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            missing_field_as: Some(self.missing_field_as.to_string()),
+            null_if: self.null_if.clone(),
         })
     }
 }

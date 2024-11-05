@@ -145,7 +145,6 @@ impl ExecuteBackgroundJobSource {
 impl AsyncSource for ExecuteBackgroundJobSource {
     const NAME: &'static str = "execute_job";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let background_handler = get_background_service_handler();

@@ -63,7 +63,7 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
-    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols)?
+    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols, None)?
         .read_pruning(segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
@@ -97,7 +97,6 @@ async fn test_block_pruner() -> Result<()> {
         engine: Engine::Fuse,
         engine_options: Default::default(),
         storage_params: None,
-        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),

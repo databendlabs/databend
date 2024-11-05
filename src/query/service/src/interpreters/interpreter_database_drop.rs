@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatabasePlan;
-use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
@@ -59,7 +58,7 @@ impl Interpreter for DropDatabaseInterpreter {
             let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::Database {
                 catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().ident.db_id,
+                db_id: db.get_db_info().database_id.db_id,
             };
 
             role_api.revoke_ownership(&owner_object).await?;
@@ -67,23 +66,7 @@ impl Interpreter for DropDatabaseInterpreter {
         }
 
         // actual drop database
-        let resp = catalog.drop_database(self.plan.clone().into()).await?;
-
-        // handle share cleanups with the DropDatabaseReply
-        if let Some(spec_vec) = resp.spec_vec {
-            let mut share_table_into = Vec::with_capacity(spec_vec.len());
-            for share_spec in &spec_vec {
-                share_table_into.push((share_spec.name.clone(), None));
-            }
-
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_into),
-            )
-            .await?;
-        }
+        let _ = catalog.drop_database(self.plan.clone().into()).await?;
 
         Ok(PipelineBuildResult::create())
     }

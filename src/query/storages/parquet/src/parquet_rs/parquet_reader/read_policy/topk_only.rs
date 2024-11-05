@@ -61,6 +61,7 @@ pub struct TopkOnlyPolicyBuilder {
 impl TopkOnlyPolicyBuilder {
     pub fn create(
         schema_desc: &SchemaDescriptor,
+        arrow_schema: Option<&arrow_schema::Schema>,
         topk: &BuiltTopK,
         output_schema: &TableSchema,
         output_leaves: &[usize],
@@ -90,8 +91,11 @@ impl TopkOnlyPolicyBuilder {
             }
         }
         let remain_schema = TableSchema::new(remain_fields);
-        let remain_field_levels =
-            parquet_to_arrow_field_levels(schema_desc, remain_projection.clone(), None)?;
+        let remain_field_levels = parquet_to_arrow_field_levels(
+            schema_desc,
+            remain_projection.clone(),
+            arrow_schema.map(|s| &s.fields),
+        )?;
         let remain_field_paths = Arc::new(compute_output_field_paths(
             schema_desc,
             &remain_projection,

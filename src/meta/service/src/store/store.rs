@@ -35,7 +35,7 @@ impl RaftStore {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,

@@ -21,10 +21,11 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -33,6 +34,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -44,41 +46,47 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -88,6 +96,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -107,41 +116,43 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -424,6 +435,10 @@ impl TableContext for CtxDelegation {
         self.ctx.get_group_by_spill_progress()
     }
 
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_window_partition_spill_progress()
+    }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         todo!()
     }
@@ -437,6 +452,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
@@ -463,6 +482,22 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
+        todo!()
+    }
+
+    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
+        todo!()
+    }
+
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
+        todo!()
+    }
+
+    fn set_lazy_mutation_delete(&self, _lazy: bool) {
+        todo!()
+    }
+
+    fn get_lazy_mutation_delete(&self) -> bool {
         todo!()
     }
 
@@ -534,11 +569,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn check_aborting(&self) -> Result<()> {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         todo!()
     }
 
-    fn get_error(&self) -> Option<ErrorCode> {
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         todo!()
     }
 
@@ -561,6 +596,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
+    ) -> Result<()> {
         todo!()
     }
 
@@ -597,6 +641,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_shared_settings"))
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
@@ -641,8 +689,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_data_operator()
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
@@ -661,6 +709,16 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_table_with_batch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
@@ -670,6 +728,16 @@ impl TableContext for CtxDelegation {
         _max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         todo!()
+    }
+
+    fn set_variable(&self, _key: String, _value: Scalar) {}
+    fn unset_variable(&self, _key: &str) {}
+    fn get_variable(&self, _key: &str) -> Option<Scalar> {
+        None
+    }
+
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
     }
 
     fn set_materialized_cte(
@@ -703,14 +771,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_compaction_num_block_hint(&self, _enable: u64) {
-        todo!()
-    }
-
-    fn get_compaction_num_block_hint(&self) -> u64 {
-        todo!()
-    }
-
     fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
         todo!()
     }
@@ -723,15 +783,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         todo!()
     }
 
-    fn add_merge_status(&self, _merge_status: MergeStatus) {
+    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
         todo!()
     }
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
         todo!()
     }
 
@@ -743,7 +803,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_query_profiles(&self, _: &[PlanProfile]) {
+    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
         todo!()
     }
 
@@ -760,6 +820,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
+        todo!()
+    }
+
+    fn clear_runtime_filter(&self) {
         todo!()
     }
 
@@ -801,6 +865,32 @@ impl TableContext for CtxDelegation {
     fn set_query_queued_duration(&self, _queued_duration: Duration) {
         todo!()
     }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        todo!()
+    }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        todo!()
+    }
+
+    fn session_state(&self) -> SessionState {
+        todo!()
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
+    }
+
+    fn get_runtime(&self) -> Result<Arc<Runtime>> {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -815,7 +905,7 @@ impl Catalog for FakedCatalog {
         "FakedCatalog".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
     }
 
@@ -860,8 +950,20 @@ impl Catalog for FakedCatalog {
         self.cat.mget_table_names_by_ids(tenant, table_id).await
     }
 
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.cat.get_table_name_by_id(table_id).await
+    }
+
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.cat.get_db_name_by_id(db_id).await
+    }
+
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        self.cat.mget_databases(tenant, db_names).await
     }
 
     #[async_backtrace::framed]
@@ -879,6 +981,15 @@ impl Catalog for FakedCatalog {
         _db_name: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn get_table_history(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
@@ -902,7 +1013,11 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<()> {
+        todo!()
+    }
+
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         todo!()
     }
 
@@ -919,18 +1034,6 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        if let Some(e) = &self.error_injection {
-            Err(e.clone())
-        } else {
-            self.cat.update_table_meta(table_info, req).await
-        }
-    }
-
     async fn set_table_column_mask_policy(
         &self,
         _req: SetTableColumnMaskPolicyReq,
@@ -939,12 +1042,12 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -971,7 +1074,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -1004,26 +1107,17 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -1075,5 +1169,45 @@ impl Catalog for FakedCatalog {
 
     async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
+    }
+
+    async fn retryable_update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        if let Some(e) = &self.error_injection {
+            Err(e.clone())
+        } else {
+            self.cat.retryable_update_multi_table_meta(req).await
+        }
+    }
+
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        todo!()
+    }
+
+    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        todo!()
+    }
+
+    async fn drop_dictionary(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        todo!()
+    }
+
+    async fn get_dictionary(
+        &self,
+        _req: DictionaryNameIdent,
+    ) -> Result<Option<GetDictionaryReply>> {
+        todo!()
+    }
+
+    async fn list_dictionaries(
+        &self,
+        _req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
+        todo!()
     }
 }

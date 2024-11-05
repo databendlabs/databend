@@ -10,7 +10,6 @@ BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 killall databend-query || true
 killall databend-meta || true
-killall open-sharing || true
 sleep 1
 
 for bin in databend-query databend-meta; do
@@ -24,7 +23,7 @@ done
 sleep 1
 
 echo 'Start databend-meta...'
-nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=ERROR &
+nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=INFO &
 echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
 

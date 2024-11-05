@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 
 use databend_common_base::base::tokio;
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
@@ -45,7 +46,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures_util::TryStreamExt;
-use ordered_float::OrderedFloat;
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,
@@ -184,6 +184,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         field,
         comment: "".to_string(),
         option: AddColumnOption::End,
+        is_deterministic: true,
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;

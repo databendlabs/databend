@@ -1,0 +1,33 @@
+statement ok
+drop table if exists test_table_double
+
+statement ok
+CREATE TABLE IF NOT EXISTS test_table_double (ID INT, Name VARCHAR(50), Age INT, City VARCHAR(50), Score DOUBLE)
+
+statement ok
+INSERT INTO test_table_double (ID, Name, Age, City, Score) VALUES (1, 'Alice', 25, 'Toroto', 'inf')
+
+query
+SELECT * FROM test_table_double
+----
+1 Alice 25 Toroto Infinity
+
+statement ok
+drop table if exists test_inf_nan
+
+statement ok
+create table if not exists test_inf_nan (a float)
+
+statement ok
+insert into test_inf_nan select 'inf' from numbers(100)
+
+statement ok
+insert into test_inf_nan select '-inf' from numbers(100)
+
+statement ok
+insert into test_inf_nan select 'nan' from numbers(100)
+
+query
+select max(a) from test_inf_nan
+----
+NaN

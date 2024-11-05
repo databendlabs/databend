@@ -23,9 +23,13 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::LimitType;
+use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::executor::physical_plans::AggregateExpand;
 use databend_common_sql::executor::physical_plans::AggregateFinal;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
@@ -86,14 +90,10 @@ impl PipelineBuilder {
             grouping_ids.push(!id & mask);
         }
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(TransformExpandGroupingSets::create(
-                input,
-                output,
-                group_bys.clone(),
-                grouping_ids.clone(),
-            ))
-        })
+        self.main_pipeline.add_transformer(|| {
+            TransformExpandGroupingSets::new(group_bys.clone(), grouping_ids.clone())
+        });
+        Ok(())
     }
 
     pub(crate) fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
@@ -101,28 +101,25 @@ impl PipelineBuilder {
 
         let max_block_size = self.settings.get_max_block_size()?;
         let max_threads = self.settings.get_max_threads()?;
+        let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
 
         let enable_experimental_aggregate_hashtable = self
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
-
-        let in_cluster = !self.ctx.get_cluster().is_empty();
 
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
-            in_cluster,
+            self.is_exchange_neighbor,
             max_block_size as usize,
-            None,
+            max_spill_io_requests as usize,
         )?;
 
         if params.group_columns.is_empty() {
-            return self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    PartialSingleStateAggregator::try_create(input, output, &params)?,
-                ))
+            return self.main_pipeline.try_add_accumulating_transformer(|| {
+                PartialSingleStateAggregator::try_new(&params)
             });
         }
 
@@ -130,16 +127,37 @@ impl PipelineBuilder {
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if self.ctx.get_cluster().is_empty() {
+        let partial_agg_config = if !self.is_exchange_neighbor {
             HashTableConfig::default().with_partial(true, max_threads as usize)
         } else {
             HashTableConfig::default()
                 .cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
         };
+
+        // For rank limit, we can filter data using sort with rank before partial
+        if let Some(rank_limit) = &aggregate.rank_limit {
+            let sort_desc = rank_limit
+                .0
+                .iter()
+                .map(|desc| {
+                    let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
+                    Ok(SortColumnDescription {
+                        offset,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let sort_desc = Arc::new(sort_desc);
+
+            self.main_pipeline.add_transformer(|| {
+                TransformSortPartial::new(LimitType::LimitRank(rank_limit.1), sort_desc.clone())
+            });
+        }
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
@@ -169,7 +187,7 @@ impl PipelineBuilder {
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if self.ctx.get_cluster().is_empty() {
+        if !self.is_exchange_neighbor {
             let operator = DataOperator::instance().operator();
             let location_prefix =
                 query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
@@ -221,15 +239,16 @@ impl PipelineBuilder {
         let enable_experimental_aggregate_hashtable = self
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
-        let in_cluster = !self.ctx.get_cluster().is_empty();
+        let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
+
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
-            in_cluster,
+            self.is_exchange_neighbor,
             max_block_size as usize,
-            aggregate.limit,
+            max_spill_io_requests as usize,
         )?;
 
         if params.group_columns.is_empty() {
@@ -293,9 +312,9 @@ impl PipelineBuilder {
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
         enable_experimental_aggregate_hashtable: bool,
-        in_cluster: bool,
+        cluster_aggregator: bool,
         max_block_size: usize,
-        limit: Option<usize>,
+        max_spill_io_requests: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -335,9 +354,9 @@ impl PipelineBuilder {
             &aggs,
             &agg_args,
             enable_experimental_aggregate_hashtable,
-            in_cluster,
+            cluster_aggregator,
             max_block_size,
-            limit,
+            max_spill_io_requests,
         )?;
 
         Ok(params)

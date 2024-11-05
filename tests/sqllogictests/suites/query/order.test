@@ -28,6 +28,13 @@ NULL
 1
 2
 
+query I
+select * from order_test order by a nulls last
+----
+1
+2
+NULL
+
 query II
 select number  d , max(1-number) c from numbers(4) group by 1  order by 2;
 ----
@@ -45,3 +52,22 @@ select number from numbers(10) as a order by b.number
 
 statement error
 select number from (select * from numbers(10) as b) as a order by b.number
+
+statement ok
+set sort_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set spilling_file_format = 'arrow';
+
+query I
+select number from numbers(1000) order by number offset 997;
+----
+997
+998
+999
+
+statement ok
+unset sort_spilling_bytes_threshold_per_proc;
+
+statement ok
+unset spilling_file_format;

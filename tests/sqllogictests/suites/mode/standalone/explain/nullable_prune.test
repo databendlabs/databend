@@ -33,7 +33,7 @@ explain select * from t_nullable_prune where a is not null
 Filter
 ├── output columns: [t_nullable_prune.a (#0)]
 ├── filters: [is_not_null(t_nullable_prune.a (#0))]
-├── estimated rows: 1.20
+├── estimated rows: 3.00
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── output columns: [a (#0)]
@@ -51,7 +51,7 @@ explain select * from t_nullable_prune where a is null
 Filter
 ├── output columns: [t_nullable_prune.a (#0)]
 ├── filters: [NOT is_not_null(t_nullable_prune.a (#0))]
-├── estimated rows: 4.80
+├── estimated rows: 3.00
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── output columns: [a (#0)]

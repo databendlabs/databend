@@ -19,11 +19,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_formats::output_format::OutputFormat;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 
 use super::buffers::FileOutputBuffer;
 use super::buffers::FileOutputBuffers;
@@ -34,17 +30,8 @@ pub(super) struct SerializeProcessor {
 }
 
 impl SerializeProcessor {
-    pub(super) fn try_create(
-        ctx: Arc<dyn TableContext>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        output_format: Box<dyn OutputFormat>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            SerializeProcessor { output_format, ctx },
-        )))
+    pub(super) fn new(ctx: Arc<dyn TableContext>, output_format: Box<dyn OutputFormat>) -> Self {
+        SerializeProcessor { output_format, ctx }
     }
 }
 

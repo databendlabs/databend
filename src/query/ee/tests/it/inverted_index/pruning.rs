@@ -69,7 +69,7 @@ async fn apply_block_pruning(
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols)?
+    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, None)?
         .read_pruning(segment_locs)
         .await
 }
@@ -103,7 +103,6 @@ async fn test_block_pruner() -> Result<()> {
         engine: Engine::Fuse,
         engine_options: Default::default(),
         storage_params: None,
-        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
@@ -500,10 +499,12 @@ async fn test_block_pruner() -> Result<()> {
         "filters".to_string(),
         "english_stop,english_stemmer,chinese_stop".to_string(),
     );
+    let tenant = ctx.get_tenant();
 
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
+        tenant,
         name: index_name.clone(),
         column_ids: vec![1, 2, 3],
         sync_creation: false,
@@ -525,7 +526,6 @@ async fn test_block_pruner() -> Result<()> {
         table: test_tbl_name.to_string(),
         index_name: index_name.clone(),
         segment_locs: None,
-        need_lock: true,
     };
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;
@@ -554,6 +554,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "test".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -566,6 +567,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "save".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -578,6 +580,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "one".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -590,6 +593,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "the".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -602,6 +606,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "光阴".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -614,6 +619,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "人生".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -626,6 +632,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "people".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -638,6 +645,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "bad".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -650,6 +658,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "黄金".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -662,6 +671,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "时间".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -677,6 +687,7 @@ async fn test_block_pruner() -> Result<()> {
             ],
             query_text: "you".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -692,6 +703,7 @@ async fn test_block_pruner() -> Result<()> {
             ],
             query_text: "光阴".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -704,6 +716,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("extras".to_string(), None)],
             query_text: "extras.title:Blockchain".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -716,6 +729,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("extras".to_string(), None)],
             query_text: "extras.metadata.author:David".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };
@@ -728,6 +742,7 @@ async fn test_block_pruner() -> Result<()> {
             query_fields: vec![("extras".to_string(), None)],
             query_text: "extras.metadata.tags:技术".to_string(),
             has_score: false,
+            inverted_index_option: None,
         }),
         ..Default::default()
     };

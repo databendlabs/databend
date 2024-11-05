@@ -35,18 +35,21 @@ use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
     matchers: Vec<Matcher>,
+    metadata: MetadataRef,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterJoin,
             // Filter
@@ -62,6 +65,7 @@ impl RulePushDownFilterJoin {
                     children: vec![Matcher::Leaf, Matcher::Leaf],
                 }],
             }],
+            metadata,
         }
     }
 }
@@ -73,7 +77,7 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr)?;
+        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.metadata.clone())?;
 
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
@@ -88,7 +92,7 @@ impl Rule for RulePushDownFilterJoin {
         }
 
         // Finally, push down filter to join.
-        let (need_push, mut result) = try_push_down_filter_join(&s_expr)?;
+        let (need_push, mut result) = try_push_down_filter_join(&s_expr, self.metadata.clone())?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
@@ -104,7 +108,7 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
+pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
     // Extract or predicates from Filter to push down them to join.
     // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
     // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
@@ -142,7 +146,8 @@ pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
                     if can_filter_null(
                         &predicate,
                         &left_prop.output_columns,
-                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
                     )? {
                         left_push_down.push(predicate);
                     } else {
@@ -159,8 +164,9 @@ pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
                 ) {
                     if can_filter_null(
                         &predicate,
-                        &left_prop.output_columns,
                         &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
                     )? {
                         right_push_down.push(predicate);
                     } else {
@@ -172,13 +178,17 @@ pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
             JoinPredicate::Both { is_equal_op, .. } => {
-                if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+                if matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+                    || join.single_to_inner.is_some()
+                {
                     if is_equal_op {
                         push_down_predicates.push(predicate);
                     } else {
                         non_equi_predicates.push(predicate);
                     }
-                    join.join_type = JoinType::Inner;
+                    if join.join_type == JoinType::Cross {
+                        join.join_type = JoinType::Inner;
+                    }
                 } else {
                     original_predicates.push(predicate);
                 }
@@ -190,22 +200,19 @@ pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
         return Ok((false, s_expr.clone()));
     }
 
-    if !matches!(join.join_type, JoinType::Full) {
+    if !matches!(join.join_type, JoinType::Full) && !join.has_null_equi_condition() {
         // Infer new predicate and push down filter.
-        for (left_condition, right_condition) in join
-            .left_conditions
-            .iter()
-            .zip(join.right_conditions.iter())
-        {
+        for equi_condition in join.equi_conditions.iter() {
+            let left = equi_condition.left.clone();
+            let right = equi_condition.right.clone();
             push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
-                arguments: vec![left_condition.clone(), right_condition.clone()],
+                arguments: vec![left, right],
             }));
         }
-        join.left_conditions.clear();
-        join.right_conditions.clear();
+        join.equi_conditions.clear();
         match join.join_type {
             JoinType::Left | JoinType::LeftSingle => {
                 push_down_predicates.extend(left_push_down);
@@ -246,8 +253,11 @@ pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
                 right_push_down.push(predicate);
             }
             JoinPredicate::Both { left, right, .. } => {
-                join.left_conditions.push(left.clone());
-                join.right_conditions.push(right.clone());
+                join.equi_conditions.push(JoinEquiCondition::new(
+                    left.clone(),
+                    right.clone(),
+                    false,
+                ));
             }
             _ => original_predicates.push(predicate),
         }

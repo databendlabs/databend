@@ -25,15 +25,20 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
-use minitrace::func_name;
+use fastrace::func_name;
 
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
+#[derive(Clone)]
 pub enum Credential {
+    DatabendToken {
+        token: String,
+    },
     Jwt {
         token: String,
         client_ip: Option<String>,
@@ -43,6 +48,7 @@ pub enum Credential {
         password: Option<Vec<u8>>,
         client_ip: Option<String>,
     },
+    NoNeed,
 }
 
 impl AuthMgr {
@@ -65,9 +71,26 @@ impl AuthMgr {
     }
 
     #[async_backtrace::framed]
-    pub async fn auth(&self, session: &mut Session, credential: &Credential) -> Result<()> {
+    pub async fn auth(
+        &self,
+        session: &mut Session,
+        credential: &Credential,
+        need_user_info: bool,
+    ) -> Result<(String, Option<String>)> {
         let user_api = UserApiProvider::instance();
         match credential {
+            Credential::NoNeed => Ok(("".to_string(), None)),
+            Credential::DatabendToken { token } => {
+                let claim = ClientSessionManager::instance().verify_token(token).await?;
+                let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
+                if need_user_info {
+                    let identity = UserIdentity::new(claim.user.clone(), "%");
+                    session.set_current_tenant(tenant.clone());
+                    let user_info = user_api.get_user(&tenant, identity.clone()).await?;
+                    session.set_authed_user(user_info, claim.auth_role).await?;
+                }
+                Ok((claim.user, Some(claim.session_id)))
+            }
             Credential::Jwt {
                 token: t,
                 client_ip,
@@ -128,27 +151,32 @@ impl AuthMgr {
                 };
 
                 session.set_authed_user(user, jwt.custom.role).await?;
+                Ok((user_name, None))
             }
             Credential::Password {
-                name: n,
+                name,
                 password: p,
                 client_ip,
             } => {
                 let tenant = session.get_current_tenant();
-                let identity = UserIdentity::new(n, "%");
-                let user = user_api
+                let identity = UserIdentity::new(name, "%");
+                let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
                 // Check password policy for login
-                UserApiProvider::instance()
+                let need_change = UserApiProvider::instance()
                     .check_login_password(&tenant, identity.clone(), &user)
                     .await?;
+                if need_change {
+                    user.update_auth_need_change_password();
+                }
 
                 let authed = match &user.auth_info {
                     AuthInfo::None => Ok(()),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
+                        ..
                     } => match p {
                         None => Err(ErrorCode::AuthenticateFailure("password required")),
                         Some(p) => {
@@ -168,8 +196,8 @@ impl AuthMgr {
                 authed?;
 
                 session.set_authed_user(user, None).await?;
+                Ok((name.to_string(), None))
             }
-        };
-        Ok(())
+        }
     }
 }

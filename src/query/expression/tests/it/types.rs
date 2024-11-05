@@ -12,35 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow_schema::Schema;
 use chrono_tz::Tz;
+use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+
+use crate::get_all_test_data_types;
+use crate::rand_block_for_all_types;
 
 #[test]
 fn test_timestamp_to_string_formats() {
     // Unix timestamp for "2024-01-01 01:02:03" UTC
-    let ts = 1_704_070_923;
-
+    let ts = 1_704_070_923_000_000;
     let tz = Tz::UTC;
 
-    // Test with a valid format
-    let ts_format = "%Y-%m-%d %H:%M:%S";
     assert_eq!(
-        timestamp_to_string(ts, tz, ts_format).to_string(),
-        "2024-01-01 01:02:03"
-    );
-
-    // Test with a format including fraction of a second
-    let ts_format = "%Y-%m-%d %H:%M:%S%.6f";
-    assert_eq!(
-        timestamp_to_string(ts, tz, ts_format).to_string(),
+        timestamp_to_string(ts, tz).to_string(),
         "2024-01-01 01:02:03.000000"
     );
+}
 
-    // Test with an invalid format (should use default format)
-    // let ts_format = "%Y-%Q-%W"; // Invalid format specifiers
-    // assert_eq!(
-    // timestamp_to_string(ts, tz, ts_format).to_string(),
-    // "2024-01-01 01:02:03.000000" // Default format
-    // );
-    //
+#[test]
+fn test_convert_types() {
+    let all_types = get_all_test_data_types();
+    let all_fields = all_types
+        .iter()
+        .enumerate()
+        .map(|(idx, data_type)| DataField::new(&format!("column_{idx}"), data_type.clone()))
+        .collect::<Vec<_>>();
+
+    let schema = DataSchema::new(all_fields);
+    let arrow_schema = Schema::from(&schema);
+    let schema2 = DataSchema::try_from(&arrow_schema).unwrap();
+    assert_eq!(schema, schema2);
+
+    let random_block = rand_block_for_all_types(1024);
+
+    for c in random_block.columns() {
+        let c = c.value.as_column().unwrap().clone();
+        let data = serialize_column(&c);
+        let c2 = deserialize_column(&data).unwrap();
+
+        assert_eq!(c, c2);
+    }
 }

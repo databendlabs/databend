@@ -19,15 +19,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::meta::Versioned;
-use minitrace::full_name;
-use minitrace::prelude::*;
+use fastrace::func_path;
+use fastrace::prelude::*;
 use opendal::Operator;
 
 use crate::io::MetaReaders;
@@ -78,7 +75,7 @@ impl SegmentsIO {
 
     // Read all segments information from s3 in concurrently.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn read_segments<T>(
         &self,
         segment_locations: &[Location],
@@ -102,7 +99,7 @@ impl SegmentsIO {
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
                 }
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                .in_span(Span::enter_with_local_parent(func_path!()))
             })
         });
 
@@ -115,20 +112,5 @@ impl SegmentsIO {
             "fuse-req-segments-worker".to_owned(),
         )
         .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn write_segment(dal: Operator, serialized_segment: SerializedSegment) -> Result<()> {
-        assert_eq!(
-            serialized_segment.segment.format_version,
-            SegmentInfo::VERSION
-        );
-        let raw_bytes = serialized_segment.segment.to_bytes()?;
-        let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
-        dal.write(&serialized_segment.path, raw_bytes).await?;
-        if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.put(serialized_segment.path, Arc::new(compact_segment_info));
-        }
-        Ok(())
     }
 }

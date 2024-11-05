@@ -22,7 +22,10 @@ use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::FieldIndex;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
+// FIXME(xuanwo): refactor code here.
+#[allow(deprecated)]
 use parquet::file::footer::decode_footer;
+#[allow(deprecated)]
 use parquet::file::footer::decode_metadata;
 use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
@@ -38,6 +41,15 @@ pub async fn read_parquet_schema_async_rs(
     file_size: Option<u64>,
 ) -> Result<ArrowSchema> {
     let meta = read_metadata_async(path, operator, file_size).await?;
+    infer_schema_with_extension(meta.file_metadata())
+}
+
+pub fn read_parquet_schema_sync_rs(
+    operator: &Operator,
+    path: &str,
+    file_size: Option<u64>,
+) -> Result<ArrowSchema> {
+    let meta = read_metadata_sync(path, operator, file_size)?;
     infer_schema_with_extension(meta.file_metadata())
 }
 
@@ -104,6 +116,7 @@ pub async fn read_metadata_async(
         .await?
         .to_vec();
     let buffer_len = buffer.len();
+    #[allow(deprecated)]
     let metadata_len = decode_footer(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
@@ -115,6 +128,7 @@ pub async fn read_metadata_async(
     if (footer_len as usize) <= buffer_len {
         // The whole metadata is in the bytes we already read
         let offset = buffer_len - footer_len as usize;
+        #[allow(deprecated)]
         Ok(decode_metadata(&buffer[offset..])?)
     } else {
         // The end of file read by default is not long enough, read again including the metadata.
@@ -127,6 +141,54 @@ pub async fn read_metadata_async(
             .await?
             .to_vec();
         metadata.extend(buffer);
+        #[allow(deprecated)]
+        Ok(decode_metadata(&metadata)?)
+    }
+}
+
+pub fn read_metadata_sync(
+    path: &str,
+    operator: &Operator,
+    file_size: Option<u64>,
+) -> Result<ParquetMetaData> {
+    let blocking = operator.blocking();
+    let file_size = match file_size {
+        None => blocking.stat(path)?.content_length(),
+        Some(n) => n,
+    };
+
+    check_footer_size(file_size)?;
+
+    // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
+    let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
+    let buffer = blocking
+        .read_with(path)
+        .range((file_size - default_end_len)..file_size)
+        .call()?
+        .to_vec();
+    let buffer_len = buffer.len();
+    #[allow(deprecated)]
+    let metadata_len = decode_footer(
+        &buffer[(buffer_len - FOOTER_SIZE as usize)..]
+            .try_into()
+            .unwrap(),
+    )? as u64;
+    check_meta_size(file_size, metadata_len)?;
+
+    let footer_len = FOOTER_SIZE + metadata_len;
+    if (footer_len as usize) <= buffer_len {
+        // The whole metadata is in the bytes we already read
+        let offset = buffer_len - footer_len as usize;
+        #[allow(deprecated)]
+        Ok(decode_metadata(&buffer[offset..])?)
+    } else {
+        let mut metadata = blocking
+            .read_with(path)
+            .range((file_size - footer_len)..(file_size - buffer_len as u64))
+            .call()?
+            .to_vec();
+        metadata.extend(buffer);
+        #[allow(deprecated)]
         Ok(decode_metadata(&metadata)?)
     }
 }

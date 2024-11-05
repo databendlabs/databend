@@ -24,7 +24,7 @@ onlyif mysql
 query T
 SELECT current_role();
 ----
-(empty)
+public
 
 statement error 2204
 DROP ROLE `test-b`

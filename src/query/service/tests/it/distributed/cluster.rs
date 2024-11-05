@@ -49,7 +49,7 @@ fn test_simple_cluster() -> Result<()> {
         let handle = thread::Builder::new()
             .name(thread_name)
             .spawn(move || {
-                let rt = TokioRuntimeBuilder::new_current_thread()
+                let rt = TokioRuntimeBuilder::new_multi_thread()
                     .enable_all()
                     .build()
                     .expect("Failed to create runtime");

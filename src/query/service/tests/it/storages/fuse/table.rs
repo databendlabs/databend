@@ -55,7 +55,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let (stats, _) = table.read_partitions(ctx.clone(), None, true).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        let plan = table.read_plan(ctx.clone(), None, true).await?;
+        let plan = table
+            .read_plan(ctx.clone(), None, None, false, true)
+            .await?;
 
         let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
@@ -106,7 +108,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let (stats, _) = table.read_partitions(ctx.clone(), None, true).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        let plan = table.read_plan(ctx.clone(), None, true).await?;
+        let plan = table
+            .read_plan(ctx.clone(), None, None, false, true)
+            .await?;
         let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
 
         let blocks = stream.try_collect::<Vec<_>>().await?;
@@ -143,7 +147,7 @@ fn test_parse_storage_prefix() -> Result<()> {
         .meta
         .options
         .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
-    let prefix = FuseTable::parse_storage_prefix(&tbl_info)?;
+    let prefix = FuseTable::parse_storage_prefix_from_table_info(&tbl_info)?;
     assert_eq!(format!("{}/{}", db_id, tbl_id), prefix);
     Ok(())
 }

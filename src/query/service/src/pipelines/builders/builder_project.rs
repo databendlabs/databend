@@ -19,6 +19,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::EmptySink;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::ProjectSet;
@@ -46,17 +47,15 @@ impl PipelineBuilder {
             projections.push(input_schema.index_of(index.to_string().as_str())?);
         }
         let num_input_columns = input_schema.num_fields();
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                input,
-                output,
-                num_input_columns,
-                func_ctx.clone(),
+        pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
                 }],
-            )))
-        })?;
+                func_ctx.clone(),
+                num_input_columns,
+            )
+        });
 
         Ok(())
     }

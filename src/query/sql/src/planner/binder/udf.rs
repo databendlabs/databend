@@ -19,7 +19,6 @@ use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::UDFDefinition;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -31,17 +30,21 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
+use crate::BindContext;
 use crate::Binder;
+use crate::UdfRewriter;
 
 impl Binder {
     fn is_allowed_language(language: &str) -> bool {
-        let allowed_languages: HashSet<&str> = ["javascript", "wasm"].iter().cloned().collect();
+        let allowed_languages: HashSet<&str> =
+            ["javascript", "wasm", "python"].iter().cloned().collect();
         allowed_languages.contains(&language.to_lowercase().as_str())
     }
 
@@ -80,21 +83,7 @@ impl Binder {
                 handler,
                 language,
             } => {
-                if !GlobalConfig::instance().query.enable_udf_server {
-                    return Err(ErrorCode::Unimplemented(
-                        "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
-                    ));
-                }
-
-                let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-                if udf_server_allow_list
-                    .iter()
-                    .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
-                {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-                    )));
-                }
+                UDFValidator::is_udf_server_allowed(address.as_str())?;
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
@@ -148,7 +137,7 @@ impl Binder {
 
                 if !Self::is_allowed_language(language) {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be javascript or wasm"
+                        "Unallowed UDF language '{language}', must be python, javascript or wasm"
                     )));
                 }
 
@@ -207,5 +196,28 @@ impl Binder {
             if_exists,
             udf: name,
         })))
+    }
+
+    // Rewrite udf script, udf server and its arguments as derived column.
+    pub(in crate::planner::binder) fn rewrite_udf(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if !bind_context.have_udf_script && !bind_context.have_udf_server {
+            return Ok(s_expr);
+        }
+        let mut s_expr = s_expr.clone();
+        if bind_context.have_udf_script {
+            // rewrite udf for interpreter udf
+            let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+            s_expr = udf_rewriter.rewrite(&s_expr)?;
+        }
+        if bind_context.have_udf_server {
+            // rewrite udf for server udf
+            let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+            s_expr = udf_rewriter.rewrite(&s_expr)?;
+        }
+        Ok(s_expr)
     }
 }

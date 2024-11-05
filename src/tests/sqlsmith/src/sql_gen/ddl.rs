@@ -24,6 +24,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TypeName;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -32,7 +33,7 @@ use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
 
-const SIMPLE_COLUMN_TYPES: [TypeName; 20] = [
+const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
     TypeName::Boolean,
     TypeName::UInt8,
     TypeName::UInt16,
@@ -59,6 +60,7 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 20] = [
     TypeName::Variant,
     TypeName::Binary,
     TypeName::Geometry,
+    TypeName::Geography,
 ];
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -82,10 +84,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 source: Some(source),
                 engine: Some(Engine::Fuse),
                 uri_location: None,
-                cluster_by: vec![],
+                cluster_by: None,
                 table_options: BTreeMap::new(),
                 as_query: None,
-                transient: false,
+                table_type: TableType::Normal,
             };
             tables.push((drop_table, create_table));
         }
@@ -124,7 +126,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     } else {
                         let mut fields_name = Vec::with_capacity(len);
                         for i in 0..len {
-                            let field_name = format!("t_{}_{}", depth, i);
+                            let rand_name = self
+                                .rng
+                                .sample_iter(&Alphanumeric)
+                                .take(5)
+                                .map(char::from)
+                                .collect::<String>();
+                            let name = format!("t_{}_{}_{}", depth, i, rand_name);
+                            let field_name = if self.rng.gen_bool(0.5) {
+                                Identifier::from_name(None, name)
+                            } else {
+                                Identifier::from_name_with_quoted(None, name, Some('"'))
+                            };
                             fields_name.push(field_name);
                         }
                         Some(fields_name)
@@ -270,6 +283,10 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             value: Literal::String("null".to_string()),
         },
         TypeName::Geometry => Expr::Literal {
+            span: None,
+            value: Literal::String("POINT(0 0)".to_string()),
+        },
+        TypeName::Geography => Expr::Literal {
             span: None,
             value: Literal::String("POINT(0 0)".to_string()),
         },

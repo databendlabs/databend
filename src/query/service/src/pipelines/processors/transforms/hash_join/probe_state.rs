@@ -14,18 +14,27 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::filter::FilterExecutor;
-use databend_common_expression::filter::SelectExprBuilder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::KeysState;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::RowPtr;
 
 use super::desc::MARKER_KIND_FALSE;
 use crate::sql::plans::JoinType;
 
+pub struct ProcessState {
+    pub input: DataBlock,
+    pub keys_state: KeysState,
+    pub next_idx: usize,
+}
+
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
+    pub(crate) process_state: Option<ProcessState>,
+
     pub(crate) max_block_size: usize,
     // The `mutable_indexes` is used to call `take` or `gather`.
     pub(crate) mutable_indexes: MutableIndexes,
@@ -109,11 +118,9 @@ impl ProbeState {
             JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
         ) && let Some(predicate) = other_predicate
         {
-            let (select_expr, has_or) = SelectExprBuilder::new().build(&predicate).into();
             let filter_executor = FilterExecutor::new(
-                select_expr,
+                predicate,
                 func_ctx.clone(),
-                has_or,
                 max_block_size,
                 None,
                 &BUILTIN_FUNCTIONS,
@@ -124,6 +131,7 @@ impl ProbeState {
             None
         };
         ProbeState {
+            process_state: None,
             max_block_size,
             mutable_indexes: MutableIndexes::new(max_block_size),
             generation_state: ProbeBlockGenerationState::new(max_block_size, has_string_column),

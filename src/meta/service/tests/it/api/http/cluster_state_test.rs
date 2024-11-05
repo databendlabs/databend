@@ -46,7 +46,7 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 /// Test http API "/cluster/nodes"
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -86,7 +86,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -132,7 +132,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let addr_str = "127.0.0.1:30003";
 

@@ -49,6 +49,7 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowColumns(_, _, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
+                            | RewriteKind::ShowVariables
                             | RewriteKind::ShowFunctions
                             | RewriteKind::ShowUserFunctions
                             | RewriteKind::ShowTableFunctions
@@ -70,7 +71,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::ShowCreateTable(_)
 
                 // Set
-                | Plan::SetVariable(_)
+                | Plan::Set(_)
 
                 // Database.
                 | Plan::CreateDatabase(_)
@@ -91,6 +92,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::AlterUser(_)
                 | Plan::CreateUser(_)
                 | Plan::DropUser(_)
+                | Plan::DescUser(_)
 
                 // Roles.
                 | Plan::ShowRoles(_)

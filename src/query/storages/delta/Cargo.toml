@@ -6,40 +6,36 @@ authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-databend-common-base = { path = "../../../common/base" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-pipeline-core = { path = "../../pipeline/core" }
-databend-common-storage = { path = "../../../common/storage" }
-databend-common-storages-parquet = { path = "../parquet" }
-databend-storages-common-table-meta = { path = "../common/table_meta" }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-bytes = { workspace = true }
-deltalake = { git = "https://github.com/delta-io/delta-rs", package = "deltalake-core", rev = "81593e9" }
-flagset = "0.4"
-futures = "0.3"
-match-template = "0.0.1"
-minitrace = { workspace = true }
-object_store = "0.9"
+deltalake = { workspace = true }
+fastrace = { workspace = true }
+match-template = { workspace = true }
+object_store_opendal = { workspace = true }
 opendal = { workspace = true }
-ordered-float = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-typetag = "0.2"
-url = "2.4.1"
+typetag = { workspace = true }
+url = { workspace = true }
 
-[dev-dependencies]
-maplit = "1.0.2"
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "opendal"]

@@ -168,8 +168,8 @@ where T: AsBytes + PartialEq + Clone
     }
 }
 
-use hashbrown::hash_map::RawEntryMut;
-use hashbrown::HashMap;
+use hashbrown_v0_14::hash_map::RawEntryMut;
+use hashbrown_v0_14::HashMap;
 
 use crate::general_err;
 use crate::native::compression::get_bits_needed;

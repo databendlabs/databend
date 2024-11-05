@@ -21,19 +21,25 @@ use derive_visitor::DriveMut;
 use ethnum::i256;
 
 use crate::ast::quote::QuotedIdent;
+use crate::ast::WithOptions;
 use crate::Span;
 
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct Identifier {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub quote: Option<char>,
     #[drive(skip)]
-    pub is_hole: bool,
+    pub ident_type: IdentifierType,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum IdentifierType {
+    #[default]
+    None,
+    Hole,
+    Variable,
 }
 
 impl Identifier {
@@ -41,12 +47,20 @@ impl Identifier {
         self.quote.is_some()
     }
 
+    pub fn is_hole(&self) -> bool {
+        self.ident_type == IdentifierType::Hole
+    }
+
+    pub fn is_variable(&self) -> bool {
+        self.ident_type == IdentifierType::Variable
+    }
+
     pub fn from_name(span: Span, name: impl Into<String>) -> Self {
         Self {
             span,
             name: name.into(),
             quote: None,
-            is_hole: false,
+            ident_type: IdentifierType::None,
         }
     }
 
@@ -55,15 +69,17 @@ impl Identifier {
             span,
             name: name.into(),
             quote,
-            is_hole: false,
+            ident_type: IdentifierType::None,
         }
     }
 }
 
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.is_hole {
+        if self.is_hole() {
             write!(f, "IDENTIFIER(:{})", self.name)
+        } else if self.is_variable() {
+            write!(f, "IDENTIFIER(${})", self.name)
         } else if let Some(quote) = self.quote {
             write!(f, "{}", QuotedIdent(&self.name, quote))
         } else {
@@ -74,11 +90,8 @@ impl Display for Identifier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ColumnPosition {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub pos: usize,
-    #[drive(skip)]
     pub name: String,
 }
 
@@ -146,6 +159,7 @@ pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub with_options: Option<WithOptions>,
 }
 
 impl Display for TableRef {
@@ -158,6 +172,10 @@ impl Display for TableRef {
             write!(f, "{}.", database)?;
         }
         write!(f, "{}", self.table)?;
+
+        if let Some(with_options) = &self.with_options {
+            write!(f, " {with_options}")?;
+        }
         Ok(())
     }
 }

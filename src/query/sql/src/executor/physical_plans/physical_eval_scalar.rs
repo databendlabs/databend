@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -81,7 +82,7 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+        let column_projections = required.clone();
         let mut used = vec![];
         // Only keep columns needed by parent plan.
         for s in eval_scalar.items.iter() {
@@ -108,6 +109,11 @@ impl PhysicalPlanBuilder {
                 self.build(child, required).await?
             };
 
+            let column_projections: HashSet<usize> = column_projections
+                .union(self.metadata.read().get_retained_column())
+                .cloned()
+                .collect();
+            let column_projections = column_projections.clone().into_iter().collect::<Vec<_>>();
             let eval_scalar = crate::plans::EvalScalar { items: used };
             self.create_eval_scalar(&eval_scalar, column_projections, input, stat_info)
         }

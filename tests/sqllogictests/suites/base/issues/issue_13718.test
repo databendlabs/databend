@@ -1,5 +1,5 @@
 statement ok
 DROP DATABASE IF EXISTS xx
 
-statement error (?s)1003.*Unknown database `xx` in catalog 'default'
+statement error (?s)1003,.*Unknown database "default".xx \.
 select * from xx.yy;

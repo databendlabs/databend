@@ -10,22 +10,27 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-base = { path = "../base" }
-
-# Crates.io dependencies
-defer = "0.2"
-fern = "0.6.2"
-humantime = "2.1.0"
+[dependencies]
+backtrace = { workspace = true, features = ["std", "serialize-serde"] }
+bincode = { workspace = true }
+chrono = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+defer = { workspace = true }
+fastrace = { workspace = true }
+fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
+libc = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
-minitrace-opentelemetry = { workspace = true }
+logforth = { workspace = true }
 opentelemetry = { workspace = true }
-opentelemetry-otlp = { workspace = true }
+opentelemetry-otlp = { workspace = true, features = ["reqwest-client"] }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
-tracing-appender = { workspace = true }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

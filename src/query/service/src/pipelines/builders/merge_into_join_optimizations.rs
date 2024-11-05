@@ -25,7 +25,11 @@ impl PipelineBuilder {
             PhysicalPlan::TableScan(scan) => match scan.table_index {
                 None | Some(databend_common_sql::DUMMY_TABLE_INDEX) => (false, false),
                 Some(table_index) => match need_reserve_block_info(self.ctx.clone(), table_index) {
-                    (true, is_distributed) => (true, is_distributed),
+                    // due to issue https://github.com/datafuselabs/databend/issues/15643,
+                    // target build optimization of merge-into is disabled
+
+                    //(true, is_distributed) => (true, is_distributed),
+                    (true, is_distributed) => (false, is_distributed),
                     _ => (false, false),
                 },
             },

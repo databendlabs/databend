@@ -112,11 +112,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -130,7 +130,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -151,11 +151,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -169,7 +169,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -190,11 +190,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -208,7 +208,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -229,11 +229,11 @@ HashJoin
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t.a (#0)]
 │   ├── filters: [is_not_null(t.a (#0))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#0)]
@@ -247,7 +247,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t1.a (#1)]
     ├── filters: [is_not_null(t1.a (#1))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#1)]
@@ -268,11 +268,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -286,7 +286,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_not_null(t.a (#0))]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -346,11 +346,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 9.00
+├── estimated rows: 8.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) > 1)]
-│   ├── estimated rows: 8.18
+│   ├── estimated rows: 8.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -364,7 +364,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) > 1)]
-    ├── estimated rows: 8.18
+    ├── estimated rows: 8.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -385,11 +385,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 0.83
+├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) < 1)]
-│   ├── estimated rows: 0.91
+│   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -403,7 +403,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) < 1)]
-    ├── estimated rows: 0.91
+    ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -463,11 +463,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 8.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) >= 1)]
-│   ├── estimated rows: 9.09
+│   ├── estimated rows: 8.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -481,7 +481,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) >= 1)]
-    ├── estimated rows: 9.09
+    ├── estimated rows: 8.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -502,11 +502,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 1.65
+├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) <= 1)]
-│   ├── estimated rows: 1.82
+│   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -520,7 +520,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) <= 1)]
-    ├── estimated rows: 1.82
+    ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -538,8 +538,8 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or t.a < 1
 ----
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
-├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) < 1)]
-├── estimated rows: 3.31
+├── filters: [is_true((t1.a (#1) <= 1 OR t.a (#0) < 1))]
+├── estimated rows: 1.90
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: LEFT OUTER
@@ -573,19 +573,19 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1
 ----
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
-├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t1.a (#1) > 1)]
-├── estimated rows: 7.15
+├── filters: [is_true((t1.a (#1) <= 1 OR (t.a (#0) > 1 AND t1.a (#1) > 1)))]
+├── estimated rows: 6.13
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: INNER
     ├── build keys: [t1.a (#1)]
     ├── probe keys: [t.a (#0)]
     ├── filters: []
-    ├── estimated rows: 8.51
+    ├── estimated rows: 7.47
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#1)]
-    │   ├── filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)]
-    │   ├── estimated rows: 8.51
+    │   ├── filters: [is_true((t1.a (#1) <= 1 OR t1.a (#1) > 1))]
+    │   ├── estimated rows: 8.20
     │   └── TableScan
     │       ├── table: default.eliminate_outer_join.t
     │       ├── output columns: [a (#1)]
@@ -594,12 +594,12 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    │       ├── push downs: [filters: [is_true(t.a (#1) <= 1 OR t.a (#1) > 1)], limit: NONE]
+    │       ├── push downs: [filters: [is_true((t.a (#1) <= 1 OR t.a (#1) > 1))], limit: NONE]
     │       └── estimated rows: 10.00
     └── Filter(Probe)
         ├── output columns: [t.a (#0)]
-        ├── filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)]
-        ├── estimated rows: 8.51
+        ├── filters: [is_true((t.a (#0) <= 1 OR t.a (#0) > 1))]
+        ├── estimated rows: 8.20
         └── TableScan
             ├── table: default.eliminate_outer_join.t
             ├── output columns: [a (#0)]
@@ -608,39 +608,43 @@ Filter
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            ├── push downs: [filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)], limit: NONE]
+            ├── push downs: [filters: [is_true((t.a (#0) <= 1 OR t.a (#0) > 1))], limit: NONE]
             └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1 and t.a < 2)
 ----
-HashJoin
+Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
-├── join type: INNER
-├── build keys: [t1.a (#1)]
-├── probe keys: [t.a (#0)]
-├── filters: [t1.a (#1) <= 1 OR t.a (#0) > 1 AND t.a (#0) < 2]
-├── estimated rows: 10.00
-├── TableScan(Build)
-│   ├── table: default.eliminate_outer_join.t
-│   ├── output columns: [a (#1)]
-│   ├── read rows: 10
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 10.00
-└── TableScan(Probe)
-    ├── table: default.eliminate_outer_join.t
-    ├── output columns: [a (#0)]
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+├── filters: [is_true((t1.a (#1) <= 1 OR (t.a (#0) > 1 AND t.a (#0) < 2)))]
+├── estimated rows: 2.80
+└── HashJoin
+    ├── output columns: [t.a (#0), t1.a (#1)]
+    ├── join type: LEFT OUTER
+    ├── build keys: [t1.a (#1)]
+    ├── probe keys: [t.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 10.00
+    ├── TableScan(Build)
+    │   ├── table: default.eliminate_outer_join.t
+    │   ├── output columns: [a (#1)]
+    │   ├── read rows: 10
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 10.00
+    └── TableScan(Probe)
+        ├── table: default.eliminate_outer_join.t
+        ├── output columns: [a (#0)]
+        ├── read rows: 10
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
 
 statement ok
 create table time_table(a timestamp)

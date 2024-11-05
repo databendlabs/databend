@@ -20,9 +20,10 @@ mod select_expr_permutation;
 mod select_op;
 mod select_value;
 mod selector;
+mod volnitsky;
 
 pub use filter_executor::FilterExecutor;
-pub use like::gerenate_like_pattern;
+pub use like::generate_like_pattern;
 pub use like::is_like_pattern_escape;
 pub use like::LikePattern;
 pub use select_expr::SelectExpr;
@@ -30,3 +31,4 @@ pub use select_expr::SelectExprBuilder;
 pub use select_op::SelectOp;
 pub use selector::SelectStrategy;
 pub use selector::Selector;
+pub use volnitsky::VolnitskyBase;

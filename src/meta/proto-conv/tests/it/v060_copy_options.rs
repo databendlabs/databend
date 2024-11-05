@@ -14,7 +14,7 @@
 
 use databend_common_meta_app::principal::CopyOptions;
 use databend_common_meta_app::principal::OnErrorMode;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

@@ -18,12 +18,12 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
@@ -53,20 +53,15 @@ pub struct RefreshDesc {
 
 /// Hook refresh action with a on-finished callback.
 /// errors (if any) are ignored.
-pub async fn hook_refresh(
-    ctx: Arc<QueryContext>,
-    pipeline: &mut Pipeline,
-    desc: RefreshDesc,
-    need_lock: bool,
-) {
+pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: RefreshDesc) {
     if pipeline.is_empty() {
         return;
     }
 
-    pipeline.set_on_finished(move |(_profiles, err)| {
-        if err.is_ok() {
+    pipeline.set_on_finished(move |info: &ExecutionInfo| {
+        if info.res.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
-            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc, need_lock)) {
+            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
                 Ok(_) => {
                     info!("execute refresh job successfully.");
                 }
@@ -79,7 +74,7 @@ pub async fn hook_refresh(
     });
 }
 
-async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) -> Result<()> {
+async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
@@ -99,7 +94,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
 
     // Generate sync inverted indexes.
     let inverted_index_plans =
-        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table.clone(), need_lock).await?;
+        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table).await?;
     plans.extend_from_slice(&inverted_index_plans);
 
     // Generate virtual columns.
@@ -179,13 +174,26 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
                             ctx_cloned.clone(),
                             *virtual_column_plan,
                         )?;
-                    let build_res = refresh_virtual_column_interpreter.execute2().await?;
-                    if !build_res.main_pipeline.is_empty() {
-                        return Err(ErrorCode::Internal(
-                            "Logical error, refresh virtual column is an empty pipeline.",
-                        ));
+                    let mut build_res = refresh_virtual_column_interpreter.execute2().await?;
+                    if build_res.main_pipeline.is_empty() {
+                        return Ok(());
                     }
-                    Ok(())
+
+                    let settings = ctx_cloned.get_settings();
+                    build_res.set_max_threads(settings.get_max_threads()? as usize);
+                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
+
+                    if build_res.main_pipeline.is_complete_pipeline()? {
+                        let mut pipelines = build_res.sources_pipelines;
+                        pipelines.push(build_res.main_pipeline);
+
+                        let complete_executor =
+                            PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                        ctx_cloned.set_executor(complete_executor.get_inner())?;
+                        complete_executor.execute()
+                    } else {
+                        Ok(())
+                    }
                 }
                 _ => unreachable!(),
             }
@@ -263,7 +271,6 @@ async fn generate_refresh_inverted_index_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
-    need_lock: bool,
 ) -> Result<Vec<Plan>> {
     let segment_locs = ctx.get_segment_locations()?;
     let mut plans = vec![];
@@ -279,7 +286,6 @@ async fn generate_refresh_inverted_index_plan(
             table: desc.table.clone(),
             index_name: index.name.clone(),
             segment_locs: Some(segment_locs.clone()),
-            need_lock,
         };
         plans.push(Plan::RefreshTableIndex(Box::new(plan)));
     }

@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -31,10 +33,9 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
@@ -93,12 +94,18 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    // Get one table history by db and table name.
     #[async_backtrace::framed]
-    async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+    async fn get_table_history(&self, _table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement list_tables in {} Database",
+            "UnImplement get_table in {} Database",
             self.name()
         )))
+    }
+
+    #[async_backtrace::framed]
+    async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(vec![])
     }
 
     #[async_backtrace::framed]
@@ -126,9 +133,16 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement undrop_table in {} Database",
+            self.name()
+        )))
+    }
+
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement commit_table_meta in {} Database",
             self.name()
         )))
     }
@@ -148,14 +162,6 @@ pub trait Database: DynClone + Sync + Send {
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement upsert_table_option in {} Database",
-            self.name()
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "UnImplement update_table_meta in {} Database",
             self.name()
         )))
     }
@@ -186,6 +192,17 @@ pub trait Database: DynClone + Sync + Send {
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement truncate_table in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn retryable_update_multi_table_meta(
+        &self,
+        _req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement retryable_update_multi_table_meta in {} Database",
             self.name()
         )))
     }

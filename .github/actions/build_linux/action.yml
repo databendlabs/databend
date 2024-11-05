@@ -58,7 +58,9 @@ runs:
             flags=""
             ;;
         esac
-        echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
+        if [[ ! -z "${flags}" ]]; then
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+        fi
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
@@ -67,12 +69,12 @@ runs:
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,query,sqllogictests"
+        artifacts="meta,metactl,metabench,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
         done
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Debug for specific artifacts
@@ -90,7 +92,7 @@ runs:
       if: env.BUILD_PROFILE == 'release' && inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,query,sqllogictests"
+        artifacts="meta,metactl,metabench,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
@@ -110,10 +112,9 @@ runs:
 
     - name: Check Binary Info
       shell: bash
-      continue-on-error: true
       run: |
-        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
-        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
+        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'

@@ -1,6 +1,6 @@
 [Unit]
 Description=Databend Query
-Documentation=https://databend.rs
+Documentation=https://docs.databend.com
 After=network-online.target
 Requires=network-online.target
 

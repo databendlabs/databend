@@ -18,7 +18,7 @@ use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get client ip

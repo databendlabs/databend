@@ -22,14 +22,29 @@ GRANT ROLE test TO 'test-user'
 statement ok
 CREATE ROLE test
 
+query T
+select created_on=update_on from system.roles where name='test';
+----
+1
+
 statement error 2201
 GRANT ROLE test TO 'test-user'
 
 statement ok
 CREATE USER 'test-user' IDENTIFIED BY 'password'
 
+query T
+select created_on=update_on from system.users where name='test-user';
+----
+1
+
 statement ok
 GRANT ROLE test TO 'test-user'
+
+query T
+select created_on=update_on from system.users where name='test-user';
+----
+0
 
 statement error 2204
 GRANT ROLE test TO ROLE `test-role`
@@ -37,8 +52,18 @@ GRANT ROLE test TO ROLE `test-role`
 statement ok
 CREATE ROLE `test-role`
 
+query T
+select created_on=update_on from system.roles where name='test-role';
+----
+1
+
 statement ok
 GRANT ROLE test TO ROLE `test-role`
+
+query T
+select created_on=update_on from system.roles where name='test-role';
+----
+0
 
 statement ok
 CREATE ROLE IF NOT EXISTS role1
@@ -70,7 +95,7 @@ test 0 (empty) 0 0
 test-role 1 test 0 0
 
 query TTT
-select * from system.roles order by name;
+select name, inherited_roles, inherited_roles_name from system.roles order by name;
 ----
 account_admin 0 (empty)
 public 0 (empty)
@@ -136,6 +161,7 @@ show grants on udf isnotempty;
 ----
 USAGE isnotempty NULL ROLE role2 (empty)
 USAGE isnotempty NULL ROLE role3 (empty)
+OWNERSHIP isnotempty NULL ROLE account_admin (empty)
 
 query TT
 show grants on udf isnotempty where name!='role2' limit 1;
@@ -146,17 +172,20 @@ query TT
 show grants on stage s1;
 ----
 Read s1 NULL ROLE role2 (empty)
+OWNERSHIP s1 NULL ROLE account_admin (empty)
 
 query TT
 select * EXCLUDE(object_id) from show_grants('database', 'db1', 'default');
 ----
 CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role2 (empty)
 CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role3 (empty)
+OWNERSHIP db1 ROLE account_admin (empty)
 
 query TT
 select * EXCLUDE(object_id) from show_grants('table', 't', 'default', 'default');
 ----
 SELECT t ROLE role3 (empty)
+OWNERSHIP t ROLE account_admin (empty)
 
 statement ok
 DROP ROLE role1
@@ -181,3 +210,15 @@ drop function if exists isnotempty;
 
 statement ok
 drop user if exists u_05_0017;
+
+statement ok
+drop user if exists 'u@05_0017';
+
+statement ok
+create user 'u@05_0017' identified by '123';
+
+statement ok
+show grants for 'u@05_0017';
+
+statement ok
+drop user if exists 'u@05_0017';

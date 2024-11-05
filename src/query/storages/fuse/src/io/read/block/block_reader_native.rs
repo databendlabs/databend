@@ -18,9 +18,9 @@ use std::io::BufReader;
 use std::ops::Range;
 use std::sync::Arc;
 
+use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::native::read::reader::infer_schema;
+use databend_common_arrow::native::read::reader::infer_schema_async;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::read::NativeReadBuf;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -31,14 +31,15 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 
 // Native storage format
 
@@ -189,7 +190,7 @@ impl BlockReader {
                 .blocking()
                 .reader_with(path)
                 .call()?
-                .into_std_read(offset..offset + length);
+                .into_std_read(offset..offset + length)?;
 
             let reader: Reader = Box::new(BufReader::new(reader));
 
@@ -248,15 +249,15 @@ impl BlockReader {
         Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
     }
 
-    pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let meta = self.operator.blocking().stat(loc).ok()?;
-        let mut reader = self
-            .operator
-            .blocking()
-            .reader(loc)
-            .ok()?
-            .into_std_read(0..meta.content_length());
-        let schema = infer_schema(&mut reader).ok()?;
-        Some(schema)
+    #[async_backtrace::framed]
+    pub async fn async_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
+        let op = &self.operator;
+        let stat = op.stat(loc).await.ok()?;
+        let reader = op.reader(loc).await.ok()?;
+        let schema = infer_schema_async(reader, stat.content_length())
+            .await
+            .ok()?;
+        let schema = DataSchema::try_from(&schema).ok()?;
+        Some(ArrowSchema::from(&schema))
     }
 }

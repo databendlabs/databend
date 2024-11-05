@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_arrow::arrow::datatypes::Schema;
+use databend_common_arrow::native::read::NativeColumnsReader;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -34,7 +34,7 @@ use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use opendal::Operator;
 
-use crate::MergeIOReadResult;
+use crate::BlockReadResult;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -45,7 +45,6 @@ pub struct BlockReader {
     pub(crate) projected_schema: TableSchemaRef,
     pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) project_column_nodes: Vec<ColumnNode>,
-    pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
     pub query_internal_columns: bool,
     // used for mutation to update stream columns.
@@ -53,6 +52,7 @@ pub struct BlockReader {
     pub put_cache: bool,
 
     pub original_schema: TableSchemaRef,
+    pub native_columns_reader: NativeColumnsReader,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -126,9 +126,8 @@ impl BlockReader {
             }
         };
 
-        let arrow_schema = schema.as_ref().into();
-        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-
+        let arrow_schema: Schema = schema.as_ref().into();
+        let native_columns_reader = NativeColumnsReader::new(arrow_schema.clone())?;
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 
         let project_column_nodes: Vec<ColumnNode> = projection
@@ -145,12 +144,12 @@ impl BlockReader {
             projected_schema,
             project_indices,
             project_column_nodes,
-            parquet_schema_descriptor,
             default_vals,
             query_internal_columns,
             update_stream_columns,
             put_cache,
             original_schema: schema,
+            native_columns_reader,
         }))
     }
 
@@ -201,7 +200,7 @@ impl BlockReader {
 
     pub fn report_cache_metrics<'a>(
         &self,
-        merged_result: &MergeIOReadResult,
+        block_read_res: &BlockReadResult,
         ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,
     ) {
         let bytes_read_from_storage: usize = ranges
@@ -209,13 +208,13 @@ impl BlockReader {
             .sum();
 
         let cache_metrics = self.ctx.get_data_cache_metrics();
-        let read_from_disk_cache: usize = merged_result
+        let read_from_disk_cache: usize = block_read_res
             .cached_column_data
             .iter()
             .map(|(_, bytes)| bytes.len())
             .sum();
 
-        let read_from_in_mem_cache_array: usize = merged_result
+        let read_from_in_mem_cache_array: usize = block_read_res
             .cached_column_array
             .iter()
             .map(|(_, sized_array)| sized_array.1)

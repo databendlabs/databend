@@ -20,8 +20,8 @@ use chrono::Utc;
 use databend_common_expression as ce;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema as mt;
+use fastrace::func_name;
 use maplit::btreemap;
-use minitrace::func_name;
 
 use crate::common;
 
@@ -128,7 +128,6 @@ fn test_decode_v10_table_meta() -> anyhow::Result<()> {
             ],
             btreemap! {s("a") => s("b")},
         )),
-        catalog: "never-gonna-give-you-up".to_string(),
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         storage_params: None,

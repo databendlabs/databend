@@ -15,9 +15,10 @@ onlyif mysql
 query T
 explain pipeline select a from t1 ignore_result
 ----
-EmptySink × 1 processor
-  DeserializeDataTransform × 1 processor
-    SyncReadParquetDataSource × 1 processor
+EmptySink × 1
+  DeserializeDataTransform × 1
+    SyncReadParquetDataTransform × 1
+      BlockPartitionSource × 1
 
 
 statement ok

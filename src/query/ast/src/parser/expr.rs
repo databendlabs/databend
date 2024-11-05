@@ -19,6 +19,7 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
@@ -33,10 +34,7 @@ use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
-use crate::rule;
-
-pub const BETWEEN_PREC: u32 = 20;
-pub const NOT_PREC: u32 = 15;
+use crate::Span;
 
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
@@ -107,7 +105,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     ExprElement::MapAccess {
                         accessor: MapAccessor::Colon { key },
                     } => {
-                        if !key.is_quoted() && !key.is_hole {
+                        if !key.is_quoted() && !key.is_hole() {
                             *elem = ExprElement::Hole {
                                 name: key.to_string(),
                             };
@@ -185,6 +183,7 @@ pub enum ExprElement {
     UnaryOp {
         op: UnaryOperator,
     },
+    VariableAccess(String),
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
@@ -297,6 +296,11 @@ pub enum ExprElement {
         interval: Expr,
         date: Expr,
     },
+    DateDiff {
+        unit: IntervalKind,
+        date_start: Expr,
+        date_end: Expr,
+    },
     DateSub {
         unit: IntervalKind,
         interval: Expr,
@@ -311,182 +315,151 @@ pub enum ExprElement {
     },
 }
 
+pub const BETWEEN_PREC: u32 = 20;
+pub const NOT_PREC: u32 = 15;
+const CHAIN_FUNCTION_AFFIX: Affix = Affix::Postfix(Precedence(61));
+const DOT_ACCESS_AFFIX: Affix = Affix::Postfix(Precedence(60));
+const MAP_ACCESS_AFFIX: Affix = Affix::Postfix(Precedence(60));
+const IS_NULL_AFFIX: Affix = Affix::Postfix(Precedence(17));
+const BETWEEN_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const IS_DISTINCT_FROM_AFFIX: Affix = Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left);
+const IN_LIST_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const IN_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const JSON_OP_AFFIX: Affix = Affix::Infix(Precedence(40), Associativity::Left);
+const PG_CAST_AFFIX: Affix = Affix::Postfix(Precedence(60));
+
+const fn unary_affix(op: &UnaryOperator) -> Affix {
+    match op {
+        UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
+        UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
+        UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
+        UnaryOperator::BitwiseNot => Affix::Prefix(Precedence(50)),
+        UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
+        UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
+        UnaryOperator::Abs => Affix::Prefix(Precedence(60)),
+        UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
+    }
+}
+
+const fn binary_affix(op: &BinaryOperator) -> Affix {
+    match op {
+        BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
+        BinaryOperator::And => Affix::Infix(Precedence(10), Associativity::Left),
+        BinaryOperator::Eq => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotEq => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Gt => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Lt => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Gte => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Lte => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Like => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotLike => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotRLike => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::SoundsLike => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
+        BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
+        BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
+        BinaryOperator::L2Distance => Affix::Infix(Precedence(22), Associativity::Left),
+        BinaryOperator::BitwiseShiftLeft => Affix::Infix(Precedence(23), Associativity::Left),
+        BinaryOperator::BitwiseShiftRight => Affix::Infix(Precedence(23), Associativity::Left),
+        BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
+        BinaryOperator::Plus => Affix::Infix(Precedence(30), Associativity::Left),
+        BinaryOperator::Minus => Affix::Infix(Precedence(30), Associativity::Left),
+        BinaryOperator::Multiply => Affix::Infix(Precedence(40), Associativity::Left),
+        BinaryOperator::Div => Affix::Infix(Precedence(40), Associativity::Left),
+        BinaryOperator::Divide => Affix::Infix(Precedence(40), Associativity::Left),
+        BinaryOperator::IntDiv => Affix::Infix(Precedence(40), Associativity::Left),
+        BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
+        BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
+        BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Right),
+    }
+}
+
 impl ExprElement {
     pub fn affix(&self) -> Affix {
         match &self {
-            ExprElement::ChainFunctionCall { .. } => Affix::Postfix(Precedence(61)),
-            ExprElement::DotAccess { .. } => Affix::Postfix(Precedence(60)),
-            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(60)),
-            ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
-            ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
-            ExprElement::IsDistinctFrom { .. } => {
-                Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left)
-            }
-            ExprElement::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
-            ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
-            ExprElement::UnaryOp { op } => match op {
-                UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
-
-                UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
-                UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
-                UnaryOperator::BitwiseNot => Affix::Prefix(Precedence(50)),
-                UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
-                UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
-                UnaryOperator::Abs => Affix::Prefix(Precedence(60)),
-                UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
-            },
-            ExprElement::BinaryOp { op } => match op {
-                BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
-
-                BinaryOperator::And => Affix::Infix(Precedence(10), Associativity::Left),
-
-                BinaryOperator::Eq => Affix::Infix(Precedence(20), Associativity::Right),
-                BinaryOperator::NotEq => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::Gt => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::Lt => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::Gte => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::Lte => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::Like => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::NotLike => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::NotRLike => Affix::Infix(Precedence(20), Associativity::Left),
-                BinaryOperator::SoundsLike => Affix::Infix(Precedence(20), Associativity::Left),
-
-                BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
-                BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
-                BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
-                BinaryOperator::L2Distance => Affix::Infix(Precedence(22), Associativity::Left),
-
-                BinaryOperator::BitwiseShiftLeft => {
-                    Affix::Infix(Precedence(23), Associativity::Left)
-                }
-                BinaryOperator::BitwiseShiftRight => {
-                    Affix::Infix(Precedence(23), Associativity::Left)
-                }
-
-                BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
-
-                BinaryOperator::Plus => Affix::Infix(Precedence(30), Associativity::Left),
-                BinaryOperator::Minus => Affix::Infix(Precedence(30), Associativity::Left),
-
-                BinaryOperator::Multiply => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::Div => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::Divide => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::IntDiv => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
-            },
-            ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
-            ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
-            _ => Affix::Nilfix,
+            ExprElement::ChainFunctionCall { .. } => CHAIN_FUNCTION_AFFIX,
+            ExprElement::DotAccess { .. } => DOT_ACCESS_AFFIX,
+            ExprElement::MapAccess { .. } => MAP_ACCESS_AFFIX,
+            ExprElement::IsNull { .. } => IS_NULL_AFFIX,
+            ExprElement::Between { .. } => BETWEEN_AFFIX,
+            ExprElement::IsDistinctFrom { .. } => IS_DISTINCT_FROM_AFFIX,
+            ExprElement::InList { .. } => IN_LIST_AFFIX,
+            ExprElement::InSubquery { .. } => IN_SUBQUERY_AFFIX,
+            ExprElement::UnaryOp { op } => unary_affix(op),
+            ExprElement::BinaryOp { op } => binary_affix(op),
+            ExprElement::JsonOp { .. } => JSON_OP_AFFIX,
+            ExprElement::PgCast { .. } => PG_CAST_AFFIX,
+            ExprElement::ColumnRef { .. } => Affix::Nilfix,
+            ExprElement::Cast { .. } => Affix::Nilfix,
+            ExprElement::TryCast { .. } => Affix::Nilfix,
+            ExprElement::Extract { .. } => Affix::Nilfix,
+            ExprElement::DatePart { .. } => Affix::Nilfix,
+            ExprElement::Position { .. } => Affix::Nilfix,
+            ExprElement::SubString { .. } => Affix::Nilfix,
+            ExprElement::Trim { .. } => Affix::Nilfix,
+            ExprElement::Literal { .. } => Affix::Nilfix,
+            ExprElement::CountAll { .. } => Affix::Nilfix,
+            ExprElement::Tuple { .. } => Affix::Nilfix,
+            ExprElement::FunctionCall { .. } => Affix::Nilfix,
+            ExprElement::Case { .. } => Affix::Nilfix,
+            ExprElement::Exists { .. } => Affix::Nilfix,
+            ExprElement::Subquery { .. } => Affix::Nilfix,
+            ExprElement::ListComprehension { .. } => Affix::Nilfix,
+            ExprElement::Group(_) => Affix::Nilfix,
+            ExprElement::Array { .. } => Affix::Nilfix,
+            ExprElement::Map { .. } => Affix::Nilfix,
+            ExprElement::Interval { .. } => Affix::Nilfix,
+            ExprElement::DateAdd { .. } => Affix::Nilfix,
+            ExprElement::DateDiff { .. } => Affix::Nilfix,
+            ExprElement::DateSub { .. } => Affix::Nilfix,
+            ExprElement::DateTrunc { .. } => Affix::Nilfix,
+            ExprElement::Hole { .. } => Affix::Nilfix,
+            ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }
 }
 
-impl From<Expr> for ExprElement {
-    fn from(expr: Expr) -> Self {
-        match expr {
-            Expr::ColumnRef { column, .. } => ExprElement::ColumnRef { column },
-            Expr::IsNull { not, .. } => ExprElement::IsNull { not },
-            Expr::IsDistinctFrom { not, .. } => ExprElement::IsDistinctFrom { not },
-            Expr::InList { list, not, .. } => ExprElement::InList { list, not },
-            Expr::InSubquery { subquery, not, .. } => ExprElement::InSubquery { subquery, not },
-            Expr::Between { low, high, not, .. } => ExprElement::Between { low, high, not },
-            Expr::BinaryOp { op, .. } => ExprElement::BinaryOp { op },
-            Expr::JsonOp { op, .. } => ExprElement::JsonOp { op },
-            Expr::UnaryOp { op, .. } => ExprElement::UnaryOp { op },
+impl Expr {
+    pub fn affix(&self) -> Affix {
+        match self {
+            Expr::MapAccess { .. } => MAP_ACCESS_AFFIX,
+            Expr::IsNull { .. } => IS_NULL_AFFIX,
+            Expr::Between { .. } => BETWEEN_AFFIX,
+            Expr::IsDistinctFrom { .. } => Affix::Nilfix,
+            Expr::InList { .. } => IN_LIST_AFFIX,
+            Expr::InSubquery { .. } => IN_SUBQUERY_AFFIX,
+            Expr::UnaryOp { op, .. } => unary_affix(op),
+            Expr::BinaryOp { op, .. } => binary_affix(op),
+            Expr::JsonOp { .. } => JSON_OP_AFFIX,
+            Expr::Cast { pg_style: true, .. } => PG_CAST_AFFIX,
             Expr::Cast {
-                target_type,
-                pg_style: true,
-                ..
-            } => ExprElement::PgCast { target_type },
-            Expr::Cast {
-                expr,
-                target_type,
-                pg_style: false,
-                ..
-            } => ExprElement::Cast { expr, target_type },
-            Expr::TryCast {
-                expr, target_type, ..
-            } => ExprElement::TryCast { expr, target_type },
-            Expr::Extract { kind, expr, .. } => ExprElement::Extract { field: kind, expr },
-            Expr::DatePart { kind, expr, .. } => ExprElement::DatePart { field: kind, expr },
-            Expr::Position {
-                substr_expr,
-                str_expr,
-                ..
-            } => ExprElement::Position {
-                substr_expr,
-                str_expr,
-            },
-            Expr::Substring {
-                expr,
-                substring_from,
-                substring_for,
-                ..
-            } => ExprElement::SubString {
-                expr,
-                substring_from,
-                substring_for,
-            },
-            Expr::Trim {
-                expr, trim_where, ..
-            } => ExprElement::Trim { expr, trim_where },
-            Expr::Literal { value, .. } => ExprElement::Literal { value },
-            Expr::CountAll { window, .. } => ExprElement::CountAll { window },
-            Expr::Tuple { exprs, .. } => ExprElement::Tuple { exprs },
-            Expr::FunctionCall { func, .. } => ExprElement::FunctionCall { func },
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-                ..
-            } => ExprElement::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-            },
-            Expr::Exists { subquery, not, .. } => ExprElement::Exists {
-                subquery: *subquery,
-                not,
-            },
-            Expr::Subquery {
-                modifier, subquery, ..
-            } => ExprElement::Subquery {
-                modifier,
-                subquery: *subquery,
-            },
-            Expr::MapAccess { accessor, .. } => ExprElement::MapAccess { accessor },
-            Expr::Array { exprs, .. } => ExprElement::Array { exprs },
-            Expr::Map { kvs, .. } => ExprElement::Map { kvs },
-            Expr::Interval { expr, unit, .. } => ExprElement::Interval { expr: *expr, unit },
-            Expr::DateAdd {
-                unit,
-                interval,
-                date,
-                ..
-            } => ExprElement::DateAdd {
-                unit,
-                interval: *interval,
-                date: *date,
-            },
-            Expr::DateSub {
-                unit,
-                interval,
-                date,
-                ..
-            } => ExprElement::DateSub {
-                unit,
-                interval: *interval,
-                date: *date,
-            },
-            Expr::DateTrunc { unit, date, .. } => ExprElement::DateTrunc { unit, date: *date },
-            Expr::Hole { name, .. } => ExprElement::Hole { name },
+                pg_style: false, ..
+            } => Affix::Nilfix,
+            Expr::TryCast { .. } => Affix::Nilfix,
+            Expr::Extract { .. } => Affix::Nilfix,
+            Expr::DatePart { .. } => Affix::Nilfix,
+            Expr::Position { .. } => Affix::Nilfix,
+            Expr::Substring { .. } => Affix::Nilfix,
+            Expr::ColumnRef { .. } => Affix::Nilfix,
+            Expr::Trim { .. } => Affix::Nilfix,
+            Expr::Literal { .. } => Affix::Nilfix,
+            Expr::CountAll { .. } => Affix::Nilfix,
+            Expr::Tuple { .. } => Affix::Nilfix,
+            Expr::FunctionCall { .. } => Affix::Nilfix,
+            Expr::Case { .. } => Affix::Nilfix,
+            Expr::Exists { .. } => Affix::Nilfix,
+            Expr::Subquery { .. } => Affix::Nilfix,
+            Expr::Array { .. } => Affix::Nilfix,
+            Expr::Map { .. } => Affix::Nilfix,
+            Expr::Interval { .. } => Affix::Nilfix,
+            Expr::DateAdd { .. } => Affix::Nilfix,
+            Expr::DateDiff { .. } => Affix::Nilfix,
+            Expr::DateSub { .. } => Affix::Nilfix,
+            Expr::DateTrunc { .. } => Affix::Nilfix,
+            Expr::Hole { .. } => Affix::Nilfix,
         }
     }
 }
@@ -659,6 +632,16 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 interval: Box::new(interval),
                 date: Box::new(date),
             },
+            ExprElement::DateDiff {
+                unit,
+                date_start,
+                date_end,
+            } => Expr::DateDiff {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date_start: Box::new(date_start),
+                date_end: Box::new(date_end),
+            },
             ExprElement::DateSub {
                 unit,
                 interval,
@@ -678,6 +661,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 name,
             },
+            ExprElement::VariableAccess(name) => {
+                let span = transform_span(elem.span.tokens);
+                make_func_get_variable(span, name)
+            }
             _ => unreachable!(),
         };
         Ok(expr)
@@ -1040,7 +1027,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ (OVER ~ #window_spec_ident)
+            ~ #window_function
         },
         |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
@@ -1048,7 +1035,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
-                window: Some(window.1),
+                window: Some(window),
                 lambda: None,
             },
         },
@@ -1102,6 +1089,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let json_op = map(json_op, |op| ExprElement::JsonOp { op });
+    let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
@@ -1196,6 +1184,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             date,
         },
     );
+
+    let date_diff = map(
+        rule! {
+            DATE_DIFF ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+        },
+        |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateDiff {
+            unit,
+            date_start,
+            date_end,
+        },
+    );
+
     let date_sub = map(
         rule! {
             DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
@@ -1268,55 +1268,58 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
-    let (rest, (span, elem)) = consumed(alt((
-        // Note: each `alt` call supports maximum of 21 parsers
-        rule!(
-            #is_null : "`... IS [NOT] NULL`"
-            | #in_list : "`[NOT] IN (<expr>, ...)`"
-            | #in_subquery : "`[NOT] IN (SELECT ...)`"
-            | #exists : "`[NOT] EXISTS (SELECT ...)`"
-            | #between : "`[NOT] BETWEEN ... AND ...`"
-            | #binary_op : "<operator>"
-            | #json_op : "<operator>"
-            | #unary_op : "<operator>"
-            | #cast : "`CAST(... AS ...)`"
-            | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
-            | #date_expr: "`DATE <str_literal>`"
-            | #timestamp_expr: "`TIMESTAMP <str_literal>`"
-            | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
-            | #pg_cast : "`::<type_name>`"
-            | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-            | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-            | #position : "`POSITION(... IN ...)`"
-        ),
-        rule!(
-            #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-            | #trim : "`TRIM(...)`"
-            | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #chain_function_call : "x.function(...)"
-            | #list_comprehensions: "[expr for x in ... [if ...]]"
-            | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call_with_lambda : "`function(..., x -> ...)`"
-            | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-            | #function_call_with_params : "`function(...)(...)`"
-            | #function_call : "`function(...)`"
-            | #case : "`CASE ... END`"
-            | #tuple : "`(<expr> [, ...])`"
-            | #subquery : "`(SELECT ...)`"
-            | #column_ref : "<column>"
-            | #dot_access : "<dot_access>"
-            | #map_access : "[<key>] | .<key> | :<key>"
-            | #literal : "<literal>"
-            | #current_timestamp: "CURRENT_TIMESTAMP"
-            | #array : "`[<expr>, ...]`"
-            | #map_expr : "`{ <literal> : <expr>, ... }`"
-        ),
-    )))(i)?;
-
-    Ok((rest, WithSpan { span, elem }))
+    map(
+        consumed(alt((
+            // Note: each `alt` call supports maximum of 21 parsers
+            rule!(
+                #is_null : "`... IS [NOT] NULL`"
+                | #in_list : "`[NOT] IN (<expr>, ...)`"
+                | #in_subquery : "`[NOT] IN (SELECT ...)`"
+                | #exists : "`[NOT] EXISTS (SELECT ...)`"
+                | #between : "`[NOT] BETWEEN ... AND ...`"
+                | #binary_op : "<operator>"
+                | #json_op : "<operator>"
+                | #unary_op : "<operator>"
+                | #cast : "`CAST(... AS ...)`"
+                | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_diff: "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #date_expr: "`DATE <str_literal>`"
+                | #timestamp_expr: "`TIMESTAMP <str_literal>`"
+                | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+                | #pg_cast : "`::<type_name>`"
+                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
+                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+                | #position : "`POSITION(... IN ...)`"
+                | #variable_access: "`$<ident>`"
+            ),
+            rule!(
+                #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
+                | #trim : "`TRIM(...)`"
+                | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
+                | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+                | #chain_function_call : "x.function(...)"
+                | #list_comprehensions: "[expr for x in ... [if ...]]"
+                | #count_all_with_window : "`COUNT(*) OVER ...`"
+                | #function_call_with_lambda : "`function(..., x -> ...)`"
+                | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+                | #function_call_with_params : "`function(...)(...)`"
+                | #function_call : "`function(...)`"
+                | #case : "`CASE ... END`"
+                | #tuple : "`(<expr> [, ...])`"
+                | #subquery : "`(SELECT ...)`"
+                | #column_ref : "<column>"
+                | #dot_access : "<dot_access>"
+                | #map_access : "[<key>] | .<key> | :<key>"
+                | #literal : "<literal>"
+                | #current_timestamp: "CURRENT_TIMESTAMP"
+                | #array : "`[<expr>, ...]`"
+                | #map_expr : "`{ <literal> : <expr>, ... }`"
+            ),
+        ))),
+        |(span, elem)| WithSpan { span, elem },
+    )(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
@@ -1616,16 +1619,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_named_tuple = map_res(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
         |(_, _, fields, _)| {
-            let (fields_name, fields_type): (Vec<String>, Vec<TypeName>) =
-                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            if fields_name
-                .iter()
-                .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
-            {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "Invalid tuple field name, only support alphanumeric characters",
-                )));
-            }
+            let (fields_name, fields_type): (Vec<Identifier>, Vec<TypeName>) =
+                fields.into_iter().unzip();
             Ok(TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
@@ -1647,6 +1642,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
+    let ty_geography = value(TypeName::Geography, rule! { GEOGRAPHY });
     map_res(
         alt((
             rule! {
@@ -1676,6 +1672,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_geometry
+            | #ty_geography
             | #ty_nullable
             ) ~ #nullable? : "type name" },
         )),
@@ -1796,7 +1793,7 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
     let point_pos = text.find('.');
-    let e_pos = text.find(|c| c == 'e' || c == 'E');
+    let e_pos = text.find(['e', 'E']);
     let (i_part, f_part, e_part) = match (point_pos, e_pos) {
         (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
         (Some(p), None) => (&text[..p], &text[(p + 1)..], None),
@@ -1846,7 +1843,7 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
     let contains_underscore = text.contains('_');
     if contains_underscore {
-        let text = text.replace(|p| p == '_', "");
+        let text = text.replace('_', "");
         return parse_uint(&text, radix);
     }
 
@@ -1865,5 +1862,22 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
             precision: 76,
             scale: 0,
         })
+    }
+}
+
+pub(crate) fn make_func_get_variable(span: Span, name: String) -> Expr {
+    Expr::FunctionCall {
+        span,
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier::from_name(span, "getvariable"),
+            args: vec![Expr::Literal {
+                span,
+                value: Literal::String(name),
+            }],
+            params: vec![],
+            window: None,
+            lambda: None,
+        },
     }
 }

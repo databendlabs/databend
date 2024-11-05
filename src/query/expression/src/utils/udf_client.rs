@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::time::Duration;
 
 use arrow_array::RecordBatch;
@@ -20,11 +21,21 @@ use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
 use arrow_select::concat::concat_batches;
+use databend_common_base::headers::HEADER_FUNCTION;
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_TENANT;
+use databend_common_base::version::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_grpc::DNSService;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use hyper_util::client::legacy::connect::HttpConnector;
+use tonic::metadata::KeyAndValueRef;
+use tonic::metadata::MetadataKey;
+use tonic::metadata::MetadataMap;
+use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::transport::Endpoint;
 use tonic::Request;
@@ -35,12 +46,15 @@ use crate::DataSchema;
 const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
 const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
 const UDF_KEEP_ALIVE_TIMEOUT_SEC: u64 = 20;
+// 4MB by default, we use 16G
+// max_encoding_message_size is usize::max by default
 const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
     inner: FlightServiceClient<Channel>,
     batch_rows: u64,
+    headers: MetadataMap,
 }
 
 impl UDFFlightClient {
@@ -55,6 +69,10 @@ impl UDFFlightClient {
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))
             })?
+            .user_agent(format!("databend-query/{}", *DATABEND_SEMVER))
+            .map_err(|err| {
+                ErrorCode::UDFServerConnectError(format!("Invalid UDF Client User Agent: {err}"))
+            })?
             .connect_timeout(Duration::from_secs(conn_timeout))
             .timeout(Duration::from_secs(request_timeout))
             .tcp_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)))
@@ -62,20 +80,84 @@ impl UDFFlightClient {
             .keep_alive_timeout(Duration::from_secs(UDF_KEEP_ALIVE_TIMEOUT_SEC))
             .keep_alive_while_idle(true);
 
-        let inner = FlightServiceClient::connect(endpoint)
+        let mut connector = HttpConnector::new_with_resolver(DNSService);
+        connector.enforce_http(false);
+        connector.set_nodelay(true);
+        connector.set_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)));
+        connector.set_connect_timeout(Some(Duration::from_secs(conn_timeout)));
+        connector.set_reuse_address(true);
+
+        let channel = endpoint
+            .connect_with_connector(connector)
             .await
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(
-                    "Cannot connect to UDF Server {addr}: {err}"
+                    "Cannot connect to UDF Server {}: {:?}",
+                    addr, err
                 ))
-            })?
-            .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
+            })?;
+        let inner =
+            FlightServiceClient::new(channel).max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
+        Ok(UDFFlightClient {
+            inner,
+            batch_rows,
+            headers: MetadataMap::new(),
+        })
+    }
 
-        Ok(UDFFlightClient { inner, batch_rows })
+    /// Set tenant for the UDF client.
+    pub fn with_tenant(mut self, tenant: &str) -> Result<Self> {
+        let key = HEADER_TENANT.to_lowercase();
+        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Parse tenant header key error: {err}"))
+        })?;
+        let value = MetadataValue::from_str(tenant).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Parse tenant header value error: {err}"))
+        })?;
+        self.headers.insert(key, value);
+        Ok(self)
+    }
+
+    /// Set function name for the UDF client.
+    pub fn with_func_name(mut self, func_name: &str) -> Result<Self> {
+        let key = HEADER_FUNCTION.to_lowercase();
+        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Parse function name header key error: {err}"))
+        })?;
+        let value = MetadataValue::from_str(func_name).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Parse function name header value error: {err}"))
+        })?;
+        self.headers.insert(key, value);
+        Ok(self)
+    }
+
+    /// Set query id for the UDF client.
+    pub fn with_query_id(mut self, query_id: &str) -> Result<Self> {
+        let key = HEADER_QUERY_ID.to_lowercase();
+        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Parse query id header key error: {err}"))
+        })?;
+        let value = MetadataValue::from_str(query_id).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Parse query id header value error: {err}"))
+        })?;
+        self.headers.insert(key, value);
+        Ok(self)
     }
 
     fn make_request<T>(&self, t: T) -> Request<T> {
-        Request::new(t)
+        let mut request = Request::new(t);
+        for k_v in self.headers.iter() {
+            match k_v {
+                KeyAndValueRef::Ascii(key, value) => {
+                    request.metadata_mut().insert(key, value.clone());
+                }
+                KeyAndValueRef::Binary(key, value) => {
+                    request.metadata_mut().insert_bin(key, value.clone());
+                }
+            }
+        }
+
+        request
     }
 
     #[async_backtrace::framed]
@@ -165,5 +247,25 @@ impl UDFFlightClient {
         let schema = batches[0].schema();
         concat_batches(&schema, batches.iter())
             .map_err(|err| ErrorCode::UDFDataError(err.to_string()))
+    }
+}
+
+pub fn error_kind(message: &str) -> &str {
+    let message = message.to_ascii_lowercase();
+    if message.contains("timeout") || message.contains("timedout") {
+        // Error(Connect, Custom)
+        if message.contains("connect,") {
+            "ConnectTimeout"
+        } else {
+            "RequestTimeout"
+        }
+    } else if message.contains("cannot connect") {
+        "ConnectError"
+    } else if message.contains("stream closed because of a broken pipe") {
+        "ServerClosed"
+    } else if message.contains("dns error") || message.contains("lookup address") {
+        "DnsError"
+    } else {
+        "Other"
     }
 }

@@ -22,9 +22,7 @@ use crate::ast::write_comma_separated_string_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CallStmt {
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub args: Vec<String>,
 }
 

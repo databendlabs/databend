@@ -14,10 +14,18 @@
 
 use databend_common_exception::Result;
 
+use super::physical_plans::AddStreamColumn;
+use super::physical_plans::CacheScan;
+use super::physical_plans::ExpressionScan;
+use super::physical_plans::MutationManipulate;
+use super::physical_plans::MutationOrganize;
+use super::physical_plans::MutationSplit;
+use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -25,6 +33,7 @@ use crate::executor::physical_plans::ChunkEvalScalar;
 use crate::executor::physical_plans::ChunkFillAndReorder;
 use crate::executor::physical_plans::ChunkFilter;
 use crate::executor::physical_plans::ChunkMerge;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -32,7 +41,6 @@ use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
@@ -43,13 +51,11 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoAddRowNumber;
-use crate::executor::physical_plans::MergeIntoAppendNotMatched;
+use crate::executor::physical_plans::Mutation;
+use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::ReclusterSink;
-use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::Recluster;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -59,20 +65,22 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
+use crate::executor::physical_plans::WindowPartition;
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
         match plan {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
+            PhysicalPlan::RecursiveCteScan(plan) => self.replace_recursive_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
             PhysicalPlan::Window(plan) => self.replace_window(plan),
+            PhysicalPlan::WindowPartition(plan) => self.replace_window_partition(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
             PhysicalPlan::Limit(plan) => self.replace_limit(plan),
             PhysicalPlan::RowFetch(plan) => self.replace_row_fetch(plan),
@@ -84,7 +92,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
-            PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
@@ -92,17 +99,20 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceAsyncSourcer(plan) => self.replace_async_sourcer(plan),
             PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
-            PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
-            PhysicalPlan::MergeIntoAddRowNumber(plan) => self.replace_add_row_number(plan),
-            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-                self.replace_merge_into_row_id_apply(plan)
-            }
+            PhysicalPlan::MutationSource(plan) => self.replace_mutation_source(plan),
+            PhysicalPlan::ColumnMutation(plan) => self.replace_column_mutation(plan),
+            PhysicalPlan::Mutation(plan) => self.replace_mutation(plan),
+            PhysicalPlan::MutationSplit(plan) => self.replace_mutation_split(plan),
+            PhysicalPlan::MutationManipulate(plan) => self.replace_mutation_manipulate(plan),
+            PhysicalPlan::MutationOrganize(plan) => self.replace_mutation_organize(plan),
+            PhysicalPlan::AddStreamColumn(plan) => self.replace_add_stream_column(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
-            PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
-            PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
-            PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
+            PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
+            PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
+            PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
+            PhysicalPlan::AsyncFunction(plan) => self.replace_async_function(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
             PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
             PhysicalPlan::ChunkFilter(plan) => self.replace_chunk_filter(plan),
@@ -112,20 +122,11 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
-            PhysicalPlan::AsyncFunction(plan) => Ok(PhysicalPlan::AsyncFunction(plan.clone())),
         }
     }
 
-    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
-    }
-
-    fn replace_recluster_sink(&mut self, plan: &ReclusterSink) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
+    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
     }
 
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
@@ -136,8 +137,20 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CteScan(plan.clone()))
     }
 
+    fn replace_recursive_cte_scan(&mut self, plan: &RecursiveCteScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::RecursiveCteScan(plan.clone()))
+    }
+
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    }
+
+    fn replace_expression_scan(&mut self, plan: &ExpressionScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ExpressionScan(plan.clone()))
+    }
+
+    fn replace_cache_scan(&mut self, plan: &CacheScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CacheScan(plan.clone()))
     }
 
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
@@ -187,6 +200,7 @@ pub trait PhysicalPlanReplacer {
             group_by_display: plan.group_by_display.clone(),
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
+            rank_limit: plan.rank_limit.clone(),
         }))
     }
 
@@ -201,7 +215,6 @@ pub trait PhysicalPlanReplacer {
             agg_funcs: plan.agg_funcs.clone(),
             group_by_display: plan.group_by_display.clone(),
             stat_info: plan.stat_info.clone(),
-            limit: plan.limit,
         }))
     }
 
@@ -220,6 +233,19 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_window_partition(&mut self, plan: &WindowPartition) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::WindowPartition(WindowPartition {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            partition_by: plan.partition_by.clone(),
+            order_by: plan.order_by.clone(),
+            after_exchange: plan.after_exchange,
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
         let build = self.replace(&plan.build)?;
         let probe = self.replace(&plan.probe)?;
@@ -233,6 +259,7 @@ pub trait PhysicalPlanReplacer {
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
             probe_keys: plan.probe_keys.clone(),
+            is_null_equal: plan.is_null_equal.clone(),
             non_equi_conditions: plan.non_equi_conditions.clone(),
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
@@ -245,19 +272,21 @@ pub trait PhysicalPlanReplacer {
             enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
+            build_side_cache_info: plan.build_side_cache_info.clone(),
         }))
     }
 
     fn replace_materialized_cte(&mut self, plan: &MaterializedCte) -> Result<PhysicalPlan> {
-        let left = self.replace(&plan.left)?;
         let right = self.replace(&plan.right)?;
+        let left = self.replace(&plan.left)?;
 
         Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
             cte_idx: plan.cte_idx,
-            left_output_columns: plan.left_output_columns.clone(),
+            cte_scan_offset: plan.cte_scan_offset.clone(),
+            materialized_output_columns: plan.materialized_output_columns.clone(),
         }))
     }
 
@@ -314,6 +343,7 @@ pub trait PhysicalPlanReplacer {
             cols_to_fetch: plan.cols_to_fetch.clone(),
             fetched_fields: plan.fetched_fields.clone(),
             stat_info: plan.stat_info.clone(),
+            need_wrap_nullable: plan.need_wrap_nullable,
         }))
     }
 
@@ -360,9 +390,11 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
+            left_outputs: plan.left_outputs.clone(),
+            right_outputs: plan.right_outputs.clone(),
             schema: plan.schema.clone(),
-            pairs: plan.pairs.clone(),
             stat_info: plan.stat_info.clone(),
+            cte_scan_names: plan.cte_scan_names.clone(),
         }))
     }
 
@@ -400,7 +432,6 @@ pub trait PhysicalPlanReplacer {
             DistributedInsertSelect {
                 plan_id: plan.plan_id,
                 input: Box::new(input),
-                catalog_info: plan.catalog_info.clone(),
                 table_info: plan.table_info.clone(),
                 select_schema: plan.select_schema.clone(),
                 insert_schema: plan.insert_schema.clone(),
@@ -412,14 +443,6 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
-    }
-
-    fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
-    }
-
-    fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
     }
 
     fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
@@ -452,35 +475,58 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::MutationSource(plan.clone()))
+    }
+
+    fn replace_column_mutation(&mut self, plan: &ColumnMutation) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+        Ok(PhysicalPlan::ColumnMutation(ColumnMutation {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
+    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
             input: Box::new(input),
             ..plan.clone()
         })))
     }
 
-    fn replace_add_row_number(&mut self, plan: &MergeIntoAddRowNumber) -> Result<PhysicalPlan> {
+    fn replace_mutation_split(&mut self, plan: &MutationSplit) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoAddRowNumber(Box::new(
-            MergeIntoAddRowNumber {
+        Ok(PhysicalPlan::MutationSplit(Box::new(MutationSplit {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_mutation_manipulate(&mut self, plan: &MutationManipulate) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MutationManipulate(Box::new(
+            MutationManipulate {
                 input: Box::new(input),
                 ..plan.clone()
             },
         )))
     }
 
-    fn replace_merge_into_row_id_apply(
-        &mut self,
-        plan: &MergeIntoAppendNotMatched,
-    ) -> Result<PhysicalPlan> {
+    fn replace_mutation_organize(&mut self, plan: &MutationOrganize) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoAppendNotMatched(Box::new(
-            MergeIntoAppendNotMatched {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
+        Ok(PhysicalPlan::MutationOrganize(Box::new(MutationOrganize {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_add_stream_column(&mut self, plan: &AddStreamColumn) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
@@ -502,6 +548,16 @@ pub trait PhysicalPlanReplacer {
             udf_funcs: plan.udf_funcs.clone(),
             stat_info: plan.stat_info.clone(),
             script_udf: plan.script_udf,
+        }))
+    }
+
+    fn replace_async_function(&mut self, plan: &AsyncFunction) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::AsyncFunction(AsyncFunction {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            async_func_descs: plan.async_func_descs.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -600,13 +656,14 @@ impl PhysicalPlan {
                 PhysicalPlan::TableScan(_)
                 | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
+                | PhysicalPlan::RecursiveCteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)
-                | PhysicalPlan::ReclusterSource(_)
+                | PhysicalPlan::ExpressionScan(_)
+                | PhysicalPlan::CacheScan(_)
+                | PhysicalPlan::Recluster(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::DeleteSource(_)
-                | PhysicalPlan::AsyncFunction(_)
-                | PhysicalPlan::UpdateSource(_) => {}
+                | PhysicalPlan::MutationSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -623,6 +680,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Window(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::WindowPartition(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Sort(plan) => {
@@ -669,9 +729,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::ReclusterSink(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
                 PhysicalPlan::CommitSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -681,13 +738,22 @@ impl PhysicalPlan {
                 PhysicalPlan::ReplaceInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeInto(plan) => {
+                PhysicalPlan::ColumnMutation(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoAddRowNumber(plan) => {
+                PhysicalPlan::Mutation(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                PhysicalPlan::MutationSplit(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MutationManipulate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MutationOrganize(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AddStreamColumn(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {
@@ -695,6 +761,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Udf(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AsyncFunction(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Duplicate(plan) => {

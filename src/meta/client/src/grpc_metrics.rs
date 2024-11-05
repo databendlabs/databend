@@ -55,7 +55,7 @@ pub fn record_meta_grpc_client_request_duration_ms(endpoint: &str, request: &str
         .observe(duration);
 }
 
-pub fn incr_meta_grpc_client_request_inflight(val: i64) {
+pub fn client_request_inflight(val: i64) {
     META_GRPC_CLIENT_REQUEST_INFLIGHT.inc_by(val);
 }
 

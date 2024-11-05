@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,13 +24,10 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 
 use crate::executor::PhysicalPlan;
-use crate::ColumnBinding;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    // When input source is select clause, record the order of the select results.
-    pub project_columns: Vec<ColumnBinding>,
     pub n: usize,
 }
 
@@ -110,7 +108,6 @@ pub struct ChunkFillAndReorder {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FillAndReorder {
     pub source_schema: DataSchemaRef,
-    pub catalog_info: CatalogInfo,
     pub target_table_info: TableInfo,
 }
 
@@ -123,7 +120,7 @@ pub struct ChunkAppendData {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SerializableTable {
-    pub target_catalog_info: CatalogInfo,
+    pub target_catalog_info: Arc<CatalogInfo>,
     pub target_table_info: TableInfo,
 }
 

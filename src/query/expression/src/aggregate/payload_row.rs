@@ -36,6 +36,7 @@ use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::InputColumns;
 use crate::Scalar;
 use crate::SelectVector;
 
@@ -55,7 +56,8 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         | DataType::String
         | DataType::Bitmap
         | DataType::Variant
-        | DataType::Geometry => 4 + 8, // u32 len + address
+        | DataType::Geometry
+        | DataType::Geography => 4 + 8, // u32 len + address
         DataType::Nullable(x) => rowformat_size(x),
         DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) => 4 + 8,
         DataType::Generic(_) => unreachable!(),
@@ -165,7 +167,7 @@ pub unsafe fn serialize_column_to_rowformat(
 }
 
 pub unsafe fn row_match_columns(
-    cols: &[Column],
+    cols: InputColumns,
     address: &[*const u8],
     select_vector: &mut SelectVector,
     temp_vector: &mut SelectVector,

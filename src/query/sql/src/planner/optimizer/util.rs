@@ -26,4 +26,5 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
         } else {
             false
         }
+        || matches!(s_expr.plan(), RelOperator::RecursiveCteScan { .. })
 }

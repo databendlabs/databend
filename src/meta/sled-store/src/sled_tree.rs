@@ -21,11 +21,11 @@ use std::time::Duration;
 
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqV;
+use fastrace::func_name;
 use log::debug;
 use log::warn;
-use minitrace::func_name;
 use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
@@ -188,16 +188,10 @@ impl SledTree {
                     warn!("txn error: {:?}", meta_sto_err);
 
                     match &meta_sto_err {
-                        MetaStorageError::BytesError(_e) => {
-                            Err(ConflictableTransactionError::Abort(meta_sto_err))
-                        }
-                        MetaStorageError::SledError(_e) => {
-                            Err(ConflictableTransactionError::Abort(meta_sto_err))
-                        }
                         MetaStorageError::TransactionConflict => {
                             Err(ConflictableTransactionError::Conflict)
                         }
-                        MetaStorageError::SnapshotError(_e) => {
+                        MetaStorageError::Damaged(_e) => {
                             Err(ConflictableTransactionError::Abort(meta_sto_err))
                         }
                     }
@@ -210,7 +204,7 @@ impl SledTree {
             Err(txn_err) => match txn_err {
                 TransactionError::Abort(meta_sto_err) => Err(meta_sto_err),
                 TransactionError::Storage(sto_err) => {
-                    Err(MetaStorageError::SledError(AnyError::new(&sto_err)))
+                    Err(MetaStorageError::Damaged(AnyError::new(&sto_err)))
                 }
             },
         }
@@ -232,7 +226,7 @@ impl SledTree {
     }
 
     /// Delete kvs that are in `range`.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn range_remove<KV, R>(
         &self,
         range: R,
@@ -380,6 +374,28 @@ impl SledTree {
         Ok(prev)
     }
 
+    /// Remove a key without returning the previous value.
+    ///
+    /// Just return the size of the removed value if the key is removed.
+    pub(crate) async fn remove_no_return<KV>(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> Result<Option<usize>, MetaStorageError>
+    where
+        KV: SledKeySpace,
+    {
+        let k = KV::serialize_key(key)?;
+
+        let prev = self.tree.remove(k)?;
+
+        let removed = prev.map(|x| x.len());
+
+        self.flush_async(flush).await?;
+
+        Ok(removed)
+    }
+
     /// Build a string describing the range for a range operation.
     #[allow(dead_code)]
     fn range_message<KV, R>(&self, range: &R) -> String
@@ -396,7 +412,7 @@ impl SledTree {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
         debug!("{}: flush: {}", func_name!(), flush);
 
@@ -527,6 +543,14 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
 
         let kv = last?.kv()?;
         Ok(Some(kv))
+    }
+
+    pub async fn remove_no_return(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> Result<Option<usize>, MetaStorageError> {
+        self.inner.remove_no_return::<KV>(key, flush).await
     }
 
     pub async fn range_remove<R>(&self, range: R, flush: bool) -> Result<(), MetaStorageError>

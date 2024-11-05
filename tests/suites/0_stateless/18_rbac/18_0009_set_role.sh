@@ -71,3 +71,32 @@ echo "SELECT current_role();" | $TEST_USER_CONNECT
 
 echo '-- test 10: set default role as nonexisting_role, will fail'
 echo "SET DEFAULT ROLE nonexistedrole;" | $TEST_USER_CONNECT || true
+
+echo '-- test 11: set secondary All | None, create object only check current role'
+echo "DROP USER if exists 'test_c';" | $BENDSQL_CLIENT_CONNECT
+echo "DROP role if exists 'role_c';" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE USER 'test_c' IDENTIFIED BY '123'" | $BENDSQL_CLIENT_CONNECT
+echo 'CREATE ROLE `role_c`' | $BENDSQL_CLIENT_CONNECT
+echo 'GRANT ALL ON *.* TO ROLE `role_c`' | $BENDSQL_CLIENT_CONNECT
+echo 'GRANT ROLE `role_c` to test_c' | $BENDSQL_CLIENT_CONNECT
+
+export TEST_C_CONNECT="bendsql --user=test_c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+echo 'drop database if exists db_c' | $BENDSQL_CLIENT_CONNECT
+echo 'drop database if exists db_d' | $BENDSQL_CLIENT_CONNECT
+echo 'drop database if exists db_e' | $BENDSQL_CLIENT_CONNECT
+echo 'SET SECONDARY ROLES ALL;create database db_c' | $TEST_C_CONNECT
+echo 'SET SECONDARY ROLES NONE;create database db_c' | $TEST_C_CONNECT
+echo 'SET ROLE role_c;SET SECONDARY ROLES NONE;create database db_c' | $TEST_C_CONNECT
+echo 'SET ROLE role_c;SET SECONDARY ROLES ALL;create database db_d' | $TEST_C_CONNECT
+echo "show grants for role role_c where object_name in ('db_c', 'db_d')" | $TEST_C_CONNECT | awk -F ' ' '{$3=""; print $0}'
+
+echo 'revoke ROLE `role_c` from test_c' | $BENDSQL_CLIENT_CONNECT
+echo 'grant all on *.* to test_c' | $BENDSQL_CLIENT_CONNECT
+echo 'create database db_e' | $TEST_C_CONNECT
+echo "show grants for role public where object_name in ('db_e')" | $TEST_C_CONNECT | awk -F ' ' '{$3=""; print $0}'
+
+echo 'drop database if exists db_c' | $BENDSQL_CLIENT_CONNECT
+echo 'drop database if exists db_d' | $BENDSQL_CLIENT_CONNECT
+echo 'drop database if exists db_e' | $BENDSQL_CLIENT_CONNECT
+echo "DROP USER if exists 'test_c';" | $BENDSQL_CLIENT_CONNECT
+echo "DROP role if exists 'role_c';" | $BENDSQL_CLIENT_CONNECT

@@ -15,7 +15,6 @@
 mod block_writer;
 mod inverted_index_writer;
 mod meta_writer;
-mod segment_writer;
 mod write_settings;
 
 pub(crate) use block_writer::create_inverted_index_builders;
@@ -23,11 +22,14 @@ pub use block_writer::serialize_block;
 pub use block_writer::write_data;
 pub use block_writer::BlockBuilder;
 pub use block_writer::BlockSerialization;
+pub use block_writer::BlockWriter;
+pub use block_writer::BloomIndexBuilder;
+pub use block_writer::BloomIndexState;
 pub use block_writer::InvertedIndexBuilder;
+pub(crate) use inverted_index_writer::block_to_inverted_index;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_tokenizer_manager;
 pub use inverted_index_writer::InvertedIndexWriter;
 pub use meta_writer::CachedMetaWriter;
 pub use meta_writer::MetaWriter;
-pub use segment_writer::SegmentWriter;
 pub use write_settings::WriteSettings;

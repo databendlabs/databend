@@ -15,17 +15,17 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
-use crate::io::SegmentWriter;
+use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::CompactOptions;
@@ -46,7 +46,6 @@ pub struct SegmentCompactionState {
 
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
-    lock: Arc<dyn Lock>,
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
@@ -57,7 +56,6 @@ pub struct SegmentCompactMutator {
 impl SegmentCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        lock: Arc<dyn Lock>,
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
@@ -65,7 +63,6 @@ impl SegmentCompactMutator {
     ) -> Result<Self> {
         Ok(Self {
             ctx,
-            lock,
             compact_params,
             data_accessor: operator,
             location_generator,
@@ -105,14 +102,14 @@ impl SegmentCompactMutator {
         let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
-        let segment_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
             self.default_cluster_key_id,
             chunk_size,
             &fuse_segment_io,
-            segment_writer,
+            &self.data_accessor,
+            &self.location_generator,
         );
 
         self.compaction = compactor
@@ -136,8 +133,6 @@ impl SegmentCompactMutator {
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let _guard = self.lock.try_lock(self.ctx.clone()).await?;
 
         fuse_table
             .commit_mutation(
@@ -173,7 +168,8 @@ pub struct SegmentCompactor<'a> {
     accumulated_num_blocks: u64,
     chunk_size: usize,
     segment_reader: &'a SegmentsIO,
-    segment_writer: SegmentWriter<'a>,
+    operator: &'a Operator,
+    location_generator: &'a TableMetaLocationGenerator,
     // accumulated compaction state
     compacted_state: SegmentCompactionState,
 }
@@ -184,7 +180,8 @@ impl<'a> SegmentCompactor<'a> {
         default_cluster_key_id: Option<u32>,
         chunk_size: usize,
         segment_reader: &'a SegmentsIO,
-        segment_writer: SegmentWriter<'a>,
+        operator: &'a Operator,
+        location_generator: &'a TableMetaLocationGenerator,
     ) -> Self {
         Self {
             threshold,
@@ -193,7 +190,8 @@ impl<'a> SegmentCompactor<'a> {
             fragmented_segments: vec![],
             chunk_size,
             segment_reader,
-            segment_writer,
+            operator,
+            location_generator,
             compacted_state: Default::default(),
         }
     }
@@ -357,11 +355,16 @@ impl<'a> SegmentCompactor<'a> {
 
         // 2.2 write down new segment
         let new_segment = SegmentInfo::new(blocks, new_statistics);
-        let location = self.segment_writer.write_segment(new_segment).await?;
+        let location = self.location_generator.gen_segment_info_location();
+        new_segment
+            .write_meta_through_cache(self.operator, &location)
+            .await?;
         self.compacted_state
             .new_segment_paths
-            .push(location.0.clone());
-        self.compacted_state.segments_locations.push(location);
+            .push(location.clone());
+        self.compacted_state
+            .segments_locations
+            .push((location, SegmentInfo::VERSION));
         Ok(())
     }
 

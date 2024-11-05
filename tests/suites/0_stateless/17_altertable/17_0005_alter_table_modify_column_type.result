@@ -6,11 +6,12 @@ c	INT	NO	0
 a	FLOAT	NO	0	
 b	VARCHAR	NO	''	
 c	INT	NO	0	
-Error: APIError: ResponseError with 1006: invalid float literal while evaluating function `to_float32('a')`
+Error: APIError: ResponseError with 1006: fail to auto cast column a (String) to column a (Float32)
+invalid float literal while evaluating function `to_float32('a')` in expr `to_float32(a)`
 Error: APIError: ResponseError with 1058: Cannot find column b
 Error: APIError: ResponseError with 1006: null value in column `a` of table `c` violates not-null constraint
 0	1
-Error: APIError: ResponseError with 1006: invalid float literal while evaluating function `to_float32('a')`
+Error: APIError: ResponseError with 1006: invalid float literal while evaluating function `to_float32('a')` in expr `to_float32('a')`
 0	1
 0	1
 1.2	2

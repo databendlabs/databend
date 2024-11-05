@@ -91,7 +91,6 @@ impl Display for AlterViewStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropViewStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -118,10 +117,8 @@ impl Display for DropViewStmt {
 pub struct ShowViewsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
-    #[drive(skip)]
     pub with_history: bool,
 }
 
@@ -159,7 +156,7 @@ pub struct DescribeViewStmt {
 
 impl Display for DescribeViewStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DESCRIBE ")?;
+        write!(f, "DESCRIBE VIEW ")?;
         write_dot_separated_list(
             f,
             self.catalog

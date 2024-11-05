@@ -23,11 +23,12 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -59,7 +60,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn bind_one_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
+pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
@@ -116,7 +117,7 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
@@ -134,7 +135,7 @@ pub fn parse_exprs(
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
-            let (scalar, _) = *databend_common_base::runtime::block_on(type_checker.resolve(ast))?;
+            let (scalar, _) = *type_checker.resolve(ast)?;
             let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
             Ok(expr)
         })
@@ -231,7 +232,7 @@ pub fn parse_computed_expr(
         )));
     }
     let ast = asts.remove(0);
-    let (scalar, _) = *databend_common_base::runtime::block_on(type_checker.resolve(&ast))?;
+    let (scalar, _) = *type_checker.resolve(&ast)?;
     let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
     Ok(expr)
 }
@@ -240,8 +241,7 @@ pub fn parse_default_expr_to_string(
     ctx: Arc<dyn TableContext>,
     field: &TableField,
     ast: &AExpr,
-    is_add_column: bool,
-) -> Result<String> {
+) -> Result<(String, bool)> {
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
@@ -256,30 +256,21 @@ pub fn parse_default_expr_to_string(
         false,
     )?;
 
-    let (mut scalar, data_type) =
-        *databend_common_base::runtime::block_on(type_checker.resolve(ast))?;
+    let (mut scalar, data_type) = *type_checker.resolve(ast)?;
     let schema_data_type = DataType::from(field.data_type());
     if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
     }
     let expr = scalar.as_expr()?;
-
-    // Added columns are not allowed to use expressions,
-    // as the default values will be generated at at each query.
-    if is_add_column && !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-        return Err(ErrorCode::SemanticError(format!(
-            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.",
-            expr.sql_display(),
-        )));
-    }
-    let expr = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+    let (expr, is_deterministic) = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
         let (fold_to_constant, _) =
             ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-        fold_to_constant
+        (fold_to_constant, true)
     } else {
-        expr
+        (expr, false)
     };
-    Ok(expr.sql_display())
+
+    Ok((expr.sql_display(), is_deterministic))
 }
 
 pub fn parse_computed_expr_to_string(
@@ -306,7 +297,7 @@ pub fn parse_computed_expr_to_string(
             field.data_type().clone(),
             0,
             None,
-            None,
+            Some(field.column_id),
             None,
             None,
         );
@@ -322,7 +313,7 @@ pub fn parse_computed_expr_to_string(
         false,
     )?;
 
-    let (scalar, data_type) = *databend_common_base::runtime::block_on(type_checker.resolve(ast))?;
+    let (scalar, data_type) = *type_checker.resolve(ast)?;
     if data_type != DataType::from(field.data_type()) {
         return Err(ErrorCode::SemanticError(format!(
             "expected computed column expression have type {}, but `{}` has type {}.",
@@ -348,28 +339,25 @@ pub fn parse_computed_expr_to_string(
 
 pub fn parse_lambda_expr(
     ctx: Arc<dyn TableContext>,
+    mut bind_context: BindContext,
     columns: &[(String, DataType)],
     ast: &AExpr,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
     let settings = Settings::create(Tenant::new_literal("dummy"));
-    let mut bind_context = BindContext::new();
-    let mut metadata = Metadata::default();
-
+    let metadata = Metadata::default();
     bind_context.set_expr_context(ExprContext::InLambdaFunction);
 
+    let column_len = bind_context.all_column_bindings().len();
     for (idx, column) in columns.iter().enumerate() {
         bind_context.add_column_binding(
             ColumnBindingBuilder::new(
                 column.0.clone(),
-                idx,
+                column_len + idx,
                 Box::new(column.1.clone()),
                 Visibility::Visible,
             )
             .build(),
         );
-
-        let table_type = infer_schema_type(&column.1)?;
-        metadata.add_base_table_column(column.0.to_string(), table_type, 0, None, None, None, None);
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -382,7 +370,304 @@ pub fn parse_lambda_expr(
         false,
     )?;
 
-    databend_common_base::runtime::block_on(type_checker.resolve(ast))
+    type_checker.resolve(ast)
+}
+
+pub fn parse_cluster_keys(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    cluster_key_str: &str,
+) -> Result<Vec<Expr>> {
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let tokens = tokenize_sql(cluster_key_str)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    } else {
+        // Defensive check:
+        // `ast_exprs` should always contain one element which can be one of the following:
+        // 1. A tuple of composite cluster keys
+        // 2. A single cluster key
+        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+    }
+
+    let mut exprs = Vec::with_capacity(ast_exprs.len());
+    for ast in ast_exprs {
+        let (scalar, _) = *type_checker.resolve(&ast)?;
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+
+        let inner_type = expr.data_type().remove_nullable();
+        let mut should_wrapper = false;
+        if inner_type == DataType::String {
+            if let Expr::FunctionCall { function, .. } = &expr {
+                should_wrapper = function.signature.name != "substr";
+            } else {
+                should_wrapper = true;
+            }
+        }
+
+        // If the cluster key type is string, use substr to truncate the first 8 digits.
+        let expr = if should_wrapper {
+            check_function(
+                None,
+                "substr",
+                &[],
+                &[
+                    expr,
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(1i64.into()),
+                        data_type: DataType::Number(NumberDataType::Int64),
+                    },
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(8u64.into()),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    },
+                ],
+                &BUILTIN_FUNCTIONS,
+            )?
+        } else {
+            expr
+        };
+        exprs.push(expr);
+    }
+    Ok(exprs)
+}
+
+pub fn parse_hilbert_cluster_key(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    cluster_key_str: &str,
+) -> Result<Vec<Expr>> {
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let tokens = tokenize_sql(cluster_key_str)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    } else {
+        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+    }
+
+    let expr_len = ast_exprs.len();
+    if !(2..=5).contains(&expr_len) {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "Hilbert clustering requires the dimension to be between 2 and 5",
+        ));
+    }
+
+    let mut max_size = 0;
+    let mut byte_sizes = Vec::with_capacity(expr_len);
+    let mut exprs = Vec::with_capacity(expr_len);
+    for ast in ast_exprs {
+        let (scalar, _) = *type_checker.resolve(&ast)?;
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        let byte_size = hilbert_byte_size(expr.data_type())?;
+        max_size = max_size.max(byte_size);
+        byte_sizes.push(byte_size);
+        exprs.push(expr);
+    }
+
+    let max_size = max_size.min(8);
+    let common_cast = match max_size {
+        1 => "to_int8",
+        2 => "to_int16",
+        4 => "to_int32",
+        8 => "to_int64",
+        _ => unreachable!(),
+    };
+    let max_val = Expr::Constant {
+        span: None,
+        scalar: Scalar::Binary(vec![0xFF; max_size]),
+        data_type: DataType::Binary,
+    };
+
+    for (expr, byte_size) in exprs.iter_mut().zip(byte_sizes.into_iter()) {
+        let inner_type = expr.data_type().remove_nullable();
+        let cast_str = match inner_type {
+            DataType::Date | DataType::Timestamp | DataType::Boolean => Some(common_cast),
+            DataType::Decimal(_) => Some("to_float64"),
+            DataType::Number(t) if max_size > byte_size => {
+                if matches!(t, NumberDataType::Float32) {
+                    Some("to_float64")
+                } else {
+                    Some(common_cast)
+                }
+            }
+            _ => None,
+        };
+        *expr = if let Some(cast) = cast_str {
+            check_function(None, cast, &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?
+        } else {
+            expr.clone()
+        };
+        *expr = check_function(
+            None,
+            "hilbert_key",
+            &[],
+            &[expr.clone()],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let data_type = expr.data_type();
+        let is_nullable = data_type.is_nullable();
+        if is_nullable {
+            let is_not_null_expr = check_function(
+                None,
+                "is_not_null",
+                &[],
+                &[expr.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            let assume_not_null_expr = check_function(
+                None,
+                "assume_not_null",
+                &[],
+                &[expr.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            *expr = check_function(
+                None,
+                "if",
+                &[],
+                &[is_not_null_expr, assume_not_null_expr, max_val.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+        }
+    }
+
+    let array = check_function(None, "array", &[], &exprs, &BUILTIN_FUNCTIONS)?;
+    let result = check_function(
+        None,
+        "hilbert_index",
+        &[],
+        &[array, Expr::Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64)),
+            data_type: DataType::Number(NumberDataType::UInt64),
+        }],
+        &BUILTIN_FUNCTIONS,
+    )?;
+    Ok(vec![result])
+}
+
+fn hilbert_byte_size(data_type: &DataType) -> Result<usize> {
+    match data_type {
+        DataType::Nullable(inner) => hilbert_byte_size(inner),
+        DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::Decimal(_) => {
+            Ok(data_type.numeric_byte_size().unwrap())
+        }
+        DataType::Boolean => Ok(1),
+        DataType::String => Ok(24),
+        _ => Err(ErrorCode::Internal("unsupported data type for hilbert")),
+    }
+}
+
+pub fn analyze_cluster_keys(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<(String, Vec<Expr>)> {
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let tokens = tokenize_sql(sql)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    }
+
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let mut exprs = Vec::with_capacity(ast_exprs.len());
+    let mut cluster_keys = Vec::with_capacity(exprs.len());
+    for ast in ast_exprs {
+        let (scalar, _) = *type_checker.resolve(&ast)?;
+        if scalar.used_columns().len() != 1 || !scalar.evaluable() {
+            return Err(ErrorCode::InvalidClusterKeys(format!(
+                "Cluster by expression `{:#}` is invalid",
+                ast
+            )));
+        }
+
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            return Err(ErrorCode::InvalidClusterKeys(format!(
+                "Cluster by expression `{:#}` is not deterministic",
+                ast
+            )));
+        }
+
+        let data_type = expr.data_type().remove_nullable();
+        if !matches!(
+            data_type,
+            DataType::Number(_)
+                | DataType::String
+                | DataType::Timestamp
+                | DataType::Date
+                | DataType::Boolean
+                | DataType::Decimal(_)
+        ) {
+            return Err(ErrorCode::InvalidClusterKeys(format!(
+                "Unsupported data type '{}' for cluster by expression `{:#}`",
+                data_type, ast
+            )));
+        }
+
+        exprs.push(expr);
+
+        let mut cluster_by = ast.clone();
+        let mut normalizer = IdentifierNormalizer {
+            ctx: &name_resolution_ctx,
+        };
+        cluster_by.drive_mut(&mut normalizer);
+        cluster_keys.push(format!("{:#}", &cluster_by));
+    }
+
+    let cluster_by_str = format!("({})", cluster_keys.join(", "));
+    Ok((cluster_by_str, exprs))
 }
 
 #[derive(Default)]

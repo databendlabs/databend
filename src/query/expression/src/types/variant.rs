@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use core::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::ops::Range;
 
+use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
-use roaring::RoaringTreemap;
+use jsonb::Value;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -149,8 +151,11 @@ impl ValueType for VariantType {
         builder.commit_row();
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.put_slice(b"");
         builder.commit_row();
     }
 
@@ -175,8 +180,8 @@ impl ValueType for VariantType {
     }
 
     #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
     }
 }
 
@@ -189,6 +194,17 @@ impl ArgType for VariantType {
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
+    }
+}
+
+impl VariantType {
+    pub fn create_column_from_variants(variants: &[Value]) -> BinaryColumn {
+        let mut builder = BinaryColumnBuilder::with_capacity(variants.len(), 0);
+        for v in variants {
+            v.write_to_vec(&mut builder.data);
+            builder.commit_row();
+        }
+        builder.build()
     }
 }
 
@@ -223,30 +239,28 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Map(col) => {
             let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(&col).unwrap();
-            let kvs = kv_col
-                .iter()
-                .map(|(k, v)| {
-                    let key = match k {
-                        ScalarRef::String(v) => v.to_string(),
-                        ScalarRef::Number(v) => v.to_string(),
-                        ScalarRef::Decimal(v) => v.to_string(),
-                        ScalarRef::Boolean(v) => v.to_string(),
-                        ScalarRef::Timestamp(v) => timestamp_to_string(v, inner_tz).to_string(),
-                        ScalarRef::Date(v) => date_to_string(v, inner_tz).to_string(),
-                        _ => unreachable!(),
-                    };
-                    let mut val = vec![];
-                    cast_scalar_to_variant(v, tz, &mut val);
-                    (key, val)
-                })
-                .collect::<Vec<_>>();
+            let mut kvs = BTreeMap::new();
+            for (k, v) in kv_col.iter() {
+                let key = match k {
+                    ScalarRef::String(v) => v.to_string(),
+                    ScalarRef::Number(v) => v.to_string(),
+                    ScalarRef::Decimal(v) => v.to_string(),
+                    ScalarRef::Boolean(v) => v.to_string(),
+                    ScalarRef::Timestamp(v) => timestamp_to_string(v, inner_tz).to_string(),
+                    ScalarRef::Date(v) => date_to_string(v, inner_tz).to_string(),
+                    _ => unreachable!(),
+                };
+                let mut val = vec![];
+                cast_scalar_to_variant(v, tz, &mut val);
+                kvs.insert(key, val);
+            }
             jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
                 .expect("failed to build jsonb object from map");
             return;
         }
         ScalarRef::Bitmap(b) => {
             jsonb::Value::Array(
-                RoaringTreemap::deserialize_from(b)
+                deserialize_bitmap(b)
                     .unwrap()
                     .iter()
                     .map(|x| x.into())
@@ -272,9 +286,15 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             return;
         }
         ScalarRef::Geometry(bytes) => {
-            let geom = Ewkb(bytes.to_vec())
-                .to_json()
-                .expect("failed to decode wkb data");
+            let geom = Ewkb(bytes).to_json().expect("failed to decode wkb data");
+            jsonb::parse_value(geom.as_bytes())
+                .expect("failed to parse geojson to json value")
+                .write_to_vec(buf);
+            return;
+        }
+        ScalarRef::Geography(bytes) => {
+            // todo: Implement direct conversion, omitting intermediate processes
+            let geom = Ewkb(bytes.0).to_json().expect("failed to decode wkb data");
             jsonb::parse_value(geom.as_bytes())
                 .expect("failed to parse geojson to json value")
                 .write_to_vec(buf);

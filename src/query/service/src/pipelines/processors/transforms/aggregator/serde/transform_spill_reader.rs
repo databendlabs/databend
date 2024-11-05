@@ -34,6 +34,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
@@ -47,6 +48,7 @@ pub struct TransformSpillReader<Method: HashMethodBounds, V: Send + Sync + 'stat
     output: Arc<OutputPort>,
 
     operator: Operator,
+    semaphore: Arc<Semaphore>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
     reading_meta: Option<AggregateMeta<Method, V>>,
     deserializing_meta: Option<DeserializingMeta<Method, V>>,
@@ -106,14 +108,14 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 }
 
                 if let AggregateMeta::Partitioned { data, .. } = block_meta {
-                    for meta in data {
-                        if matches!(meta, AggregateMeta::BucketSpilled(_)) {
-                            self.input.set_not_need_data();
-                            let block_meta = data_block.take_meta().unwrap();
-                            self.reading_meta =
-                                AggregateMeta::<Method, V>::downcast_from(block_meta);
-                            return Ok(Event::Async);
-                        }
+                    if data
+                        .iter()
+                        .any(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
+                    {
+                        self.input.set_not_need_data();
+                        let block_meta = data_block.take_meta().unwrap();
+                        self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
+                        return Ok(Event::Async);
                     }
                 }
             }
@@ -183,6 +185,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
+                    let _guard = self.semaphore.acquire().await;
                     let instant = Instant::now();
                     let data = self
                         .operator
@@ -211,7 +214,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
+                            let semaphore = self.semaphore.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
+                                let _guard = semaphore.acquire().await;
                                 let instant = Instant::now();
                                 let data = operator
                                     .read_with(&location)
@@ -222,15 +227,15 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                 // perf
                                 {
                                     Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadCount,
+                                        ProfileStatisticsName::RemoteSpillReadCount,
                                         1,
                                     );
                                     Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadBytes,
+                                        ProfileStatisticsName::RemoteSpillReadBytes,
                                         data.len(),
                                     );
                                     Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadTime,
+                                        ProfileStatisticsName::RemoteSpillReadTime,
                                         instant.elapsed().as_millis() as usize,
                                     );
                                 }
@@ -258,17 +263,19 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             return Err(ErrorCode::TokioError("Cannot join tokio job"));
                         }
                         Ok(read_data) => {
-                            let read_data: Result<VecDeque<Vec<u8>>, opendal::Error> =
+                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
                                 read_data.into_iter().try_collect();
 
                             self.deserializing_meta = Some((block_meta, read_data?));
                         }
                     };
 
-                    info!(
-                        "Read {} aggregate spills successfully, total elapsed: {:?}",
-                        processed_count, total_elapsed
-                    );
+                    if processed_count != 0 {
+                        info!(
+                            "Read {} aggregate spills successfully, total elapsed: {:?}",
+                            processed_count, total_elapsed
+                        );
+                    }
                 }
             }
         }
@@ -282,6 +289,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
+        semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<
             Method,
@@ -290,6 +298,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
             input,
             output,
             operator,
+            semaphore,
             deserialized_meta: None,
             reading_meta: None,
             deserializing_meta: None,

@@ -20,7 +20,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

@@ -6,27 +6,30 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-base = { path = "../../../common/base" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-databend-common-pipeline-core = { path = "../core" }
-
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
 jsonb = { workspace = true }
+log = { workspace = true }
 match-template = { workspace = true }
 serde = { workspace = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]
 itertools = { workspace = true }
 rand = { workspace = true }
+
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

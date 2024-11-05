@@ -32,7 +32,6 @@ pub struct ClusteringHistoryLogElement {
     pub end_time: i64,
     pub database: String,
     pub table: String,
-    pub block_count: u64,
     pub byte_size: u64,
     pub row_count: u64,
 }
@@ -46,7 +45,6 @@ impl SystemLogElement for ClusteringHistoryLogElement {
             TableField::new("end_time", TableDataType::Timestamp),
             TableField::new("database", TableDataType::String),
             TableField::new("table", TableDataType::String),
-            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("byte_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
         ])
@@ -70,10 +68,6 @@ impl SystemLogElement for ClusteringHistoryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.table.clone()).as_ref());
-        columns
-            .next()
-            .unwrap()
-            .push(Scalar::Number(NumberScalar::UInt64(self.block_count)).as_ref());
         columns
             .next()
             .unwrap()

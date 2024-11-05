@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::OrderedFloat;
 use ethnum::i256;
-use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
 use crate::types::geometry::GeometryType;
@@ -33,17 +33,26 @@ use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::InputColumns;
 use crate::ScalarRef;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
-pub fn group_hash_columns(cols: &[Column], values: &mut [u64]) {
+pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
-    combine_group_hash_column::<true>(&cols[0], values);
-    if cols.len() > 1 {
-        for col in &cols[1..] {
-            combine_group_hash_column::<false>(col, values);
-        }
+    let mut iter = cols.iter();
+    combine_group_hash_column::<true>(iter.next().unwrap(), values);
+    for col in iter {
+        combine_group_hash_column::<false>(col, values);
+    }
+}
+
+pub fn group_hash_columns_slice(cols: &[Column], values: &mut [u64]) {
+    debug_assert!(!cols.is_empty());
+    let mut iter = cols.iter();
+    combine_group_hash_column::<true>(iter.next().unwrap(), values);
+    for col in iter {
+        combine_group_hash_column::<false>(col, values);
     }
 }
 

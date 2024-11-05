@@ -77,7 +77,6 @@ impl RangeIndex {
         }))
     }
 
-    #[minitrace::trace]
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
         let input_domains = self
@@ -122,7 +121,6 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
-
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             &self.expr,
             &input_domains,
@@ -137,7 +135,7 @@ impl RangeIndex {
         }))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn apply_with_partition_columns(
         &self,
         stats: &StatisticsOfColumns,
@@ -249,4 +247,8 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
     }
 }
 
-impl Index for RangeIndex {}
+impl Index for RangeIndex {
+    fn supported_type(data_type: &DataType) -> bool {
+        databend_storages_common_table_meta::meta::supported_stat_type(data_type)
+    }
+}

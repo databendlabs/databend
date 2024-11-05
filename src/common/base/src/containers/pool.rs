@@ -22,6 +22,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use log::debug;
+use log::warn;
 
 use crate::base::tokio;
 use crate::base::tokio::time::sleep;
@@ -34,9 +35,9 @@ pub type PoolItem<T> = Arc<tokio::sync::Mutex<Option<T>>>;
 /// When an item is reused, ItemManager `check()` if it is still valid.
 #[async_trait]
 pub trait ItemManager {
-    type Key;
+    type Key: Debug;
     type Item;
-    type Error;
+    type Error: Debug;
 
     /// Make a new item to put into the pool.
     ///
@@ -118,7 +119,7 @@ where
     /// When returning an existent one, `check()` will be called on it to ensure it is still valid.
     /// E.g., when returning a tcp connection.
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get(&self, key: &Mgr::Key) -> Result<Mgr::Item, Mgr::Error> {
         let pool_item = self.get_pool_item(key);
 
@@ -132,6 +133,7 @@ where
             if let Ok(itm) = check_res {
                 return Ok(itm);
             } else {
+                warn!("RaftNetwork check reused item failed: {:?}", key);
                 // mark broken conn as deleted
                 *guard = None;
             }
@@ -152,6 +154,7 @@ where
                     return Ok(x);
                 }
                 Err(err) => {
+                    warn!("RaftNetwork build new item failed: {:?}", err);
                     if i == self.n_retries - 1 {
                         return Err(err);
                     }

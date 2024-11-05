@@ -35,6 +35,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_hashtable::HashSet as CommonHashSet;
 use databend_common_hashtable::HashtableKeyable;
@@ -54,10 +55,10 @@ pub trait DistinctStateFunc: Sized + Send + Sync {
     fn deserialize(reader: &mut &[u8]) -> Result<Self>;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn add(&mut self, columns: &[Column], row: usize) -> Result<()>;
+    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()>;
     fn batch_add(
         &mut self,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()>;
@@ -102,7 +103,7 @@ impl DistinctStateFunc for AggregateDistinctState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
+    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
         let values = columns
             .iter()
             .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
@@ -115,7 +116,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
     fn batch_add(
         &mut self,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -191,7 +192,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
+    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let data = unsafe { column.index_unchecked(row) };
         let _ = self.set.set_insert(data.as_bytes());
@@ -200,7 +201,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
 
     fn batch_add(
         &mut self,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -275,7 +276,7 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
         self.set.len()
     }
 
-    fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
+    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
         let col = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         let v = unsafe { col.get_unchecked(row) };
         let _ = self.set.set_insert(*v).is_ok();
@@ -284,7 +285,7 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
 
     fn batch_add(
         &mut self,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -356,7 +357,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
+    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
         let column = columns[0].as_string().unwrap();
         let data = unsafe { column.index_unchecked(row) };
         let mut hasher = SipHasher24::new();
@@ -368,7 +369,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
 
     fn batch_add(
         &mut self,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {

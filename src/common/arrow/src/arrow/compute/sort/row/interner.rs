@@ -18,8 +18,8 @@ use std::hash::Hash;
 use std::num::NonZeroU32;
 use std::ops::Index;
 
-use hashbrown::hash_map::RawEntryMut;
-use hashbrown::HashMap;
+use hashbrown_v0_14::hash_map::RawEntryMut;
+use hashbrown_v0_14::HashMap;
 
 /// An interned value of 32 bits.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -47,16 +47,7 @@ trait HashSingle: BuildHasher {
     #[inline]
     fn hash_single<T: Hash>(&self, x: T) -> u64
     where Self: Sized {
-        // Rewrite as `hasher.hash_one(&x)` after
-        // https://github.com/rust-lang/rust/issues/86161 is merged.
-        #[cfg(feature = "nightly_build")]
-        {
-            self.hash_one(x)
-        }
-        #[cfg(not(feature = "nightly_build"))]
-        {
-            self.hash_one(&x)
-        }
+        self.hash_one(&x)
     }
 }
 

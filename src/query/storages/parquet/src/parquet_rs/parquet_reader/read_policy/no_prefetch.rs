@@ -66,11 +66,16 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
 impl NoPretchPolicyBuilder {
     pub fn create(
         schema: &SchemaDescriptor,
+        arrow_schema: Option<&arrow_schema::Schema>,
         data_schema: DataSchema,
         projection: ProjectionMask,
         field_paths: Arc<Option<FieldPaths>>,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
-        let field_levels = parquet_to_arrow_field_levels(schema, projection.clone(), None)?;
+        let field_levels = parquet_to_arrow_field_levels(
+            schema,
+            projection.clone(),
+            arrow_schema.map(|s| &s.fields),
+        )?;
         Ok(Box::new(NoPretchPolicyBuilder {
             field_levels,
             data_schema,

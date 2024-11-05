@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,7 +20,6 @@ use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::error_info::NodeErrorType;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
@@ -31,16 +29,17 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
+use fastrace::func_path;
+use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
-use log::LevelFilter;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
@@ -54,9 +53,6 @@ use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback =
-    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
-
 pub struct QueryPipelineExecutor {
     threads_num: usize,
     pub(crate) graph: Arc<RunningGraph>,
@@ -64,12 +60,12 @@ pub struct QueryPipelineExecutor {
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<QueryExecutorTasksQueue>,
     on_init_callback: Mutex<Option<InitCallback>>,
-    on_finished_callback: Mutex<Option<FinishedCallback>>,
+    on_finished_chain: Mutex<FinishedCallbackChain>,
     settings: ExecutorSettings,
     finished_notify: Arc<WatchNotify>,
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
-    lock_guards: Vec<LockGuard>,
+    lock_guards: Vec<Arc<LockGuard>>,
 }
 
 impl QueryPipelineExecutor {
@@ -86,26 +82,28 @@ impl QueryPipelineExecutor {
         }
 
         let on_init_callback = pipeline.take_on_init();
-        let on_finished_callback = pipeline.take_on_finished();
+        let mut on_finished_chain = pipeline.take_on_finished();
         let lock_guards = pipeline.take_lock_guards();
 
         match RunningGraph::create(pipeline, 1, settings.query_id.clone(), None) {
             Err(cause) => {
-                let _ = on_finished_callback((&vec![], &Err(cause.clone())));
+                let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
+                let _ = on_finished_chain.apply(info);
+
                 Err(cause)
             }
             Ok(running_graph) => Self::try_create(
                 running_graph,
                 threads_num,
                 Mutex::new(Some(on_init_callback)),
-                Mutex::new(Some(on_finished_callback)),
+                Mutex::new(on_finished_chain),
                 settings,
                 lock_guards,
             ),
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -140,19 +138,10 @@ impl QueryPipelineExecutor {
             })
         };
 
-        let on_finished_callback = {
-            let pipelines_callback = pipelines
-                .iter_mut()
-                .map(|x| x.take_on_finished())
-                .collect::<Vec<_>>();
-
-            pipelines_callback.into_iter().reduce(|left, right| {
-                Box::new(move |arg| {
-                    left(arg)?;
-                    right(arg)
-                })
-            })
-        };
+        let mut finished_chain = FinishedCallbackChain::create();
+        for pipeline in &mut pipelines {
+            finished_chain.extend(pipeline.take_on_finished());
+        }
 
         let lock_guards = pipelines
             .iter_mut()
@@ -161,17 +150,15 @@ impl QueryPipelineExecutor {
 
         match RunningGraph::from_pipelines(pipelines, 1, settings.query_id.clone(), None) {
             Err(cause) => {
-                if let Some(on_finished_callback) = on_finished_callback {
-                    let _ = on_finished_callback((&vec![], &Err(cause.clone())));
-                }
-
+                let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
+                let _ignore_res = finished_chain.apply(info);
                 Err(cause)
             }
             Ok(running_graph) => Self::try_create(
                 running_graph,
                 threads_num,
                 Mutex::new(on_init_callback),
-                Mutex::new(on_finished_callback),
+                Mutex::new(finished_chain),
                 settings,
                 lock_guards,
             ),
@@ -182,9 +169,9 @@ impl QueryPipelineExecutor {
         graph: Arc<RunningGraph>,
         threads_num: usize,
         on_init_callback: Mutex<Option<InitCallback>>,
-        on_finished_callback: Mutex<Option<FinishedCallback>>,
+        on_finished_chain: Mutex<FinishedCallbackChain>,
         settings: ExecutorSettings,
-        lock_guards: Vec<LockGuard>,
+        lock_guards: Vec<Arc<LockGuard>>,
     ) -> Result<Arc<QueryPipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = QueryExecutorTasksQueue::create(threads_num);
@@ -195,7 +182,7 @@ impl QueryPipelineExecutor {
             workers_condvar,
             global_tasks_queue,
             on_init_callback,
-            on_finished_callback,
+            on_finished_chain,
             async_runtime: GlobalIORuntime::instance(),
             settings,
             finished_error: Mutex::new(None),
@@ -204,38 +191,34 @@ impl QueryPipelineExecutor {
         }))
     }
 
-    fn on_finished(&self, error: (&Vec<PlanProfile>, &Result<()>)) -> Result<()> {
-        let mut guard = self.on_finished_callback.lock();
-        if let Some(on_finished_callback) = guard.take() {
-            drop(guard);
+    fn on_finished(&self, info: ExecutionInfo) -> Result<()> {
+        let mut on_finished_chain = self.on_finished_chain.lock();
 
-            // untracking for on finished
-            let mut tracking_payload = ThreadTracker::new_tracking_payload();
-            if let Some(mem_stat) = &tracking_payload.mem_stat {
-                tracking_payload.mem_stat = Some(MemStat::create_child(
-                    String::from("Pipeline-on-finished"),
-                    mem_stat.get_parent_memory_stat(),
-                ));
-            }
-
-            catch_unwind(move || {
-                let _guard = ThreadTracker::tracking(tracking_payload);
-                on_finished_callback(error)
-            })??;
+        // untracking for on finished
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        if let Some(mem_stat) = &tracking_payload.mem_stat {
+            tracking_payload.mem_stat = Some(MemStat::create_child(
+                String::from("Pipeline-on-finished"),
+                mem_stat.get_parent_memory_stat(),
+            ));
         }
-        Ok(())
+
+        let _guard = ThreadTracker::tracking(tracking_payload);
+        on_finished_chain.apply(info)
     }
 
-    pub fn finish(&self, cause: Option<ErrorCode>) {
-        if let Some(cause) = cause {
-            let mut finished_error = self.finished_error.lock();
+    pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
+        let cause = cause.map(|err| err.with_context("pipeline executor finished"));
 
+        let mut finished_error = self.finished_error.lock();
+        if let Some(cause) = cause {
             // We only save the cause of the first error.
             if finished_error.is_none() {
                 *finished_error = Some(cause);
             }
         }
 
+        drop(finished_error);
         self.global_tasks_queue.finish(self.workers_condvar.clone());
         self.graph.interrupt_running_nodes();
         self.finished_notify.notify_waiters();
@@ -245,7 +228,7 @@ impl QueryPipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         self.init(self.graph.clone())?;
 
@@ -262,7 +245,8 @@ impl QueryPipelineExecutor {
                     let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    self.on_finished((&self.get_plans_profile(), &Err(may_error.clone())))?;
+                    let profiling = self.fetch_plans_profile(true);
+                    self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
                     return Err(may_error);
                 }
             }
@@ -270,18 +254,20 @@ impl QueryPipelineExecutor {
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = thread_res.unwrap_err();
-                self.on_finished((&self.get_plans_profile(), &Err(may_error.clone())))?;
+                let profiling = self.fetch_plans_profile(true);
+                self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
                 return Err(may_error);
             }
         }
 
         if let Err(error) = self.graph.assert_finished_graph() {
-            self.on_finished((&self.get_plans_profile(), &Err(error.clone())))?;
+            let profiling = self.fetch_plans_profile(true);
+            self.on_finished(ExecutionInfo::create(Err(error.clone()), profiling))?;
             return Err(error);
         }
 
-        // self.settings.query_id
-        self.on_finished((&self.get_plans_profile(), &Ok(())))?;
+        let profiling = self.fetch_plans_profile(true);
+        self.on_finished(ExecutionInfo::create(Ok(()), profiling))?;
         Ok(())
     }
 
@@ -351,16 +337,16 @@ impl QueryPipelineExecutor {
             let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
             let finished_notify = self.finished_notify.clone();
             self.async_runtime.spawn(async move {
-                            let finished_future = Box::pin(finished_notify.notified());
-                            let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
-                            if let Either::Left(_) = select(max_execute_future, finished_future).await {
-                                if let Some(executor) = this.upgrade() {
-                                    executor.finish(Some(ErrorCode::AbortedQuery(
-                                        "Aborted query, because the execution time exceeds the maximum execution time limit",
-                                    )));
-                                }
-                            }
-                        });
+                let finished_future = Box::pin(finished_notify.notified());
+                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
+                if let Either::Left(_) = select(max_execute_future, finished_future).await {
+                    if let Some(executor) = this.upgrade() {
+                        executor.finish(Some(ErrorCode::AbortedQuery(
+                            "Aborted query, because the execution time exceeds the maximum execution time limit",
+                        )));
+                    }
+                }
+            });
         }
 
         Ok(())
@@ -384,26 +370,12 @@ impl QueryPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent(full_name!())
+            let span = Span::enter_with_local_parent(func_path!())
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
-                let try_result = catch_unwind(move || -> Result<()> {
-                    match this_clone.execute_single_thread(thread_num) {
-                        Ok(_) => Ok(()),
-                        Err(cause) => {
-                            if log::max_level() == LevelFilter::Trace {
-                                Err(cause.add_message_back(format!(
-                                    " (while in processor thread {})",
-                                    thread_num
-                                )))
-                            } else {
-                                Err(cause)
-                            }
-                        }
-                    }
-                });
+                let try_result = catch_unwind(|| this_clone.execute_single_thread(thread_num));
 
                 // finish the pipeline executor when has error or panic
                 if let Err(cause) = try_result.flatten() {
@@ -477,78 +449,42 @@ impl QueryPipelineExecutor {
         self.graph.format_graph_nodes()
     }
 
-    pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
-        self.graph.get_proc_profiles()
-    }
-
-    pub fn get_plans_profile(&self) -> Vec<PlanProfile> {
-        let mut plans_profile: HashMap<u32, PlanProfile> = HashMap::<u32, PlanProfile>::new();
-
-        for profile in self.get_profiles() {
-            if let Some(plan_id) = &profile.plan_id {
-                match plans_profile.entry(*plan_id) {
-                    Entry::Occupied(mut v) => {
-                        v.get_mut().accumulate(&profile);
-                    }
-                    Entry::Vacant(v) => {
-                        let plan_profile = v.insert(PlanProfile::create(&profile));
-                        if let Some(metrics_registry) = &profile.metrics_registry {
-                            match metrics_registry.dump_sample() {
-                                Ok(metrics) => {
-                                    plan_profile.add_metrics(
-                                        self.settings.executor_node_id.clone(),
-                                        metrics,
-                                    );
-                                }
-                                Err(error) => {
-                                    warn!(
-                                        "Dump {:?} plan metrics error, cause {:?}",
-                                        plan_profile.name, error
-                                    );
-                                }
-                            }
-                        }
-                    }
-                };
-            };
+    pub fn fetch_plans_profile(&self, collect_metrics: bool) -> HashMap<u32, PlanProfile> {
+        match collect_metrics {
+            true => self
+                .graph
+                .fetch_profiling(Some(self.settings.executor_node_id.clone())),
+            false => self.graph.fetch_profiling(None),
         }
-
-        plans_profile.into_values().collect::<Vec<_>>()
     }
 }
 
 impl Drop for QueryPipelineExecutor {
     fn drop(&mut self) {
         drop_guard(move || {
-            self.finish(None);
+            self.finish::<()>(None);
 
-            let mut guard = self.on_finished_callback.lock();
-            if let Some(on_finished_callback) = guard.take() {
-                drop(guard);
-                let cause = match self.finished_error.lock().as_ref() {
-                    Some(cause) => cause.clone(),
-                    None => {
-                        ErrorCode::Internal("Pipeline illegal state: not successfully shutdown.")
-                    }
-                };
+            let cause = match self.finished_error.lock().as_ref() {
+                Some(cause) => cause.clone(),
+                None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
+            };
 
-                // untracking for on finished
-                let mut tracking_payload = ThreadTracker::new_tracking_payload();
-                if let Some(mem_stat) = &tracking_payload.mem_stat {
-                    tracking_payload.mem_stat = Some(MemStat::create_child(
-                        String::from("Pipeline-on-finished"),
-                        mem_stat.get_parent_memory_stat(),
-                    ));
-                }
+            let mut on_finished_chain = self.on_finished_chain.lock();
 
-                if let Err(cause) = catch_unwind(move || {
-                    let _guard = ThreadTracker::tracking(tracking_payload);
-                    on_finished_callback((&self.get_plans_profile(), &Err(cause)))
-                })
-                .flatten()
-                {
-                    warn!("Pipeline executor shutdown failure, {:?}", cause);
-                }
+            // untracking for on finished
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            if let Some(mem_stat) = &tracking_payload.mem_stat {
+                tracking_payload.mem_stat = Some(MemStat::create_child(
+                    String::from("Pipeline-on-finished"),
+                    mem_stat.get_parent_memory_stat(),
+                ));
+            }
+
+            let _guard = ThreadTracker::tracking(tracking_payload);
+            let profiling = self.fetch_plans_profile(true);
+            let info = ExecutionInfo::create(Err(cause), profiling);
+            if let Err(cause) = on_finished_chain.apply(info) {
+                warn!("Pipeline executor shutdown failure, {:?}", cause);
             }
         })
     }

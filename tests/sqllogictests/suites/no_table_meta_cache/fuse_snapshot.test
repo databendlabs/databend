@@ -1,0 +1,35 @@
+statement ok
+create or replace database test_fuse_snapshot_without_meta_cache;
+
+statement ok
+use test_fuse_snapshot_without_meta_cache;
+
+
+statement ok
+create or replace table t(c int) 'fs:///tmp/test_fuse_snapshot_without_meta_cache/';
+
+# check table meta cache is disabled
+
+query TT
+select name, value from system.configs where  name = 'enable_table_meta_cache';
+----
+enable_table_meta_cache false
+
+# generate 3 snapshots
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(1);
+
+query I
+select count() from fuse_snapshot('test_fuse_snapshot_without_meta_cache', 't') limit 100;
+----
+3
+
+
+

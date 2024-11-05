@@ -14,16 +14,22 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoLocationOptions;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
 use log::debug;
+use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,7 +51,10 @@ impl CopyIntoLocationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_query(&self, query: &Plan) -> Result<SelectInterpreter> {
+    async fn build_query(
+        &self,
+        query: &Plan,
+    ) -> Result<(SelectInterpreter, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -66,7 +75,9 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        Ok(select_interpreter)
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+
+        Ok((select_interpreter, update_stream_meta))
     }
 
     /// Build a pipeline for local copy into stage.
@@ -76,8 +87,9 @@ impl CopyIntoLocationInterpreter {
         stage: &StageInfo,
         path: &str,
         query: &Plan,
-    ) -> Result<PipelineBuildResult> {
-        let query_interpreter = self.build_query(query).await?;
+        options: &CopyIntoLocationOptions,
+    ) -> Result<(PipelineBuildResult, Vec<UpdateStreamMetaReq>)> {
+        let (query_interpreter, update_stream_meta_req) = self.build_query(query).await?;
         let query_physical_plan = query_interpreter.build_physical_plan().await?;
         let query_result_schema = query_interpreter.get_result_schema();
         let table_schema = infer_table_schema(&query_result_schema)?;
@@ -99,12 +111,16 @@ impl CopyIntoLocationInterpreter {
                 duplicated_files_detected: vec![],
                 is_select: false,
                 default_values: None,
+                copy_into_location_options: options.clone(),
             },
         }));
 
         let mut next_plan_id = 0;
         physical_plan.adjust_plan_id(&mut next_plan_id);
-        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await
+        Ok((
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?,
+            update_stream_meta_req,
+        ))
     }
 }
 
@@ -118,7 +134,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         false
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
@@ -126,11 +142,32 @@ impl Interpreter for CopyIntoLocationInterpreter {
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
-        self.build_local_copy_into_stage_pipeline(
-            &self.plan.stage,
-            &self.plan.path,
-            &self.plan.from,
-        )
-        .await
+
+        let (mut pipeline_build_result, update_stream_reqs) = self
+            .build_local_copy_into_stage_pipeline(
+                &self.plan.stage,
+                &self.plan.path,
+                &self.plan.from,
+                &self.plan.options,
+            )
+            .await?;
+
+        // We are going to consuming streams, which are all of the default catalog
+        let catalog = self.ctx.get_default_catalog()?;
+
+        // Add a commit sink to the pipeline does not work, since the pipeline emits result set,
+        // `inject_result` should work, but is cumbersome for this case
+        pipeline_build_result.main_pipeline.set_on_finished(
+            move |info: &ExecutionInfo| match &info.res {
+                Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                    info!("Updating the stream meta for COPY INTO LOCATION statement",);
+                    catalog.update_stream_metas(update_stream_reqs).await?;
+                    Ok(())
+                }),
+                Err(e) => Err(e.clone()),
+            },
+        );
+
+        Ok(pipeline_build_result)
     }
 }

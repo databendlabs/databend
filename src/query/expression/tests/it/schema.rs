@@ -309,23 +309,23 @@ fn test_schema_from_struct() -> Result<()> {
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
         (
-            "tuplearray:0:0",
+            "tuplearray:\"0\":\"0\"",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
-            "tuplearray:0:1",
+            "tuplearray:\"0\":\"1\"",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
-            "tuplearray:1:0",
+            "tuplearray:\"1\":0",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
-            "arraytuple:0:0",
+            "arraytuple:0:\"0\"",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
-            "arraytuple:0:1",
+            "arraytuple:0:\"1\"",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         ("nullarray:0", TableDataType::Number(NumberDataType::UInt64)),
@@ -405,11 +405,11 @@ fn test_schema_from_struct() -> Result<()> {
     {
         let expected_column_id_field = vec![
             (0, "u64"),
-            (1, "tuplearray:0:0"),
-            (2, "tuplearray:0:1"),
-            (3, "tuplearray:1:0"),
-            (4, "arraytuple:0:0"),
-            (5, "arraytuple:0:1"),
+            (1, "tuplearray:\"0\":\"0\""),
+            (2, "tuplearray:\"0\":\"1\""),
+            (3, "tuplearray:\"1\":0"),
+            (4, "arraytuple:0:\"0\""),
+            (5, "arraytuple:0:\"1\""),
             (6, "nullarray:0"),
             (7, "maparray:key"),
             (8, "maparray:value"),
@@ -531,9 +531,9 @@ fn test_schema_modify_field() -> Result<()> {
         let expected_column_id_field = [
             (0, "a"),
             (2, "c"),
-            (3, "s:0:0"),
-            (4, "s:0:1"),
-            (5, "s:1"),
+            (3, "s:\"0\":\"0\""),
+            (4, "s:\"0\":\"1\""),
+            (5, "s:\"1\""),
             (6, "ary:0:0"),
         ];
         let leaf_fields = schema.leaf_fields();
@@ -649,4 +649,25 @@ fn test_leaf_columns_of() -> Result<()> {
     assert_eq!(schema.leaf_columns_of(&"d".to_string()), vec![5, 6]);
     assert_eq!(schema.leaf_columns_of(&"e".to_string()), vec![7]);
     Ok(())
+}
+
+#[test]
+fn test_geography_as_arrow() {
+    use databend_common_expression::types::binary::BinaryColumnBuilder;
+    use databend_common_expression::types::geography::GeographyColumn;
+    use databend_common_expression::Column;
+    use databend_common_io::wkb::make_point;
+
+    let mut builder = BinaryColumnBuilder::with_capacity(3, 0);
+    builder.put_slice(&make_point(1.0, 2.0));
+    builder.commit_row();
+    builder.put_slice(&make_point(2.0, 3.0));
+    builder.commit_row();
+    builder.put_slice(&make_point(4.0, 5.0));
+    builder.commit_row();
+    let col = Column::Geography(GeographyColumn(builder.build()));
+
+    let arr = col.as_arrow();
+    let got = Column::from_arrow(&*arr, &col.data_type()).unwrap();
+    assert_eq!(col, got)
 }

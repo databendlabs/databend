@@ -56,7 +56,7 @@ impl Interpreter for CreateUserStageInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_stage_execute");
@@ -115,7 +115,7 @@ impl Interpreter for CreateUserStageInterpreter {
 
         // create dir if new stage if not external stage
         if user_stage.stage_type != StageType::External {
-            let op = self.ctx.get_data_operator()?.operator();
+            let op = self.ctx.get_application_level_data_operator()?.operator();
             op.create_dir(&user_stage.stage_prefix()).await?
         }
 

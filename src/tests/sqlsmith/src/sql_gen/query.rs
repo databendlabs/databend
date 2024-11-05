@@ -478,11 +478,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             alias: None,
             // TODO
             temporal: None,
-            consume: false,
+            with_options: None,
             // TODO
             pivot: None,
             // TODO
             unpivot: None,
+            sample: None,
         };
         (table_ref, schema)
     }
@@ -523,6 +524,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }],
                     named_params: vec![],
                     alias: None,
+                    sample: None,
                 }
             }
             "generate_series" | "range" => {
@@ -593,6 +595,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     },
                     named_params: vec![],
                     alias: None,
+                    sample: None,
                 }
             }
             _ => unreachable!(),
@@ -689,6 +692,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             lateral: false,
             subquery: Box::new(subquery),
             alias: Some(alias),
+            pivot: None,
+            unpivot: None,
         }
     }
 

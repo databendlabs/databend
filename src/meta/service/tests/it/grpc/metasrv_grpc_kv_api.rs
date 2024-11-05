@@ -22,7 +22,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvBuilder;
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_metasrv_kv_api() -> anyhow::Result<()> {
     let builder = MetaSrvBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),

@@ -31,6 +31,7 @@ use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
+use crate::InputColumns;
 use crate::PayloadFlushState;
 use crate::SelectVector;
 use crate::StateAddr;
@@ -194,7 +195,7 @@ impl Payload {
         group_hashes: &[u64],
         address: &mut [*const u8],
         new_group_rows: usize,
-        group_columns: &[Column],
+        group_columns: InputColumns,
     ) {
         let tuple_size = self.tuple_size;
         let mut page = self.writable_page();
@@ -229,11 +230,11 @@ impl Payload {
         group_hashes: &[u64],
         address: &mut [*const u8],
         new_group_rows: usize,
-        group_columns: &[Column],
+        group_columns: InputColumns,
     ) {
         let mut write_offset = 0;
         // write validity
-        for col in group_columns {
+        for col in group_columns.iter() {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
                 if bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len() {

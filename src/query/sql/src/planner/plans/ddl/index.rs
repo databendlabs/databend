@@ -81,5 +81,4 @@ pub struct RefreshTableIndexPlan {
     pub table: String,
     pub index_name: String,
     pub segment_locs: Option<Vec<Location>>,
-    pub need_lock: bool,
 }

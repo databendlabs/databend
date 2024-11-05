@@ -39,19 +39,6 @@ fn default_new_int() -> u32 {
     100
 }
 
-#[cfg(with_pot)]
-#[test]
-fn test_pot_backward_compat() {
-    let old = BasicOld { a: 1, b: 2 };
-    let bytes = pot::to_vec(&old).unwrap();
-    let new: Basic = pot::from_slice(&bytes).unwrap();
-
-    assert_eq!(new.a, 1);
-    assert_eq!(new.b, 2);
-    assert_eq!(new.new_string, None);
-    assert_eq!(new.new_int, 100);
-}
-
 #[test]
 fn test_msgpack_backward_compat() {
     let old_format = BasicOld { a: 1, b: 2 };

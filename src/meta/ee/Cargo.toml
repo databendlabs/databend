@@ -14,4 +14,7 @@ test = true
 [dependencies]
 
 [build-dependencies]
-databend-common-building = { path = "../../common/building" }
+databend-common-building = { workspace = true }
+
+[lints]
+workspace = true

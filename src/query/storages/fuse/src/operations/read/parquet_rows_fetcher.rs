@@ -29,6 +29,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
@@ -37,10 +38,9 @@ use super::fuse_rows_fetcher::RowsFetcher;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
-use crate::io::ReadSettings;
+use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
-use crate::MergeIOReadResult;
 
 pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
     snapshot: Option<Arc<TableSnapshot>>,
@@ -96,11 +96,17 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
         let num_parts = part_set.len();
         let mut tasks = Vec::with_capacity(self.max_threads);
         // Fetch blocks in parallel.
+        let part_size = num_parts / self.max_threads;
+        let remainder = num_parts % self.max_threads;
+        let mut begin = 0;
         for i in 0..self.max_threads {
-            let begin = num_parts * i / self.max_threads;
-            let end = num_parts * (i + 1) / self.max_threads;
+            let end = if i < remainder {
+                begin + part_size + 1
+            } else {
+                begin + part_size
+            };
             if begin == end {
-                continue;
+                break;
             }
             let parts = part_set[begin..end]
                 .iter()
@@ -110,7 +116,8 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
                 self.reader.clone(),
                 parts,
                 self.settings,
-            ))
+            ));
+            begin = end;
         }
 
         let num_task = tasks.len();
@@ -255,7 +262,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
     fn build_block(
         reader: &BlockReader,
         part: &PartInfoPtr,
-        chunk: MergeIOReadResult,
+        chunk: BlockReadResult,
     ) -> Result<DataBlock> {
         let columns_chunks = chunk.columns_chunks()?;
         let part = FuseBlockPartInfo::from_part(part)?;

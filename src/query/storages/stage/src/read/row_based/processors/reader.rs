@@ -22,16 +22,16 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::PrefetchAsyncSource;
+use databend_storages_common_stage::SingleFilePartition;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
 use log::debug;
 use opendal::Operator;
 
-use crate::one_file_partition::OneFilePartition;
 use crate::read::row_based::batch::BytesBatch;
 
 struct FileState {
-    file: OneFilePartition,
+    file: SingleFilePartition,
     reader: opendal::FuturesAsyncReader,
     offset: usize,
 }
@@ -88,7 +88,7 @@ impl BytesReader {
                 .get_scan_progress()
                 .incr(&ProgressValues { rows: 0, bytes: n });
 
-            debug!("read {} bytes", n);
+            debug!("read {} bytes from {}", n, state.file.path);
             let offset = state.offset;
             state.offset += n;
             let is_eof = state.offset == state.file.size;
@@ -121,14 +121,13 @@ impl PrefetchAsyncSource for BytesReader {
         prefetched.len() >= self.prefetch_num
     }
 
-    #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.file_state.is_none() {
             let part = match self.table_ctx.get_partition() {
                 Some(part) => part,
                 None => return Ok(None),
             };
-            let file = OneFilePartition::from_part(&part)?.clone();
+            let file = SingleFilePartition::from_part(&part)?.clone();
 
             let reader = self
                 .op
@@ -137,7 +136,8 @@ impl PrefetchAsyncSource for BytesReader {
                 // TODO: Use 4 concurrent for test, let's extract as a new setting.
                 .concurrent(4)
                 .await?
-                .into_futures_async_read(0..file.size as u64);
+                .into_futures_async_read(0..file.size as u64)
+                .await?;
             self.file_state = Some(FileState {
                 file,
                 reader,

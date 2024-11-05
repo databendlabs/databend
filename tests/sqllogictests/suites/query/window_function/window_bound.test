@@ -100,7 +100,8 @@ SELECT four, ten, first_value(ten) OVER (PARTITION BY four ORDER BY ten rows bet
 3 7 3
 
 query IIII
-SELECT two, four, unique1, first_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between 1 following and unbounded following) fv FROM tenk1
+SELECT two, four, unique1, first_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between 1 following and unbounded following) fv
+    FROM tenk1 order by 1,2,3,4;
 ----
 0 0 0 4
 0 0 4 8
@@ -143,7 +144,8 @@ SELECT four, ten, last_value(ten) OVER (PARTITION BY four ORDER BY ten rows betw
 3 7 7
 
 query IIII
-SELECT two, four, unique1, last_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between unbounded preceding and 1 preceding) lv FROM tenk1
+SELECT two, four, unique1, last_value(unique1) OVER 
+    (PARTITION BY two, four ORDER BY ten, twenty rows between unbounded preceding and 1 preceding) lv FROM tenk1 order by 1,2,3,4;
 ----
 0 0 0 NULL
 0 0 4 0
@@ -206,7 +208,7 @@ statement ok
 INSERT INTO t1 VALUES (5),(5),(6),(7);
 
 query II
-SELECT a, RANK() OVER (PARTITION BY a ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rank FROM t1;
+SELECT a, RANK() OVER (PARTITION BY a ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rank FROM t1 order by 1,2;
 ----
 1 1
 1 1
@@ -236,7 +238,7 @@ SELECT a, RANK() OVER (ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED
 7 11
 
 query II
-SELECT a, DENSE_RANK() OVER (PARTITION BY a ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rank FROM t1;
+SELECT a, DENSE_RANK() OVER (PARTITION BY a ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rank FROM t1 order by 1,2;
 ----
 1 1
 1 1
@@ -264,6 +266,24 @@ SELECT a, DENSE_RANK() OVER (ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNB
 5 3
 6 4
 7 5
+
+query I
+SELECT DISTINCT lead((861, FALSE, FALSE), 9, (849, TRUE, TRUE)) OVER (
+    PARTITION BY 15560425903542832284, 965871850213131579 
+    ORDER BY 13746504519650342222, 5897530378272856518 ASC NULLS FIRST) 
+FROM range(100, 12000000, 467);
+----
+(861,0,0)
+(849,1,1)
+
+query II
+SELECT DISTINCT lead((861, FALSE, FALSE), 9, (849, TRUE, TRUE)) OVER (
+    PARTITION BY 15560425903542832284, 965871850213131579 
+    ORDER BY 13746504519650342222, 5897530378272856518 ASC NULLS FIRST) 
+FROM range(100, 120000000, 467);
+----
+(861,0,0)
+(849,1,1)
 
 statement ok
 DROP DATABASE test_window_bound;

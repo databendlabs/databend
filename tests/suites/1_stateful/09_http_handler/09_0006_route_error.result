@@ -1,0 +1,15 @@
+# error
+## page
+{"error":{"code":404,"message":"route error: query QID SHOULD be on server XXX, but current server is NODE, which started ... ago)"}}
+## kill
+{"error":{"code":404,"message":"route error: query QID SHOULD be on server XXX, but current server is NODE, which started ... ago)"}}
+## final
+{"error":{"code":404,"message":"route error: query QID SHOULD be on server XXX, but current server is NODE, which started ... ago)"}}
+
+# ok
+## page
+[["1"]]
+## kill
+200
+## final
+null

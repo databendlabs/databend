@@ -28,10 +28,10 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use itertools::Itertools;
@@ -311,7 +311,7 @@ where T: Number + AsPrimitive<f64>
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -334,7 +334,7 @@ where T: Number + AsPrimitive<f64>
 
         Ok(())
     }
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         let v = NumberType::<T>::index_column(&column, row);
         if let Some(v) = v {
@@ -347,7 +347,7 @@ where T: Number + AsPrimitive<f64>
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();

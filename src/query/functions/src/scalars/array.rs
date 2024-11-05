@@ -98,7 +98,7 @@ const ARRAY_SORT_FUNCTIONS: &[(&str, (bool, bool)); 4] = &[
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("contains", &["array_contains"]);
     registry.register_aliases("get", &["array_get"]);
-    registry.register_aliases("length", &["array_length"]);
+    registry.register_aliases("length", &["array_length", "array_size"]);
     registry.register_aliases("slice", &["array_slice"]);
 
     register_array_aggr(registry);
@@ -310,6 +310,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                 },
             ),
         );
+
+    registry
+        .register_passthrough_nullable_2_arg::<ArrayType<NullableType<StringType>>, StringType, StringType, _, _>(
+        "array_to_string",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<StringType>>, StringType, StringType>(
+            |lhs, rhs, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                for (i, d) in lhs.iter().filter(|x| x.is_some()).enumerate() {
+                    if i != 0  {
+                        output.put_str(rhs);
+                    }
+                    output.put_str(d.unwrap());
+                }
+                output.commit_row();
+            },
+        ),
+    );
 
     registry
         .register_passthrough_nullable_2_arg::<EmptyArrayType, UInt64Type, EmptyArrayType, _, _>(
@@ -845,7 +868,6 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     offset: 0,
                     asc: sort_desc.0,
                     nulls_first: sort_desc.1,
-                    is_nullable: false,  // This information is not needed here.
                 }];
                 let columns = vec![BlockEntry{
                     data_type: arr.data_type(),

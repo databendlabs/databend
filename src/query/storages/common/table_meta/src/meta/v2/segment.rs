@@ -77,6 +77,7 @@ pub struct BlockMeta {
 
     #[serde(default)]
     pub bloom_filter_index_size: u64,
+    pub inverted_index_size: Option<u64>,
     pub compression: Compression,
 
     // block create_on
@@ -95,6 +96,7 @@ impl BlockMeta {
         location: Location,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        inverted_index_size: Option<u64>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
     ) -> Self {
@@ -108,6 +110,7 @@ impl BlockMeta {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            inverted_index_size,
             compression,
             create_on,
         }
@@ -118,9 +121,11 @@ impl BlockMeta {
     }
 
     /// Get the page size of the block.
+    ///
     /// - If the format is parquet, its page size is its row count.
     /// - If the format is native, its page size is the row count of each page.
-    /// (The row count of the last page may be smaller than the page size)
+    ///
+    /// The row count of the last page may be smaller than the page size
     pub fn page_size(&self) -> u64 {
         if let Some((_, ColumnMeta::Native(meta))) = self.col_metas.iter().next() {
             meta.pages.first().unwrap().num_values
@@ -228,15 +233,7 @@ impl ColumnMeta {
 
 impl BlockMeta {
     pub fn from_v0(s: &v0::BlockMeta, fields: &[TableField]) -> Self {
-        let col_stats = s
-            .col_stats
-            .iter()
-            .filter_map(|(k, v)| {
-                let data_type = fields[*k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(v, data_type);
-                stats.map(|s| (*k, s))
-            })
-            .collect();
+        let col_stats = Statistics::convert_column_stats(&s.col_stats, fields);
 
         let col_metas = s
             .col_metas
@@ -255,21 +252,13 @@ impl BlockMeta {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
+            inverted_index_size: None,
             create_on: None,
         }
     }
 
     pub fn from_v1(s: &v1::BlockMeta, fields: &[TableField]) -> Self {
-        let col_stats = s
-            .col_stats
-            .iter()
-            .filter_map(|(k, v)| {
-                let t = fields[*k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(v, t);
-                stats.map(|s| (*k, s))
-            })
-            .collect();
-
+        let col_stats = Statistics::convert_column_stats(&s.col_stats, fields);
         let col_metas = s
             .col_metas
             .iter()
@@ -287,6 +276,7 @@ impl BlockMeta {
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
+            inverted_index_size: None,
             create_on: None,
         }
     }

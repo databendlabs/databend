@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_datavalues::DataValue;
-use ordered_float::OrderedFloat;
 
 use crate::Scalar;
 
@@ -52,7 +52,11 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
             let values = x.iter().map(scalar_to_datavalue).collect();
             DataValue::Struct(values)
         }
-        Scalar::EmptyMap | Scalar::Binary(_) | Scalar::Map(_) | Scalar::Bitmap(_) => {
+        Scalar::EmptyMap
+        | Scalar::Binary(_)
+        | Scalar::Map(_)
+        | Scalar::Bitmap(_)
+        | Scalar::Geography(_) => {
             unimplemented!()
         }
     }

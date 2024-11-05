@@ -6,38 +6,38 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-# Workspace dependencies
-databend-common-exception = { path = "../exception" }
-
-# Crates.io dependencies
 bincode = { workspace = true }
 borsh = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+enquote = { workspace = true }
+enumflags2 = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
-lexical-core = "0.8.5"
-micromarshal = "0.5.0"
-ordered-float = { workspace = true }
-roaring = { version = "0.10.1", features = ["serde"] }
-scroll = "0.12.0"
+lexical-core = { workspace = true }
+micromarshal = { workspace = true }
+roaring = { workspace = true, features = ["serde"] }
+scroll = { workspace = true }
 serde = { workspace = true }
-wkt = "0.10.3"
+wkt = { workspace = true }
 
 [dev-dependencies]
-aho-corasick = { version = "1.0.1" }
+aho-corasick = { workspace = true }
 rand = { workspace = true }
-rmp-serde = "1.1.1"
+rmp-serde = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]
+
+[lints]
+workspace = true

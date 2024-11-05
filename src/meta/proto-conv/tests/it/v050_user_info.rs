@@ -14,9 +14,11 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 
@@ -50,6 +52,7 @@ fn test_decode_v50_user_info() -> anyhow::Result<()> {
             ]
             .to_vec(),
             hash_method: databend_common_meta_app::principal::PasswordHashMethod::DoubleSha1,
+            need_change: false,
         },
         grants: databend_common_meta_app::principal::UserGrantSet::new(
             vec![databend_common_meta_app::principal::GrantEntry::new(
@@ -71,6 +74,8 @@ fn test_decode_v50_user_info() -> anyhow::Result<()> {
         password_fails: vec![],
         password_update_on: None,
         lockout_time: None,
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

@@ -24,22 +24,20 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::INF_BYTES_LOWER;
-use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
@@ -49,8 +47,9 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_bytes_to_ewkb;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
@@ -78,12 +77,11 @@ impl NestedValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
+                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
         }
     }
@@ -138,6 +136,7 @@ impl NestedValues {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -245,10 +244,12 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
+        let date = buffer_readr.read_date_text(
+            &self.common_settings().timezone,
+            self.common_settings().enable_dst_hour_fix,
+        )?;
         let days = uniform_date(date);
-        check_date(days as i64)?;
-        column.push(days);
+        column.push(clamp_date(days as i64));
         Ok(())
     }
 
@@ -260,10 +261,14 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = if !buf.contains(&b'-') {
+        let mut ts = if !buf.contains(&b'-') {
             buffer_readr.read_num_text_exact()?
         } else {
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+            let t = buffer_readr.read_timestamp_text(
+                &self.common_settings().timezone,
+                false,
+                self.common_settings.enable_dst_hour_fix,
+            )?;
             match t {
                 DateTimeResType::Datetime(t) => {
                     if !buffer_readr.eof() {
@@ -280,7 +285,7 @@ impl NestedValues {
                 _ => unreachable!(),
             }
         };
-        check_timestamp(ts)?;
+        clamp_timestamp(&mut ts);
         column.push(ts);
         Ok(())
     }
@@ -328,8 +333,21 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let geom = parse_to_ewkb(&buf, None)?;
+        let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let geog = geography_from_ewkt_bytes(&buf)?;
+        column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
     }
@@ -357,14 +375,14 @@ impl NestedValues {
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
         for idx in 0.. {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if reader.ignore_byte(b']') {
                 break;
             }
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(&mut column.builder, reader)?;
         }
         column.commit_row();
@@ -382,14 +400,14 @@ impl NestedValues {
         let mut set = HashSet::new();
         let map_builder = column.builder.as_tuple_mut().unwrap();
         for idx in 0.. {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if reader.ignore_byte(b'}') {
                 break;
             }
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(&mut map_builder[KEY], reader)?;
             // check duplicate map keys
             let key = map_builder[KEY].pop().unwrap();
@@ -400,9 +418,9 @@ impl NestedValues {
             }
             map_builder[KEY].push(key.as_ref());
             set.insert(key);
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             reader.must_ignore_byte(b':')?;
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(&mut map_builder[VALUE], reader)?;
         }
         column.commit_row();
@@ -416,11 +434,11 @@ impl NestedValues {
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
         for (idx, field) in fields.iter_mut().enumerate() {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(field, reader)?;
         }
         reader.must_ignore_byte(b')')?;

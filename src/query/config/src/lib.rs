@@ -14,9 +14,9 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
-#![feature(lazy_cell)]
 
 mod background_config;
+mod builtin;
 /// Config mods provide config support.
 ///
 /// We are providing two config types:
@@ -34,13 +34,16 @@ mod global;
 mod inner;
 mod mask;
 mod obsolete;
-mod version;
-
+pub use builtin::*;
 pub use config::CacheStorageTypeConfig;
 pub use config::Commands;
 pub use config::Config;
 pub use config::QueryConfig;
 pub use config::StorageConfig;
+pub use databend_common_base::version::DATABEND_COMMIT_VERSION;
+pub use databend_common_base::version::DATABEND_GIT_SEMVER;
+pub use databend_common_base::version::DATABEND_GIT_SHA;
+pub use databend_common_base::version::DATABEND_SEMVER;
 pub use global::GlobalConfig;
 pub use inner::CacheConfig;
 pub use inner::CacheStorageTypeConfig as CacheStorageTypeInnerConfig;
@@ -48,8 +51,5 @@ pub use inner::CatalogConfig;
 pub use inner::CatalogHiveConfig;
 pub use inner::DiskCacheKeyReloadPolicy;
 pub use inner::InnerConfig;
+pub use inner::SpillConfig;
 pub use inner::ThriftProtocol;
-pub use version::DATABEND_COMMIT_VERSION;
-pub use version::QUERY_GIT_SEMVER;
-pub use version::QUERY_GIT_SHA;
-pub use version::QUERY_SEMVER;

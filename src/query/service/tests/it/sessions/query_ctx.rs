@@ -48,7 +48,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&conf).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let _ = ctx.get_data_operator()?;
+    let _ = ctx.get_application_level_data_operator()?;
 
     Ok(())
 }
@@ -61,7 +61,7 @@ async fn test_get_storage_accessor_fs() -> Result<()> {
     });
     let fixture = TestFixture::setup_with_config(&conf).await?;
     let ctx = fixture.new_query_ctx().await?;
-    let _ = ctx.get_data_operator()?;
+    let _ = ctx.get_application_level_data_operator()?;
 
     Ok(())
 }

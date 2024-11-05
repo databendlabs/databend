@@ -13,9 +13,8 @@
 // limitations under the License.
 
 pub use databend_common_pipeline_core::processors::*;
-pub(crate) mod transforms;
+pub mod transforms;
 
-pub use transforms::DeduplicateRowNumber;
 pub use transforms::HashJoinBuildState;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
@@ -23,6 +22,6 @@ pub use transforms::TransformAddStreamColumns;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCreateSets;
 pub use transforms::TransformLimit;
+pub use transforms::TransformNullIf;
 pub use transforms::TransformResortAddOn;
 pub use transforms::TransformResortAddOnWithoutSourceSchema;
-pub use transforms::TransformWindow;

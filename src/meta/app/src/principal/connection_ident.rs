@@ -24,6 +24,7 @@ mod kvapi_impl {
     use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::principal::connection_ident::ConnectionIdent;
     use crate::principal::UserDefinedConnection;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
@@ -38,7 +39,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for UserDefinedConnection {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ConnectionIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

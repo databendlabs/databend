@@ -11,18 +11,24 @@ doctest = false
 test = true
 
 [dependencies]
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
-databend-common-base = { path = "../base" }
-databend-common-exception = { path = "../exception" }
+hyper-util = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 tonic = { workspace = true }
+
 [build-dependencies]
-lenient_semver = "0.4.2"
+lenient_semver = { workspace = true }
 prost-build = { workspace = true }
 semver = { workspace = true }
 tonic-build = { workspace = true }
 
 [dev-dependencies]
-tower = { version = "0.4" }
+tower = { workspace = true, features = ["util"] }
+
+[lints]
+workspace = true

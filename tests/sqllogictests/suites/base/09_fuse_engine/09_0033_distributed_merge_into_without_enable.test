@@ -1,3 +1,12 @@
+statement ok
+drop database if exists db;
+
+statement ok
+create database db;
+
+statement ok
+use db;
+
 ## we need to test without enable_distributed_merge_into in cluster environment.
 statement ok
 set enable_experimental_merge_into = 1;

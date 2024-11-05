@@ -21,6 +21,23 @@ c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL
 c3 VARCHAR NO 'c3' NULL NULL
 
 statement ok
+CREATE TABLE showcolumn.t4(c1 int comment '4', c2 Datetime comment '2022-02-02 12:00:00', c3 String comment 'c\s3') ENGINE = Null;
+
+query T
+select comment from system.columns where database='showcolumn' and table='t4' order by name;
+----
+4
+2022-02-02 12:00:00
+c\s3
+
+query T
+select column_name, column_comment from information_schema.columns where table_schema='showcolumn' and table_name='t4' order by column_name;
+----
+c1 4
+c2 2022-02-02 12:00:00
+c3 c\s3
+
+statement ok
 use showcolumn
 
 query TTTTTTT

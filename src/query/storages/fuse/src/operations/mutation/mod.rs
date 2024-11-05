@@ -20,6 +20,5 @@ pub use meta::*;
 pub use mutator::*;
 pub use processors::*;
 
-pub static MAX_BLOCK_COUNT: usize = 10_000;
 pub type SegmentIndex = usize;
 pub type BlockIndex = usize;

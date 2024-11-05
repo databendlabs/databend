@@ -123,10 +123,9 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             )?,
-            SelectExpr::Like((column_ref, like_pattern, like_str, not)) => self.process_like(
+            SelectExpr::Like((column_ref, like_pattern, not)) => self.process_like(
                 column_ref,
-                like_pattern,
-                like_str,
+                like_pattern.as_ref(),
                 *not,
                 true_selection,
                 false_selection,
@@ -328,7 +327,6 @@ impl<'a> Selector<'a> {
         &self,
         column_ref: &Expr,
         like_pattern: &LikePattern,
-        like_str: &String,
         not: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
@@ -357,7 +355,6 @@ impl<'a> Selector<'a> {
             column,
             &data_type,
             like_pattern,
-            like_str.as_bytes(),
             not,
             true_selection,
             false_selection,
@@ -530,6 +527,7 @@ impl<'a> Selector<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &expr.sql_display(),
                     selection,
                 )?;
                 let data_type = self
@@ -583,6 +581,7 @@ impl<'a> Selector<'a> {
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
 
+                let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
                     .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
@@ -595,9 +594,9 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let result = self
-                    .evaluator
-                    .run_lambda(name, args, lambda_expr, return_type)?;
+                let result =
+                    self.evaluator
+                        .run_lambda(name, args, data_types, lambda_expr, return_type)?;
                 (result, return_type.clone())
             }
             _ => {

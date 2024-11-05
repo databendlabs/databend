@@ -14,7 +14,7 @@ explain select * from t as a(id) where a.id > 1;
 Filter
 ├── output columns: [a.x (#0)]
 ├── filters: [is_true(a.id (#0) > 1)]
-├── estimated rows: 0.40
+├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t
     ├── output columns: [x (#0)]

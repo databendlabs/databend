@@ -240,7 +240,6 @@ impl TaskDependentsSource {
 impl AsyncSource for TaskDependentsSource {
     const NAME: &'static str = "task_dependents";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> databend_common_exception::Result<Option<DataBlock>> {
         if self.is_finished {

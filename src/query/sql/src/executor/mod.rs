@@ -16,14 +16,15 @@ mod explain;
 mod format;
 mod physical_plan;
 mod physical_plan_builder;
-mod physical_plan_display;
 mod physical_plan_visitor;
 pub mod physical_plans;
 mod util;
 
 pub mod table_read_plan;
 
+pub use format::format_partial_tree;
 pub use physical_plan::PhysicalPlan;
+pub use physical_plan_builder::MutationBuildInfo;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use util::*;

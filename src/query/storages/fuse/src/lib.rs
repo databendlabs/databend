@@ -20,6 +20,7 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
 #![feature(iterator_try_reduce)]
+#![feature(slice_take)]
 #![recursion_limit = "256"]
 
 mod constants;
@@ -45,7 +46,7 @@ pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_table::FuseTable;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
-pub use io::MergeIOReadResult;
+pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
 
 mod sessions {

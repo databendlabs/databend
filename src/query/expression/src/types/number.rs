@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -19,11 +20,12 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::base::OrderedFloat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
+use num_traits::float::FloatCore;
 use num_traits::NumCast;
-use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -196,6 +198,10 @@ impl<Num: Number> ValueType for NumberType<Num> {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.resize(builder.len() + n, item);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(Num::default());
     }
@@ -211,6 +217,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+
+    #[inline(always)]
+    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
+        left.cmp(&right)
     }
 
     #[inline(always)]
@@ -558,6 +569,14 @@ impl NumberScalar {
             _ => None,
         }
     }
+
+    pub fn to_f64(&self) -> F64 {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => (*num as f64).into(),
+            NumberScalar::Float32(num) => (num.into_inner() as f64).into(),
+            NumberScalar::Float64(num) => *num,
+        })
+    }
 }
 
 impl<T> From<T> for NumberScalar
@@ -646,10 +665,27 @@ impl NumberColumnBuilder {
         })
     }
 
+    pub fn repeat_default(ty: &NumberDataType, len: usize) -> Self {
+        crate::with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                let s = NumberScalar::from(NUM_TYPE::default());
+                Self::repeat(s, len)
+            }
+        })
+    }
+
     pub fn push(&mut self, item: NumberScalar) {
+        self.push_repeat(item, 1)
+    }
+
+    pub fn push_repeat(&mut self, item: NumberScalar, n: usize) {
         crate::with_number_type!(|NUM_TYPE| match (self, item) {
             (NumberColumnBuilder::NUM_TYPE(builder), NumberScalar::NUM_TYPE(value)) => {
-                builder.push(value)
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         })
@@ -1323,11 +1359,9 @@ impl Number for F32 {
     }
 
     fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
-        unsafe {
-            lexical_core::WriteFloatOptions::builder()
-                .trim_floats(true)
-                .build_unchecked()
-        }
+        lexical_core::WriteFloatOptions::builder()
+            .trim_floats(true)
+            .build_unchecked()
     }
 }
 
@@ -1383,10 +1417,8 @@ impl Number for F64 {
     }
 
     fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
-        unsafe {
-            lexical_core::WriteFloatOptions::builder()
-                .trim_floats(true)
-                .build_unchecked()
-        }
+        lexical_core::WriteFloatOptions::builder()
+            .trim_floats(true)
+            .build_unchecked()
     }
 }

@@ -105,9 +105,7 @@ impl Display for ElseClause {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct InsertMultiTableStmt {
-    #[drive(skip)]
     pub overwrite: bool,
-    #[drive(skip)]
     pub is_first: bool,
     pub when_clauses: Vec<WhenClause>,
     pub else_clause: Option<ElseClause>,

@@ -1,4 +1,13 @@
 statement ok
+DROP DATABASE IF EXISTS seq_db
+
+statement ok
+CREATE DATABASE seq_db
+
+statement ok
+USE seq_db
+
+statement ok
 DROP SEQUENCE IF EXISTS seq
 
 statement ok
@@ -34,6 +43,12 @@ INSERT INTO tmp1 values(nextval(seq));
 statement ok
 INSERT INTO tmp2 select nextval(seq) from numbers(2);
 
+query I
+select * from tmp2;
+----
+2
+3
+
 statement ok
 INSERT INTO tmp2 values(nextval(seq)), (1024);
 
@@ -46,20 +61,20 @@ select * from tmp2 order by a;
 1024
 
 statement ok
-INSERT INTO tmp3 values(1,nextval(seq),3);
+INSERT INTO tmp3 values(1,nextval(seq) + 1,3);
 
 query III
 select * from tmp3;
 ----
-1 5 3
+1 6 3
 
 statement ok
 INSERT INTO tmp3 select 10,nextval(seq),20 from numbers(3);
 
 query III
-select * from tmp3 order by b;
+select * from tmp3 order by b,a;
 ----
-1 5 3
+1 6 3
 10 6 20
 10 7 20
 10 8 20
@@ -68,6 +83,25 @@ query I
 select nextval(seq);
 ----
 9
+
+query I
+select nextval(seq) + 20 from numbers(5);
+----
+30
+31
+32
+33
+34
+
+query B
+select cast(nextval(seq) as float);
+----
+15.0
+
+query I
+select sum(nextval(seq)) from numbers(10);
+----
+205
 
 statement ok
 INSERT INTO tmp select nextval(seq) from numbers(1000000);
@@ -97,3 +131,6 @@ DROP TABLE IF EXISTS tmp2;
 
 statement ok
 DROP TABLE IF EXISTS tmp3;
+
+statement ok
+DROP DATABASE seq_db;

@@ -27,12 +27,12 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 use crate::FuseStorageFormat;
 
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
@@ -48,7 +48,7 @@ pub fn set_backoff(
     // The initial retry delay in millisecond. By default,  it is 5 ms.
     let init_delay = init_retry_delay.unwrap_or(OCC_DEFAULT_BACKOFF_INIT_DELAY_MS);
 
-    // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
+    // The maximum back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
     // By default, it is 20 seconds.
     let max_delay = max_retry_delay.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_DELAY_MS);
 
@@ -69,7 +69,7 @@ pub fn set_backoff(
 }
 
 pub fn column_parquet_metas(
-    file_meta: &parquet_rs::format::FileMetaData,
+    file_meta: &parquet::format::FileMetaData,
     schema: &TableSchemaRef,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only

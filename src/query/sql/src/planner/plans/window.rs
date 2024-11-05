@@ -33,12 +33,10 @@ use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::plans::LagLeadFunction;
 use crate::plans::NtileFunction;
 use crate::plans::Operator;
@@ -110,14 +108,6 @@ impl Operator for Window {
         RelOp::Window
     }
 
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -126,19 +116,23 @@ impl Operator for Window {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        required.distribution = Distribution::Serial;
-        Ok(required)
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
+        Ok(required.clone())
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![RequiredProperty {
-            distribution: Distribution::Serial,
-        }]])
+        let mut required = required.clone();
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
+        Ok(vec![vec![required.clone()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -161,54 +155,19 @@ impl Operator for Window {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let input_stat_info = rel_expr.derive_cardinality_child(0)?;
-        let cardinality = if self.partition_by.is_empty() {
-            // Scalar aggregation
-            1.0
-        } else if self.partition_by.iter().any(|item| {
-            input_stat_info
-                .statistics
-                .column_stats
-                .get(&item.index)
-                .is_none()
-        }) {
-            input_stat_info.cardinality
-        } else {
-            // A upper bound
-            let res = self.partition_by.iter().fold(1.0, |acc, item| {
-                let item_stat = input_stat_info
-                    .statistics
-                    .column_stats
-                    .get(&item.index)
-                    .unwrap();
-                acc * item_stat.ndv
-            });
-            // To avoid res is very large
-            f64::min(res, input_stat_info.cardinality)
-        };
-
-        let precise_cardinality = if self.partition_by.is_empty() {
-            Some(1)
-        } else {
-            None
-        };
-        Ok(Arc::new(StatInfo {
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality,
-                column_stats: input_stat_info.statistics.column_stats.clone(),
-            },
-        }))
+        rel_expr.derive_cardinality_child(0)
     }
 }
 

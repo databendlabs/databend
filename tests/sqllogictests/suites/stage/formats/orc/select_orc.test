@@ -1,0 +1,53 @@
+query 
+select boolean, int8, binary, decimal, date32 from @data/orc/alltypes.zstd.orc (file_format=>'orc')
+----
+NULL NULL NULL NULL NULL
+1 0 (empty) 0.00000 1970-01-01
+0 1 61 1.00000 1970-01-02
+0 -1 20 -1.00000 1969-12-31
+1 127 656E636F6465 123456789.12345 9999-12-31
+1 -128 6465636F6465 -999999999.99999 1582-10-15
+1 50 E5A4A7E7868AE5928CE5A58F -31256.12300 1582-10-16
+1 51 E69689E897A4E69CB1E5A48F 1241000.00000 2000-01-01
+1 52 E988B4E58E9FE5B88CE5AE9F 1.10000 3000-12-31
+0 53 F09FA494 0.99999 1900-01-01
+NULL NULL NULL NULL NULL
+
+query 
+select int8 from @data/orc/alltypes.zstd.orc (file_format => 'orc') where boolean is not null;
+----
+0
+1
+-1
+127
+-128
+50
+51
+52
+53
+
+query 
+select * from @data/orc/nested_array.orc  (file_format=>'orc')
+----
+[1,NULL,3,43,5]
+[5,NULL,32,4,15]
+[16,NULL,3,4,5,6]
+NULL
+[3,NULL]
+
+query 
+select * from @data/orc/nested_map.orc  (file_format=>'orc')
+----
+{'zero':0,'one':1}
+NULL
+{'two':2,'tree':3}
+{'one':1,'two':2,'nill':NULL}
+
+query 
+select * from @data/orc/nested_struct.orc  (file_format=>'orc')
+----
+(1.0,1)
+(3.0,NULL)
+(NULL,NULL)
+NULL
+(-3.0,NULL)

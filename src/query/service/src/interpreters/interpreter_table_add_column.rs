@@ -19,7 +19,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::ComputedColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -27,8 +27,9 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::save_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -38,6 +39,7 @@ use log::info;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::Interpreter;
+use crate::interpreters::MutationInterpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -60,7 +62,7 @@ impl Interpreter for AddTableColumnInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        self.plan.is_deterministic
     }
 
     #[async_backtrace::framed]
@@ -69,85 +71,82 @@ impl Interpreter for AddTableColumnInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await
-            .ok();
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        // check mutability
+        tbl.check_mutable()?;
 
-        if let Some(table) = &tbl {
-            // check mutability
-            table.check_mutable()?;
+        let table_info = tbl.get_table_info();
+        let engine = table_info.engine();
+        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} engine is {} that doesn't support alter",
+                &self.plan.database, &self.plan.table, engine
+            )));
+        }
+        if table_info.db_type != DatabaseType::NormalDB {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} doesn't support alter",
+                &self.plan.database, &self.plan.table
+            )));
+        }
 
-            let table_info = table.get_table_info();
-            let engine = table_info.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
-                )));
-            }
-            if table_info.db_type != DatabaseType::NormalDB {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
-                )));
-            }
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let mut new_table_meta = table_info.meta.clone();
+        let field = self.plan.field.clone();
+        if field.computed_expr().is_some() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+        }
 
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let mut new_table_meta = table.get_table_info().meta.clone();
-            let field = self.plan.field.clone();
-            if field.computed_expr().is_some() {
-                let license_manager = get_license_manager();
-                license_manager
-                    .manager
-                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
-            }
+        if field.default_expr().is_some() {
+            let _ = field_default_value(self.ctx.clone(), &field)?;
+        }
+        is_valid_column(field.name())?;
+        let index = match &self.plan.option {
+            AddColumnOption::First => 0,
+            AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
+            AddColumnOption::End => new_table_meta.schema.num_fields(),
+        };
+        new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
-            if field.default_expr().is_some() {
-                let _ = field_default_value(self.ctx.clone(), &field)?;
-            }
-            is_valid_column(field.name())?;
-            let index = match &self.plan.option {
-                AddColumnOption::First => 0,
-                AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
-                AddColumnOption::End => new_table_meta.schema.num_fields(),
-            };
-            new_table_meta.add_column(&field, &self.plan.comment, index)?;
+        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
 
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
-
-            generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
-            };
-
-            let res = catalog.update_table_meta(table_info, req).await?;
-
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            new_table_meta,
         };
 
+        let _resp = catalog.update_single_table_meta(req, table_info).await?;
+
+        // If the column is not deterministic, update to refresh the value with default expr.
+        if !self.plan.is_deterministic {
+            self.ctx
+                .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+            let query = format!(
+                "update `{}`.`{}` set `{}` = {};",
+                db_name,
+                tbl_name,
+                field.name(),
+                field.default_expr().unwrap()
+            );
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _) = planner.plan_sql(&query).await?;
+            if let Plan::DataMutation { s_expr, schema, .. } = plan {
+                let interpreter =
+                    MutationInterpreter::try_create(self.ctx.clone(), *s_expr, schema)?;
+                let _ = interpreter.execute(self.ctx.clone()).await?;
+                return Ok(PipelineBuildResult::create());
+            }
+        }
         Ok(PipelineBuildResult::create())
     }
 }
 
 pub(crate) async fn generate_new_snapshot(
+    ctx: &QueryContext,
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
 ) -> Result<()> {
@@ -174,16 +173,16 @@ pub(crate) async fn generate_new_snapshot(
 
             // write down hint
             FuseTable::write_last_snapshot_hint(
+                ctx,
                 fuse_table.get_operator_ref(),
                 fuse_table.meta_location_generator(),
-                new_snapshot_location.clone(),
+                &new_snapshot_location,
             )
             .await;
 
-            new_table_meta.options.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-                new_snapshot_location.clone(),
-            );
+            new_table_meta
+                .options
+                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
         } else {
             info!("Snapshot not found, no need to generate new snapshot");
         }

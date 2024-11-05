@@ -35,6 +35,7 @@ pub struct MarkJoinDesc {
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
+    pub(crate) is_null_equal: Vec<bool>,
     pub(crate) join_type: JoinType,
     pub(crate) single_to_inner: Option<JoinType>,
     /// when we have non-equal conditions for hash join,
@@ -80,6 +81,7 @@ impl HashJoinDesc {
             join_type: join.join_type.clone(),
             build_keys,
             probe_keys,
+            is_null_equal: join.is_null_equal.clone(),
             other_predicate,
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),

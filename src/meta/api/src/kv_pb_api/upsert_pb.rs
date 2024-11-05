@@ -18,6 +18,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 
 #[derive(Clone, Debug)]
@@ -70,10 +71,20 @@ impl<K: kvapi::Key> UpsertPB<K> {
         }
     }
 
+    /// Update the value only when the seq matches exactly. Note that the meta is not copied.
+    pub fn update_exact(key: K, value: SeqV<K::ValueType>) -> Self {
+        Self {
+            key,
+            seq: MatchSeq::Exact(value.seq),
+            value: Operation::Update(value.data),
+            value_meta: None,
+        }
+    }
+
     pub fn delete(key: K) -> Self {
         Self {
             key,
-            seq: MatchSeq::GE(0),
+            seq: MatchSeq::GE(1),
             value: Operation::Delete,
             value_meta: None,
         }

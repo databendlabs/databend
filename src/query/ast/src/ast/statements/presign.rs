@@ -45,7 +45,7 @@ impl Display for PresignAction {
 /// TODO: we can support uri location in the future.
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum PresignLocation {
-    StageLocation(#[drive(skip)] String),
+    StageLocation(String),
 }
 
 impl Display for PresignLocation {
@@ -62,7 +62,6 @@ pub struct PresignStmt {
     pub location: PresignLocation,
     #[drive(skip)]
     pub expire: Duration,
-    #[drive(skip)]
     pub content_type: Option<String>,
 }
 

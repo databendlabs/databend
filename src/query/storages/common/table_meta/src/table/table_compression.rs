@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_arrow::native;
-use databend_common_arrow::parquet;
+use databend_common_arrow::parquet as databend_parquet;
 use databend_common_exception::ErrorCode;
-use parquet_rs::basic::Compression as ParquetCompression;
-use parquet_rs::basic::GzipLevel;
-use parquet_rs::basic::ZstdLevel;
+use parquet::basic::Compression as ParquetCompression;
+use parquet::basic::GzipLevel;
+use parquet::basic::ZstdLevel;
 
 use crate::meta;
 
@@ -50,13 +50,15 @@ impl TryFrom<&str> for TableCompression {
 }
 
 /// Convert to parquet CompressionOptions.
-impl From<TableCompression> for parquet::compression::CompressionOptions {
+impl From<TableCompression> for databend_parquet::compression::CompressionOptions {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => parquet::compression::CompressionOptions::Uncompressed,
-            TableCompression::LZ4 => parquet::compression::CompressionOptions::Lz4Raw,
-            TableCompression::Snappy => parquet::compression::CompressionOptions::Snappy,
-            TableCompression::Zstd => parquet::compression::CompressionOptions::Zstd(None),
+            TableCompression::None => {
+                databend_parquet::compression::CompressionOptions::Uncompressed
+            }
+            TableCompression::LZ4 => databend_parquet::compression::CompressionOptions::Lz4Raw,
+            TableCompression::Snappy => databend_parquet::compression::CompressionOptions::Snappy,
+            TableCompression::Zstd => databend_parquet::compression::CompressionOptions::Zstd(None),
         }
     }
 }

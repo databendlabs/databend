@@ -17,10 +17,11 @@ use std::sync::Arc;
 
 use databend_common_config::InnerConfig;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_storages_system::BackgroundJobTable;
 use databend_common_storages_system::BackgroundTaskTable;
 use databend_common_storages_system::BacktraceTable;
@@ -34,20 +35,24 @@ use databend_common_storages_system::ConfigsTable;
 use databend_common_storages_system::ContributorsTable;
 use databend_common_storages_system::CreditsTable;
 use databend_common_storages_system::DatabasesTable;
+use databend_common_storages_system::DictionariesTable;
 use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FullStreamsTable;
 use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::IndexesTable;
 use databend_common_storages_system::LocksTable;
+#[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTable;
+#[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTotalsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
+use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
-use databend_common_storages_system::ProcessorProfileTable;
+use databend_common_storages_system::QueriesProfilingTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
@@ -59,6 +64,7 @@ use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
+use databend_common_storages_system::TemporaryTablesTable;
 use databend_common_storages_system::TerseStreamsTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
@@ -103,7 +109,9 @@ impl SystemDatabase {
             ProcessesTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),
+            #[cfg(feature = "jemalloc")]
             MallocStatsTable::create(sys_db_meta.next_table_id()),
+            #[cfg(feature = "jemalloc")]
             MallocStatsTotalsTable::create(sys_db_meta.next_table_id()),
             ColumnsTable::create(sys_db_meta.next_table_id()),
             UsersTable::create(sys_db_meta.next_table_id()),
@@ -130,7 +138,7 @@ impl SystemDatabase {
             TempFilesTable::create(sys_db_meta.next_table_id()),
             TasksTable::create(sys_db_meta.next_table_id()),
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
-            ProcessorProfileTable::create(sys_db_meta.next_table_id()),
+            QueriesProfilingTable::create(sys_db_meta.next_table_id()),
             LocksTable::create(sys_db_meta.next_table_id()),
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
@@ -139,6 +147,9 @@ impl SystemDatabase {
             NotificationHistoryTable::create(sys_db_meta.next_table_id()),
             ViewsTableWithHistory::create(sys_db_meta.next_table_id()),
             ViewsTableWithoutHistory::create(sys_db_meta.next_table_id()),
+            TemporaryTablesTable::create(sys_db_meta.next_table_id()),
+            ProceduresTable::create(sys_db_meta.next_table_id()),
+            DictionariesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();
@@ -146,7 +157,7 @@ impl SystemDatabase {
             // Not load the disable system tables.
             if config.query.disable_system_table_load {
                 let name = tbl.name();
-                if disable_tables.get(name).is_none() {
+                if !disable_tables.contains_key(name) {
                     sys_db_meta.insert("system", tbl);
                 }
             } else {
@@ -155,15 +166,12 @@ impl SystemDatabase {
         }
 
         let db_info = DatabaseInfo {
-            ident: DatabaseIdent {
-                db_id: sys_db_meta.next_db_id(),
-                seq: 0,
-            },
+            database_id: DatabaseId::new(sys_db_meta.next_db_id()),
             name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), "system"),
-            meta: DatabaseMeta {
+            meta: SeqV::new(0, DatabaseMeta {
                 engine: "SYSTEM".to_string(),
                 ..Default::default()
-            },
+            }),
         };
 
         Self { db_info }

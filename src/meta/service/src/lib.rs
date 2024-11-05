@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(try_blocks)]
 #![feature(coroutines)]
-#![feature(lazy_cell)]
 #![allow(clippy::uninlined_format_args)]
 
 pub mod api;

@@ -23,4 +23,8 @@ message RoleInfo {
 
   string name = 1;
   UserGrantSet grants = 2;
+  // The time role created.
+  optional string created_on = 3;
+  // The time role update.
+  optional string update_on = 4;
 }

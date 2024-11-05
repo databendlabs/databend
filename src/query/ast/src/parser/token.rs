@@ -65,6 +65,16 @@ impl<'a> Tokenizer<'a> {
             prev_token: None,
         }
     }
+
+    pub fn contains_token(query: &str, target_kind: TokenKind) -> bool {
+        let mut tokenizer = Tokenizer::new(query);
+        while let Some(Ok(token)) = tokenizer.next() {
+            if token.kind == target_kind {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
@@ -145,6 +155,9 @@ pub enum TokenKind {
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
+
+    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    IdentVariable,
 
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
@@ -236,6 +249,8 @@ pub enum TokenKind {
     LBrace,
     #[token("}")]
     RBrace,
+    #[token("$")]
+    Dollar,
     #[token("->")]
     RArrow,
     #[token("->>")]
@@ -402,6 +417,8 @@ pub enum TokenKind {
     BROTLI,
     #[token("BZ2", ignore(ascii_case))]
     BZ2,
+    #[token("BLOCK", ignore(ascii_case))]
+    BLOCK,
     #[token("CALL", ignore(ascii_case))]
     CALL,
     #[token("CASE", ignore(ascii_case))]
@@ -452,10 +469,10 @@ pub enum TokenKind {
     COPY,
     #[token("COUNT", ignore(ascii_case))]
     COUNT,
+    #[token("CREDENTIAL", ignore(ascii_case))]
+    CREDENTIAL,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
-    #[token("CREDENTIALS", ignore(ascii_case))]
-    CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
     CROSS,
     #[token("CSV", ignore(ascii_case))]
@@ -474,6 +491,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_DIFF", ignore(ascii_case))]
+    DATE_DIFF,
     #[token("DATE_PART", ignore(ascii_case))]
     DATE_PART,
     #[token("DATE_SUB", ignore(ascii_case))]
@@ -502,10 +521,16 @@ pub enum TokenKind {
     DETAILED_OUTPUT,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DISABLE", ignore(ascii_case))]
+    DISABLE,
     #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
     DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
+    #[token("RESPECT", ignore(ascii_case))]
+    RESPECT,
+    #[token("IGNORE", ignore(ascii_case))]
+    IGNORE,
     #[token("DIV", ignore(ascii_case))]
     DIV,
     #[token("DOUBLE_SHA1_PASSWORD", ignore(ascii_case))]
@@ -540,6 +565,8 @@ pub enum TokenKind {
     ELSE,
     #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
     EMPTY_FIELD_AS,
+    #[token("ENABLE", ignore(ascii_case))]
+    ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
@@ -556,6 +583,8 @@ pub enum TokenKind {
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
     ESCAPE,
+    #[token("EXCEPTION_BACKTRACE", ignore(ascii_case))]
+    EXCEPTION_BACKTRACE,
     #[token("EXISTS", ignore(ascii_case))]
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
@@ -622,10 +651,14 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
+    #[token("GET", ignore(ascii_case))]
+    GET,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
     #[token("GEOMETRY", ignore(ascii_case))]
     GEOMETRY,
+    #[token("GEOGRAPHY", ignore(ascii_case))]
+    GEOGRAPHY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -638,6 +671,8 @@ pub enum TokenKind {
     HAVING,
     #[token("HIGH", ignore(ascii_case))]
     HIGH,
+    #[token("HILBERT", ignore(ascii_case))]
+    HILBERT,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
     #[token("HIVE", ignore(ascii_case))]
@@ -658,6 +693,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
+    INCLUDE_QUERY_ID,
     #[token("INCREMENTAL", ignore(ascii_case))]
     INCREMENTAL,
     #[token("INDEX", ignore(ascii_case))]
@@ -688,6 +725,10 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("PROCEDURE", ignore(ascii_case))]
+    PROCEDURE,
+    #[token("PROCEDURES", ignore(ascii_case))]
+    PROCEDURES,
     #[token("IMMEDIATE", ignore(ascii_case))]
     IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
@@ -710,6 +751,8 @@ pub enum TokenKind {
     KILL,
     #[token("LATERAL", ignore(ascii_case))]
     LATERAL,
+    #[token("LINEAR", ignore(ascii_case))]
+    LINEAR,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]
@@ -771,6 +814,8 @@ pub enum TokenKind {
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
+    #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
+    MUST_CHANGE_PASSWORD,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
@@ -813,6 +858,8 @@ pub enum TokenKind {
     OPTIONS,
     #[token("OR", ignore(ascii_case))]
     OR,
+    #[token("ORC", ignore(ascii_case))]
+    ORC,
     #[token("ORDER", ignore(ascii_case))]
     ORDER,
     #[token("OUTPUT_HEADER", ignore(ascii_case))]
@@ -871,6 +918,10 @@ pub enum TokenKind {
     PRIORITY,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
+    #[token("PUT", ignore(ascii_case))]
+    PUT,
+    #[token("PARTIAL", ignore(ascii_case))]
+    PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
@@ -901,6 +952,8 @@ pub enum TokenKind {
     RETURN_FAILED_ONLY,
     #[token("REVERSE", ignore(ascii_case))]
     REVERSE,
+    #[token("SAMPLE", ignore(ascii_case))]
+    SAMPLE,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
@@ -961,6 +1014,8 @@ pub enum TokenKind {
     RAW,
     #[token("OPTIMIZED", ignore(ascii_case))]
     OPTIMIZED,
+    #[token("DECORRELATED", ignore(ascii_case))]
+    DECORRELATED,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]
@@ -985,6 +1040,8 @@ pub enum TokenKind {
     SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
+    #[token("VARIABLES", ignore(ascii_case))]
+    VARIABLES,
     #[token("STAGES", ignore(ascii_case))]
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]
@@ -1021,6 +1078,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("USE_RAW_PATH", ignore(ascii_case))]
+    USE_RAW_PATH,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
@@ -1053,6 +1112,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
+    #[token("SYSTEM", ignore(ascii_case))]
+    SYSTEM,
     #[token("STORAGE_TYPE", ignore(ascii_case))]
     STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]
@@ -1151,8 +1212,12 @@ pub enum TokenKind {
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
+    #[token("VARIABLE", ignore(ascii_case))]
+    VARIABLE,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
+    #[token("GRAPHICAL", ignore(ascii_case))]
+    GRAPHICAL,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
     #[token("VIEWS", ignore(ascii_case))]
@@ -1273,10 +1338,22 @@ pub enum TokenKind {
     ROLLBACK,
     #[token("TEMPORARY", ignore(ascii_case))]
     TEMPORARY,
+    #[token("TEMP", ignore(ascii_case))]
+    TEMP,
     #[token("SECONDS", ignore(ascii_case))]
     SECONDS,
     #[token("DAYS", ignore(ascii_case))]
     DAYS,
+    #[token("DICTIONARY", ignore(ascii_case))]
+    DICTIONARY,
+    #[token("DICTIONARIES", ignore(ascii_case))]
+    DICTIONARIES,
+    #[token("PRIMARY", ignore(ascii_case))]
+    PRIMARY,
+    #[token("SOURCE", ignore(ascii_case))]
+    SOURCE,
+    #[token("SQL", ignore(ascii_case))]
+    SQL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1337,6 +1414,7 @@ impl TokenKind {
                 | Factorial
                 | LBrace
                 | RBrace
+                | Dollar
                 | RArrow
                 | LongRArrow
                 | HashRArrow
@@ -1512,6 +1590,7 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATE_ADD
+            | TokenKind::DATE_DIFF
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
             | TokenKind::IGNORE_RESULT
@@ -1526,12 +1605,14 @@ impl TokenKind {
             | TokenKind::AND
             | TokenKind::ANY
             | TokenKind::FUNCTION
+            | TokenKind::PROCEDURE
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC
             // | TokenKind::AUTHORIZATION
             // | TokenKind::BINARY
             | TokenKind::BOTH
+            | TokenKind::BLOCK
             | TokenKind::CASE
             | TokenKind::CAST
             // | TokenKind::CHECK
@@ -1589,11 +1670,11 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             | TokenKind::SEMI
+            | TokenKind::SAMPLE
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
-            | TokenKind::TRANSACTION
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
             //| TokenKind::USER

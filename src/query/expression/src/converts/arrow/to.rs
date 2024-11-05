@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_array::cast::AsArray;
@@ -20,16 +19,15 @@ use arrow_array::Array;
 use arrow_array::LargeListArray;
 use arrow_array::MapArray;
 use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
 use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
 use arrow_schema::Schema as ArrowSchema;
-use databend_common_arrow::arrow::datatypes::DataType as Arrow2DataType;
 use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::Result;
 
-use super::EXTENSION_KEY;
 use crate::infer_table_schema;
 use crate::Column;
 use crate::DataBlock;
@@ -43,7 +41,7 @@ impl From<&DataSchema> for ArrowSchema {
         let fields = schema
             .fields
             .iter()
-            .map(|f| arrow_field_from_arrow2_field(Arrow2Field::from(f)))
+            .map(|f| ArrowField::from(Arrow2Field::from(f)))
             .collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
@@ -57,7 +55,7 @@ impl From<&TableSchema> for ArrowSchema {
         let fields = schema
             .fields
             .iter()
-            .map(|f| arrow_field_from_arrow2_field(Arrow2Field::from(f)))
+            .map(|f| ArrowField::from(Arrow2Field::from(f)))
             .collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
@@ -70,7 +68,7 @@ pub fn table_schema_to_arrow_schema(schema: &TableSchema) -> ArrowSchema {
     let fields = schema
         .fields
         .iter()
-        .map(|f| arrow_field_from_arrow2_field(f.into()))
+        .map(|f| ArrowField::from(Arrow2Field::from(f)))
         .collect::<Vec<_>>();
     ArrowSchema {
         fields: Fields::from(fields),
@@ -80,13 +78,13 @@ pub fn table_schema_to_arrow_schema(schema: &TableSchema) -> ArrowSchema {
 
 impl From<&TableField> for ArrowField {
     fn from(field: &TableField) -> Self {
-        arrow_field_from_arrow2_field(Arrow2Field::from(field))
+        ArrowField::from(Arrow2Field::from(field))
     }
 }
 
 impl From<&DataField> for ArrowField {
     fn from(field: &DataField) -> Self {
-        arrow_field_from_arrow2_field(Arrow2Field::from(field))
+        ArrowField::from(Arrow2Field::from(field))
     }
 }
 
@@ -98,10 +96,18 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
+        if table_schema.num_fields() == 0 {
+            return Ok(RecordBatch::try_new_with_options(
+                Arc::new(ArrowSchema::empty()),
+                vec![],
+                &RecordBatchOptions::default().with_row_count(Some(self.num_rows())),
+            )?);
+        }
+
         let arrow_schema = table_schema_to_arrow_schema(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self
-            .convert_to_full()
+            .consume_convert_to_full()
             .columns()
             .iter()
             .zip(arrow_schema.fields())
@@ -165,35 +171,4 @@ impl Column {
         let arrow_array: Arc<dyn arrow_array::Array> = arrow2_array.into();
         arrow_array
     }
-}
-
-fn arrow_field_from_arrow2_field(field: Arrow2Field) -> ArrowField {
-    let mut metadata = HashMap::new();
-
-    let arrow2_data_type = if let Arrow2DataType::Extension(extension_type, ty, _) = field.data_type
-    {
-        metadata.insert(EXTENSION_KEY.to_string(), extension_type.clone());
-        *ty
-    } else {
-        field.data_type
-    };
-
-    let data_type = match arrow2_data_type {
-        Arrow2DataType::List(f) => ArrowDataType::List(Arc::new(arrow_field_from_arrow2_field(*f))),
-        Arrow2DataType::LargeList(f) => {
-            ArrowDataType::LargeList(Arc::new(arrow_field_from_arrow2_field(*f)))
-        }
-        Arrow2DataType::FixedSizeList(f, size) => {
-            ArrowDataType::FixedSizeList(Arc::new(arrow_field_from_arrow2_field(*f)), size as _)
-        }
-        Arrow2DataType::Map(f, ordered) => {
-            ArrowDataType::Map(Arc::new(arrow_field_from_arrow2_field(*f)), ordered)
-        }
-        Arrow2DataType::Struct(f) => {
-            ArrowDataType::Struct(f.into_iter().map(arrow_field_from_arrow2_field).collect())
-        }
-        other => other.into(),
-    };
-
-    ArrowField::new(field.name, data_type, field.is_nullable).with_metadata(metadata)
 }

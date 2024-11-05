@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
@@ -54,6 +55,7 @@ fn test_user_info() -> mt::principal::UserInfo {
             ]
             .to_vec(),
             hash_method: mt::principal::PasswordHashMethod::DoubleSha1,
+            need_change: false,
         },
         grants: mt::principal::UserGrantSet::new(
             vec![mt::principal::GrantEntry::new(
@@ -72,6 +74,8 @@ fn test_user_info() -> mt::principal::UserInfo {
         password_fails: vec![],
         password_update_on: None,
         lockout_time: None,
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     }
 }
 

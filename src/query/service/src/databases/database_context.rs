@@ -25,6 +25,7 @@ pub struct DatabaseContext {
     pub meta: MetaStore,
     pub storage_factory: Arc<StorageFactory>,
     pub tenant: Tenant,
+    pub disable_table_info_refresh: bool,
 }
 
 impl DatabaseContext {

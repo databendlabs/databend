@@ -1,0 +1,51 @@
+statement ok
+DROP DATABASE IF EXISTS db_values_comment
+
+statement ok
+CREATE DATABASE db_values_comment
+
+statement ok
+USE db_values_comment
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(id Int, s string) Engine = Fuse
+
+statement ok
+INSERT INTO t1 (id, s) VALUES
+    -- line comment
+    (1, 'aaa'), -- line comment
+    (2, 'aaa'),
+    /* block comment */
+    (/* block comment */3, 'aaa'),/* block comment */
+    (4, 'aaa')/* block comment *//* block comment */--linecomment
+    --(5, '')
+
+statement ok
+INSERT INTO t1 (id, s) VALUES-- line comment
+
+query IT
+SELECT id, s FROM t1 order by id
+----
+1 aaa
+2 aaa
+3 aaa
+4 aaa
+
+statement error 1025
+INSERT INTO table_a_temp_data_storage
+SELECT col_1,COALESCE(b2.col_2,'other') AS col_3,col_4,col_5,col_6,col_7 FROM
+(SELECT a.col_8 AS col_1,a.col_9,a.col_10 AS col_4,'CODE_001' as col_5, a.col_11 AS col_6,'table_b' AS col_7 FROM schema_x.table_b a left join schema_x.table_c b on b.col_12 = 'TABLE_D' and b.col_13 = 'table_b' left join table_e c on 1=1 where a.col_11 >= b.col_14 AND a.col_11 < c.col_15) b1
+left join schema_x.table_f b2 ON b1.col_9 = b2.col_16 and b2.col_17 = 'table_b' and b2.col_18 = 'col_9'
+
+statement error 1003
+INSERT INTO xxx.table_1
+SELECT a, COALESCE(b.c, '其他') AS d, e, f, g, h FROM
+(SELECT i.j AS a, i.k, i.l AS e, 'xx' as f, i.m AS g, 'a.table_2' AS h
+ FROM a.table_2 i
+ LEFT JOIN table_3 n ON n.o = 'yy' AND n.p = 'a.table_2'
+ LEFT JOIN table_4 q ON 1=1
+ WHERE i.m >= n.r AND i.m < q.s) t
+LEFT JOIN table_5 b ON t.k = b.u AND b.v = 'a.table_2' AND b.w = 'k'
+
+statement ok
+DROP DATABASE db_values_comment

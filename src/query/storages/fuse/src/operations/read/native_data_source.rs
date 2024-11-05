@@ -23,12 +23,4 @@ pub enum NativeDataSource {
 }
 
 #[typetag::serde(name = "fuse_data_source")]
-impl BlockMetaInfo for DataSourceWithMeta<NativeDataSource> {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals DataSourceMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone DataSourceMeta")
-    }
-}
+impl BlockMetaInfo for DataSourceWithMeta<NativeDataSource> {}

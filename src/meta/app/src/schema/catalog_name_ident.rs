@@ -16,10 +16,10 @@ use crate::tenant_key::ident::TIdent;
 
 /// The identifier of a catalog,
 /// which is used as a key and does not support other codec method such as serde.
-pub type CatalogNameIdent = TIdent<Resource>;
-pub type CatalogNameIdentRaw = TIdentRaw<Resource>;
+pub type CatalogNameIdent = TIdent<CatalogNameRsc>;
+pub type CatalogNameIdentRaw = TIdentRaw<CatalogNameRsc>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::CatalogNameRsc;
 
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -28,20 +28,23 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::CatalogIdIdent;
+    use crate::schema::catalog_id_ident::CatalogId;
+    use crate::schema::CatalogNameIdent;
     use crate::tenant_key::resource::TenantResource;
+    use crate::KeyWithTenant;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct CatalogNameRsc;
+    impl TenantResource for CatalogNameRsc {
         const PREFIX: &'static str = "__fd_catalog";
         const TYPE: &'static str = "CatalogNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = CatalogIdIdent;
+        type ValueType = CatalogId;
     }
 
-    impl kvapi::Value for CatalogIdIdent {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+    impl kvapi::Value for CatalogId {
+        type KeyType = CatalogNameIdent;
+        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            [self.into_t_ident(key.tenant()).to_string_key()]
         }
     }
 

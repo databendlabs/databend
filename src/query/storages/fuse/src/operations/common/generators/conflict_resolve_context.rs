@@ -51,20 +51,19 @@ impl ConflictResolveContext {
     }
 
     pub fn is_modified_segments_exists_in_latest(
-        base: &TableSnapshot,
-        latest: &TableSnapshot,
+        base_segments: &[Location],
+        latest_segments: &[Location],
         replaced_segments: &HashMap<usize, Location>,
         removed_segments: &[usize],
     ) -> Option<(Vec<usize>, HashMap<usize, Location>)> {
-        let latest_segments = latest
-            .segments
+        let latest_segments = latest_segments
             .iter()
             .enumerate()
             .map(|(i, x)| (x, i))
             .collect::<HashMap<_, usize>>();
         let mut removed = Vec::with_capacity(removed_segments.len());
         for removed_segment in removed_segments {
-            let removed_segment = &base.segments[*removed_segment];
+            let removed_segment = &base_segments[*removed_segment];
             if let Some(position) = latest_segments.get(removed_segment) {
                 removed.push(*position);
             } else {
@@ -74,7 +73,7 @@ impl ConflictResolveContext {
 
         let mut replaced = HashMap::with_capacity(replaced_segments.len());
         for (position, location) in replaced_segments {
-            let origin_segment = &base.segments[*position];
+            let origin_segment = &base_segments[*position];
             if let Some(position) = latest_segments.get(origin_segment) {
                 replaced.insert(*position, location.clone());
             } else {

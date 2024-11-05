@@ -1,84 +1,114 @@
+onlyif http
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
 sql_dialect PostgreSQL PostgreSQL DEFAULT
 timezone UTC UTC DEFAULT
 
+onlyif http
 statement ok
 SET GLOBAL sql_dialect='MySQL'
 
+onlyif http
 statement ok
 SET GLOBAL timezone='Asia/Shanghai'
 
+onlyif http
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
 sql_dialect  MySQL  PostgreSQL  GLOBAL
 timezone  Asia/Shanghai  UTC  GLOBAL
 
+onlyif http
 statement ok
-UNSET (timezone)
+UNSET GLOBAL (timezone)
 
+onlyif http
 statement error 2801
 SET stl_dialect='MySQL'
 
+onlyif http
 statement ok
 UNSET stl_dialect
 
+onlyif http
 statement ok
-UNSET sql_dialect
+UNSET GLOBAL sql_dialect
 
+onlyif http
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
 sql_dialect PostgreSQL PostgreSQL DEFAULT
 timezone UTC UTC DEFAULT
 
+onlyif http
 statement ok
 set DATA_RETENTION_TIME_IN_DAYS=20;
 
+onlyif http
 query TTTTTTT
 show settings like 'DATA_RETENTION_TIME_IN_DAYS';
 ----
 data_retention_time_in_days 20 1 [0, 90] SESSION Sets the data retention time in days. UInt64
 
+onlyif http
 statement ok
 unset data_retention_time_in_days;
 
+onlyif http
 query TTTTTTT
 show settings like 'DATA_RETENTION_TIME_IN_DAYS';
 ----
 data_retention_time_in_days 1 1 [0, 90] DEFAULT Sets the data retention time in days. UInt64
 
+onlyif http
 statement ok
 set global load_file_metadata_expire_hours=12;
 
+onlyif http
 query TT
 show settings like 'load_file_metadata_expire_hours';
 ----
 load_file_metadata_expire_hours 12 24 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
 
+onlyif http
 statement ok
 set load_file_metadata_expire_hours=13;
 
+onlyif http
 query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
 load_file_metadata_expire_hours 13 24 [0, 18446744073709551615] SESSION Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
 
+onlyif http
 statement ok
 unset session load_file_metadata_expire_hours;
 
+onlyif http
 query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
 load_file_metadata_expire_hours 12 24 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
 
+onlyif http
 statement ok
 unset load_file_metadata_expire_hours
 
+onlyif http
+query TTTTTTT
+show settings like 'load_file_metadata_expire_hours';
+----
+load_file_metadata_expire_hours 12 24 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+
+onlyif http
+statement ok
+unset global load_file_metadata_expire_hours
+
+onlyif http
 query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
 load_file_metadata_expire_hours 24 24 [0, 18446744073709551615] DEFAULT Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
-

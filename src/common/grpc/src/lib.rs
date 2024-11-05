@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(lazy_cell)]
 
 pub use client_conf::RpcClientConf;
 pub use client_conf::RpcClientTlsConfig;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
+pub use dns_resolver::DNSService;
 pub use dns_resolver::GrpcConnectionError;
 pub use grpc_token::GrpcClaim;
 pub use grpc_token::GrpcToken;

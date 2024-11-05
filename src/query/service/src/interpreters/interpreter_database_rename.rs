@@ -50,7 +50,7 @@ impl Interpreter for RenameDatabaseInterpreter {
         for entity in &self.plan.entities {
             let catalog = self.ctx.get_catalog(&entity.catalog).await?;
             let tenant = self.plan.tenant.clone();
-            catalog
+            let _reply = catalog
                 .rename_database(RenameDatabaseReq {
                     if_exists: entity.if_exists,
                     name_ident: DatabaseNameIdent::new(tenant, &entity.database),

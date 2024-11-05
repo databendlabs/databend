@@ -62,7 +62,45 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
-        total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block
+    pub fn check_too_small(&self, row_count: usize, block_size: usize) -> bool {
+        row_count < self.min_rows_per_block / 2 && block_size < self.max_bytes_per_block / 2
+    }
+
+    #[inline]
+    pub fn calc_rows_per_block(&self, total_bytes: usize, total_rows: usize) -> usize {
+        if self.check_for_compact(total_rows, total_bytes) {
+            return total_rows;
+        }
+
+        let block_num_by_size = std::cmp::max(total_bytes / self.max_bytes_per_block, 1);
+        let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
+        if block_num_by_rows >= block_num_by_size {
+            return self.max_rows_per_block;
+        }
+
+        let mut rows_per_block = total_rows.div_ceil(block_num_by_size);
+        let max_bytes_per_block = match rows_per_block {
+            v if v < self.max_rows_per_block / 10 => {
+                // If block rows < 100_000, max_bytes_per_block set to 200M
+                2 * self.max_bytes_per_block
+            }
+            v if v < self.max_rows_per_block / 2 => {
+                // If block rows < 500_000, max_bytes_per_block set to 150M
+                3 * self.max_bytes_per_block / 2
+            }
+            v if v < self.min_rows_per_block => {
+                // If block rows < 800_000, max_bytes_per_block set to 125M
+                5 * self.max_bytes_per_block / 4
+            }
+            _ => self.max_bytes_per_block,
+        };
+
+        if max_bytes_per_block > self.max_bytes_per_block {
+            rows_per_block = std::cmp::max(
+                total_rows / (std::cmp::max(total_bytes / max_bytes_per_block, 1)),
+                1,
+            );
+        }
+        rows_per_block
     }
 }

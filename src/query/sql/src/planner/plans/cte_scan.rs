@@ -35,6 +35,7 @@ use crate::IndexType;
 pub struct CteScan {
     pub cte_idx: (usize, usize),
     pub fields: Vec<DataField>,
+    pub materialized_indexes: Vec<IndexType>,
     pub offsets: Vec<IndexType>,
     pub stat: Arc<StatInfo>,
 }
@@ -78,6 +79,7 @@ impl Operator for CteScan {
             outer_columns: ColumnSet::new(),
             used_columns: self.used_columns()?,
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

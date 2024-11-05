@@ -38,7 +38,7 @@ use log::info;
 use log::warn;
 
 // Start one random service and get the session manager.
-#[minitrace::trace]
+#[fastrace::trace]
 pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
     let mut tc = MetaSrvTestContext::new(0);
 

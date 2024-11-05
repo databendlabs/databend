@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
-use std::path::Path;
 use std::time::Duration;
 
 use databend_common_config::InnerConfig;
@@ -30,8 +29,7 @@ use databend_common_meta_types::anyerror::AnyError;
 use log::info;
 use log::warn;
 use poem::get;
-use poem::listener::RustlsCertificate;
-use poem::listener::RustlsConfig;
+use poem::listener::OpensslTlsConfig;
 use poem::post;
 use poem::Endpoint;
 use poem::Route;
@@ -73,6 +71,10 @@ impl AdminService {
                 "/v1/cluster/list",
                 get(super::v1::cluster::cluster_list_handler),
             )
+            .at(
+                "v1/queries/:query_id/profiling",
+                get(super::v1::query_profiling::query_profiling_handler),
+            )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
             .at("/debug/async_tasks/dump", get(debug_dump_stack));
@@ -104,6 +106,10 @@ impl AdminService {
                     "/v1/tenants/:tenant/settings/:key",
                     post(super::v1::settings::set_settings)
                         .delete(super::v1::settings::unset_settings),
+                )
+                .at(
+                    "/v1/tenants/:tenant/user_functions",
+                    get(super::v1::user_functions::user_functions),
                 );
         }
 
@@ -123,18 +129,16 @@ impl AdminService {
         route
     }
 
-    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
-        let certificate = RustlsCertificate::new()
-            .cert(std::fs::read(config.query.api_tls_server_cert.as_str())?)
-            .key(std::fs::read(config.query.api_tls_server_key.as_str())?);
+    fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
+        let cfg = OpensslTlsConfig::new()
+            .cert_from_file(config.query.api_tls_server_cert.as_str())
+            .key_from_file(config.query.api_tls_server_key.as_str());
 
-        let mut cfg = RustlsConfig::new().fallback(certificate);
-
-        if Path::new(&config.query.api_tls_server_root_ca_cert).exists() {
-            cfg = cfg.client_auth_required(std::fs::read(
-                config.query.api_tls_server_root_ca_cert.as_str(),
-            )?);
-        }
+        // if Path::new(&config.query.api_tls_server_root_ca_cert).exists() {
+        //     cfg = cfg.client_auth_required(std::fs::read(
+        //         config.query.api_tls_server_root_ca_cert.as_str(),
+        //     )?);
+        // }
         Ok(cfg)
     }
 

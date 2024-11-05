@@ -15,19 +15,21 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
+use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::parser::Dialect;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
-use databend_common_io::read_ewkb_srid;
 use geozero::wkb::Ewkb;
+use geozero::GeozeroGeometry;
+use geozero::ToGeos;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
-use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -143,7 +145,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -167,10 +169,16 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec())
-                    .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(s)).unwrap())
-                    .unwrap();
+                let ewkb = Ewkb(s);
+                let geos = ewkb.to_geos().unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "{geom:?}")
+            }
+            ScalarRef::Geography(v) => {
+                let ewkt = v.to_ewkt().unwrap_or_else(|e| format!("Invalid data: {e}"));
+                write!(f, "{ewkt:?}")
             }
         }
     }
@@ -196,6 +204,7 @@ impl Debug for Column {
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
             Column::Geometry(col) => write!(f, "{col:?}"),
+            Column::Geography(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -233,11 +242,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = if !bits.is_empty() {
-                    RoaringTreemap::deserialize_from(*bits).unwrap()
-                } else {
-                    RoaringTreemap::new()
-                };
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "'{}'", rb.into_iter().join(","))
             }
             ScalarRef::Tuple(fields) => {
@@ -258,9 +263,19 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec())
-                    .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(s)).unwrap())
-                    .unwrap();
+                let ewkb = Ewkb(s);
+                let geos = ewkb.to_geos().unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
+                write!(f, "'{geom}'")
+            }
+            ScalarRef::Geography(v) => {
+                let ewkb = Ewkb(v.0);
+                let geos = ewkb.to_geos().unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "'{geom}'")
             }
         }
@@ -528,6 +543,7 @@ impl Display for DataType {
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Geometry => write!(f, "Geometry"),
+            DataType::Geography => write!(f, "Geography"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -576,6 +592,7 @@ impl Display for TableDataType {
             }
             TableDataType::Variant => write!(f, "Variant"),
             TableDataType::Geometry => write!(f, "Geometry"),
+            TableDataType::Geography => write!(f, "Geography"),
         }
     }
 }
@@ -738,7 +755,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             precedence: usize,
             min_precedence: usize,
         ) -> String {
-            if precedence < min_precedence {
+            if precedence < min_precedence || matches!(op, "AND" | "OR") {
                 format!(
                     "({} {op} {})",
                     write_expr(lhs, precedence),
@@ -753,9 +770,33 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
+        #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
-                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
+                Expr::Constant { scalar, .. } => match scalar {
+                    s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
+                        "'nan'::Float32".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_nan() => {
+                        "'nan'::Float64".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_infinite() => {
+                        if *f != f32::NEG_INFINITY {
+                            "'inf'::Float32".to_string()
+                        } else {
+                            "'-inf'::Float32".to_string()
+                        }
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_infinite() => {
+                        if *f != f64::NEG_INFINITY {
+                            "'inf'::Float64".to_string()
+                        } else {
+                            "'-inf'::Float64".to_string()
+                        }
+                    }
+                    other => other.as_ref().to_string(),
+                },
                 Expr::ColumnRef { display_name, .. } => display_name.clone(),
                 Expr::Cast {
                     is_try,
@@ -851,7 +892,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                     ..
                 } => {
                     let mut s = String::new();
-                    s += &name;
+                    s += name;
                     s += "(";
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
@@ -860,7 +901,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s += &arg.sql_display();
                     }
                     s += ", ";
-                    s += &lambda_display;
+                    s += lambda_display;
                     s += ")";
                     s
                 }
@@ -1063,4 +1104,9 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
+}
+
+/// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
+pub fn display_tuple_field_name(field_name: &str) -> String {
+    display_ident(field_name, true, Dialect::PostgreSQL)
 }

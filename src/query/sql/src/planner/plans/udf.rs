@@ -18,7 +18,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
@@ -50,10 +49,6 @@ impl Operator for Udf {
         RelOp::Udf
     }
 
-    fn arity(&self) -> usize {
-        1
-    }
-
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
@@ -81,31 +76,19 @@ impl Operator for Udf {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        Ok(required.clone())
     }
 
     fn compute_required_prop_children(

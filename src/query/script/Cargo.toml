@@ -9,16 +9,16 @@ edition = { workspace = true }
 [lib]
 doctest = false
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-ast = { path = "../ast" }
-databend-common-exception = { path = "../../common/exception" }
-
-# Crates.io dependencies
+[dependencies]
+databend-common-ast = { workspace = true }
+databend-common-exception = { workspace = true }
 derive-visitor = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 
 [dev-dependencies]
-goldenfile = "1.4"
+goldenfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
-unindent = "0.2.3"
+unindent = { workspace = true }
+
+[lints]
+workspace = true

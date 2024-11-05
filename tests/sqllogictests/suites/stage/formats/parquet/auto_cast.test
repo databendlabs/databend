@@ -1,0 +1,46 @@
+statement ok
+drop stage if exists s1;
+
+statement ok
+create stage s1;
+
+statement ok
+create or replace table t(a int null);
+
+statement ok
+insert into table t values (1), (2);
+
+statement ok
+copy into @s1 from t;
+
+statement ok
+create or replace table t2(a int not null);
+
+statement ok
+copy into t2 from @s1;
+
+statement ok
+insert into table t values (null);
+
+statement ok
+copy into @s1 from t;
+
+statement error 1006.*fail to auto cast column
+copy into t2 from @s1;
+
+statement ok
+create or replace table t3(a string null);
+
+statement ok
+copy into t3 from @s1;
+
+statement ok
+drop table if exists ts;
+
+statement ok
+create table ts(b timestamp);
+
+# 1006: fail to auto cast column b (Variant) to column b (Timestamp NULL)
+# unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp('{"a":11}')
+statement error 1006.*fail to auto cast column b \(Variant\) to column b \(Timestamp NULL\)
+copy into ts from @data/parquet/variant force=true;

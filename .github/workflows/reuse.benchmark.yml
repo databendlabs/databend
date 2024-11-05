@@ -24,11 +24,11 @@ on:
         required: true
         type: string
       runner_provider:
-        description: 'Self-hosted runner provider, aws or gcp'
+        description: "Self-hosted runner provider, aws or gcp"
         type: string
         required: true
       target:
-        description: 'The target of benchmark, local or cloud or all'
+        description: "The target of benchmark, local or cloud or all"
         type: string
         required: true
 
@@ -55,29 +55,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
+        with:
+          ref: ${{ inputs.sha }}
       - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-      - name: Download artifact for pr
-        if: inputs.source == 'pr'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download artifact
         uses: ./.github/actions/artifact_download
         with:
           sha: ${{ inputs.sha }}
           target: x86_64-unknown-linux-gnu
-      - name: Download artifact for release
-        if: inputs.source == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version=${{ inputs.source_id }}
-          target=x86_64-unknown-linux-gnu
-          mkdir -p ./distro/
-          mkdir -p ./target/release/
-          gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
-          tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
-          chmod +x ./target/release/databend-*
+          category: udf
+          artifacts: meta,query
       - name: Setup Databend Binary
         shell: bash
         run: |
@@ -100,6 +94,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
+        with:
+          ref: ${{ inputs.sha }}
       - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
@@ -144,6 +140,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
+        with:
+          ref: ${{ inputs.sha }}
       - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
@@ -211,7 +209,7 @@ jobs:
             aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json"
             ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
             aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html
-            echo "* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
+            echo "* **${dataset}**: https://benchmark.databend.com/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
           done
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1

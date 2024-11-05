@@ -33,7 +33,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
     let (_, tcs) = start_meta_node_cluster(btreeset! {0,1,2}, btreeset! {}).await?;
 

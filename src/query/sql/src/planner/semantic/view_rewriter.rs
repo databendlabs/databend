@@ -31,9 +31,10 @@ impl ViewRewriter {
             table,
             alias,
             temporal,
-            consume,
+            with_options,
             pivot,
             unpivot,
+            sample,
         } = table_ref
         {
             // Must rewrite view query when table_ref::database is none. If not:
@@ -50,9 +51,10 @@ impl ViewRewriter {
                     table: table.clone(),
                     alias: alias.clone(),
                     temporal: temporal.clone(),
-                    consume: *consume,
+                    with_options: with_options.clone(),
                     pivot: pivot.clone(),
                     unpivot: unpivot.clone(),
+                    sample: sample.clone(),
                 }
             }
         }

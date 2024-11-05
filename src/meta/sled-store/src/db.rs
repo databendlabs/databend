@@ -41,12 +41,18 @@ impl GlobalSledDb {
         }
     }
 
-    pub(crate) fn new(path: String) -> Self {
+    pub(crate) fn new(path: String, cache_size: u64) -> Self {
+        let db = sled::Config::default()
+            .path(&path)
+            .cache_capacity(cache_size as usize)
+            .mode(sled::Mode::HighThroughput)
+            .open()
+            .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", path, e));
+
         GlobalSledDb {
             temp_dir: None,
             path: path.clone(),
-            db: sled::open(path.clone())
-                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", path, e)),
+            db,
         }
     }
 }
@@ -76,13 +82,13 @@ pub fn init_temp_sled_db(temp_dir: TempDir) {
     }
 }
 
-pub fn init_sled_db(path: String) {
+pub fn init_sled_db(path: String, cache_size: u64) {
     let (inited_as_temp, curr_path) = {
         let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
         if let Some(gdb) = g.as_ref() {
             (gdb.temp_dir.is_some(), gdb.path.clone())
         } else {
-            *g = Some(GlobalSledDb::new(path));
+            *g = Some(GlobalSledDb::new(path, cache_size));
             return;
         }
     };

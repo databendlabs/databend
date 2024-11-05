@@ -28,6 +28,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
@@ -82,28 +83,36 @@ impl BlockEntry {
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     #[allow(clippy::borrowed_box)]
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        panic!(
+            "The reason for not implementing equals is usually because the higher-level logic doesn't allow/need the meta to be compared."
+        )
+    }
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        panic!(
+            "The reason for not implementing clone_self is usually because the higher-level logic doesn't allow/need the associated block to be cloned."
+        )
+    }
 }
 
-pub trait BlockMetaInfoDowncast: Sized {
-    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self>;
+pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
+    fn boxed(self) -> BlockMetaInfoPtr {
+        Box::new(self)
+    }
 
-    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self>;
-}
-
-impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
         let boxed: Box<dyn Any> = boxed;
         boxed.downcast().ok().map(|x| *x)
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        let boxed: &dyn Any = boxed.as_ref();
+        let boxed = boxed.as_ref() as &dyn Any;
         boxed.downcast_ref()
     }
 }
+
+impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
 
 impl DataBlock {
     #[inline]
@@ -117,7 +126,6 @@ impl DataBlock {
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        #[cfg(debug_assertions)]
         Self::check_columns_valid(&columns, num_rows).unwrap();
 
         Self {
@@ -130,12 +138,14 @@ impl DataBlock {
     fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
         for entry in columns.iter() {
             if let Value::Column(c) = &entry.value {
+                #[cfg(debug_assertions)]
                 c.check_valid()?;
                 if c.len() != num_rows {
                     return Err(ErrorCode::Internal(format!(
-                        "DataBlock corrupted, column length mismatch, col: {}, num_rows: {}",
+                        "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {}, datatype: {}",
                         c.len(),
-                        num_rows
+                        num_rows,
+                        c.data_type()
                     )));
                 }
             }
@@ -239,6 +249,18 @@ impl DataBlock {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
     }
 
+    pub fn consume_convert_to_full(self) -> Self {
+        if self
+            .columns()
+            .iter()
+            .all(|entry| entry.value.as_column().is_some())
+        {
+            return self;
+        }
+
+        self.convert_to_full()
+    }
+
     pub fn convert_to_full(&self) -> Self {
         let columns = self
             .columns()
@@ -263,6 +285,12 @@ impl DataBlock {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
+        assert!(
+            range.end <= self.num_rows(),
+            "range {:?} out of len {}",
+            range,
+            self.num_rows()
+        );
         let columns = self
             .columns()
             .iter()
@@ -278,7 +306,11 @@ impl DataBlock {
             .collect();
         Self {
             columns,
-            num_rows: range.end - range.start,
+            num_rows: if range.is_empty() {
+                0
+            } else {
+                range.end - range.start
+            },
             meta: self.meta.clone(),
         }
     }
@@ -318,16 +350,19 @@ impl DataBlock {
         res
     }
 
-    pub fn split_by_rows_if_needed_no_tail(&self, min_rows_per_block: usize) -> Vec<Self> {
-        let max_rows_per_block = min_rows_per_block * 2;
+    pub fn split_by_rows_if_needed_no_tail(&self, rows_per_block: usize) -> Vec<Self> {
+        // Since rows_per_block represents the expected number of rows per block,
+        // and the minimum number of rows per block is 0.8 * rows_per_block,
+        // the maximum is taken as 1.8 * rows_per_block.
+        let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
         let mut res = vec![];
         let mut offset = 0;
         let mut remain_rows = self.num_rows;
         while remain_rows >= max_rows_per_block {
-            let cut = self.slice(offset..(offset + min_rows_per_block));
+            let cut = self.slice(offset..(offset + rows_per_block));
             res.push(cut);
-            offset += min_rows_per_block;
-            remain_rows -= min_rows_per_block;
+            offset += rows_per_block;
+            remain_rows -= rows_per_block;
         }
         res.push(self.slice(offset..(offset + remain_rows)));
         res
@@ -563,6 +598,16 @@ impl DataBlock {
         debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
         self.columns.last().unwrap().value.as_column().unwrap()
     }
+
+    pub fn infer_schema(&self) -> DataSchema {
+        let fields = self
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, e)| DataField::new(&format!("col_{index}"), e.data_type.clone()))
+            .collect();
+        DataSchema::new(fields)
+    }
 }
 
 impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
@@ -586,7 +631,7 @@ impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
 impl BlockEntry {
     pub fn memory_size(&self) -> usize {
         match &self.value {
-            Value::Scalar(s) => std::mem::size_of_val(s),
+            Value::Scalar(s) => s.as_ref().memory_size(),
             Value::Column(c) => c.memory_size(),
         }
     }
@@ -596,8 +641,8 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_any: &dyn Any = self.as_ref();
-        let other_any: &dyn Any = other.as_ref();
+        let this_any = self.as_ref() as &dyn Any;
+        let other_any = other.as_ref() as &dyn Any;
 
         match this_any.type_id() == other_any.type_id() {
             true => self.equals(other),
@@ -630,4 +675,29 @@ fn check_type(data_type: &DataType, value: &Value<AnyType>) {
         Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
         Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
+}
+
+#[macro_export]
+macro_rules! local_block_meta_serde {
+    ($T:ty) => {
+        impl serde::Serialize for $T {
+            fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
+            where S: serde::Serializer {
+                unreachable!(
+                    "{} must not be exchanged between multiple nodes.",
+                    stringify!($T)
+                )
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for $T {
+            fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
+            where D: serde::Deserializer<'de> {
+                unreachable!(
+                    "{} must not be exchanged between multiple nodes.",
+                    stringify!($T)
+                )
+            }
+        }
+    };
 }

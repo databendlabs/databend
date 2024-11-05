@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod name_resolution;
+mod type_check;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
@@ -34,8 +36,13 @@ pub enum PhysicalJoinType {
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.left_conditions.is_empty() {
+    if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
+        return Ok(PhysicalJoinType::Hash);
+    }
+
+    if join.build_side_cache_info.is_some() {
+        // There is a build side cache, use hash join.
         return Ok(PhysicalJoinType::Hash);
     }
 
@@ -107,33 +114,39 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
-        let others_required = join
+        let mut others_required = join
             .non_equi_conditions
             .iter()
             .fold(required.clone(), |acc, v| {
                 acc.union(&v.used_columns()).cloned().collect()
             });
-        let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
+        if let Some(cache_info) = &join.build_side_cache_info {
+            for column in &cache_info.columns {
+                others_required.insert(*column);
+            }
+        }
+
         // Include columns referenced in left conditions and right conditions.
-        let left_required = join
-            .left_conditions
+        let left_required: HashSet<usize> = join
+            .equi_conditions
             .iter()
             .fold(required.clone(), |acc, v| {
-                acc.union(&v.used_columns()).cloned().collect()
+                acc.union(&v.left.used_columns()).cloned().collect()
             })
             .union(&others_required)
             .cloned()
             .collect();
-        let right_required = join
-            .right_conditions
+        let right_required: HashSet<usize> = join
+            .equi_conditions
             .iter()
-            .fold(required, |acc, v| {
-                acc.union(&v.used_columns()).cloned().collect()
+            .fold(required.clone(), |acc, v| {
+                acc.union(&v.right.used_columns()).cloned().collect()
             })
             .union(&others_required)
             .cloned()
             .collect();
+        let left_required = left_required.union(&others_required).cloned().collect();
+        let right_required = right_required.union(&others_required).cloned().collect();
 
         // 2. Build physical plan.
         // Choose physical join type by join conditions
@@ -143,9 +156,10 @@ impl PhysicalPlanBuilder {
                 self.build_hash_join(
                     join,
                     s_expr,
-                    (left_required, right_required),
-                    pre_column_projections,
-                    column_projections,
+                    required,
+                    others_required,
+                    left_required,
+                    right_required,
                     stat_info,
                 )
                 .await

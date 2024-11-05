@@ -24,8 +24,8 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -68,7 +68,7 @@ impl AggregateFunction for AggregateStringAggFunction {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -97,7 +97,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
@@ -111,7 +111,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let v = StringType::index_column(&column, row);
         if let Some(v) = v {
