@@ -62,6 +62,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
@@ -130,7 +131,6 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
-use databend_common_meta_app::schema::RenameDictionaryReply;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -164,6 +164,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -214,7 +215,6 @@ use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_get;
 use crate::txn_op_put;
-use crate::util::assert_dictionary_exist;
 use crate::util::db_id_has_to_exist;
 use crate::util::deserialize_id_get_response;
 use crate::util::deserialize_struct_get_response;
@@ -3037,31 +3037,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn rename_dictionary(
-        &self,
-        req: RenameDictionaryReq,
-    ) -> Result<RenameDictionaryReply, KVAppError> {
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let (dict_id_seq, dict_id) = get_u64_value(self, &req.name_ident).await?;
-            assert_dictionary_exist(
-                dict_id_seq,
-                &req.name_ident,
-                "rename_dictionary: src (db,dictionary)",
-            )?;
+            let dict_id = self
+                .get_pb(&req.name_ident)
+                .await?
+                .ok_or_else(|| AppError::from(req.name_ident.unknown_error(func_name!())))?;
 
-            let new_dict_id_seq = self.get_seq(&req.new_name_ident).await?;
-            dict_has_to_not_exist(new_dict_id_seq, &req.new_name_ident, "rename_dictionary")?;
+            let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
+            let new_dict_id_seq = self.get_seq(&new_name_ident).await?;
+            let _ = dict_has_to_not_exist(new_dict_id_seq, &new_name_ident, "rename_dictionary")
+                .map_err(|_| AppError::from(new_name_ident.exist_error(func_name!())))?;
 
-            let id = serialize_u64(dict_id)?;
-            let condition = vec![txn_cond_seq(&req.name_ident, Eq, dict_id_seq)];
+            let condition = vec![
+                txn_cond_seq(&req.name_ident, Eq, dict_id.seq),
+                txn_cond_seq(&new_name_ident, Eq, new_dict_id_seq),
+            ];
             let if_then = vec![
-                txn_op_del(&req.name_ident),         // del old_dict_name
-                txn_op_put(&req.new_name_ident, id), // put new dict name
+                txn_op_del(&req.name_ident),                          // del old dict name
+                txn_op_put_pb(&new_name_ident, &dict_id.data, None)?, // put new dict name
             ];
 
             let txn_req = TxnRequest {
@@ -3074,13 +3073,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             debug!(
                 name :? =(req.name_ident),
-                to :? =(&req.new_name_ident),
+                to :? =(&new_name_ident),
                 succ = succ;
                 "rename_dictionary"
             );
 
             if succ {
-                return Ok(RenameDictionaryReply {});
+                return Ok(());
             }
         }
     }
@@ -3508,12 +3507,12 @@ fn dict_has_to_not_exist(
     seq: u64,
     name_ident: &DictionaryNameIdent,
     _ctx: impl Display,
-) -> Result<(), KVAppError> {
+) -> Result<(), ExistError<DictionaryNameRsc, DictionaryIdentity>> {
     if seq == 0 {
         Ok(())
     } else {
         debug!(seq = seq, name_ident :? =(name_ident); "exist");
-        Err(AppError::from(name_ident.exist_error(func_name!())).into())
+        Err(name_ident.exist_error(func_name!()))
     }
 }
 

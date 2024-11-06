@@ -7362,10 +7362,8 @@ impl SchemaApiTestSuite {
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name2.to_string()),
         );
-        let dict_ident3 = DictionaryNameIdent::new(
-            dict_tenant.clone(),
-            DictionaryIdentity::new(db_id, dict_name3.to_string()),
-        );
+        let dict3 = DictionaryIdentity::new(db_id, dict_name3.to_string());
+        let dict_ident3 = DictionaryNameIdent::new(dict_tenant.clone(), dict3.clone());
 
         {
             info!("--- create dictionary");
@@ -7467,9 +7465,9 @@ impl SchemaApiTestSuite {
             info!("--- rename dictionary");
             let rename_req = RenameDictionaryReq {
                 name_ident: dict_ident1.clone(),
-                new_name_ident: dict_ident3.clone(),
+                new_dict_ident: dict3.clone(),
             };
-            let _ = mt.rename_dictionary(rename_req).await?;
+            mt.rename_dictionary(rename_req).await?;
             let req = dict_ident1.clone();
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_none());
@@ -7481,6 +7479,14 @@ impl SchemaApiTestSuite {
             let dict_reply = res.unwrap();
             assert_eq!(*dict_reply.0.data, dict_id);
             assert_eq!(dict_reply.1.source, "postgresql".to_string());
+
+            info!("--- rename unknown dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            let res = mt.rename_dictionary(rename_req).await;
+            assert!(res.is_err());
         }
 
         {

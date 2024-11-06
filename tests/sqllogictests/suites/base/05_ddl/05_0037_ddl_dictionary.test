@@ -104,22 +104,28 @@ statement ok
 CREATE DICTIONARY db1.test1(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
 statement ok
-DROP DICTIONARY IF EXISTS d
+DROP DICTIONARY IF EXISTS db1.d
 
 statement ok
-DROP DICTIONARY IF EXISTS dd
+DROP DICTIONARY IF EXISTS db1.dd
 
 statement ok
-CREATE DICTIONARY IF NOT EXISTS d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+CREATE DICTIONARY IF NOT EXISTS db1.d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
-statement ok
-RENAME DICTIONARY d TO dd
+statement error 3113
+RENAME DICTIONARY db1.d TO db1.test1
 
 statement error 3114
-SHOW CREATE DICTIONARY d
+RENAME DICTIONARY db1.d0 TO db1.dd
+
+statement ok
+RENAME DICTIONARY db1.d TO db1.dd
+
+statement error 3114
+SHOW CREATE DICTIONARY db1.d
 
 query TT
-SHOW CREATE DICTIONARY dd
+SHOW CREATE DICTIONARY db1.dd
 ----
 dd CREATE DICTIONARY dd ( c1 INT NOT NULL, c2 VARCHAR NOT NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root'))
 
@@ -127,10 +133,10 @@ statement ok
 DROP DICTIONARY IF EXISTS default.dd2
 
 statement ok
-rename dictionary dd to default.dd2
+rename dictionary db1.dd to default.dd2
 
 statement error 3114
-show create dictionary dd
+show create dictionary db1.dd
 
 query TT
 show create dictionary default.dd2

@@ -79,7 +79,6 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
-use databend_common_meta_app::schema::RenameDictionaryReply;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -849,7 +848,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.list_dictionaries(req).await
     }
 
-    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<RenameDictionaryReply> {
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         self.mutable_catalog.rename_dictionary(req).await
     }
 }

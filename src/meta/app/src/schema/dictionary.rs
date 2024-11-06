@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use super::dictionary_name_ident::DictionaryNameIdent;
+use crate::schema::DictionaryIdentity;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
@@ -177,7 +178,7 @@ pub struct UpdateDictionaryReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameDictionaryReq {
     pub name_ident: DictionaryNameIdent,
-    pub new_name_ident: DictionaryNameIdent,
+    pub new_dict_ident: DictionaryIdentity,
 }
 
 impl RenameDictionaryReq {
@@ -194,11 +195,11 @@ impl RenameDictionaryReq {
     }
 
     pub fn new_db_id(&self) -> u64 {
-        self.new_name_ident.db_id()
+        self.new_dict_ident.db_id
     }
 
     pub fn new_dictionary_name(&self) -> String {
-        self.new_name_ident.dict_name().clone()
+        self.new_dict_ident.dict_name.clone()
     }
 }
 
@@ -215,6 +216,3 @@ impl Display for RenameDictionaryReq {
         )
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RenameDictionaryReply {}

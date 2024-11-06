@@ -58,11 +58,10 @@ impl Interpreter for RenameDictionaryInterpreter {
 
         let new_dict_ident =
             DictionaryIdentity::new(self.plan.new_database_id, self.plan.new_dictionary.clone());
-        let new_name_ident = DictionaryNameIdent::new(tenant, new_dict_ident);
 
         let req = RenameDictionaryReq {
             name_ident,
-            new_name_ident,
+            new_dict_ident,
         };
 
         let reply = catalog.rename_dictionary(req).await;
