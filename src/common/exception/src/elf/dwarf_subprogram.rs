@@ -61,9 +61,9 @@ impl<R: Reader> SubprogramAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -85,18 +85,14 @@ impl<R: Reader> Unit<R> {
                         attrs.set_attr(attr);
                     }
 
-                    if let Some(range_offset) = self.attrs.ranges_offset {
-                        if !self.match_range(probe, range_offset) {
-                            continue;
-                        }
-                    } else if !attrs.match_pc(probe) {
-                        continue;
-                    }
-
-                    return match abbrev.has_children() {
-                        true => Ok(Some(dw_die_offset)),
-                        false => Ok(None)
+                    let range_match = match self.attrs.ranges_offset {
+                        None => true,
+                        Some(range_offset) => self.match_range(probe, range_offset),
                     };
+
+                    if range_match || attrs.match_pc(probe) {
+                        return Ok(Some(dw_die_offset));
+                    }
                 } else {
                     entries.skip_attributes(abbrev.attributes())?;
                 }

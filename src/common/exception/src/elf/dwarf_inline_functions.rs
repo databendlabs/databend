@@ -69,6 +69,15 @@ impl<R: Reader> SubroutineAttrs<R> {
                 _ => {}
             },
             gimli::DW_AT_ranges => {
+                // match attr.value() {
+                //     AttributeValue::RangeListsRef(offset) => {
+                //         self.ranges_offset =
+                //         Ok(Some(self.ranges_offset_from_raw(unit, offset)))
+                //     }
+                //     AttributeValue::DebugRngListsIndex(index) => self.ranges_offset(unit, index).map(Some),
+                //     _ => Ok(None),
+                // }
+
                 if let AttributeValue::RangeListsRef(v) = attr.value() {
                     self.ranges_offset = Some(RangeListsOffset(v.0));
                 }
@@ -85,8 +94,8 @@ impl<R: Reader> SubroutineAttrs<R> {
             }
             gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
                 eprintln!(
-                    "gimli::DW_AT_abstract_origin | gimli::DW_AT_specification before {:?}",
-                    self.name.as_ref().map(|x| x.to_string_lossy())
+                    "gimli::DW_AT_abstract_origin | gimli::DW_AT_specification before {:?} {:?}",
+                    self.name.as_ref().map(|x| x.to_string_lossy()), attr.value(),
                 );
                 if self.name.is_none() {
                     if let Ok(Some(v)) = unit.name_attr(attr.value(), 16) {
@@ -118,9 +127,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -134,11 +143,11 @@ impl<R: Reader> Unit<R> {
             AttributeValue::DebugStrRef(offset) => {
                 eprintln!("attr_str DebugStrRef {:?}", offset);
                 self.debug_str.get_str(offset).ok()
-            },
+            }
             AttributeValue::DebugLineStrRef(offset) => {
                 eprintln!("attr_str DebugLineStrRef {:?}", offset);
                 self.debug_line_str.get_str(offset).ok()
-            },
+            }
             AttributeValue::DebugStrOffsetsIndex(index) => {
                 eprintln!("attr_str DebugStrOffsetsIndex {:?}", index);
                 let offset = self
@@ -209,59 +218,60 @@ impl<R: Reader> Unit<R> {
             AttributeValue::DebugInfoRef(dr) => {
                 let mut offset = DebugInfoOffset(R::Offset::from_u8(0));
 
+                let mut head = None;
                 let mut units = self.debug_info.units();
 
-                while let Some(head) = units
+                while let Some(unit_head) = units
                     .next()
                     .map_err(|x| gimli::Error::NoEntryAtGivenOffset)?
                 {
-                    if let Some(o) = head.offset().as_debug_info_offset() {
-                        offset = o;
-                        if o.0 + head.length_including_self() > dr.0 {
-                            eprintln!("offset {:?}, dr {:?}", offset, dr);
-                            break;
-                        }
+                    if unit_head.offset().as_debug_info_offset().unwrap() > dr {
+                        break;
                     }
+
+                    head = Some(unit_head);
                 }
 
-                let head = self.debug_info.header_from_offset(offset)?;
+                if let Some(head) = head {
+                    let unit_offset = dr
+                        .to_unit_offset(&head)
+                        .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
 
-                let unit_offset = dr
-                    .to_unit_offset(&head)
-                    .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
+                    eprintln!("debug info ref offset {:?}, unit offset {:?} entities offset {:?}", dr, head.offset(), unit_offset);
 
-                eprintln!("unit offset {:?}", unit_offset);
+                    let abbrev_offset = head.debug_abbrev_offset();
+                    let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
+                        return Ok(None);
+                    };
 
-                let abbrev_offset = head.debug_abbrev_offset();
-                let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
-                    return Ok(None);
-                };
+                    let mut cursor = head.entries(&abbreviations);
+                    let (_idx, root) = cursor.next_dfs()?.unwrap();
 
-                let mut cursor = head.entries(&abbreviations);
-                let (_idx, root) = cursor.next_dfs()?.unwrap();
+                    let mut attrs = root.attrs();
+                    let mut unit_attrs = UnitAttrs::create();
 
-                let mut attrs = root.attrs();
-                let mut unit_attrs = UnitAttrs::create();
+                    while let Some(attr) = attrs.next()? {
+                        unit_attrs.set_attr(&self.debug_str, attr);
+                    }
 
-                while let Some(attr) = attrs.next()? {
-                    unit_attrs.set_attr(&self.debug_str, attr);
+                    let unit = Unit {
+                        head,
+                        abbreviations,
+                        attrs: unit_attrs,
+                        debug_str: self.debug_str.clone(),
+                        debug_info: self.debug_info.clone(),
+                        debug_abbrev: self.debug_abbrev.clone(),
+                        debug_line: self.debug_line.clone(),
+                        debug_line_str: self.debug_line_str.clone(),
+                        debug_str_offsets: self.debug_str_offsets.clone(),
+                        debug_addr: self.debug_addr.clone(),
+                        range_list: self.range_list.clone(),
+                    };
+
+                    return unit.name_entry(unit_offset, recursion);
                 }
 
-                let unit = Unit {
-                    head,
-                    abbreviations,
-                    attrs: unit_attrs,
-                    debug_str: self.debug_str.clone(),
-                    debug_info: self.debug_info.clone(),
-                    debug_abbrev: self.debug_abbrev.clone(),
-                    debug_line: self.debug_line.clone(),
-                    debug_line_str: self.debug_line_str.clone(),
-                    debug_str_offsets: self.debug_str_offsets.clone(),
-                    debug_addr: self.debug_addr.clone(),
-                    range_list: self.range_list.clone(),
-                };
-
-                return unit.name_entry(unit_offset, recursion);
+                Ok(None)
             }
             _ => Ok(None),
         }
@@ -397,3 +407,85 @@ impl<R: Reader> Unit<R> {
         Ok(())
     }
 }
+//
+//
+// fn name_attr<R>(
+//     attr: gimli::AttributeValue<R>,
+//     mut file: DebugFile,
+//     unit: &gimli::Unit<R>,
+//     ctx: &Context<R>,
+//     sections: &gimli::Dwarf<R>,
+//     recursion_limit: usize,
+// ) -> std::result::Result<Option<R>, Error>
+//     where
+//         R: gimli::Reader,
+// {
+//     if recursion_limit == 0 {
+//         return Ok(None);
+//     }
+//
+//     match attr {
+//         gimli::AttributeValue::UnitRef(offset) => {
+//             name_entry(file, unit, offset, ctx, sections, recursion_limit)
+//         }
+//         gimli::AttributeValue::DebugInfoRef(dr) => {
+//             let (unit, offset) = ctx.find_unit(dr, file)?;
+//             name_entry(file, unit, offset, ctx, sections, recursion_limit)
+//         }
+//         _ => Ok(None),
+//     }
+// }
+//
+// fn name_entry<R>(
+//     file: DebugFile,
+//     unit: &gimli::Unit<R>,
+//     offset: gimli::UnitOffset<R::Offset>,
+//     ctx: &Context<R>,
+//     sections: &gimli::Dwarf<R>,
+//     recursion_limit: usize,
+// ) -> std::result::Result<Option<R>, Error>
+//     where
+//         R: gimli::Reader,
+// {
+//     let mut entries = unit.entries_raw(Some(offset))?;
+//     let abbrev = if let Some(abbrev) = entries.read_abbreviation()? {
+//         abbrev
+//     } else {
+//         return Err(gimli::Error::NoEntryAtGivenOffset);
+//     };
+//
+//     let mut name = None;
+//     let mut next = None;
+//     for spec in abbrev.attributes() {
+//         match entries.read_attribute(*spec) {
+//             Ok(ref attr) => match attr.name() {
+//                 gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
+//                     if let Ok(val) = sections.attr_string(unit, attr.value()) {
+//                         return Ok(Some(val));
+//                     }
+//                 }
+//                 gimli::DW_AT_name => {
+//                     if let Ok(val) = sections.attr_string(unit, attr.value()) {
+//                         name = Some(val);
+//                     }
+//                 }
+//                 gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
+//                     next = Some(attr.value());
+//                 }
+//                 _ => {}
+//             },
+//             Err(e) => return Err(e),
+//         }
+//     }
+//
+//     if name.is_some() {
+//         return Ok(name);
+//     }
+//
+//     if let Some(next) = next {
+//         return name_attr(next, file, unit, ctx, sections, recursion_limit - 1);
+//     }
+//
+//     Ok(None)
+// }
+
