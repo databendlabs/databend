@@ -296,7 +296,7 @@ impl<R: Reader> Unit<R> {
                         };
 
                         if attrs.match_pc(probe) || range_match {
-                            eprintln!("match pc or range");
+                            eprintln!("match pc or range {:?}, {:?}, {:?}", attrs.low_pc, attrs.high_pc, probe);
                             if let Some(name) = &attrs.name {
                                 if let Ok(name) = name.to_string_lossy() {
                                     if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {

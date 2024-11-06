@@ -90,7 +90,7 @@ impl Location {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum HighPc {
     Addr(u64),
     Offset(u64),
