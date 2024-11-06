@@ -201,7 +201,7 @@ impl<R: Reader> Unit<R> {
                     {
                         if let Some(o) = head.offset().as_debug_info_offset() {
                             if o.0 + head.length_including_self() > dr.0 {
-                                eprintln!("offset {:?}", offset);
+                                eprintln!("offset {:?}, dr {:?}", offset, dr);
                                 break;
                             }
                             offset = o;
@@ -214,6 +214,8 @@ impl<R: Reader> Unit<R> {
                 let unit_offset = dr
                     .to_unit_offset(&head)
                     .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
+
+                eprintln!("unit offset {:?}", unit_offset);
 
                 let abbrev_offset = head.debug_abbrev_offset();
                 let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
