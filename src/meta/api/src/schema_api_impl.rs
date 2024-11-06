@@ -62,7 +62,6 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
@@ -164,7 +163,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -3050,9 +3048,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .ok_or_else(|| AppError::from(req.name_ident.unknown_error(func_name!())))?;
 
             let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
-            let new_dict_id_seq = self.get_seq(&new_name_ident).await?;
-            let _ = dict_has_to_not_exist(new_dict_id_seq, &new_name_ident, "rename_dictionary")
-                .map_err(|_| AppError::from(new_name_ident.exist_error(func_name!())))?;
 
             let condition = vec![
                 txn_cond_seq(&req.name_ident, Eq, dict_id.seq),
@@ -3497,22 +3492,6 @@ fn table_has_to_not_exist(
         Err(KVAppError::AppError(AppError::TableAlreadyExists(
             TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
-    }
-}
-
-/// Return OK if a dictionary_id or dictionary_meta does not exist by checking the seq.
-///
-/// Otherwise returns DictionaryAlreadyExists error
-fn dict_has_to_not_exist(
-    seq: u64,
-    name_ident: &DictionaryNameIdent,
-    _ctx: impl Display,
-) -> Result<(), ExistError<DictionaryNameRsc, DictionaryIdentity>> {
-    if seq == 0 {
-        Ok(())
-    } else {
-        debug!(seq = seq, name_ident :? =(name_ident); "exist");
-        Err(name_ident.exist_error(func_name!()))
     }
 }
 
