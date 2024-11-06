@@ -300,18 +300,18 @@ impl<R: Reader> Unit<R> {
                             attrs.set_attr(attr, self);
                         }
 
-                        if let Some(range_offset) = self.attrs.ranges_offset {
-                            if !self.match_range(probe, range_offset) {
-                                continue;
-                            }
-                        } else if !attrs.match_pc(probe) {
-                            continue;
-                        }
+                        // if let Some(range_offset) = self.attrs.ranges_offset {
+                        //     if !self.match_range(probe, range_offset) {
+                        //         continue;
+                        //     }
+                        // } else if !attrs.match_pc(probe) {
+                        //     continue;
+                        // }
 
-                        eprintln!(
-                            "match pc or range {:?}, {:?}, {:?}",
-                            attrs.low_pc, attrs.high_pc, probe
-                        );
+                        // eprintln!(
+                        //     "match pc or range {:?}, {:?}, {:?}",
+                        //     attrs.low_pc, attrs.high_pc, probe
+                        // );
                         if let Some(name) = &attrs.name {
                             if let Ok(name) = name.to_string_lossy() {
                                 if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
@@ -325,9 +325,9 @@ impl<R: Reader> Unit<R> {
                             }
                         }
 
-                        self.inlined_functions(entries, probe, next_depth, res)?;
+                        // self.inlined_functions(entries, probe, next_depth, res)?;
 
-                        return Ok(());
+                        // return Ok(());
                     }
                     _ => {
                         eprintln!("inlined is {:?}", abbrev.tag());
@@ -374,6 +374,7 @@ impl<R: Reader> Unit<R> {
 
         self.inlined_functions(entries, probe, depth, res)?;
 
+        eprintln!("inline functions: {:?}", res);
         // TODO: find location
         if let Some(name) = name {
             if let Ok(name) = name.to_string_lossy() {
