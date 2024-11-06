@@ -44,7 +44,7 @@ pub fn lexical_to_bytes_mut<N: lexical_core::ToLexical>(n: N, buf: &mut Vec<u8>)
         }
         #[cfg(not(debug_assertions))]
         {
-            let len = lexical_core::write_unchecked(n, slice).len();
+            let len = lexical_core::write(n, slice).len();
             buf.set_len(len);
         }
     }

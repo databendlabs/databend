@@ -3768,11 +3768,7 @@ impl<'a> TypeChecker<'a> {
         let file_location = match udf_definition.code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
             None => {
-                let uri = UriLocation::from_uri(
-                    udf_definition.code.clone(),
-                    "".to_string(),
-                    BTreeMap::default(),
-                );
+                let uri = UriLocation::from_uri(udf_definition.code.clone(), BTreeMap::default());
 
                 match uri {
                     Ok(uri) => FileLocation::Uri(uri),

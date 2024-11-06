@@ -43,30 +43,30 @@ use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
+use databend_common_meta_types::raft_types::AppendEntriesRequest;
+use databend_common_meta_types::raft_types::AppendEntriesResponse;
+use databend_common_meta_types::raft_types::ErrorSubject;
+use databend_common_meta_types::raft_types::InstallSnapshotError;
+use databend_common_meta_types::raft_types::InstallSnapshotRequest;
+use databend_common_meta_types::raft_types::InstallSnapshotResponse;
+use databend_common_meta_types::raft_types::MembershipNode;
+use databend_common_meta_types::raft_types::NetworkError;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::RPCError;
+use databend_common_meta_types::raft_types::RaftError;
+use databend_common_meta_types::raft_types::Snapshot;
+use databend_common_meta_types::raft_types::SnapshotResponse;
+use databend_common_meta_types::raft_types::StorageError;
+use databend_common_meta_types::raft_types::StreamingError;
 use databend_common_meta_types::raft_types::TransferLeaderRequest;
-use databend_common_meta_types::AppendEntriesRequest;
-use databend_common_meta_types::AppendEntriesResponse;
+use databend_common_meta_types::raft_types::TypeConfig;
+use databend_common_meta_types::raft_types::Vote;
+use databend_common_meta_types::raft_types::VoteRequest;
+use databend_common_meta_types::raft_types::VoteResponse;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::ErrorSubject;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::InstallSnapshotError;
-use databend_common_meta_types::InstallSnapshotRequest;
-use databend_common_meta_types::InstallSnapshotResponse;
-use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::NetworkError;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::RPCError;
-use databend_common_meta_types::RaftError;
-use databend_common_meta_types::Snapshot;
-use databend_common_meta_types::SnapshotResponse;
-use databend_common_meta_types::StorageError;
-use databend_common_meta_types::StreamingError;
-use databend_common_meta_types::TypeConfig;
-use databend_common_meta_types::Vote;
-use databend_common_meta_types::VoteRequest;
-use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
 use fastrace::func_name;
 use futures::FutureExt;
@@ -232,7 +232,7 @@ impl Network {
                 }
                 Err(e) => {
                     warn!(
-                        "Raft NetworkConnection fail to connect: target={}: addr={}: {}",
+                        "Raft NetworkConnection fail to connect: target={}: addr={}: {:?}",
                         self.target, &addr, e
                     );
                     tokio::time::sleep(Duration::from_millis(50)).await;

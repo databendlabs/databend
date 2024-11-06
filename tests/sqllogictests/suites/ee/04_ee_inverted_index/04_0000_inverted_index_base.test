@@ -476,7 +476,7 @@ idx2 INVERTED books(title, author, description)index_record='"basic"' tokenizer=
 query III
 select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_index', 't1')
 ----
-10 465 2390
+10 438 2390
 
 statement ok
 CREATE TABLE t2 (id int, body string)

@@ -66,6 +66,16 @@ impl<Labels: FamilyLabels> FamilyCounter<Labels> {
         self.value.fetch_add(v, Ordering::Relaxed)
     }
 
+    pub fn sub_by(&self, v: u64) -> u64 {
+        ScopedRegistry::op(self.index, |m: &Family<Labels, Self>| {
+            m.get_or_create(&self.labels)
+                .value
+                .fetch_sub(v, Ordering::Relaxed);
+        });
+
+        self.value.fetch_sub(v, Ordering::Relaxed)
+    }
+
     pub fn get(&self) -> u64 {
         self.value.load(Ordering::Relaxed)
     }

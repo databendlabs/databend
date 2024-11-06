@@ -138,6 +138,6 @@ fn build_proto() {
             "TxnPutRequest.ttl_ms",
             r#"#[serde(skip_serializing_if = "Option::is_none")]"#,
         )
-        .compile_with_config(config, &protos, &[&proto_dir])
+        .compile_protos_with_config(config, &protos, &[&proto_dir])
         .unwrap();
 }

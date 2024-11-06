@@ -132,7 +132,7 @@ async fn test_fuse_navigate() -> Result<()> {
     ctx.get_current_session()
         .force_kill_query(ErrorCode::AbortedQuery("mission aborted"));
     let checker = ctx.clone().get_abort_checker();
-    assert!(checker.is_aborting());
+    assert!(checker.try_check_aborting().is_err());
     let res = fuse_table
         .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
         .await;

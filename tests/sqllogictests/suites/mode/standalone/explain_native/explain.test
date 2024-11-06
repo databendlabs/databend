@@ -212,7 +212,7 @@ query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
 COPY
-INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
+INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
     field_delimiter = ',',

@@ -415,9 +415,9 @@ statement ok
 set timezone = 'Asia/Shanghai'
 
 query T
-select add_months(to_timestamp(1619822911999000), 1)
+select add_months(to_timestamp(1619822911999000), 1), to_timestamp(1619822911999000)
 ----
-2021-06-01 14:48:31.999000
+2021-06-01 06:48:31.999000 2021-05-01 06:48:31.999000
 
 query T
 select to_timestamp(1583013600000000)
@@ -425,9 +425,9 @@ select to_timestamp(1583013600000000)
 2020-03-01 06:00:00.000000
 
 query T
-select add_years(to_timestamp(1583013600000000), 1)
+select add_years(to_timestamp(1583013600000000), 1), to_timestamp(1583013600000000)
 ----
-2021-03-01 14:00:00.000000
+2021-03-01 06:00:00.000000 2020-03-01 06:00:00.000000
 
 statement ok
 set timezone= 'UTC';
@@ -768,7 +768,6 @@ select to_datetime('1', '%s')
 statement error 1006
 select to_timestamp('200,2000', '%s,%Y');
 
-
 statement ok
 set timezone='UTC';
 
@@ -789,6 +788,46 @@ statement ok
 set enable_dst_hour_fix=1;
 
 query T
+SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1941-04-15 01:00:00.000000
+
+query T
+SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1942-03-15 01:00:00.000000
+
+# format: -10-29 11:46:11.267412
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 5)=substr(now()::String, 5);
+----
+1
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 1, 4)=substr(now()::String, 1, 4)+1;
+----
+1
+
+# format: 11:47:46.704107(time)
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 11)=substr(now()::String, 11);
+----
+1
+
+# format: 11
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 6,2)=substr(now()::String, 6, 2)+1;
+----
+1
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 1,4)=substr(now()::String, 1,4);
+----
+1
+
+query T
 select to_monday(to_date('1919-04-13','%Y-%m-%d'));
 ----
 1919-04-07
@@ -799,7 +838,99 @@ select to_year(to_date('1919-04-13','%Y-%m-%d'));
 1919
 
 statement ok
+unset enable_dst_hour_fix;
+
+statement error 1006
+SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+
+statement error 1006
+SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+
+statement ok
 unset timezone;
+
+# format: -10-29 11:46:11.267412
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 5)=substr(now()::String, 5);
+----
+1
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 1, 4)=substr(now()::String, 1, 4)+1;
+----
+1
+
+# format: 11:47:46.704107(time)
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 11)=substr(now()::String, 11);
+----
+1
+
+# format: 11
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 6,2)=substr(now()::String, 6, 2)+1;
+----
+1
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 1,4)=substr(now()::String, 1,4);
+----
+1
+
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+SELECT convert_timezone('America/Los_Angeles', '2024-11-01 11:36:10')
+----
+2024-10-31 20:36:10.000000
+
+statement ok
+set timezone='UTC';
+
+statement ok
+create or replace table t(a string null, c timestamp null);
+
+statement ok
+insert into t values('America/Los_Angeles','1970-01-01 00:00:00'), ('America/Los_Angeles','2024-10-31 22:21:15'), (null, '1970-01-01 00:00:00'), ('Asia/Shanghai', '1970-01-01 00:00:00'), ('Asia/Shanghai', '2024-10-31 22:21:15'),('Asia/Shanghai', null), (null, null);
+
+# UTC to America/Los_Angeles,  20240-03-10 ~ 2024-11-03 is UTC-7(dst), other is UTC-8
+query T
+select a, c, CONVERT_TIMEZONE(a, c) from t order by a,c;
+----
+America/Los_Angeles 1970-01-01 00:00:00.000000 1969-12-31 16:00:00.000000
+America/Los_Angeles 2024-10-31 22:21:15.000000 2024-10-31 15:21:15.000000
+Asia/Shanghai 1970-01-01 00:00:00.000000 1970-01-01 08:00:00.000000
+Asia/Shanghai 2024-10-31 22:21:15.000000 2024-11-01 06:21:15.000000
+Asia/Shanghai NULL NULL
+NULL 1970-01-01 00:00:00.000000 NULL
+NULL NULL NULL
+
+statement ok
+set timezone='Asia/Shanghai';
+
+
+statement error 1006
+select convert_timezone('Asia/Shanghai', '1947-04-15 00:00:00');
+
+statement ok
+set enable_dst_hour_fix=1;
+
+# 1947-04-15 00:00:00 is not exists in Asia/Shanghai. Such timings cannot be guaranteed to meet completely
+# consider use date_add/sub calc the offset.
+query T
+select convert_timezone('UTC', '1947-04-15 00:00:00');
+----
+1947-04-14 15:00:00.000000
 
 statement ok
 unset enable_dst_hour_fix;
+
+statement ok
+drop table if exists t;
+
+statement ok
+unset timezone;

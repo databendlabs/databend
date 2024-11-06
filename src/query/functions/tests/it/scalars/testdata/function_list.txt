@@ -1224,6 +1224,8 @@ Functions overloads:
 26 contains(Array(Boolean), Boolean) :: Boolean
 27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
 28 contains(Array(T0) NULL, T0) :: Boolean
+0 convert_timezone(String, Timestamp) :: Timestamp
+1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32
@@ -2544,9 +2546,12 @@ Functions overloads:
 1 map_contains_key(Map(T0, T1), T0) :: Boolean
 2 map_contains_key(Map(T0, T1) NULL, T0 NULL) :: Boolean NULL
 0 map_delete FACTORY
+0 map_insert(Map(T0, T1) NULL, T0, T1) :: Map(T0, T1)
+1 map_insert(Map(T0, T1) NULL, T0, T1, Boolean) :: Map(T0, T1)
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
+0 map_pick FACTORY
 0 map_size(Map(Nothing)) :: UInt8
 1 map_size(Map(T0, T1)) :: UInt64
 2 map_size(Map(T0, T1) NULL) :: UInt64 NULL

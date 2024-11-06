@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_meta_sled_store::openraft;
-use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::RaftTxId;
 use databend_common_meta_types::UpsertKV;

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
@@ -58,30 +59,10 @@ impl Debug for ExchangeShuffleMeta {
     }
 }
 
-impl serde::Serialize for ExchangeShuffleMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize ExchangeShuffleMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize ExchangeShuffleMeta")
-    }
-}
+local_block_meta_serde!(ExchangeShuffleMeta);
 
 #[typetag::serde(name = "exchange_shuffle")]
-impl BlockMetaInfo for ExchangeShuffleMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals ExchangeShuffleMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone ExchangeShuffleMeta")
-    }
-}
+impl BlockMetaInfo for ExchangeShuffleMeta {}
 
 struct OutputsBuffer {
     inner: Vec<VecDeque<DataBlock>>,

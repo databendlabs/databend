@@ -11,8 +11,8 @@ doctest = false
 test = true
 
 [dependencies]
-enum-as-inner = "0.5"
-enum_dispatch = "0.3.8"
+enum-as-inner = { workspace = true }
+enum_dispatch = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

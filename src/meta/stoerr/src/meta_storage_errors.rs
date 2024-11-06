@@ -19,22 +19,11 @@ use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
 use sled::transaction::UnabortableTransactionError;
 
-use crate::MetaBytesError;
-
 /// Storage level error that is raised by meta service.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
-    /// An error raised when encode/decode data to/from underlying storage.
-    #[error(transparent)]
-    BytesError(MetaBytesError),
-
-    /// An AnyError built from sled::Error.
-    #[error(transparent)]
-    SledError(AnyError),
-
-    /// Error that is related to snapshot
-    #[error(transparent)]
-    SnapshotError(AnyError),
+    #[error("Data damaged: {0}")]
+    Damaged(AnyError),
 
     // TODO(1): remove this error
     /// An internal error that inform txn to retry.
@@ -43,18 +32,16 @@ pub enum MetaStorageError {
 }
 
 impl MetaStorageError {
-    pub fn snapshot_error<D: fmt::Display, F: FnOnce() -> D>(
+    pub fn damaged<D: fmt::Display, F: FnOnce() -> D>(
         error: &(impl std::error::Error + 'static),
         context: F,
     ) -> Self {
-        MetaStorageError::SnapshotError(AnyError::new(error).add_context(context))
+        MetaStorageError::Damaged(AnyError::new(error).add_context(context))
     }
 
     pub fn name(&self) -> &'static str {
         match self {
-            MetaStorageError::BytesError(_) => "BytesError",
-            MetaStorageError::SledError(_) => "SledError",
-            MetaStorageError::SnapshotError(_) => "SnapshotError",
+            MetaStorageError::Damaged(_) => "Damaged",
             MetaStorageError::TransactionConflict => "TransactionConflict",
         }
     }
@@ -62,33 +49,27 @@ impl MetaStorageError {
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaStorageError::BytesError(MetaBytesError::new(&error))
+        MetaStorageError::Damaged(AnyError::new(&error))
     }
 }
 
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
-        MetaStorageError::BytesError(MetaBytesError::new(&error))
-    }
-}
-
-impl From<MetaBytesError> for MetaStorageError {
-    fn from(error: MetaBytesError) -> Self {
-        MetaStorageError::BytesError(error)
+        MetaStorageError::Damaged(AnyError::new(&error))
     }
 }
 
 impl From<sled::Error> for MetaStorageError {
-    fn from(e: sled::Error) -> MetaStorageError {
-        MetaStorageError::SledError(AnyError::new(&e))
+    fn from(error: sled::Error) -> MetaStorageError {
+        MetaStorageError::Damaged(AnyError::new(&error))
     }
 }
 
 impl From<UnabortableTransactionError> for MetaStorageError {
     fn from(error: UnabortableTransactionError) -> Self {
         match error {
-            UnabortableTransactionError::Storage(e) => {
-                MetaStorageError::SledError(AnyError::new(&e))
+            UnabortableTransactionError::Storage(error) => {
+                MetaStorageError::Damaged(AnyError::new(&error))
             }
             UnabortableTransactionError::Conflict => MetaStorageError::TransactionConflict,
         }

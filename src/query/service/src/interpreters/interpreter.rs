@@ -216,7 +216,6 @@ pub async fn interpreter_plan_sql(
     acquire_queue: bool,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
     let result = plan_sql(ctx.clone(), sql, acquire_queue).await;
-
     let short_sql = short_sql(
         sql.to_string(),
         ctx.get_settings().get_short_sql_max_length()?,

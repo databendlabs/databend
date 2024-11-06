@@ -83,7 +83,24 @@ TableScan
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0], v['b']]
+└── estimated rows: 1.00
+
+query T
+explain select a, v['a'][0], v['b'][1] from t1
+----
+TableScan
+├── table: default.test_virtual_db.t1
+├── output columns: [a (#0), v['a'][0] (#2), v['b'][1] (#3)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0]]
+├── not created virtual columns: [v['b'][1]]
 └── estimated rows: 1.00
 
 query T
@@ -97,7 +114,8 @@ TableScan
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#3) AS UInt8 NULL) = 1)], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
+├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#3) AS UInt8 NULL) = 1)], limit: NONE]
+├── virtual columns: [v['a'][0], v['b']]
 └── estimated rows: 0.00
 
 statement ok
@@ -170,21 +188,24 @@ TableScan
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0], v['b']]
 └── estimated rows: 1.00
 
 query T
-explain select a, v['a'][0] from t2
+explain select a, v['a'][0], v['b'][1] from t2
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
-├── output columns: [a (#0), v['a'][0] (#2)]
+├── output columns: [a (#0), v['a'][0] (#2), v['b'][1] (#3)]
 ├── read rows: 1
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v['a'][0]]]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0]]
+├── not created virtual columns: [v['b'][1]]
 └── estimated rows: 1.00
 
 query T
@@ -202,7 +223,8 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#3) AS UInt8 NULL) = 2)], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
+    ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#3) AS UInt8 NULL) = 2)], limit: NONE]
+    ├── virtual columns: [v['a'][0], v['b']]
     └── estimated rows: 1.00
 
 statement ok

@@ -174,7 +174,7 @@ impl OptimizeGroupTask {
             }
 
             let rel_expr = RelExpr::with_m_expr(m_expr, &optimizer.memo);
-            let children_required_props = if optimizer.enforce_distribution {
+            let children_required_props = if optimizer.enforce_distribution() {
                 rel_expr.compute_required_prop_children(self.ctx.clone(), &self.required_prop)?
             } else {
                 vec![vec![RequiredProperty::default(); m_expr.plan.arity()]]

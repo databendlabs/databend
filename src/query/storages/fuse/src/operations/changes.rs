@@ -27,11 +27,11 @@ use databend_common_catalog::plan::StreamTablePart;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -296,6 +296,7 @@ impl FuseTable {
             cluster_keys,
             bloom_index_cols,
             None,
+            self.get_storage_format(),
         )?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;
