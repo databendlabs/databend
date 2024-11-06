@@ -3056,7 +3056,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let condition = vec![
                 txn_cond_seq(&req.name_ident, Eq, dict_id.seq),
-                txn_cond_seq(&new_name_ident, Eq, new_dict_id_seq),
+                txn_cond_seq(&new_name_ident, Eq, 0),
             ];
             let if_then = vec![
                 txn_op_del(&req.name_ident),                          // del old dict name
