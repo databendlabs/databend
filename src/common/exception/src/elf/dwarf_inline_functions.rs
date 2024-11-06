@@ -69,13 +69,6 @@ impl<R: Reader> SubroutineAttrs<R> {
                 _ => {}
             },
             gimli::DW_AT_ranges => {
-                // match attr.value() {
-                //     AttributeValue::RangeListsRef(offset) => {
-                //         Ok(Some(self.ranges_offset_from_raw(unit, offset)))
-                //     }
-                //     AttributeValue::DebugRngListsIndex(index) => self.ranges_offset(unit, index).map(Some),
-                //     _ => Ok(None),
-                // }
                 if let AttributeValue::RangeListsRef(v) = attr.value() {
                     self.ranges_offset = Some(RangeListsOffset(v.0));
                 }
@@ -138,9 +131,16 @@ impl<R: Reader> Unit<R> {
     pub(crate) fn attr_str(&self, value: AttributeValue<R>) -> Option<R> {
         match value {
             AttributeValue::String(string) => Some(string),
-            AttributeValue::DebugStrRef(offset) => self.debug_str.get_str(offset).ok(),
-            AttributeValue::DebugLineStrRef(offset) => self.debug_line_str.get_str(offset).ok(),
+            AttributeValue::DebugStrRef(offset) => {
+                eprintln!("attr_str DebugStrRef {:?}", offset);
+                self.debug_str.get_str(offset).ok()
+            },
+            AttributeValue::DebugLineStrRef(offset) => {
+                eprintln!("attr_str DebugLineStrRef {:?}", offset);
+                self.debug_line_str.get_str(offset).ok()
+            },
             AttributeValue::DebugStrOffsetsIndex(index) => {
+                eprintln!("attr_str DebugStrOffsetsIndex {:?}", index);
                 let offset = self
                     .debug_str_offsets
                     .get_str_offset(
@@ -169,14 +169,17 @@ impl<R: Reader> Unit<R> {
             match entries.read_attribute(*spec) {
                 Ok(ref attr) => match attr.name() {
                     gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
+                        eprintln!("DW_AT_linkage_name | DW_AT_MIPS_linkage_name");
                         if let Some(val) = self.attr_str(attr.value()) {
                             return Ok(Some(val));
                         }
                     }
                     gimli::DW_AT_name => {
+                        eprintln!("DW_AT_name");
                         name = self.attr_str(attr.value());
                     }
                     gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
+                        eprintln!("gimli::DW_AT_abstract_origin | gimli::DW_AT_specification {}", attr.name());
                         next = Some(attr.value());
                     }
                     _ => {}

@@ -93,7 +93,10 @@ impl<R: Reader> Unit<R> {
                         continue;
                     }
 
-                    return Ok(Some(dw_die_offset));
+                    return match abbrev.has_children() {
+                        true => Ok(Some(dw_die_offset)),
+                        false => Ok(None)
+                    };
                 } else {
                     entries.skip_attributes(abbrev.attributes())?;
                 }
