@@ -190,7 +190,7 @@ impl<R: Reader> Unit<R> {
         match v {
             AttributeValue::UnitRef(offset) => self.name_entry(offset, recursion),
             AttributeValue::DebugInfoRef(dr) => {
-                let mut offset = R::Offset::from_u8(0);
+                let mut offset = DebugInfoOffset(R::Offset::from_u8(0));
 
                 {
                     let mut units = self.debug_info.units();
