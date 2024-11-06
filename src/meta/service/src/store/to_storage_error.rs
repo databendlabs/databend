@@ -14,8 +14,8 @@
 
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_stoerr::MetaStorageError;
-use databend_common_meta_types::ErrorSubject;
-use databend_common_meta_types::StorageError;
+use databend_common_meta_types::raft_types::ErrorSubject;
+use databend_common_meta_types::raft_types::StorageError;
 use openraft::ErrorVerb;
 
 /// Convert MetaStorageError to openraft::StorageError;

@@ -42,7 +42,7 @@ mod log_id_impls {
 
     use crate::protobuf as pb;
     use crate::raft_types;
-    use crate::CommittedLeaderId;
+    use crate::raft_types::CommittedLeaderId;
 
     impl From<raft_types::LogId> for pb::LogId {
         fn from(log_id: raft_types::LogId) -> Self {

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
@@ -30,32 +29,30 @@ use crate::optimizer::format::display_memo;
 use crate::optimizer::memo::Memo;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::Distribution;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::RuleSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
-use crate::MetadataRef;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 pub struct CascadesOptimizer {
-    pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) opt_ctx: OptimizerContext,
     pub(crate) memo: Memo,
     pub(crate) cost_model: Box<dyn CostModel>,
     pub(crate) explore_rule_set: RuleSet,
-    pub(crate) metadata: MetadataRef,
-    pub(crate) enforce_distribution: bool,
 }
 
 impl CascadesOptimizer {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        metadata: MetadataRef,
-        mut optimized: bool,
-        enforce_distribution: bool,
-    ) -> Result<Self> {
-        let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
-            if unsafe { ctx.get_settings().get_disable_join_reorder()? } {
+    pub fn new(opt_ctx: OptimizerContext, mut optimized: bool) -> Result<Self> {
+        let explore_rule_set = if opt_ctx.table_ctx.get_settings().get_enable_cbo()? {
+            if unsafe {
+                opt_ctx
+                    .table_ctx
+                    .get_settings()
+                    .get_disable_join_reorder()?
+            } {
                 optimized = true;
             }
             get_explore_rule_set(optimized)
@@ -63,21 +60,23 @@ impl CascadesOptimizer {
             RuleSet::create()
         };
 
-        let cluster_peers = ctx.get_cluster().nodes.len();
-        let dop = ctx.get_settings().get_max_threads()? as usize;
+        let cluster_peers = opt_ctx.table_ctx.get_cluster().nodes.len();
+        let dop = opt_ctx.table_ctx.get_settings().get_max_threads()? as usize;
         let cost_model = Box::new(
-            DefaultCostModel::new(ctx.clone())?
+            DefaultCostModel::new(opt_ctx.table_ctx.clone())?
                 .with_cluster_peers(cluster_peers)
                 .with_degree_of_parallelism(dop),
         );
         Ok(CascadesOptimizer {
-            ctx,
+            opt_ctx,
             memo: Memo::create(),
             cost_model,
             explore_rule_set,
-            metadata,
-            enforce_distribution,
         })
+    }
+
+    pub(crate) fn enforce_distribution(&self) -> bool {
+        self.opt_ctx.enable_distributed_optimization
     }
 
     fn init(&mut self, expression: SExpr) -> Result<()> {
@@ -97,7 +96,7 @@ impl CascadesOptimizer {
             .ok_or_else(|| ErrorCode::Internal("Root group cannot be None after initialization"))?
             .group_index;
 
-        let root_required_prop = if self.enforce_distribution {
+        let root_required_prop = if self.enforce_distribution() {
             RequiredProperty {
                 distribution: Distribution::Serial,
             }
@@ -106,13 +105,13 @@ impl CascadesOptimizer {
         };
 
         let root_task = OptimizeGroupTask::new(
-            self.ctx.clone(),
+            self.opt_ctx.table_ctx.clone(),
             None,
             root_index,
             root_required_prop.clone(),
         );
 
-        let task_limit = if self.ctx.get_settings().get_enable_cbo()? {
+        let task_limit = if self.opt_ctx.table_ctx.get_settings().get_enable_cbo()? {
             DEFAULT_TASK_LIMIT
         } else {
             0

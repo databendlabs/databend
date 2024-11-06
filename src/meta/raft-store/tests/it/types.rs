@@ -17,7 +17,7 @@ use std::ops::Bound;
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledRangeSerde;
-use databend_common_meta_types::NodeId;
+use databend_common_meta_types::raft_types::NodeId;
 
 #[test]
 fn test_node_id_serde_ser() -> anyhow::Result<()> {

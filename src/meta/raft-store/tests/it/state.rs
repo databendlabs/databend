@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_raft_store::state::RaftState;
-use databend_common_meta_types::Vote;
+use databend_common_meta_types::raft_types::Vote;
 use test_harness::test;
 
 use crate::testing::new_raft_test_context;

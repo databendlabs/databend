@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_meta_types::LogId;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::StoredMembership;
 
 /// APIs to access the non-user-data of the state machine(leveled map).
 pub trait SysDataApiRO {

@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::Vote;
+use databend_common_meta_types::raft_types::SnapshotMeta;
+use databend_common_meta_types::raft_types::Vote;
 
 /// Contains information about a received snapshot data.
 #[derive(Debug)]

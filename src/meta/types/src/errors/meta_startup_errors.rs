@@ -16,8 +16,8 @@ use anyerror::AnyError;
 use databend_common_meta_stoerr::MetaStorageError;
 
 use crate::raft_types::InitializeError;
+use crate::raft_types::RaftError;
 use crate::MetaNetworkError;
-use crate::RaftError;
 
 /// Error raised when meta-server startup.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]

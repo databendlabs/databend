@@ -22,8 +22,8 @@ use tonic::metadata::MetadataValue;
 
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
+use crate::raft_types::RaftError;
 use crate::Endpoint;
-use crate::RaftError;
 
 const HEADER_LEADER: &str = "x-databend-meta-leader-grpc-endpoint";
 // const HEADER_LEADER_BIN: &str = "x-databend-meta-leader-grpc-endpoint-bin";
