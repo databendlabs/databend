@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gimli::Attribute;
+use gimli::{Attribute, ReaderOffset};
 use gimli::AttributeValue;
 use gimli::DebugInfoOffset;
 use gimli::EntriesRaw;
@@ -83,11 +83,13 @@ impl<R: Reader> SubroutineAttrs<R> {
                 }
             }
             gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
+                eprintln!("gimli::DW_AT_abstract_origin | gimli::DW_AT_specification before {:?}", self.name.as_ref().map(|x| x.to_string_lossy()));
                 if self.name.is_none() {
                     if let Ok(Some(v)) = unit.name_attr(attr.value(), 16) {
                         self.name = Some(v);
                     }
                 }
+                eprintln!("gimli::DW_AT_abstract_origin | gimli::DW_AT_specification after {:?}", self.name.as_ref().map(|x| x.to_string_lossy()));
             }
             gimli::DW_AT_call_file => {
                 if let AttributeValue::FileIndex(idx) = attr.value() {
@@ -109,9 +111,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -188,7 +190,7 @@ impl<R: Reader> Unit<R> {
         match v {
             AttributeValue::UnitRef(offset) => self.name_entry(offset, recursion),
             AttributeValue::DebugInfoRef(dr) => {
-                let mut offset = None;
+                let mut offset = R::Offset::from_u8(0);
 
                 {
                     let mut units = self.debug_info.units();
@@ -199,53 +201,50 @@ impl<R: Reader> Unit<R> {
                     {
                         if let Some(o) = head.offset().as_debug_info_offset() {
                             if o.0 + head.length_including_self() > dr.0 {
+                                eprintln!("offset {:?}", offset);
                                 break;
                             }
-                            offset = Some(o);
+                            offset = o;
                         }
                     }
                 }
 
-                if let Some(offset) = offset {
-                    let head = self.debug_info.header_from_offset(offset)?;
+                let head = self.debug_info.header_from_offset(offset)?;
 
-                    let unit_offset = dr
-                        .to_unit_offset(&head)
-                        .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
+                let unit_offset = dr
+                    .to_unit_offset(&head)
+                    .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
 
-                    let abbrev_offset = head.debug_abbrev_offset();
-                    let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
-                        return Ok(None);
-                    };
+                let abbrev_offset = head.debug_abbrev_offset();
+                let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
+                    return Ok(None);
+                };
 
-                    let mut cursor = head.entries(&abbreviations);
-                    let (_idx, root) = cursor.next_dfs()?.unwrap();
+                let mut cursor = head.entries(&abbreviations);
+                let (_idx, root) = cursor.next_dfs()?.unwrap();
 
-                    let mut attrs = root.attrs();
-                    let mut unit_attrs = UnitAttrs::create();
+                let mut attrs = root.attrs();
+                let mut unit_attrs = UnitAttrs::create();
 
-                    while let Some(attr) = attrs.next()? {
-                        unit_attrs.set_attr(&self.debug_str, attr);
-                    }
-
-                    let unit = Unit {
-                        head,
-                        abbreviations,
-                        attrs: unit_attrs,
-                        debug_str: self.debug_str.clone(),
-                        debug_info: self.debug_info.clone(),
-                        debug_abbrev: self.debug_abbrev.clone(),
-                        debug_line: self.debug_line.clone(),
-                        debug_line_str: self.debug_line_str.clone(),
-                        debug_str_offsets: self.debug_str_offsets.clone(),
-                        debug_addr: self.debug_addr.clone(),
-                        range_list: self.range_list.clone(),
-                    };
-
-                    return unit.name_entry(unit_offset, recursion);
+                while let Some(attr) = attrs.next()? {
+                    unit_attrs.set_attr(&self.debug_str, attr);
                 }
 
-                Ok(None)
+                let unit = Unit {
+                    head,
+                    abbreviations,
+                    attrs: unit_attrs,
+                    debug_str: self.debug_str.clone(),
+                    debug_info: self.debug_info.clone(),
+                    debug_abbrev: self.debug_abbrev.clone(),
+                    debug_line: self.debug_line.clone(),
+                    debug_line_str: self.debug_line_str.clone(),
+                    debug_str_offsets: self.debug_str_offsets.clone(),
+                    debug_addr: self.debug_addr.clone(),
+                    range_list: self.range_list.clone(),
+                };
+
+                return unit.name_entry(unit_offset, recursion);
             }
             _ => Ok(None),
         }
