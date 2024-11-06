@@ -30,6 +30,7 @@ use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
@@ -158,7 +159,66 @@ macro_rules! register_simple_domain_type_cmp {
 }
 
 fn register_string_cmp(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_cmp!(registry, StringType);
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "eq",
+        |_, d1, d2| d1.domain_eq(d2),
+        vectorize_string_cmp(|cmp| cmp == Ordering::Equal),
+    );
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "noteq",
+        |_, d1, d2| d1.domain_noteq(d2),
+        vectorize_string_cmp(|cmp| cmp != Ordering::Equal),
+    );
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "gt",
+        |_, d1, d2| d1.domain_gt(d2),
+        vectorize_string_cmp(|cmp| cmp == Ordering::Greater),
+    );
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "gte",
+        |_, d1, d2| d1.domain_gte(d2),
+        vectorize_string_cmp(|cmp| cmp != Ordering::Less),
+    );
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "lt",
+        |_, d1, d2| d1.domain_lt(d2),
+        vectorize_string_cmp(|cmp| cmp == Ordering::Less),
+    );
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "lte",
+        |_, d1, d2| d1.domain_lte(d2),
+        vectorize_string_cmp(|cmp| cmp != Ordering::Greater),
+    );
+}
+
+fn vectorize_string_cmp(
+    func: impl Fn(Ordering) -> bool + Copy,
+) -> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
+    move |arg1, arg2, _ctx| match (arg1, arg2) {
+        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Value::Scalar(func(arg1.cmp(arg2))),
+        (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
+            let mut builder = MutableBitmap::with_capacity(arg1.len());
+            for i in 0..arg1.len() {
+                builder.push(func(StringColumn::compare_str(&arg1, i, &arg2)));
+            }
+            Value::Column(builder.into())
+        }
+        (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+            let mut builder = MutableBitmap::with_capacity(arg1.len());
+            for i in 0..arg1.len() {
+                builder.push(func(StringColumn::compare_str(&arg2, i, &arg1).reverse()));
+            }
+            Value::Column(builder.into())
+        }
+        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let mut builder = MutableBitmap::with_capacity(arg1.len());
+            for i in 0..arg1.len() {
+                builder.push(func(StringColumn::compare(&arg1, i, &arg2, i)));
+            }
+            Value::Column(builder.into())
+        }
+    }
 }
 
 fn register_date_cmp(registry: &mut FunctionRegistry) {

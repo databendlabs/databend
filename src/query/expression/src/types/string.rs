@@ -218,7 +218,7 @@ impl ArgType for StringType {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct StringColumn {
     pub(crate) data: Utf8ViewArray,
 }
@@ -290,6 +290,73 @@ impl StringColumn {
     pub fn try_from_binary(col: BinaryColumn) -> Result<Self> {
         let builder = StringColumnBuilder::try_from_bin_column(col)?;
         Ok(builder.build())
+    }
+
+    pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> Ordering {
+        let view_i = col_i.data.views().get(i).unwrap();
+        let view_j = col_j.data.views().get(j).unwrap();
+
+        match view_i.prefix.cmp(&view_j.prefix) {
+            Ordering::Equal => unsafe {
+                let value_i = col_i.data.value_unchecked(i);
+                let value_j = col_j.data.value_unchecked(j);
+                value_i.cmp(value_j)
+            },
+            non_eq => non_eq,
+        }
+    }
+
+    pub fn compare_str(col: &Self, i: usize, value: &str) -> Ordering {
+        let mut prefix = [0u8; 4];
+        prefix.copy_from_slice(&value.as_bytes()[..4]);
+        let prefix = u32::from_le_bytes(prefix);
+        let view = col.data.views().get(i).unwrap();
+        match view.prefix.cmp(&prefix) {
+            Ordering::Equal => unsafe {
+                let value_i = col.data.value_unchecked(i);
+                value_i.cmp(value)
+            },
+            non_eq => non_eq,
+        }
+    }
+}
+
+impl PartialEq for StringColumn {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for StringColumn {}
+
+impl PartialOrd for StringColumn {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for StringColumn {
+    fn cmp(&self, other: &Self) -> Ordering {
+        for i in 0..self.len().max(other.len()) {
+            match (self.data.views().get(i), other.data.views().get(i)) {
+                (Some(left), Some(right)) => match left.prefix.cmp(&right.prefix) {
+                    Ordering::Equal => unsafe {
+                        let left = self.data.value_unchecked(i);
+                        let right = other.data.value_unchecked(i);
+                        match left.cmp(right) {
+                            Ordering::Equal => continue,
+                            non_eq => return non_eq,
+                        }
+                    },
+                    non_eq => return non_eq,
+                },
+                (Some(_), None) => return Ordering::Greater,
+                (None, Some(_)) => return Ordering::Less,
+                (None, None) => return Ordering::Equal,
+            }
+        }
+
+        Ordering::Equal
     }
 }
 
