@@ -21,11 +21,11 @@ use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
-use databend_common_meta_types::NodeId;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct JoinRequest {

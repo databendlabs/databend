@@ -18,9 +18,9 @@ pub use openraft::error::InProgress;
 pub use openraft::error::InitializeError;
 
 use crate::raft_types::ClientWriteError;
+use crate::raft_types::RaftError;
 use crate::MetaDataError;
 use crate::MetaOperationError;
-use crate::RaftError;
 
 // Collection of errors that occur when change membership on local raft node.
 pub type RaftChangeMembershipError = ClientWriteError;

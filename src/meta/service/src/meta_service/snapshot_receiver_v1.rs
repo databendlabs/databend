@@ -24,11 +24,11 @@ use databend_common_meta_sled_store::openraft::ErrorSubject;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::SnapshotId;
 use databend_common_meta_sled_store::openraft::SnapshotSegmentId;
-use databend_common_meta_types::InstallSnapshotError;
-use databend_common_meta_types::InstallSnapshotRequest;
-use databend_common_meta_types::RaftError;
-use databend_common_meta_types::SnapshotMismatch;
-use databend_common_meta_types::StorageError;
+use databend_common_meta_types::raft_types::InstallSnapshotError;
+use databend_common_meta_types::raft_types::InstallSnapshotRequest;
+use databend_common_meta_types::raft_types::RaftError;
+use databend_common_meta_types::raft_types::SnapshotMismatch;
+use databend_common_meta_types::raft_types::StorageError;
 use fastrace::func_name;
 use log::info;
 

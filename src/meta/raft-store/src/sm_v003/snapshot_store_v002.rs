@@ -17,9 +17,9 @@ use std::io;
 use std::str::FromStr;
 
 use databend_common_meta_stoerr::MetaStorageError;
-use databend_common_meta_types::ErrorSubject;
+use databend_common_meta_types::raft_types::ErrorSubject;
+use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::SnapshotData;
-use databend_common_meta_types::StorageError;
 use log::error;
 use log::info;
 use log::warn;

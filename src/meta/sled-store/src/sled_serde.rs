@@ -18,7 +18,7 @@ use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use databend_common_meta_types::Entry;
+use databend_common_meta_types::raft_types::Entry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
