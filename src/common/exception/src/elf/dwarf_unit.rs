@@ -248,9 +248,9 @@ impl<R: Reader> Unit<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         };
@@ -264,9 +264,9 @@ impl<R: Reader> Unit<R> {
     }
 
     pub fn find_location(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
-        let Some(location) = self.find_line(probe)? else {
-            return Ok(vec![]);
-        };
+        // let Some(location) = self.find_line(probe)? else {
+        //     return Ok(vec![]);
+        // };
 
         let mut inlined_functions = vec![];
         if let Some(offset) = self.find_subprogram(probe)? {
@@ -274,7 +274,7 @@ impl<R: Reader> Unit<R> {
             let _ = self.find_function(offset, probe, &mut inlined_functions);
         }
 
-        inlined_functions.push(location);
+        // inlined_functions.push(location);
         Ok(inlined_functions)
     }
 

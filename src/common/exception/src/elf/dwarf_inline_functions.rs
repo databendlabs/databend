@@ -313,40 +313,56 @@ impl<R: Reader> Unit<R> {
         }
     }
 
-    pub fn find_function(
-        &self,
-        offset: UnitOffset<R::Offset>,
-        probe: u64,
-        res: &mut Vec<CallLocation>,
-    ) -> Result<()> {
+    pub fn find_function(&self, offset: UnitOffset<R::Offset>, probe: u64, res: &mut Vec<CallLocation>) -> Result<()> {
         let mut entries = self.head.entries_raw(&self.abbreviations, Some(offset))?;
         let depth = entries.next_depth();
         let abbrev = entries.read_abbreviation()?.unwrap();
         debug_assert_eq!(abbrev.tag(), gimli::DW_TAG_subprogram);
 
-        // let mut name = None;
+        let mut name = None;
         for spec in abbrev.attributes() {
             let attr = entries.read_attribute(*spec)?;
             match attr.name() {
                 gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
-                    // if let Ok(val) = sections.attr_string(unit, attr.value()) {
-                    //     name = Some(val);
-                    // }
+                    if let Some(val) = self.attr_str(attr.value()) {
+                        name = Some(val);
+                    }
                 }
                 gimli::DW_AT_name => {
-                    // if name.is_none() {
-                    //     name = sections.attr_string(unit, attr.value()).ok();
-                    // }
+                    if name.is_none() {
+                        name = self.attr_str(attr.value());
+                    }
                 }
                 gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                    // if name.is_none() {
-                    //     name = name_attr(attr.value(), file, unit, ctx, sections, 16)?;
-                    // }
+                    if name.is_none() {
+                        name = self.name_attr(attr.value(), 16)?;
+                    }
                 }
                 _ => {}
             };
         }
 
-        self.inlined_functions(entries, probe, depth, res)
+        self.inlined_functions(entries, probe, depth, res)?;
+
+        // TODO: find location
+        if let Some(name) = name {
+            if let Ok(name) = name.to_string_lossy() {
+                res.push(CallLocation {
+                    symbol: Some(format!("{}", rustc_demangle::demangle(name.as_ref()))),
+                    file: None,
+                    line: None,
+                    column: None,
+                })
+            }
+        }
+
+        // res.push(CallLocation {
+        //     symbol: name,
+        //     file: None,
+        //     line: None,
+        //     column: None,
+        // });
+
+        Ok(())
     }
 }

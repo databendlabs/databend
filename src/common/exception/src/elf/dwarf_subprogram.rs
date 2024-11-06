@@ -21,6 +21,7 @@ use gimli::UnitOffset;
 
 use crate::elf::dwarf_unit::Unit;
 use crate::exception_backtrace_elf::HighPc;
+use gimli::Result;
 
 pub struct SubprogramAttrs<R: Reader> {
     high_pc: Option<HighPc>,
@@ -60,9 +61,9 @@ impl<R: Reader> SubprogramAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -70,10 +71,7 @@ impl<R: Reader> SubprogramAttrs<R> {
 }
 
 impl<R: Reader> Unit<R> {
-    pub(crate) fn find_subprogram(
-        &self,
-        probe: u64,
-    ) -> gimli::Result<Option<UnitOffset<R::Offset>>> {
+    pub fn find_subprogram(&self, probe: u64) -> Result<Option<UnitOffset<R::Offset>>> {
         let mut entries = self.head.entries_raw(&self.abbreviations, None)?;
 
         while !entries.is_empty() {
