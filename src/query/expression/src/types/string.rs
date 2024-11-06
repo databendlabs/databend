@@ -18,6 +18,7 @@ use std::ops::Range;
 use databend_common_arrow::arrow::array::MutableBinaryViewArray;
 use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -293,8 +294,8 @@ impl StringColumn {
     }
 
     pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> Ordering {
-        let view_i = col_i.data.views().get(i).unwrap();
-        let view_j = col_j.data.views().get(j).unwrap();
+        let view_i = unsafe { col_i.data.views().as_slice().get_unchecked_release(i) };
+        let view_j = unsafe { col_j.data.views().as_slice().get_unchecked_release(j) };
 
         match view_i.prefix.cmp(&view_j.prefix) {
             Ordering::Equal => unsafe {
@@ -310,7 +311,7 @@ impl StringColumn {
         let mut prefix = [0u8; 4];
         prefix.copy_from_slice(&value.as_bytes()[..4]);
         let prefix = u32::from_le_bytes(prefix);
-        let view = col.data.views().get(i).unwrap();
+        let view = unsafe { col.data.views().as_slice().get_unchecked_release(i) };
         match view.prefix.cmp(&prefix) {
             Ordering::Equal => unsafe {
                 let value_i = col.data.value_unchecked(i);
