@@ -192,19 +192,17 @@ impl<R: Reader> Unit<R> {
             AttributeValue::DebugInfoRef(dr) => {
                 let mut offset = DebugInfoOffset(R::Offset::from_u8(0));
 
-                {
-                    let mut units = self.debug_info.units();
+                let mut units = self.debug_info.units();
 
-                    while let Some(head) = units
-                        .next()
-                        .map_err(|x| gimli::Error::NoEntryAtGivenOffset)?
-                    {
-                        if let Some(o) = head.offset().as_debug_info_offset() {
-                            if o.0 + head.length_including_self() > dr.0 {
-                                eprintln!("offset {:?}, dr {:?}", offset, dr);
-                                break;
-                            }
-                            offset = o;
+                while let Some(head) = units
+                    .next()
+                    .map_err(|x| gimli::Error::NoEntryAtGivenOffset)?
+                {
+                    if let Some(o) = head.offset().as_debug_info_offset() {
+                        offset = o;
+                        if o.0 + head.length_including_self() > dr.0 {
+                            eprintln!("offset {:?}, dr {:?}", offset, dr);
+                            break;
                         }
                     }
                 }
