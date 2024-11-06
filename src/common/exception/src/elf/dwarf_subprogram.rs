@@ -86,7 +86,7 @@ impl<R: Reader> Unit<R> {
                     }
 
                     let range_match = match self.attrs.ranges_offset {
-                        None => true,
+                        None => false,
                         Some(range_offset) => self.match_range(probe, range_offset),
                     };
 
