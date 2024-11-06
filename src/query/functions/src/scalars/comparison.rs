@@ -200,14 +200,14 @@ fn vectorize_string_cmp(
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for i in 0..arg1.len() {
-                builder.push(func(StringColumn::compare_str(&arg1, i, &arg2)));
+                builder.push(func(StringColumn::compare_str(&arg1, i, arg2)));
             }
             Value::Column(builder.into())
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for i in 0..arg1.len() {
-                builder.push(func(StringColumn::compare_str(&arg2, i, &arg1).reverse()));
+                builder.push(func(StringColumn::compare_str(&arg2, i, arg1).reverse()));
             }
             Value::Column(builder.into())
         }

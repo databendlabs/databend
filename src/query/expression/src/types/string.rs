@@ -308,18 +308,26 @@ impl StringColumn {
     }
 
     pub fn compare_str(col: &Self, i: usize, value: &str) -> Ordering {
-        let mut prefix = [0u8; 4];
-        prefix.copy_from_slice(&value.as_bytes()[..4]);
-        let prefix = u32::from_le_bytes(prefix);
         let view = unsafe { col.data.views().as_slice().get_unchecked_release(i) };
-        match view.prefix.cmp(&prefix) {
-            Ordering::Equal => unsafe {
-                let value_i = col.data.value_unchecked(i);
-                value_i.cmp(value)
-            },
-            non_eq => non_eq,
+        let prefix = load_prefix(value.as_bytes());
+        let be_prefix = prefix.to_be();
+
+        if view.prefix != prefix {
+            let value_i = unsafe { col.data.value_unchecked(i) };
+            value_i.cmp(value)
+        } else {
+            view.prefix.to_be().cmp(&be_prefix)
         }
     }
+}
+
+// Loads (up to) the first 4 bytes of s as little-endian, padded with zeros.
+#[inline]
+fn load_prefix(s: &[u8]) -> u32 {
+    let start = &s[..s.len().min(4)];
+    let mut tmp = [0u8; 4];
+    tmp[..start.len()].copy_from_slice(start);
+    u32::from_le_bytes(tmp)
 }
 
 impl PartialEq for StringColumn {
