@@ -180,7 +180,7 @@ impl Dwarf {
             let type_ = head.type_();
             if matches!(type_, UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {
-                    return Ok(Some(unit.find_function(probe)?));
+                    return Ok(Some(unit.find_location(probe)?));
                 }
             }
         }
