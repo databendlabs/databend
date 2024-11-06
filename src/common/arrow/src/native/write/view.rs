@@ -40,8 +40,8 @@ pub(crate) fn write_view<W: Write>(
     w.write_all(input_buf)?;
     w.write_all(&(array.data_buffers().len() as u32).to_le_bytes())?;
 
-    buf.clear();
     for buffer in array.data_buffers().iter() {
+        buf.clear();
         let pos = buf.len();
         w.write_all(&[codec as u8])?;
         buf.extend_from_slice(&[0u8; 8]);
