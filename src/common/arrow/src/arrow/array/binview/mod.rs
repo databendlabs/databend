@@ -41,9 +41,7 @@ pub use mutable::MutableBinaryViewArray;
 use private::Sealed;
 pub use view::View;
 
-use crate::arrow::array::binview::view::validate_binary_view;
 use crate::arrow::array::binview::view::validate_utf8_only;
-use crate::arrow::array::binview::view::validate_utf8_view;
 use crate::arrow::array::iterator::NonNullValuesIter;
 use crate::arrow::array::Array;
 use crate::arrow::bitmap::utils::BitmapIter;
@@ -230,10 +228,20 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
                 "BinaryViewArray can only be initialized with DataType::BinaryView or DataType::Utf8View",
             ));
         }
-        if T::IS_UTF8 {
-            validate_utf8_view(views.as_ref(), buffers.as_ref())?;
-        } else {
-            validate_binary_view(views.as_ref(), buffers.as_ref())?;
+
+        #[cfg(debug_assertions)]
+        {
+            if T::IS_UTF8 {
+                crate::arrow::array::binview::view::validate_utf8_view(
+                    views.as_ref(),
+                    buffers.as_ref(),
+                )?;
+            } else {
+                crate::arrow::array::binview::view::validate_binary_view(
+                    views.as_ref(),
+                    buffers.as_ref(),
+                )?;
+            }
         }
 
         if let Some(validity) = &validity {

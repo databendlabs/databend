@@ -16,6 +16,8 @@
 extern crate criterion;
 
 use criterion::Criterion;
+use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
@@ -72,6 +74,58 @@ fn bench(c: &mut Criterion) {
                     block_view
                         .take_compacted_indices(&indices, num_rows)
                         .unwrap()
+                })
+            });
+        }
+    }
+
+    // IPC
+    //     bench_kernels/serialize_string_offset/12
+    //                         time:   [183.25 µs 183.49 µs 183.93 µs]
+    // Found 7 outliers among 100 measurements (7.00%)
+    //   3 (3.00%) high mild
+    //   4 (4.00%) high severe
+    // bench_kernels/serialize_string_view/12
+    //                         time:   [415.25 µs 415.36 µs 415.47 µs]
+    // Found 6 outliers among 100 measurements (6.00%)
+    //   3 (3.00%) high mild
+    //   3 (3.00%) high severe
+    // bench_kernels/serialize_string_offset/20
+    //                         time:   [195.09 µs 195.15 µs 195.23 µs]
+    // Found 6 outliers among 100 measurements (6.00%)
+    //   6 (6.00%) high mild
+    // bench_kernels/serialize_string_view/20
+    //                         time:   [464.96 µs 465.08 µs 465.21 µs]
+    // Found 4 outliers among 100 measurements (4.00%)
+    //   4 (4.00%) high mild
+    // bench_kernels/serialize_string_offset/500
+    //                         time:   [3.3092 ms 3.3139 ms 3.3194 ms]
+    // Found 2 outliers among 100 measurements (2.00%)
+    //   1 (1.00%) high mild
+    //   1 (1.00%) high severe
+    // bench_kernels/serialize_string_view/500
+    //                         time:   [3.9254 ms 3.9303 ms 3.9366 ms]
+    // Found 9 outliers among 100 measurements (9.00%)
+    //   4 (4.00%) high mild
+    //   5 (5.00%) high severe
+
+    {
+        for length in [12, 20, 500] {
+            let (s, b) = generate_random_string_data(&mut rng, length);
+            let b_c = BinaryType::from_data(b.clone());
+            let s_c = StringType::from_data(s.clone());
+
+            group.bench_function(format!("serialize_string_offset/{length}"), |b| {
+                b.iter(|| {
+                    let bs = serialize_column(&b_c);
+                    deserialize_column(&bs).unwrap();
+                })
+            });
+
+            group.bench_function(format!("serialize_string_view/{length}"), |b| {
+                b.iter(|| {
+                    let bs = serialize_column(&s_c);
+                    deserialize_column(&bs).unwrap();
                 })
             });
         }

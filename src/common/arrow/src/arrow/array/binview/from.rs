@@ -53,13 +53,15 @@ impl Arrow2Arrow for BinaryViewArray {
             .map(|x| crate::arrow::buffer::Buffer::from(x.clone()))
             .collect();
         let validity = data.nulls().map(|x| Bitmap::from_null_buffer(x.clone()));
-        Self::try_new(
-            crate::arrow::datatypes::DataType::BinaryView,
-            views,
-            buffers,
-            validity,
-        )
-        .unwrap()
+        unsafe {
+            Self::new_unchecked_unknown_md(
+                crate::arrow::datatypes::DataType::BinaryView,
+                views,
+                buffers,
+                validity,
+                None,
+            )
+        }
     }
 }
 
@@ -85,12 +87,14 @@ impl Arrow2Arrow for Utf8ViewArray {
             .map(|x| crate::arrow::buffer::Buffer::from(x.clone()))
             .collect();
         let validity = data.nulls().map(|x| Bitmap::from_null_buffer(x.clone()));
-        Self::try_new(
-            crate::arrow::datatypes::DataType::Utf8View,
-            views,
-            buffers,
-            validity,
-        )
-        .unwrap()
+        unsafe {
+            Self::new_unchecked_unknown_md(
+                crate::arrow::datatypes::DataType::Utf8View,
+                views,
+                buffers,
+                validity,
+                None,
+            )
+        }
     }
 }
