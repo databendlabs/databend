@@ -101,9 +101,9 @@ impl<R: Reader> UnitAttrs<R> {
             (gimli::DW_AT_name, v) => {
                 self.name = v.string_value(debug_str);
             }
-            // (gimli::DW_AT_entry_pc, AttributeValue::Addr(v)) => {
-            //     self.base_addr = Some(v);
-            // }
+            (gimli::DW_AT_entry_pc, AttributeValue::Addr(v)) => {
+                self.base_addr = Some(v);
+            }
             (gimli::DW_AT_comp_dir, v) => {
                 self.comp_dir = v.string_value(debug_str);
             }
@@ -161,12 +161,13 @@ impl<R: Reader> Unit<R> {
         if let Ok(mut ranges) = self.range_list.ranges(
             offset,
             self.head.encoding(),
-            self.attrs.low_pc.unwrap_or(0),
+            self.attrs.base_addr.unwrap_or(0),
             &self.debug_addr,
             self.attrs.addr_base,
         ) {
             while let Ok(Some(range)) = ranges.next() {
                 if probe >= range.begin && probe < range.end {
+                    eprintln!("range matched {:?} {:?}, {:?}", range.begin, range.end, probe);
                     return true;
                 }
             }
@@ -249,9 +250,9 @@ impl<R: Reader> Unit<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         };
