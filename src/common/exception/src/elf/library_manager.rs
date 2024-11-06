@@ -183,7 +183,7 @@ impl LibraryManager {
                 if let Some(dwarf) = dwarf {
                     let adjusted_addr = (physical_address - 1) as u64;
 
-                    match dwarf.find_location(adjusted_addr) {
+                    match dwarf.find_function(adjusted_addr) {
                         Ok(mut locations) => {
                             if let Some(top_location) = locations.pop() {
                                 location = Location {

@@ -173,14 +173,14 @@ impl Dwarf {
         }))
     }
 
-    fn fast_find_location(&self, probe: u64) -> gimli::Result<Option<Vec<CallLocation>>> {
+    fn fast_find_function(&self, probe: u64) -> gimli::Result<Option<Vec<CallLocation>>> {
         if let Some(debug_info_offset) = self.find_debug_info_offset(probe) {
             let head = self.debug_info.header_from_offset(debug_info_offset)?;
 
             let type_ = head.type_();
             if matches!(type_, UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {
-                    return Ok(Some(unit.find_location(probe)?));
+                    return Ok(Some(unit.find_function(probe)?));
                 }
             }
         }
@@ -188,7 +188,7 @@ impl Dwarf {
         Ok(None)
     }
 
-    fn slow_find_location(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
+    fn slow_find_function(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
         let mut units = self.debug_info.units();
         while let Some(head) = units.next()? {
             if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_)) {
@@ -203,10 +203,10 @@ impl Dwarf {
         Ok(vec![])
     }
 
-    pub fn find_location(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
-        match self.fast_find_location(probe)? {
+    pub fn find_function(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
+        match self.fast_find_function(probe)? {
             Some(location) => Ok(location),
-            None => self.slow_find_location(probe),
+            None => self.slow_find_function(probe),
         }
     }
 }

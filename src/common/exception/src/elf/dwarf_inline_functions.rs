@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gimli::{Attribute, ReaderOffset};
+use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::DebugInfoOffset;
 use gimli::EntriesRaw;
 use gimli::EntriesTreeNode;
 use gimli::RangeListsOffset;
 use gimli::Reader;
+use gimli::ReaderOffset;
 use gimli::Result;
 use gimli::UnitOffset;
 
@@ -83,13 +84,19 @@ impl<R: Reader> SubroutineAttrs<R> {
                 }
             }
             gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                eprintln!("gimli::DW_AT_abstract_origin | gimli::DW_AT_specification before {:?}", self.name.as_ref().map(|x| x.to_string_lossy()));
+                eprintln!(
+                    "gimli::DW_AT_abstract_origin | gimli::DW_AT_specification before {:?}",
+                    self.name.as_ref().map(|x| x.to_string_lossy())
+                );
                 if self.name.is_none() {
                     if let Ok(Some(v)) = unit.name_attr(attr.value(), 16) {
                         self.name = Some(v);
                     }
                 }
-                eprintln!("gimli::DW_AT_abstract_origin | gimli::DW_AT_specification after {:?}", self.name.as_ref().map(|x| x.to_string_lossy()));
+                eprintln!(
+                    "gimli::DW_AT_abstract_origin | gimli::DW_AT_specification after {:?}",
+                    self.name.as_ref().map(|x| x.to_string_lossy())
+                );
             }
             gimli::DW_AT_call_file => {
                 if let AttributeValue::FileIndex(idx) = attr.value() {
@@ -111,9 +118,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
@@ -267,6 +274,7 @@ impl<R: Reader> Unit<R> {
             if let Some(abbrev) = entries.read_abbreviation()? {
                 match abbrev.tag() {
                     gimli::DW_TAG_subprogram => {
+                        eprintln!("inlined is subprogram");
                         entries.skip_attributes(abbrev.attributes())?;
                         while entries.next_depth() > next_depth {
                             if let Some(abbrev) = entries.read_abbreviation()? {
@@ -275,6 +283,7 @@ impl<R: Reader> Unit<R> {
                         }
                     }
                     gimli::DW_TAG_inlined_subroutine => {
+                        eprintln!("inlined is subprogram DW_TAG_inlined_subroutine");
                         let mut attrs = SubroutineAttrs::create();
                         for spec in abbrev.attributes() {
                             let attr = entries.read_attribute(*spec)?;
@@ -287,6 +296,7 @@ impl<R: Reader> Unit<R> {
                         };
 
                         if attrs.match_pc(probe) || range_match {
+                            eprintln!("match pc or range");
                             if let Some(name) = &attrs.name {
                                 if let Ok(name) = name.to_string_lossy() {
                                     if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
@@ -306,6 +316,7 @@ impl<R: Reader> Unit<R> {
                         }
                     }
                     _ => {
+                        eprintln!("inlined is {:?}", abbrev.tag());
                         entries.skip_attributes(abbrev.attributes())?;
                     }
                 }
@@ -313,7 +324,12 @@ impl<R: Reader> Unit<R> {
         }
     }
 
-    pub fn find_function(&self, offset: UnitOffset<R::Offset>, probe: u64, res: &mut Vec<CallLocation>) -> Result<()> {
+    pub fn find_function(
+        &self,
+        offset: UnitOffset<R::Offset>,
+        probe: u64,
+        res: &mut Vec<CallLocation>,
+    ) -> Result<()> {
         let mut entries = self.head.entries_raw(&self.abbreviations, Some(offset))?;
         let depth = entries.next_depth();
         let abbrev = entries.read_abbreviation()?.unwrap();
