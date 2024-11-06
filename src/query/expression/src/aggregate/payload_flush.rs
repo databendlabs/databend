@@ -333,8 +333,7 @@ impl Payload {
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 
-                binary_builder.put_str(std::str::from_utf8(scalar).unwrap());
-                binary_builder.commit_row();
+                binary_builder.put_and_commit(std::str::from_utf8(scalar).unwrap());
             }
         }
         binary_builder.build()

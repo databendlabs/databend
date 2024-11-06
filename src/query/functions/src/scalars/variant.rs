@@ -1009,8 +1009,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             let json_str = cast_to_string(val);
-            output.put_str(&json_str);
-            output.commit_row();
+            output.put_and_commit(&json_str);
         }),
     );
 

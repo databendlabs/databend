@@ -738,10 +738,8 @@ impl TestFixture {
 
                     for i in 0..rows_per_block {
                         let j = (idx * rows_per_block + i) % sample_books.len();
-                        title_builder.put_str(sample_books[j].0);
-                        title_builder.commit_row();
-                        content_builder.put_str(sample_books[j].1);
-                        content_builder.commit_row();
+                        title_builder.put_and_commit(sample_books[j].0);
+                        content_builder.put_and_commit(sample_books[j].1);
                     }
                     let title_column = Column::String(title_builder.build());
                     let content_column = Column::String(content_builder.build());

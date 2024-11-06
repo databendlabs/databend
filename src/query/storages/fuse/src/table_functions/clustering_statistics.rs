@@ -196,8 +196,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_name.put_str(&block.location.0);
-                    block_name.commit_row();
+                    block_name.put_and_commit(&block.location.0);
 
                     let cluster_stats = block.cluster_stats.as_ref();
                     let clustered = block

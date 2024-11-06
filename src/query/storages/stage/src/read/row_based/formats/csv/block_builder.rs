@@ -83,15 +83,13 @@ impl CsvDecoder {
                     }
                     EmptyFieldAs::String => match builder {
                         ColumnBuilder::String(b) => {
-                            b.put_str("");
-                            b.commit_row();
+                            b.put_and_commit("");
                         }
                         ColumnBuilder::Nullable(box NullableColumnBuilder {
                             builder: ColumnBuilder::String(b),
                             validity,
                         }) => {
-                            b.put_str("");
-                            b.commit_row();
+                            b.put_and_commit("");
                             validity.push(true);
                         }
                         _ => {

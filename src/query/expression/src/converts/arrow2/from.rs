@@ -750,8 +750,7 @@ impl Column {
 fn binary_array_to_string_column<O: Offset>(array: &BinaryArray<O>) -> StringColumn {
     let mut builder = StringColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
-        builder.put_str(std::str::from_utf8(value).unwrap());
-        builder.commit_row();
+        builder.put_and_commit(std::str::from_utf8(value).unwrap());
     }
     builder.build()
 }
@@ -759,8 +758,7 @@ fn binary_array_to_string_column<O: Offset>(array: &BinaryArray<O>) -> StringCol
 fn utf8_array_to_string_column<O: Offset>(array: &Utf8Array<O>) -> StringColumn {
     let mut builder = StringColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
-        builder.put_str(value);
-        builder.commit_row();
+        builder.put_and_commit(value);
     }
     builder.build()
 }
@@ -768,8 +766,7 @@ fn utf8_array_to_string_column<O: Offset>(array: &Utf8Array<O>) -> StringColumn 
 fn fixed_size_binary_array_to_string_column(array: &FixedSizeBinaryArray) -> StringColumn {
     let mut builder = StringColumnBuilder::with_capacity(array.len());
     for value in array.values_iter() {
-        builder.put_str(std::str::from_utf8(value).unwrap());
-        builder.commit_row();
+        builder.put_and_commit(std::str::from_utf8(value).unwrap());
     }
     builder.build()
 }

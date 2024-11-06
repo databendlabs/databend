@@ -2147,8 +2147,7 @@ impl ColumnBuilder {
                     string::CheckUTF8::check_utf8(&bytes).unwrap();
 
                     let s = unsafe { std::str::from_utf8_unchecked(bytes) };
-                    builder.put_str(s);
-                    builder.commit_row();
+                    builder.put_and_commit(s);
                 }
             }
             ColumnBuilder::Timestamp(builder) => {

@@ -159,8 +159,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         String::new()
                     },
                 };
-                output.put_str(&res);
-                output.commit_row();
+                output.put_and_commit(&res);
             },
         ),
     );

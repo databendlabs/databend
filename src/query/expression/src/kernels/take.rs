@@ -21,6 +21,7 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_exception::Result;
+use string::StringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
@@ -41,8 +42,22 @@ impl DataBlock {
             return Ok(self.slice(0..0));
         }
 
-        let mut taker = TakeVisitor::new(indices);
+        let taker = TakeVisitor::new(indices);
+        self.take_inner(taker)
+    }
 
+    pub fn scatter_take<I>(&self, indices: &[I]) -> Result<Self>
+    where I: databend_common_arrow::arrow::types::Index {
+        if indices.is_empty() {
+            return Ok(self.slice(0..0));
+        }
+
+        let taker = TakeVisitor::new(indices).with_optimize_size_enable(true);
+        self.take_inner(taker)
+    }
+
+    fn take_inner<I>(&self, mut taker: TakeVisitor<I>) -> Result<Self>
+    where I: databend_common_arrow::arrow::types::Index {
         let after_columns = self
             .columns()
             .iter()
@@ -58,7 +73,7 @@ impl DataBlock {
 
         Ok(DataBlock::new_with_meta(
             after_columns,
-            indices.len(),
+            taker.indices.len(),
             self.get_meta().cloned(),
         ))
     }
@@ -69,6 +84,7 @@ where I: databend_common_arrow::arrow::types::Index
 {
     indices: &'a [I],
     result: Option<Value<AnyType>>,
+    optimize_size_enable: bool,
 }
 
 impl<'a, I> TakeVisitor<'a, I>
@@ -78,7 +94,13 @@ where I: databend_common_arrow::arrow::types::Index
         Self {
             indices,
             result: None,
+            optimize_size_enable: false,
         }
+    }
+
+    fn with_optimize_size_enable(mut self, optimize_size_enable: bool) -> Self {
+        self.optimize_size_enable = optimize_size_enable;
+        self
     }
 }
 
@@ -247,39 +269,26 @@ where I: databend_common_arrow::arrow::types::Index
     }
 
     fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
-        let new_views = self.take_primitive_types(col.data.views().clone());
-        let new_col = unsafe {
-            Utf8ViewArray::new_unchecked_unknown_md(
-                col.data.data_type().clone(),
-                new_views,
-                col.data.data_buffers().clone(),
-                None,
-                Some(col.data.total_buffer_len()),
-            )
-        };
-        StringColumn::new(new_col)
-        // if num_rows as f64 > col.len() as f64 * SELECTIVITY_THRESHOLD {
-        //     // reuse the buffers
-        //     let new_views = self.take_primitive_types(col.data.views().clone());
-        //     let new_col = unsafe {
-        //         Utf8ViewArray::new_unchecked_unknown_md(
-        //             col.data.data_type().clone(),
-        //             new_views,
-        //             col.data.data_buffers().clone(),
-        //             None,
-        //             Some(col.data.total_buffer_len()),
-        //         )
-        //     };
-        //     StringColumn::new(new_col)
-        // } else {
-        //     let mut builder = StringColumnBuilder::with_capacity(num_rows);
-        //     for index in self.indices.iter() {
-        //         unsafe {
-        //             builder.put_str(col.index_unchecked(index.to_usize()));
-        //             builder.commit_row();
-        //         }
-        //     }
-        //     builder.build()
-        // }
+        if self.optimize_size_enable {
+            let mut builder = StringColumnBuilder::with_capacity(self.indices.len());
+            for index in self.indices.iter() {
+                unsafe {
+                    builder.put_and_commit(col.index_unchecked(index.to_usize()));
+                }
+            }
+            builder.build()
+        } else {
+            let new_views = self.take_primitive_types(col.data.views().clone());
+            let new_col = unsafe {
+                Utf8ViewArray::new_unchecked_unknown_md(
+                    col.data.data_type().clone(),
+                    new_views,
+                    col.data.data_buffers().clone(),
+                    None,
+                    Some(col.data.total_buffer_len()),
+                )
+            };
+            StringColumn::new(new_col)
+        }
     }
 }

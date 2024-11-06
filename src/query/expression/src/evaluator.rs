@@ -615,8 +615,7 @@ impl<'a> Evaluator<'a> {
 
                         let mut key_builder = StringColumnBuilder::with_capacity(obj.len());
                         for k in obj.keys() {
-                            key_builder.put_str(k.as_str());
-                            key_builder.commit_row();
+                            key_builder.put_and_commit(k.as_str());
                         }
                         let key_column = Column::String(key_builder.build());
 
@@ -659,8 +658,7 @@ impl<'a> Evaluator<'a> {
                             };
 
                             for (k, v) in obj.iter() {
-                                key_builder.put_str(k.as_str());
-                                key_builder.commit_row();
+                                key_builder.put_and_commit(k.as_str());
                                 v.write_to_vec(&mut value_builder.builder.data);
                                 value_builder.builder.commit_row();
                             }

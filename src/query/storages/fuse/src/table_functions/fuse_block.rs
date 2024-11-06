@@ -102,8 +102,7 @@ impl TableMetaFunc for FuseBlock {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_location.put_str(&block.location.0);
-                    block_location.commit_row();
+                    block_location.put_and_commit(&block.location.0);
                     block_size.push(block.block_size);
                     file_size.push(block.file_size);
                     row_count.push(block.row_count);

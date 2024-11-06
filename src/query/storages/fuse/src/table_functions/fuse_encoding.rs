@@ -254,8 +254,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     validity_size.push(p.validity_size);
                     compressed_size.push(p.compressed_size);
                     uncompressed_size.push(p.uncompressed_size);
-                    l1.put_str(&encoding_to_string(&p.body));
-                    l1.commit_row();
+                    l1.put_and_commit(&encoding_to_string(&p.body));
                     let l2_encoding = match &p.body {
                         PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
                         PageBody::Freq(freq) => freq

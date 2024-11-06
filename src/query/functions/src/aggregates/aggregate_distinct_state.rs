@@ -234,8 +234,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
     fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
         let mut builder = StringColumnBuilder::with_capacity(self.set.len());
         for key in self.set.iter() {
-            builder.put_str(unsafe { std::str::from_utf8_unchecked(key.key()) });
-            builder.commit_row();
+            builder.put_and_commit(unsafe { std::str::from_utf8_unchecked(key.key()) });
         }
         Ok(vec![Column::String(builder.build())])
     }

@@ -227,8 +227,7 @@ impl InternalColumn {
             }
             InternalColumnType::BlockName => {
                 let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_str(&meta.block_location);
-                builder.commit_row();
+                builder.put_and_commit(&meta.block_location);
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
@@ -236,8 +235,7 @@ impl InternalColumn {
             }
             InternalColumnType::SegmentName => {
                 let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_str(&meta.segment_location);
-                builder.commit_row();
+                builder.put_and_commit(&meta.segment_location);
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
@@ -245,8 +243,7 @@ impl InternalColumn {
             }
             InternalColumnType::SnapshotName => {
                 let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_str(&meta.snapshot_location.clone().unwrap_or("".to_string()));
-                builder.commit_row();
+                builder.put_and_commit(&meta.snapshot_location.clone().unwrap_or("".to_string()));
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),

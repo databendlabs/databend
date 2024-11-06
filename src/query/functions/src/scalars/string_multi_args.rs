@@ -691,8 +691,7 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         }
 
         if source.is_empty() || pat.is_empty() {
-            builder.put_str(source);
-            builder.commit_row();
+            builder.put_and_commit(source);
             continue;
         }
 

@@ -134,8 +134,7 @@ impl ValueType for StringType {
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.put_str(item);
-        builder.commit_row();
+        builder.put_and_commit(item);
     }
 
     fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
@@ -143,7 +142,7 @@ impl ValueType for StringType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.commit_row();
+        builder.put_and_commit("");
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
@@ -489,6 +488,11 @@ impl StringColumnBuilder {
     }
 
     #[inline]
+    pub fn put_and_commit<V: AsRef<str>>(&mut self, item: V) {
+        self.data.push_value_ignore_validity(item);
+    }
+
+    #[inline]
     pub fn put_slice(&mut self, item: &[u8]) {
         self.row_buffer.extend_from_slice(item);
     }
@@ -544,8 +548,7 @@ impl<'a> FromIterator<&'a str> for StringColumnBuilder {
         let iter = iter.into_iter();
         let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0);
         for item in iter {
-            builder.put_str(item);
-            builder.commit_row();
+            builder.put_and_commit(item);
         }
         builder
     }

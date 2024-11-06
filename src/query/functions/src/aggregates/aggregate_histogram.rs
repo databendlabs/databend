@@ -157,8 +157,7 @@ where
                 })
                 .collect::<Vec<Bucket<String>>>(),
         )?;
-        builder.put_str(&json_str);
-        builder.commit_row();
+        builder.put_and_commit(&json_str);
 
         Ok(())
     }

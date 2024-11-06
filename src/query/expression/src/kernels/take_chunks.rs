@@ -794,10 +794,9 @@ impl Column {
         let mut builder = StringColumnBuilder::with_capacity(indices.len());
         for row_ptr in indices {
             unsafe {
-                builder.put_str(
+                builder.put_and_commit(
                     col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize),
                 );
-                builder.commit_row();
             }
         }
         builder.build()

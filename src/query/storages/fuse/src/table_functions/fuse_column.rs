@@ -110,17 +110,14 @@ impl TableMetaFunc for FuseColumn {
 
                     for (id, column) in block.col_metas.iter() {
                         if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
-                            block_location.put_str(&block.location.0);
-                            block_location.commit_row();
+                            block_location.put_and_commit(&block.location.0);
                             block_size.push(block.block_size);
                             file_size.push(block.file_size);
                             row_count.push(column.total_rows() as u64);
 
-                            column_name.put_str(&f.name);
-                            column_name.commit_row();
+                            column_name.put_and_commit(&f.name);
 
-                            column_type.put_str(&f.data_type.to_string());
-                            column_type.commit_row();
+                            column_type.put_and_commit(&f.data_type.to_string());
 
                             column_id.push(*id);
 

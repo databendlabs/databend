@@ -344,8 +344,7 @@ impl<'a> FilterVisitor<'a> {
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 for i in iter {
                     unsafe {
-                        builder.put_str(values.index_unchecked(i));
-                        builder.commit_row();
+                        builder.put_and_commit(values.index_unchecked(i));
                     }
                 }
                 builder.build()
