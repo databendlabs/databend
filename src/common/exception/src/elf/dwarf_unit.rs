@@ -167,7 +167,10 @@ impl<R: Reader> Unit<R> {
         ) {
             while let Ok(Some(range)) = ranges.next() {
                 if probe >= range.begin && probe < range.end {
-                    eprintln!("range matched {:?} {:?}, {:?}", range.begin, range.end, probe);
+                    eprintln!(
+                        "range matched {:?} {:?}, {:?}",
+                        range.begin, range.end, probe
+                    );
                     return true;
                 }
             }
@@ -246,23 +249,20 @@ impl<R: Reader> Unit<R> {
     }
 
     pub fn match_pc(&self, probe: u64) -> bool {
-        let pc_matched = match (self.attrs.low_pc, self.attrs.high_pc) {
+        if let Some(range_offset) = self.attrs.ranges_offset {
+            return self.match_range(probe, range_offset);
+        }
+
+        match (self.attrs.low_pc, self.attrs.high_pc) {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
-        };
-
-        let range_match = match self.attrs.ranges_offset {
-            None => false,
-            Some(range_offset) => self.match_range(probe, range_offset),
-        };
-
-        pc_matched || range_match
+        }
     }
 
     pub fn find_location(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {

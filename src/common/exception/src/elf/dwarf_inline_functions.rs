@@ -69,6 +69,13 @@ impl<R: Reader> SubroutineAttrs<R> {
                 _ => {}
             },
             gimli::DW_AT_ranges => {
+                // match attr.value() {
+                //     AttributeValue::RangeListsRef(offset) => {
+                //         Ok(Some(self.ranges_offset_from_raw(unit, offset)))
+                //     }
+                //     AttributeValue::DebugRngListsIndex(index) => self.ranges_offset(unit, index).map(Some),
+                //     _ => Ok(None),
+                // }
                 if let AttributeValue::RangeListsRef(v) = attr.value() {
                     self.ranges_offset = Some(RangeListsOffset(v.0));
                 }
@@ -290,30 +297,34 @@ impl<R: Reader> Unit<R> {
                             attrs.set_attr(attr, self);
                         }
 
-                        let range_match = match self.attrs.ranges_offset {
-                            None => false,
-                            Some(range_offset) => self.match_range(probe, range_offset),
-                        };
+                        if let Some(range_offset) = self.attrs.ranges_offset {
+                            if !self.match_range(probe, range_offset) {
+                                continue;
+                            }
+                        } else if !attrs.match_pc(probe) {
+                            continue;
+                        }
 
-                        if attrs.match_pc(probe) || range_match {
-                            eprintln!("match pc or range {:?}, {:?}, {:?}", attrs.low_pc, attrs.high_pc, probe);
-                            if let Some(name) = &attrs.name {
-                                if let Ok(name) = name.to_string_lossy() {
-                                    if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
-                                        res.push(CallLocation {
-                                            symbol: Some(format!("{:#}", name)),
-                                            file: None,
-                                            line: attrs.line,
-                                            column: attrs.column,
-                                        });
-                                    }
+                        eprintln!(
+                            "match pc or range {:?}, {:?}, {:?}",
+                            attrs.low_pc, attrs.high_pc, probe
+                        );
+                        if let Some(name) = &attrs.name {
+                            if let Ok(name) = name.to_string_lossy() {
+                                if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
+                                    res.push(CallLocation {
+                                        symbol: Some(format!("{:#}", name)),
+                                        file: None,
+                                        line: attrs.line,
+                                        column: attrs.column,
+                                    });
                                 }
                             }
-
-                            self.inlined_functions(entries, probe, next_depth, res)?;
-
-                            return Ok(());
                         }
+
+                        self.inlined_functions(entries, probe, next_depth, res)?;
+
+                        return Ok(());
                     }
                     _ => {
                         eprintln!("inlined is {:?}", abbrev.tag());

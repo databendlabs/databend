@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::slice::range;
+
 use gimli::Attribute;
 use gimli::AttributeValue;
 use gimli::EntriesTreeNode;
@@ -85,14 +87,15 @@ impl<R: Reader> Unit<R> {
                         attrs.set_attr(attr);
                     }
 
-                    let range_match = match self.attrs.ranges_offset {
-                        None => false,
-                        Some(range_offset) => self.match_range(probe, range_offset),
-                    };
-
-                    if attrs.match_pc(probe) || range_match {
-                        return Ok(Some(dw_die_offset));
+                    if let Some(range_offset) = self.attrs.ranges_offset {
+                        if !self.match_range(probe, range_offset) {
+                            continue;
+                        }
+                    } else if !attrs.match_pc(probe) {
+                        continue;
                     }
+
+                    return Ok(Some(dw_die_offset));
                 } else {
                     entries.skip_attributes(abbrev.attributes())?;
                 }
