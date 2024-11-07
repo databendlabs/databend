@@ -133,7 +133,7 @@ impl ordq::Work for SnapshotUpgradeV002ToV004 {
 /// Upgrade snapshot V002(ndjson) to V004(rotbl).
 ///
 /// After install, the state machine has only one level of data.
-pub async fn upgrade_snapshot_data_v002_to_v004(
+pub async fn upgrade_snapshot_data_v002_to_v003_or_v004(
     snapshot_store: &SnapshotStoreV004,
     data: Box<SnapshotData>,
     snapshot_id: SnapshotId,

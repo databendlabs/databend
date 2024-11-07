@@ -88,6 +88,7 @@ impl OnDisk {
         self.clean_upgrading()?;
 
         self.remove_v003_logs().await?;
+        self.remove_v003_snapshot().await?;
 
         // 3. finish upgrading
 
@@ -101,6 +102,7 @@ impl OnDisk {
         assert!(self.header.upgrading.is_some());
         if self.header.cleaning {
             self.remove_v003_logs().await?;
+            self.remove_v003_snapshot().await?;
 
             // Note that this will increase `header.version`.
             self.finish_upgrading()?;
@@ -121,6 +123,23 @@ impl OnDisk {
         Ok(())
     }
 
+    async fn remove_v003_snapshot(&mut self) -> Result<(), io::Error> {
+        let ss_store_v003 = SnapshotStoreV003::new(self.config.clone());
+
+        let v003_path = ss_store_v003.snapshot_config().snapshot_dir();
+
+        if fs::metadata(&v003_path).is_ok() {
+            fs::remove_dir_all(&v003_path).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("{}; when(remove V003 snapshot: {})", e, v003_path,),
+                )
+            })?;
+        }
+
+        Ok(())
+    }
+
     /// It removes the data from sled db.
     /// But not the sled db itself.
     async fn remove_v003_logs(&mut self) -> Result<(), MetaStorageError> {
@@ -133,7 +152,7 @@ impl OnDisk {
                     io::Error::new(
                         io::ErrorKind::Other,
                         format!(
-                            "{}; when(drop sled tree: {})as_str; when(clear sled db after upgrading to V004)",
+                            "{}; when(drop sled tree: {})as_str; when(clear sled db after upgrading V003 to V004)",
                             e,
                             String::from_utf8_lossy(&tree_name)
                         ),

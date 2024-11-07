@@ -173,45 +173,45 @@ impl OnDisk {
         config: &RaftConfig,
         header: &Header,
     ) -> Result<(), io::Error> {
-        let marker_path = Self::header_path(config);
+        let header_path = Self::header_path(config);
         let buf = serde_json::to_vec(header).map_err(|e| {
             io::Error::new(io::ErrorKind::InvalidData, e).context(format!(
                 "serializing header at {}",
-                marker_path.as_path().display(),
+                header_path.as_path().display(),
             ))
         })?;
 
-        fs::write(&marker_path, &buf).context(format!(
+        fs::write(&header_path, &buf).context(format!(
             "writing version file at {}: {}",
-            marker_path.as_path().display(),
+            header_path.as_path().display(),
             String::from_utf8_lossy(&buf)
         ))?;
 
         info!(
             "Wrote header {:?}; at {}",
             header,
-            marker_path.as_path().display()
+            header_path.as_path().display()
         );
 
         Ok(())
     }
 
     pub(crate) fn load_header_from_fs(config: &RaftConfig) -> Result<Option<Header>, io::Error> {
-        let marker_path = Self::header_path(config);
+        let header_path = Self::header_path(config);
 
-        if !marker_path.exists() {
+        if !header_path.exists() {
             return Ok(None);
         }
 
-        let state = fs::read(&marker_path).context(format!(
+        let state = fs::read(&header_path).context(format!(
             "reading version file {}",
-            marker_path.as_path().display(),
+            header_path.as_path().display(),
         ))?;
 
         let state = serde_json::from_slice::<Header>(&state).map_err(|e| {
             io::Error::new(io::ErrorKind::InvalidData, e).context(format!(
                 "parsing version file {}",
-                marker_path.as_path().display(),
+                header_path.as_path().display(),
             ))
         })?;
 

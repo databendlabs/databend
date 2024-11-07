@@ -398,7 +398,6 @@ impl StoreInner {
             yield encode_entry(tree_name, &entry)?;
         };
 
-        // Dump logs that has smaller or equal leader id as `vote`
         {
             let tree_name = "raft_log";
 
