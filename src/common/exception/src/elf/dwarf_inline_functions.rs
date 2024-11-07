@@ -334,7 +334,7 @@ impl<R: Reader> Unit<R> {
 
                         self.inlined_functions(entries, probe, next_depth, res)?;
 
-                        // return Ok(());
+                        return Ok(());
                     }
                     _ => {
                         eprintln!("inlined is {:?}", abbrev.tag());
