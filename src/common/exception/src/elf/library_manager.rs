@@ -160,7 +160,7 @@ impl LibraryManager {
                 if let Some(dwarf) = dwarf {
                     let adjusted_addr = (physical_address - 1) as u64;
 
-                    if let Ok(mut locations) = dwarf.find_frames(adjusted_addr) {
+                    if let Ok(locations) = dwarf.find_frames(adjusted_addr) {
                         for location in locations {
                             f(ResolvedStackFrame {
                                 virtual_address: 0,

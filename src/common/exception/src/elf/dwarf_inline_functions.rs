@@ -112,9 +112,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -358,10 +358,7 @@ impl<R: Reader> Unit<R> {
             },
         };
 
-        let (mut file, mut line, mut column) = match self.find_location(probe)? {
-            None => (None, None, None),
-            Some(location) => (Some(location.file), location.line, location.column),
-        };
+        let (mut file, mut line, mut column) = self.find_location(probe)?;
 
         functions.reverse();
 
