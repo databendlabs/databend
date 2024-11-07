@@ -303,7 +303,10 @@ impl StringColumn {
                 value_i.cmp(value_j)
             }
         } else {
-            view_i.prefix.to_be().cmp(&view_j.prefix.to_be())
+            view_i
+                .prefix
+                .to_le_bytes()
+                .cmp(&view_j.prefix.to_le_bytes())
         }
     }
 
@@ -347,17 +350,19 @@ impl Ord for StringColumn {
     fn cmp(&self, other: &Self) -> Ordering {
         for i in 0..self.len().max(other.len()) {
             match (self.data.views().get(i), other.data.views().get(i)) {
-                (Some(left), Some(right)) => match left.prefix.cmp(&right.prefix) {
-                    Ordering::Equal => unsafe {
-                        let left = self.data.value_unchecked(i);
-                        let right = other.data.value_unchecked(i);
-                        match left.cmp(right) {
-                            Ordering::Equal => continue,
-                            non_eq => return non_eq,
-                        }
-                    },
-                    non_eq => return non_eq,
-                },
+                (Some(left), Some(right)) => {
+                    match left.prefix.to_le_bytes().cmp(&right.prefix.to_le_bytes()) {
+                        Ordering::Equal => unsafe {
+                            let left = self.data.value_unchecked(i);
+                            let right = other.data.value_unchecked(i);
+                            match left.cmp(right) {
+                                Ordering::Equal => continue,
+                                non_eq => return non_eq,
+                            }
+                        },
+                        non_eq => return non_eq,
+                    }
+                }
                 (Some(_), None) => return Ordering::Greater,
                 (None, Some(_)) => return Ordering::Less,
                 (None, None) => return Ordering::Equal,
