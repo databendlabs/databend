@@ -49,7 +49,6 @@ use gimli::UnitOffset;
 use crate::elf::dwarf::CallLocation;
 use crate::elf::dwarf_subprogram::SubprogramAttrs;
 use crate::exception_backtrace_elf::HighPc;
-use crate::exception_backtrace_elf::Location;
 
 // Unit first die attrs
 pub struct UnitAttrs<R: Reader> {
@@ -213,7 +212,10 @@ impl<R: Reader> Unit<R> {
         Ok(None)
     }
 
-    pub fn find_location(&self, probe: u64) -> gimli::Result<Option<Location>> {
+    pub fn find_location(
+        &self,
+        probe: u64,
+    ) -> gimli::Result<(Option<String>, Option<u32>, Option<u32>)> {
         if let Some(offset) = &self.attrs.debug_line_offset {
             let program = self.debug_line.program(
                 *offset,
@@ -235,21 +237,6 @@ impl<R: Reader> Unit<R> {
 
                 if is_candidate {
                     if row.address() > probe {
-                        let address = row.address();
-
-                        // while let Some((_, row)) = rows.next_row()? {
-                        //     if !row.end_sequence() && address == row.address() {
-                        //         file_idx = row.file_index();
-                        //         line = row.line().map(NonZeroU64::get).unwrap_or(0) as u32;
-                        //         column = match row.column() {
-                        //             gimli::ColumnType::LeftEdge => 0,
-                        //             gimli::ColumnType::Column(x) => x.get() as u32,
-                        //         };
-                        //         continue;
-                        //     break;
-                        // }
-                        //     }
-                        //
                         let mut path_buf = PathBuf::new();
 
                         if let Some(dir) = &self.attrs.comp_dir {
@@ -271,11 +258,11 @@ impl<R: Reader> Unit<R> {
                             }
                         }
 
-                        return Ok(Some(Location {
-                            file: format!("{}", path_buf.display()),
-                            line: Some(line),
-                            column: Some(column),
-                        }));
+                        return Ok((
+                            Some(format!("{}", path_buf.display())),
+                            Some(line),
+                            Some(column),
+                        ));
                     }
 
                     file_idx = row.file_index();
@@ -292,7 +279,7 @@ impl<R: Reader> Unit<R> {
             }
         }
 
-        Ok(None)
+        Ok((None, None, None))
     }
 
     pub fn match_pc(&self, probe: u64) -> bool {
@@ -313,17 +300,12 @@ impl<R: Reader> Unit<R> {
     }
 
     pub fn find_frames(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
-        // let Some(location) = self.find_line(probe)? else {
-        //     return Ok(vec![]);
-        // };
-
-        let mut inlined_functions = vec![];
+        let mut functions_frames = vec![];
         if let Some(offset) = self.find_subprogram(probe)? {
-            let _ = self.find_function(offset, probe, &mut inlined_functions);
+            let _ = self.find_function(offset, probe, &mut functions_frames);
         }
 
-        // inlined_functions.push(location);
-        Ok(inlined_functions)
+        Ok(functions_frames)
     }
 
     pub fn get_address(&self, idx: DebugAddrIndex<R::Offset>) -> u64 {

@@ -12,67 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::ffi::CStr;
-use std::ffi::OsStr;
-use std::ffi::OsString;
 use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::fmt::Write;
-use std::num::NonZeroU64;
-use std::os::fd::AsRawFd;
-use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
-use std::path::PathBuf;
-use std::ptr;
-use std::sync::Arc;
-
-use gimli::constants;
-use gimli::write::RangeListOffsets;
-use gimli::Abbreviations;
-use gimli::Attribute;
-use gimli::AttributeValue;
-use gimli::DebugAbbrev;
-use gimli::DebugAbbrevOffset;
-use gimli::DebugAddr;
-use gimli::DebugAddrBase;
-use gimli::DebugAranges;
-use gimli::DebugInfo;
-use gimli::DebugInfoOffset;
-use gimli::DebugLine;
-use gimli::DebugLineOffset;
-use gimli::DebugLocListsBase;
-use gimli::DebugRanges;
-use gimli::DebugRngLists;
-use gimli::DebugRngListsBase;
-use gimli::DebugStrOffsetsBase;
-use gimli::DebuggingInformationEntry;
-use gimli::DwAt;
-use gimli::EndianSlice;
-use gimli::EntriesTree;
-use gimli::EntriesTreeNode;
-use gimli::Error;
-use gimli::FileEntry;
-use gimli::NativeEndian;
-use gimli::RangeLists;
-use gimli::RangeListsOffset;
-use gimli::RawRngListEntry;
-use gimli::Reader;
-use gimli::UnitHeader;
-use gimli::UnitOffset;
-use gimli::UnitType;
-use libc::size_t;
-use object::CompressionFormat;
-use object::Object;
-use object::ObjectSection;
-use object::ObjectSymbol;
-use object::ObjectSymbolTable;
-use once_cell::sync::OnceCell;
-use tantivy::HasLen;
-
-use crate::exception_backtrace::ResolvedStackFrame;
-use crate::exception_backtrace::StackFrame;
 
 pub struct Location {
     pub file: String,
@@ -90,6 +30,7 @@ impl Location {
     }
 }
 
+// #[cfg(target_os = "linux")]
 #[derive(Copy, Clone, Debug)]
 pub enum HighPc {
     Addr(u64),

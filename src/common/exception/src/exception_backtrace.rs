@@ -27,9 +27,6 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::RwLock;
 
-#[cfg(target_os = "linux")]
-use crate::exception_backtrace_elf::Location;
-
 // 0: not specified 1: disable 2: enable
 pub static USER_SET_ENABLE_BACKTRACE: AtomicUsize = AtomicUsize::new(0);
 
@@ -61,14 +58,7 @@ fn enable_rust_backtrace() -> bool {
 }
 
 pub fn capture() -> StackTrace {
-    let instance = std::time::Instant::now();
-    let stack_trace = StackTrace::capture();
-    // log::info!(
-    //     "capture stack trace elapsed:{:?}, {:?}",
-    //     instance.elapsed(),
-    //     std::thread::current().name()
-    // );
-    stack_trace
+    StackTrace::capture()
 }
 
 // #[cfg(target_os = "linux")]
@@ -77,7 +67,10 @@ pub struct ResolvedStackFrame {
     pub physical_address: usize,
     pub symbol: String,
     pub inlined: bool,
-    pub location: Location,
+    pub file: Option<String>,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+    // pub location: Location,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -203,20 +196,21 @@ impl StackTrace {
 
             #[allow(clippy::writeln_empty_string)]
             writeln!(f, "")?;
-            // if let Ok(location) = frame.location {
-            write!(f, "             at {}", frame.location.file)?;
 
-            if let Some(line) = frame.location.line {
-                write!(f, ":{}", line)?;
+            if let Some(file) = frame.file {
+                write!(f, "             at {}", file)?;
 
-                if let Some(column) = frame.location.column {
-                    write!(f, ":{}", column)?;
+                if let Some(line) = frame.line {
+                    write!(f, ":{}", line)?;
+
+                    if let Some(column) = frame.column {
+                        write!(f, ":{}", column)?;
+                    }
                 }
-            }
 
-            #[allow(clippy::writeln_empty_string)]
-            writeln!(f, "")?;
-            // }
+                #[allow(clippy::writeln_empty_string)]
+                writeln!(f, "")?;
+            }
 
             idx += 1;
             Ok(())
@@ -230,9 +224,7 @@ static STACK_CACHE: LazyLock<RwLock<HashMap<Vec<StackFrame>, Arc<Mutex<Option<Ar
 
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if !enable_rust_backtrace() {}
-
-        let instance = std::time::Instant::now();
+        // if !enable_rust_backtrace() {}
 
         let mut display_text = {
             let read_guard = STACK_CACHE.read().unwrap_or_else(PoisonError::into_inner);

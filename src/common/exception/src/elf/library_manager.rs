@@ -28,7 +28,6 @@ use crate::elf::ElfFile;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
 use crate::exception_backtrace_elf;
-use crate::exception_backtrace_elf::Location;
 
 pub struct Library {
     pub name: String,
@@ -106,30 +105,6 @@ impl LibraryManager {
         })
     }
 
-    pub fn resolve_frame(&self, frame: &StackFrame) {
-        let StackFrame::Ip(addr) = frame;
-
-        let mut resolved_frame = ResolvedStackFrame {
-            virtual_address: *addr,
-            physical_address: *addr,
-            symbol: String::from("<unknown>"),
-            inlined: false,
-            location: Location::unknown(),
-        };
-
-        // let Some(library) = self.find_library(*addr) else {
-        //     return Ok(ResolvedStackFrame {
-        //         virtual_address: *addr,
-        //         physical_address: *addr,
-        //         symbol: String::from("<unknown>"),
-        //         inlined: false,
-        //         location: None,
-        //     });
-        // };
-
-        // let physical_address = *addr - library.address_begin;
-    }
-
     pub fn resolve_frames<E, F: FnMut(ResolvedStackFrame) -> Result<(), E>>(
         &self,
         frames: &[StackFrame],
@@ -146,7 +121,9 @@ impl LibraryManager {
                 physical_address: *addr,
                 symbol: String::from("<unknown>"),
                 inlined: false,
-                location: Location::unknown(),
+                file: None,
+                line: None,
+                column: None,
             };
 
             if let Some(library) = self.find_library(*addr) {
@@ -158,15 +135,15 @@ impl LibraryManager {
                     physical_address: *addr,
                     symbol: String::from("<unknown>"),
                     inlined: false,
-                    location: Location::unknown(),
+                    file: None,
+                    line: None,
+                    column: None,
                 })?;
 
                 continue;
             };
 
             let physical_address = *addr - library.address_begin;
-
-            let mut location = Location::unknown();
 
             if !only_address {
                 let dwarf = match library.elf.as_ref() {
@@ -190,25 +167,25 @@ impl LibraryManager {
                                 physical_address,
                                 symbol: location.symbol.unwrap_or("<unknown>".to_string()),
                                 inlined: location.is_inlined,
-                                location: Location {
-                                    file: location.file.unwrap_or("<unknwon>".to_string()),
-                                    line: location.line,
-                                    column: location.column,
-                                },
+                                file: location.file,
+                                line: location.line,
+                                column: location.column,
                             })?;
                         }
 
-                        return Ok(());
+                        continue;
                     }
                 }
             }
 
             f(ResolvedStackFrame {
-                location,
                 physical_address,
                 virtual_address: *addr,
                 inlined: false,
                 symbol: String::from("<unknown>"),
+                file: None,
+                line: None,
+                column: None,
             })?;
         }
 
@@ -216,11 +193,9 @@ impl LibraryManager {
     }
 
     pub fn create() -> Arc<LibraryManager> {
-        unsafe {
-            let mut loader = LibraryLoader::load();
-            let (libraries, symbols) = loader.finalize();
-            Arc::new(LibraryManager { symbols, libraries })
-        }
+        let loader = LibraryLoader::load();
+        let (libraries, symbols) = loader.finalize();
+        Arc::new(LibraryManager { symbols, libraries })
     }
 
     pub fn instance() -> Arc<LibraryManager> {

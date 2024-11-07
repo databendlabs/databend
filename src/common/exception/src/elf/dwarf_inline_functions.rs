@@ -112,9 +112,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
@@ -192,7 +192,7 @@ impl<R: Reader> Unit<R> {
 
                 while let Some(unit_head) = units
                     .next()
-                    .map_err(|x| gimli::Error::NoEntryAtGivenOffset)?
+                    .map_err(|_| gimli::Error::NoEntryAtGivenOffset)?
                 {
                     if unit_head.offset().as_debug_info_offset().unwrap() > dr {
                         break;

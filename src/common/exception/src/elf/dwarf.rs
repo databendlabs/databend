@@ -48,7 +48,6 @@ use object::ObjectSection;
 use crate::elf::dwarf_unit::Unit;
 use crate::elf::dwarf_unit::UnitAttrs;
 use crate::elf::ElfFile;
-use crate::exception_backtrace_elf::Location;
 
 #[derive(Debug)]
 pub struct CallLocation {
