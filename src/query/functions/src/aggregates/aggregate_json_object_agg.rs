@@ -24,7 +24,6 @@ use databend_common_arrow::arrow::bitmap;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::date_helper::TzLUT;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::DataType;
@@ -34,6 +33,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use jiff::tz::TimeZone;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_deserialize_state;
@@ -166,7 +166,7 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let tz = TzLUT::default();
+        let tz = TimeZone::UTC;
         let mut kvs = Vec::with_capacity(self.kvs.len());
         for (key, value) in &self.kvs {
             let v = V::upcast_scalar(value.clone());
@@ -175,7 +175,7 @@ where
                 continue;
             }
             let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), tz, &mut val);
+            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
             kvs.push((key, val));
         }
         let mut data = vec![];

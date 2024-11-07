@@ -20,6 +20,7 @@ use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_settings::Settings;
+use jiff::tz::TimeZone;
 
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::CSVWithNamesAndTypesOutputFormat;
@@ -45,6 +46,7 @@ pub struct FileFormatOptionsExt {
     pub json_strings: bool,
     pub disable_variant_check: bool,
     pub timezone: Tz,
+    pub jiff_timezone: TimeZone,
     pub is_select: bool,
     pub is_clickhouse: bool,
     pub is_rounding_mode: bool,
@@ -58,6 +60,7 @@ impl FileFormatOptionsExt {
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let jiff_timezone = parse_jiff_timezone(settings)?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let geometry_format = settings.get_geometry_output_format()?;
         let numeric_cast_option = settings
@@ -72,6 +75,7 @@ impl FileFormatOptionsExt {
             json_strings: false,
             disable_variant_check: false,
             timezone,
+            jiff_timezone,
             is_select,
             is_clickhouse: false,
             is_rounding_mode,
@@ -86,6 +90,7 @@ impl FileFormatOptionsExt {
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let jiff_timezone = parse_jiff_timezone(settings)?;
         let geometry_format = settings.get_geometry_output_format()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let mut options = FileFormatOptionsExt {
@@ -95,6 +100,7 @@ impl FileFormatOptionsExt {
             json_strings: false,
             disable_variant_check: false,
             timezone,
+            jiff_timezone,
             is_select: false,
             is_clickhouse: true,
             is_rounding_mode: true,
@@ -216,4 +222,14 @@ pub fn parse_timezone(settings: &Settings) -> Result<Tz> {
     let tz = settings.get_timezone()?;
     tz.parse::<Tz>()
         .map_err(|_| ErrorCode::InvalidTimezone("Timezone has been checked and should be valid"))
+}
+
+pub fn parse_jiff_timezone(settings: &Settings) -> Result<TimeZone> {
+    let tz = settings.get_timezone()?;
+    TimeZone::get(&tz).map_err(|e| {
+        ErrorCode::InvalidTimezone(format!(
+            "Timezone has been checked and should be valid with error: {}",
+            e
+        ))
+    })
 }

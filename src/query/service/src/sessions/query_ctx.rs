@@ -114,6 +114,7 @@ use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -730,11 +731,15 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
+        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
         let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
+            jiff_timezone,
             geometry_format,
             enable_dst_hour_fix,
             format_null_as_str,
@@ -753,8 +758,14 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let settings = self.get_settings();
 
-        let tz = settings.get_timezone()?;
-        let tz = TzFactory::instance().get_by_name(&tz)?;
+        let tz_string = settings.get_timezone()?;
+        let tz = TzFactory::instance().get_by_name(&tz_string)?;
+        let jiff_tz = TimeZone::get(&tz_string).map_err(|e| {
+            ErrorCode::InvalidTimezone(format!(
+                "Timezone has been checked and should be valid with error: {}",
+                e
+            ))
+        })?;
         let now = Utc::now();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
@@ -769,6 +780,7 @@ impl TableContext for QueryContext {
         Ok(FunctionContext {
             tz,
             now,
+            jiff_tz,
             rounding_mode,
             disable_variant_check,
 

@@ -21,6 +21,7 @@ use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use jiff::fmt::strtime;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
@@ -44,6 +45,7 @@ impl JSONOutputFormat {
             rows: 0,
             format_settings: FormatSettings {
                 timezone: options.timezone,
+                jiff_timezone: options.jiff_timezone.clone(),
                 geometry_format: options.geometry_format,
                 enable_dst_hour_fix: options.enable_dst_hour_fix,
                 format_null_as_str: true,
@@ -94,12 +96,12 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         },
         ScalarRef::Decimal(x) => serde_json::to_value(x.to_string()).unwrap(),
         ScalarRef::Date(v) => {
-            let dt = DateConverter::to_date(&v, format.timezone);
-            serde_json::to_value(dt.format("%Y-%m-%d").to_string()).unwrap()
+            let dt = DateConverter::to_date(&v, format.jiff_timezone.clone());
+            serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap()
         }
         ScalarRef::Timestamp(v) => {
-            let dt = DateConverter::to_timestamp(&v, format.timezone);
-            serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
+            let dt = DateConverter::to_timestamp_jiff(&v, format.jiff_timezone.clone());
+            serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()
         }
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
