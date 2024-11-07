@@ -39,6 +39,7 @@ use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
 use itertools::Itertools;
+use jsonb::RawJsonb;
 use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
@@ -776,7 +777,9 @@ impl PartialOrd for Scalar {
             (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
             }
             (Scalar::Geometry(g1), Scalar::Geometry(g2)) => compare_geometry(g1, g2),
             (Scalar::Geography(g1), Scalar::Geography(g2)) => g1.partial_cmp(g2),
@@ -814,7 +817,11 @@ impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => {
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
+            }
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
             (ScalarRef::Geography(g1), ScalarRef::Geography(g2)) => g1.partial_cmp(g2),
             (ScalarRef::Interval(i1), ScalarRef::Interval(i2)) => i1.partial_cmp(i2),
@@ -913,9 +920,13 @@ impl PartialOrd for Column {
                 col1.iter().partial_cmp(col2.iter())
             }
             (Column::Tuple(fields1), Column::Tuple(fields2)) => fields1.partial_cmp(fields2),
-            (Column::Variant(col1), Column::Variant(col2)) => col1
-                .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
+            (Column::Variant(col1), Column::Variant(col2)) => {
+                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
+                    let left_jsonb = RawJsonb::new(v1);
+                    let right_jsonb = RawJsonb::new(v2);
+                    left_jsonb.partial_cmp(&right_jsonb)
+                })
+            }
             (Column::Geometry(col1), Column::Geometry(col2)) => {
                 col1.iter().partial_cmp_by(col2.iter(), compare_geometry)
             }
@@ -1423,7 +1434,7 @@ impl Column {
             DataType::Variant => {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let val = jsonb::rand_value();
+                    let val = jsonb::Value::rand_value();
                     data.push(val.to_vec());
                 }
                 VariantType::from_data(data)

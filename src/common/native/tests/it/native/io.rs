@@ -53,8 +53,31 @@ pub fn new_test_column() -> Vec<Column> {
         Column::Binary(BinaryColumn::from_iter(
             ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )),
+        // use binary jsonb format values to test
         Column::Variant(BinaryColumn::from_iter(
-            ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
+            [
+                // null
+                vec![0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+                // "abc"
+                vec![
+                    0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x03, 0x61, 0x62, 0x63,
+                ],
+                // 123
+                vec![0x20, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x02, 0x50, 0x7B],
+                // []
+                vec![0x80, 0x00, 0x00, 0x00],
+                // [1,2]
+                vec![
+                    0x80, 0x00, 0x00, 0x02, 0x20, 0x00, 0x00, 0x02, 0x20, 0x00, 0x00, 0x02, 0x50,
+                    0x01, 0x50, 0x02,
+                ],
+                // {"k":"v"}
+                vec![
+                    0x40, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x01, 0x6B,
+                    0x76,
+                ],
+            ]
+            .iter(),
         )),
     ]
 }
