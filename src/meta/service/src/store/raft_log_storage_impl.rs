@@ -201,7 +201,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             .map_err(|e| io.err_await_flush(e))?
             .map_err(|e| io.err_recv_flush_cb(e))?;
 
-        info!("{}: done", io);
+        info!("{}: done", io.ok_done());
         Ok(())
     }
 
