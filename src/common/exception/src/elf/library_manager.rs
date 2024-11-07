@@ -197,6 +197,8 @@ impl LibraryManager {
                                 },
                             })?;
                         }
+
+                        return Ok(());
                     }
                 }
             }

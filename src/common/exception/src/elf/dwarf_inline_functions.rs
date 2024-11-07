@@ -112,9 +112,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                        HighPc::Addr(high) => probe < high,
-                        HighPc::Offset(size) => probe < low + size,
-                    }
+                    HighPc::Addr(high) => probe < high,
+                    HighPc::Offset(size) => probe < low + size,
+                }
             }
             _ => false,
         }
@@ -364,6 +364,13 @@ impl<R: Reader> Unit<R> {
         };
 
         functions.reverse();
+
+        for function in functions {
+            std::mem::swap(&mut function.file, &mut file);
+            std::mem::swap(&mut function.line, &mut line);
+            std::mem::swap(&mut function.column, &mut column);
+        }
+
         functions.push(CallLocation {
             symbol,
             file,
