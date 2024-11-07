@@ -37,6 +37,7 @@ use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
+use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
 use tonic::Request;
 
@@ -65,6 +66,7 @@ impl UDFFlightClient {
         request_timeout: u64,
         batch_rows: u64,
     ) -> Result<UDFFlightClient> {
+        let tls_config = ClientTlsConfig::new().with_native_roots();
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))
@@ -78,7 +80,11 @@ impl UDFFlightClient {
             .tcp_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)))
             .http2_keep_alive_interval(Duration::from_secs(UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC))
             .keep_alive_timeout(Duration::from_secs(UDF_KEEP_ALIVE_TIMEOUT_SEC))
-            .keep_alive_while_idle(true);
+            .keep_alive_while_idle(true)
+            .tls_config(tls_config)
+            .map_err(|err| {
+                ErrorCode::UDFServerConnectError(format!("Invalid UDF Client TLS Config: {err}"))
+            })?;
 
         let mut connector = HttpConnector::new_with_resolver(DNSService);
         connector.enforce_http(false);

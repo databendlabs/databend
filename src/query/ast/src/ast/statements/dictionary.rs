@@ -143,3 +143,38 @@ impl Display for ShowDictionariesStmt {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct RenameDictionaryStmt {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub dictionary: Identifier,
+    pub new_catalog: Option<Identifier>,
+    pub new_database: Option<Identifier>,
+    pub new_dictionary: Identifier,
+}
+
+impl Display for RenameDictionaryStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "RENAME DICTIONARY ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.dictionary)),
+        )?;
+        write!(f, " TO ")?;
+        write_dot_separated_list(
+            f,
+            self.new_catalog
+                .iter()
+                .chain(&self.new_database)
+                .chain(Some(&self.new_dictionary)),
+        )
+    }
+}
