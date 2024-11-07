@@ -34,6 +34,8 @@ use crate::sm_v003::write_entry::WriteEntry;
 use crate::sm_v003::SnapshotStoreV004;
 use crate::state_machine::StateMachineMetaKey;
 
+pub type SnapshotUpgradeV002ToV003 = SnapshotUpgradeV002ToV004;
+
 /// Convert V002 snapshot lines in json of [`SMEntry`]
 /// to V004 rotbl key-value pairs. `(String, SeqMarked)`,
 /// or update SysData in place.
