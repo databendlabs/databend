@@ -34,6 +34,8 @@ pub fn set_backtrace(switch: bool) {
     if switch {
         USER_SET_ENABLE_BACKTRACE.store(2, Ordering::Relaxed);
     } else {
+        let mut write_guard = STACK_CACHE.write().unwrap_or_else(PoisonError::into_inner);
+        write_guard.clear();
         USER_SET_ENABLE_BACKTRACE.store(1, Ordering::Relaxed);
     }
 }
@@ -58,7 +60,10 @@ fn enable_rust_backtrace() -> bool {
 }
 
 pub fn capture() -> StackTrace {
-    StackTrace::capture()
+    match enable_rust_backtrace() {
+        true => StackTrace::capture(),
+        false => StackTrace::no_capture(),
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -234,7 +239,9 @@ static STACK_CACHE: LazyLock<RwLock<HashMap<Vec<StackFrame>, Arc<Mutex<Option<Ar
 
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // if !enable_rust_backtrace() {}
+        if self.frames.is_empty() {
+            return writeln!(f, "<empty>");
+        }
 
         let mut display_text = {
             let read_guard = STACK_CACHE.read().unwrap_or_else(PoisonError::into_inner);
