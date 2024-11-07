@@ -49,6 +49,7 @@ use gimli::UnitOffset;
 use crate::elf::dwarf::CallLocation;
 use crate::elf::dwarf_subprogram::SubprogramAttrs;
 use crate::exception_backtrace_elf::HighPc;
+use crate::exception_backtrace_elf::Location;
 
 // Unit first die attrs
 pub struct UnitAttrs<R: Reader> {
@@ -175,7 +176,7 @@ impl<R: Reader> Unit<R> {
         false
     }
 
-    fn find_line(&self, probe: u64) -> gimli::Result<Option<CallLocation>> {
+    pub fn find_location(&self, probe: u64) -> gimli::Result<Option<Location>> {
         if let Some(offset) = &self.attrs.debug_line_offset {
             let program = self.debug_line.program(
                 *offset,
@@ -218,9 +219,8 @@ impl<R: Reader> Unit<R> {
                             }
                         }
 
-                        return Ok(Some(CallLocation {
-                            symbol: None,
-                            file: Some(format!("{}", path_buf.display())),
+                        return Ok(Some(Location {
+                            file: format!("{}", path_buf.display()),
                             line: Some(line),
                             column: Some(column),
                         }));

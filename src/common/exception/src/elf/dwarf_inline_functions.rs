@@ -359,7 +359,7 @@ impl<R: Reader> Unit<R> {
 
         self.inlined_functions(entries, probe, depth, functions)?;
 
-        let name = match name {
+        let symbol = match name {
             None => None,
             Some(name) => match name.to_string_lossy() {
                 Err(_) => None,
@@ -367,13 +367,18 @@ impl<R: Reader> Unit<R> {
             },
         };
 
+        let (file, line, column) = match self.find_location(probe)? {
+            None => (None, None, None),
+            Some(location) => (Some(location.file), location.line, location.column),
+        };
+
         functions.reverse();
         functions.push(CallLocation {
-            symbol: name,
-            file: None,
-            line: None,
-            column: None,
-            is_inlined: true,
+            symbol,
+            file,
+            line,
+            column,
+            is_inlined: false,
         });
 
         Ok(())
