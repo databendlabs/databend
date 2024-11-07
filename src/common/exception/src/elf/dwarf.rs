@@ -14,28 +14,18 @@
 
 use std::sync::Arc;
 
-use gimli::Abbreviations;
-use gimli::AttributeValue;
 use gimli::DebugAbbrev;
-use gimli::DebugAbbrevOffset;
 use gimli::DebugAddr;
-use gimli::DebugAddrBase;
 use gimli::DebugAranges;
 use gimli::DebugInfo;
 use gimli::DebugInfoOffset;
 use gimli::DebugLine;
 use gimli::DebugLineStr;
-use gimli::DebugLineStrOffset;
-use gimli::DebugLocListsBase;
 use gimli::DebugRanges;
 use gimli::DebugRngLists;
-use gimli::DebugRngListsBase;
 use gimli::DebugStr;
 use gimli::DebugStrOffsets;
-use gimli::DebugStrOffsetsBase;
 use gimli::EndianSlice;
-use gimli::Error;
-use gimli::LittleEndian;
 use gimli::NativeEndian;
 use gimli::RangeLists;
 use gimli::Reader;
@@ -59,6 +49,7 @@ pub struct CallLocation {
 }
 
 pub struct Dwarf {
+    #[allow(unused)]
     elf: Arc<ElfFile>,
     debug_str: DebugStr<EndianSlice<'static, NativeEndian>>,
     debug_info: DebugInfo<EndianSlice<'static, NativeEndian>>,
@@ -69,13 +60,6 @@ pub struct Dwarf {
     debug_abbrev: DebugAbbrev<EndianSlice<'static, NativeEndian>>,
     debug_addr: DebugAddr<EndianSlice<'static, NativeEndian>>,
     debug_range_list: RangeLists<EndianSlice<'static, NativeEndian>>,
-    // debug_info: &'a [u8],
-    // debug_aranges: &'a [u8],
-    // debug_ranges: &'a [u8],
-    // debug_rnglists: &'a [u8],
-    // debug_abbrev: &'a [u8],
-    // debug_addr: &'a [u8],
-    // debug_line: &'a [u8],
 }
 
 static EMPTY_BYTES: &'static [u8] = &[];

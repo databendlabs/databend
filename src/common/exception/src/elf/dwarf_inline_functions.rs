@@ -14,18 +14,14 @@
 
 use gimli::Attribute;
 use gimli::AttributeValue;
-use gimli::DebugInfoOffset;
 use gimli::EntriesRaw;
-use gimli::EntriesTreeNode;
 use gimli::RangeListsOffset;
 use gimli::Reader;
-use gimli::ReaderOffset;
 use gimli::Result;
 use gimli::UnitOffset;
 
 use crate::elf::dwarf::CallLocation;
 use crate::elf::dwarf::HighPc;
-use crate::elf::dwarf_subprogram::SubprogramAttrs;
 use crate::elf::dwarf_unit::Unit;
 use crate::elf::dwarf_unit::UnitAttrs;
 

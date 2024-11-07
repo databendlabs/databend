@@ -98,12 +98,6 @@ impl LibraryManager {
             .find(|library| library.address_begin <= addr && addr <= library.address_end)
     }
 
-    fn find_symbol(&self, addr: usize) -> Option<&Symbol> {
-        self.symbols.iter().find(|symbol| {
-            symbol.address_begin as usize <= addr && addr <= symbol.address_end as usize
-        })
-    }
-
     pub fn resolve_frames<E, F: FnMut(ResolvedStackFrame) -> Result<(), E>>(
         &self,
         frames: &[StackFrame],

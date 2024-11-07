@@ -24,7 +24,6 @@ geozero = { workspace = true }
 gimli = "0.31.0"
 http = { workspace = true }
 libc = { workspace = true }
-log = { workspace = true }
 object = "0.36.5"
 once_cell = { workspace = true }
 opendal = { workspace = true }

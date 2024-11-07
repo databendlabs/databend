@@ -14,7 +14,6 @@
 
 use gimli::Attribute;
 use gimli::AttributeValue;
-use gimli::EntriesTreeNode;
 use gimli::RangeListsOffset;
 use gimli::Reader;
 use gimli::Result;

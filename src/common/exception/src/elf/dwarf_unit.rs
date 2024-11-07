@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::num::NonZeroU64;
-use std::path::Path;
 use std::path::PathBuf;
 
 use gimli::Abbreviations;
@@ -27,28 +26,19 @@ use gimli::DebugInfo;
 use gimli::DebugLine;
 use gimli::DebugLineOffset;
 use gimli::DebugLineStr;
-use gimli::DebugLineStrOffset;
 use gimli::DebugLocListsBase;
 use gimli::DebugRngListsBase;
 use gimli::DebugStr;
 use gimli::DebugStrOffsets;
 use gimli::DebugStrOffsetsBase;
-use gimli::EndianSlice;
-use gimli::EntriesTreeNode;
-use gimli::Error;
-use gimli::FileEntry;
-use gimli::NativeEndian;
 use gimli::RangeLists;
 use gimli::RangeListsOffset;
-use gimli::RawRngListEntry;
 use gimli::Reader;
 use gimli::ReaderOffset;
 use gimli::UnitHeader;
-use gimli::UnitOffset;
 
 use crate::elf::dwarf::CallLocation;
 use crate::elf::dwarf::HighPc;
-use crate::elf::dwarf_subprogram::SubprogramAttrs;
 
 // Unit first die attrs
 pub struct UnitAttrs<R: Reader> {
