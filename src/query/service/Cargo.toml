@@ -52,7 +52,6 @@ byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-config = { workspace = true, features = [] }
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-arrow = { workspace = true }

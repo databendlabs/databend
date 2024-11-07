@@ -321,7 +321,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
-  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `RETURN_FAILED_ONLY`, `LOCATION_PREFIX`, `FORMAT`, `VALIDATION_MODE`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `RETURN_FAILED_ONLY`, `FORMAT`, `VALIDATION_MODE`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------

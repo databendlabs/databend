@@ -18,9 +18,9 @@ use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::AsKeySpace;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::LogIndex;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::LogIndex;
 use log::info;
 
 use crate::config::RaftConfig;

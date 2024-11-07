@@ -78,7 +78,6 @@ impl Binder {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
-                    part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
 

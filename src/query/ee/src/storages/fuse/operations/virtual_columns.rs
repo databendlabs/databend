@@ -161,7 +161,9 @@ pub async fn do_refresh_virtual_column(
                         .ok()
                 }
                 FuseStorageFormat::Native => {
-                    block_reader.async_read_native_schema(&virtual_loc).await
+                    BlockReader::async_read_native_schema(operator, &virtual_loc)
+                        .await
+                        .map(|(_, schema)| schema)
                 }
             };
 

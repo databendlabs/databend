@@ -37,18 +37,18 @@ use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::Membership;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::Snapshot;
+use databend_common_meta_types::raft_types::SnapshotMeta;
+use databend_common_meta_types::raft_types::StorageError;
+use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::Membership;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::Snapshot;
-use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::StorageError;
-use databend_common_meta_types::Vote;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
@@ -129,7 +129,7 @@ impl StoreInner {
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);
-            let store_err = MetaStorageError::SnapshotError(ae);
+            let store_err = MetaStorageError::Damaged(ae);
             MetaStartupError::StoreOpenError(store_err)
         }
 
@@ -296,7 +296,7 @@ impl StoreInner {
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
         sm.install_snapshot_v003(db).await.map_err(|e| {
-            MetaStorageError::SnapshotError(
+            MetaStorageError::Damaged(
                 AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
             )
         })?;

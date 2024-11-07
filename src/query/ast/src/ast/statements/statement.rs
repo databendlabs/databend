@@ -161,6 +161,7 @@ pub enum Statement {
     DropDictionary(DropDictionaryStmt),
     ShowCreateDictionary(ShowCreateDictionaryStmt),
     ShowDictionaries(ShowDictionariesStmt),
+    RenameDictionary(RenameDictionaryStmt),
 
     // Columns
     ShowColumns(ShowColumnsStmt),
@@ -576,6 +577,7 @@ impl Display for Statement {
             Statement::DropDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDictionaries(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,

@@ -66,6 +66,7 @@ procfs = { workspace = true }
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+quickcheck = { workspace = true }
 rand = { workspace = true }
 serde_test = { workspace = true }
 

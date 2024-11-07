@@ -301,7 +301,6 @@ async fn create_memory_table_for_cte_scan(
                 engine: Engine::Memory,
                 engine_options: Default::default(),
                 storage_params: None,
-                part_prefix: "".to_string(),
                 options: Default::default(),
                 field_comments: vec![],
                 cluster_key: None,
