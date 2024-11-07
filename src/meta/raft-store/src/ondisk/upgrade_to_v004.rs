@@ -43,6 +43,8 @@ impl OnDisk {
 
         // 1.1. upgrade raft log
 
+        self.progress(format_args!("Upgrade V003 raft log in sled db to V004"));
+
         let raft_log_config = self.config.clone().to_raft_log_config();
         let raft_log_config = Arc::new(raft_log_config);
         let raft_log = RaftLogV004::open(raft_log_config)?;
@@ -67,7 +69,7 @@ impl OnDisk {
         let ss_store_v004 = SnapshotStoreV004::new(self.config.clone());
 
         let v003_path = ss_store_v003.snapshot_config().snapshot_dir();
-        let v004_path = ss_store_v004.snapshot_config().snapshot_dir();
+        let v004_path = ss_store_v004.snapshot_config().version_dir();
 
         if fs::metadata(&v003_path).is_ok() {
             let options = CopyOptions::new().overwrite(true).copy_inside(true);
@@ -145,8 +147,19 @@ impl OnDisk {
     async fn remove_v003_logs(&mut self) -> Result<(), MetaStorageError> {
         // After upgrading, no sled db is required.
 
+        self.progress(format_args!("Remove V003 log from sled db",));
+
         let db = self.db.as_ref().unwrap();
         for tree_name in db.tree_names() {
+            if tree_name == "__sled__default" {
+                continue;
+            }
+
+            self.progress(format_args!(
+                "    Removing sled tree: {}",
+                String::from_utf8_lossy(&tree_name)
+            ));
+
             db.drop_tree(&tree_name)
                 .map_err(|e| {
                     io::Error::new(
@@ -160,6 +173,8 @@ impl OnDisk {
                 })
                 ?;
         }
+
+        self.progress(format_args!("Done: Remove V003 log from sled db",));
 
         // TODO: remove sled db from self
         // drop_sled_db();
