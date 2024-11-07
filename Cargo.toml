@@ -403,6 +403,8 @@ color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+# patched opendal which categories the XML dersierialization errors as recoverable
+opendal = { git = "https://github.com/datafuse-extras/opendal-for-release-v1.2.636", rev = "6c490a0" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "1745375" }
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
