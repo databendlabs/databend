@@ -3348,7 +3348,6 @@ dependencies = [
  "gimli 0.31.1",
  "http 1.1.0",
  "libc",
- "log",
  "object",
  "once_cell",
  "opendal",

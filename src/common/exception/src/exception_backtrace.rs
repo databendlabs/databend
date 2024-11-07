@@ -116,7 +116,18 @@ impl Hash for StackFrame {
     }
 }
 
+// Rewrite the backtrace on linux ELF using gimli-rs.
 //
+// Differences from backtrace-rs[https://github.com/rust-lang/backtrace-rs]:
+// - Almost lock-free (backtrace-rs requires large-grained locks or frequent lock operations)
+// - Symbol resolution is lazy, only resolved when outputting
+// - Cache the all stack frames for the stack, not just a single stack frame
+// - Output the physical addresses of the stack instead of virtual addresses, even in the absence of symbols (this will help us use backtraces to get cause in the case of splitted symbol tables)
+// - Output inline functions and marked it
+//
+// What's different from gimli-addr2line[https://github.com/gimli-rs/addr2line](why not use gimli-addr2line):
+// - Use aranges to optimize the lookup of DWARF units (if present)
+// - gimli-addr2line caches and sorts the symbol tables to speed up symbol lookup, which would introduce locks and caching (but in reality, symbol lookup is a low-frequency operation in databend, and rapid reconstruction based on mmap is sufficient).
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct StackTrace {
     pub(crate) frames: Vec<StackFrame>,

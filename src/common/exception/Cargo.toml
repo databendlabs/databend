@@ -21,20 +21,20 @@ backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
-gimli = "0.31.0"
+gimli = { workspace = true }
 http = { workspace = true }
 libc = { workspace = true }
-object = "0.36.5"
+object = { workspace = true }
 once_cell = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 paste = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
-rustc-demangle = "0.1"
+rustc-demangle = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = "0.8"
+sqlx = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
