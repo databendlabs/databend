@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(coroutines)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(try_blocks)]
-#![allow(clippy::diverging_sub_expression)]
-extern crate core;
+use std::io;
 
-pub mod applier;
-pub mod config;
-pub mod key_spaces;
-pub mod leveled_store;
-pub(crate) mod marked;
-pub mod ondisk;
-pub mod raft_log_v004;
-pub mod sm_v003;
-pub mod snapshot_config;
-pub mod state;
-pub mod state_machine;
-pub mod utils;
+use databend_common_meta_types::raft_types::ErrorSubject;
+use databend_common_meta_types::raft_types::ErrorVerb;
+
+use crate::raft_log_v004::io_phase::IOPhase;
+
+/// Describe the error that occurred during IO operations to RaftLog.
+#[derive(Debug, thiserror::Error)]
+#[error("RaftLogIOError: {verb}-{subject:?}: {ctx}: failed to {phase}; error: {error}")]
+pub struct RaftLogIOError {
+    pub subject: ErrorSubject,
+    pub verb: ErrorVerb,
+    pub phase: IOPhase,
+    pub error: io::Error,
+    pub ctx: String,
+}
