@@ -29,9 +29,11 @@ use crate::types::string::StringColumn;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::BlockEntry;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
+use crate::SELECTIVITY_THRESHOLD;
 
 pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
@@ -101,6 +103,11 @@ where I: databend_common_arrow::arrow::types::Index
     fn with_optimize_size_enable(mut self, optimize_size_enable: bool) -> Self {
         self.optimize_size_enable = optimize_size_enable;
         self
+    }
+
+    fn should_optimize_size(&self, num_rows: usize) -> bool {
+        self.optimize_size_enable
+            || num_rows as f64 * SELECTIVITY_THRESHOLD > self.indices.len() as f64
     }
 }
 
@@ -269,7 +276,7 @@ where I: databend_common_arrow::arrow::types::Index
     }
 
     fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
-        if self.optimize_size_enable {
+        if self.should_optimize_size(col.len()) {
             let mut builder = StringColumnBuilder::with_capacity(self.indices.len());
             for index in self.indices.iter() {
                 unsafe {
@@ -289,6 +296,27 @@ where I: databend_common_arrow::arrow::types::Index
                 )
             };
             StringColumn::new(new_col)
+        }
+    }
+}
+
+impl Column {
+    pub fn maybe_gc(self) -> Self {
+        match self {
+            Column::String(c) => {
+                let data = if c.data.is_sliced() {
+                    c.data.maybe_gc()
+                } else {
+                    c.data
+                };
+                let c = StringColumn::new(data);
+                Column::String(c)
+            }
+            Column::Nullable(n) => {
+                let c = n.column.maybe_gc();
+                NullableColumn::new_column(c, n.validity)
+            }
+            other => other,
         }
     }
 }
