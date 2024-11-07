@@ -79,16 +79,17 @@ impl OnDisk {
         let version_dir = raft_dir.join("df_meta").join(format!("{}", DATA_VERSION));
 
         let log_dir = version_dir.join("log");
-
         if !log_dir.exists() {
             fs::create_dir_all(&log_dir)
                 .context(format!("creating dir {}", log_dir.as_path().display()))?;
+            info!("Created log dir: {}", log_dir.as_path().display());
         }
 
         let snapshot_dir = version_dir.join("snapshot");
         if !snapshot_dir.exists() {
             fs::create_dir_all(&snapshot_dir)
                 .context(format!("creating dir {}", snapshot_dir.as_path().display()))?;
+            info!("Created snapshot dir: {}", snapshot_dir.as_path().display());
         }
 
         Ok(())
@@ -98,6 +99,8 @@ impl OnDisk {
     #[fastrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
         info!(config :? =(config); "open and initialize data-version");
+
+        Self::ensure_dirs(&config.raft_dir)?;
 
         Self::upgrade_header(db, config).await?;
 
