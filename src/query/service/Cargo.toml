@@ -131,6 +131,7 @@ http = { workspace = true }
 humantime = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
