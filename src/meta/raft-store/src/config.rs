@@ -213,6 +213,7 @@ impl RaftConfig {
             )
     }
 
+    /// Build [`RaftLogV004`](crate::raft_log_v004::RaftLogV004) config from [`RaftConfig`].
     pub fn to_raft_log_config(&self) -> raft_log_v004::RaftLogConfig {
         let p = Path::new(&self.raft_dir)
             .join("df_meta")

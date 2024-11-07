@@ -5020,6 +5020,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
+ "raft-log",
  "rand",
  "reqwest",
  "serde",
