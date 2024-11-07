@@ -198,6 +198,21 @@ impl<R: Reader> Unit<R> {
 
                 if is_candidate {
                     if row.address() > probe {
+                        let address = row.address();
+
+                        while let Some((_, row)) = rows.next_row()? {
+                            if address == row.address() {
+                                file_idx = row.file_index();
+                                line = row.line().map(NonZeroU64::get).unwrap_or(0) as u32;
+                                column = match row.column() {
+                                    gimli::ColumnType::LeftEdge => 0,
+                                    gimli::ColumnType::Column(x) => x.get() as u32,
+                                };
+                                continue;
+                            }
+
+                            break;
+                        }
                         let mut path_buf = PathBuf::new();
 
                         if let Some(dir) = &self.attrs.comp_dir {
