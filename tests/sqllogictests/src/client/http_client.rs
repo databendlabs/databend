@@ -61,8 +61,13 @@ fn format_error(value: serde_json::Value) -> String {
 }
 
 #[derive(Deserialize)]
-struct AuthResponse {
+struct TokenInfo {
     session_token: String,
+}
+
+#[derive(Deserialize)]
+struct LoginResponse {
+    tokens: Option<TokenInfo>,
 }
 
 impl HttpClient {
@@ -91,11 +96,13 @@ impl HttpClient {
             .inspect_err(|e| {
                 println!("fail to send to {}: {:?}", url, e);
             })?
-            .json::<AuthResponse>()
+            .json::<LoginResponse>()
             .await
             .inspect_err(|e| {
                 println!("fail to decode json when call {}: {:?}", url, e);
             })?
+            .tokens
+            .unwrap()
             .session_token;
 
         Ok(Self {
