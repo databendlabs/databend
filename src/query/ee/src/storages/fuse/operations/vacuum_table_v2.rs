@@ -56,7 +56,9 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let start = std::time::Instant::now();
     let snapshots_before_lvt = list_until_timestamp(
         fuse_table,
-        &fuse_table.meta_location_generator().snapshot_dir(),
+        fuse_table
+            .meta_location_generator()
+            .snapshot_location_prefix(),
         lvt,
         true,
     )
@@ -66,7 +68,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         "list snapshots before lvt for table {} takes {:?}, snapshots_dir: {:?}, lvt: {:?}, snapshots: {:?}",
         fuse_table.get_table_info().desc,
         elapsed,
-        fuse_table.meta_location_generator().snapshot_dir(),
+        fuse_table.meta_location_generator().snapshot_location_prefix(),
         lvt,
         slice_summary(&snapshots_before_lvt)
     ));
@@ -95,7 +97,9 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         .collect::<HashSet<_>>();
     let segments_before_gc_root = list_until_timestamp(
         fuse_table,
-        &fuse_table.meta_location_generator().segment_dir(),
+        fuse_table
+            .meta_location_generator()
+            .segment_location_prefix(),
         least_visible_timestamp,
         false,
     )
@@ -104,7 +108,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         "list segments before gc_root for table {} takes {:?}, segment_dir: {:?}, least_visible_timestamp: {:?}, segments: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
-        fuse_table.meta_location_generator().segment_dir(),
+        fuse_table.meta_location_generator().segment_location_prefix(),
         least_visible_timestamp,
         slice_summary(&segments_before_gc_root)
     ));
@@ -140,7 +144,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let start = std::time::Instant::now();
     let blocks_before_gc_root = list_until_timestamp(
         fuse_table,
-        &fuse_table.meta_location_generator().block_dir(),
+        fuse_table.meta_location_generator().block_location_prefix(),
         least_visible_timestamp,
         false,
     )
@@ -149,7 +153,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         "list blocks before gc_root for table {} takes {:?}, block_dir: {:?}, least_visible_timestamp: {:?}, blocks: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
-        fuse_table.meta_location_generator().block_dir(),
+        fuse_table.meta_location_generator().block_location_prefix(),
         least_visible_timestamp,
         slice_summary(&blocks_before_gc_root)
     ));

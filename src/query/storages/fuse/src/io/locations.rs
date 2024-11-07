@@ -53,7 +53,6 @@ static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
 static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V3(PhantomData);
 
-// TODO(sky): reafactor this file, collect all location related code here, reduce duplicated code and add ut
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
@@ -61,27 +60,43 @@ pub struct TableMetaLocationGenerator {
     block_location_prefix: String,
     segment_info_location_prefix: String,
     bloom_index_location_prefix: String,
+    snapshot_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
-    pub fn with_prefix(prefix: String) -> Self {
-        Self { prefix }
-    }
+    pub fn new(prefix: String) -> Self {
         let block_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_BLOCK_PREFIX,);
         let bloom_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
         let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
-
+        let snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SNAPSHOT_PREFIX);
         Self {
             prefix,
             block_location_prefix,
             segment_info_location_prefix,
             bloom_index_location_prefix,
+            snapshot_location_prefix,
         }
     }
 
     pub fn prefix(&self) -> &str {
         &self.prefix
+    }
+
+    pub fn block_location_prefix(&self) -> &str {
+        &self.block_location_prefix
+    }
+
+    pub fn block_bloom_index_prefix(&self) -> &str {
+        &self.bloom_index_location_prefix
+    }
+
+    pub fn segment_location_prefix(&self) -> &str {
+        &self.segment_info_location_prefix
+    }
+
+    pub fn snapshot_location_prefix(&self) -> &str {
+        &self.snapshot_location_prefix
     }
 
     pub fn gen_block_location(
@@ -90,19 +105,14 @@ impl TableMetaLocationGenerator {
     ) -> (Location, Uuid) {
         let part_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         let location_path = format!(
-            "{}/{}/{}{}_v{}.parquet",
-            &self.prefix,
-            FUSE_TBL_BLOCK_PREFIX,
+            "{}{}{}_v{}.parquet",
+            self.block_location_prefix(),
             VACUUM2_OBJECT_KEY_PREFIX,
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );
 
         ((location_path, DataBlock::VERSION), part_uuid)
-    }
-
-    pub fn block_location_prefix(&self) -> &str {
-        &self.block_location_prefix
     }
 
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
@@ -117,29 +127,15 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn block_bloom_index_prefix(&self) -> &str {
-        &self.bloom_index_location_prefix
-    }
-
-    pub fn gen_segment_info_location(&self) -> String {
-        let segment_uuid = Uuid::new_v4().simple().to_string();
     pub fn gen_segment_info_location(&self, table_meta_timestamps: TableMetaTimestamps) -> String {
         let segment_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         format!(
-            "{}{}_v{}.mpk",
-            self.segment_info_prefix(),
-            segment_uuid,
-            "{}/{}/{}{}_v{}.mpk",
-            &self.prefix,
-            FUSE_TBL_SEGMENT_PREFIX,
+            "{}{}{}_v{}.mpk",
+            &self.segment_location_prefix(),
             VACUUM2_OBJECT_KEY_PREFIX,
             segment_uuid.as_simple(),
             SegmentInfo::VERSION,
         )
-    }
-
-    pub fn segment_info_prefix(&self) -> &str {
-        &self.segment_info_location_prefix
     }
 
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
