@@ -17,16 +17,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
 use reqwest::ClientBuilder;
-use reqwest::cookie::CookieStore;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
 use url::Url;
-use crate::client::gloable_cookie_store::GlobalCookieStore;
+
+use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
 use crate::util::parser_rows;
 use crate::util::HttpSessionConf;

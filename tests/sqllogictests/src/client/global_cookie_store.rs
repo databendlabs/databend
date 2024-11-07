@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::RwLock;
+
 use cookie::Cookie;
 use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderValue;
-use std::collections::HashMap;
-use std::sync::RwLock;
 use url::Url;
 
 pub(crate) struct GlobalCookieStore {

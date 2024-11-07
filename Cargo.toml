@@ -260,6 +260,7 @@ cidr = { version = "0.2.2" }
 clap = { version = "4.4.2", features = ["derive"] }
 comfy-table = "7"
 convert_case = "0.6.0"
+cookie = "0.18.1"
 crc32fast = "1.3.2"
 criterion = "0.5"
 cron = "0.12.0"
