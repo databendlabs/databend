@@ -358,7 +358,7 @@ impl<R: Reader> Unit<R> {
             },
         };
 
-        let (file, line, column) = match self.find_location(probe)? {
+        let (mut file, mut line, mut column) = match self.find_location(probe)? {
             None => (None, None, None),
             Some(location) => (Some(location.file), location.line, location.column),
         };
