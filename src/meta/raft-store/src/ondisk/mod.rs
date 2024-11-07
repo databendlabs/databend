@@ -74,6 +74,26 @@ impl fmt::Display for OnDisk {
 impl OnDisk {
     pub const KEY_HEADER: &'static str = "header";
 
+    pub fn ensure_dirs(raft_dir: &str) -> Result<(), io::Error> {
+        let raft_dir = Path::new(raft_dir);
+        let version_dir = raft_dir.join("df_meta").join(format!("{}", DATA_VERSION));
+
+        let log_dir = version_dir.join("log");
+
+        if !log_dir.exists() {
+            fs::create_dir_all(&log_dir)
+                .context(format!("creating dir {}", log_dir.as_path().display()))?;
+        }
+
+        let snapshot_dir = version_dir.join("snapshot");
+        if !snapshot_dir.exists() {
+            fs::create_dir_all(&snapshot_dir)
+                .context(format!("creating dir {}", snapshot_dir.as_path().display()))?;
+        }
+
+        Ok(())
+    }
+
     /// Initialize data version for local store, returns the loaded version.
     #[fastrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
