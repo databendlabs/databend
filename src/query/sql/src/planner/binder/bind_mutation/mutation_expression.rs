@@ -120,9 +120,6 @@ impl MutationExpression {
                     required_columns.insert(*column_index);
                 }
 
-                // Wrap `LogicalMaterializedCte` to `source_expr`.
-                source_s_expr = binder.wrap_cte(source_s_expr);
-
                 // When there is "update *" or "insert *", prepare all source columns.
                 let all_source_columns = Self::all_source_columns(
                     *has_star_clause,
@@ -443,26 +440,6 @@ impl Binder {
         Ok(row_id_index)
     }
 
-    fn wrap_cte(&mut self, mut s_expr: SExpr) -> SExpr {
-        for (_, cte_info) in self.ctes_map.iter().rev() {
-            if !cte_info.materialized || cte_info.used_count == 0 {
-                continue;
-            }
-            let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-            let materialized_output_columns = cte_info.columns.clone();
-            s_expr = SExpr::create_binary(
-                Arc::new(RelOperator::MaterializedCte(MaterializedCte {
-                    cte_idx: cte_info.cte_idx,
-                    materialized_output_columns,
-                    materialized_indexes: self.m_cte_materialized_indexes.clone(),
-                })),
-                Arc::new(s_expr),
-                Arc::new(cte_s_expr.clone()),
-            );
-        }
-        s_expr
-    }
-
     // Recursively flatten the AND expressions.
     pub fn flatten_and_scalar_expr(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
         if let ScalarExpr::FunctionCall(func) = scalar
@@ -489,8 +466,6 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
-                self.m_cte_bound_ctx.clone(),
-                self.ctes_map.clone(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
             if !self.check_allowed_scalar_expr_with_subquery(&scalar)? {

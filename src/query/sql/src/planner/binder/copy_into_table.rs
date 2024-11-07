@@ -572,8 +572,6 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
         let mut values = Vec::with_capacity(data_schema.fields.len());
         for field in &data_schema.fields {

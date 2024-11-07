@@ -121,8 +121,6 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let table_args = bind_table_args(&mut scalar_binder, params, named_params)?;
 

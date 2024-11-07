@@ -389,8 +389,6 @@ pub fn bind_values(
         name_resolution_ctx,
         metadata.clone(),
         &[],
-        HashMap::new(),
-        Box::new(IndexMap::new()),
     );
 
     let num_values = values.len();

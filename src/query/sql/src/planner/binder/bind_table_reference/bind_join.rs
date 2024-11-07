@@ -185,8 +185,6 @@ impl Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
             join_op.clone(),
             left_column_bindings,
             right_column_bindings,
@@ -515,8 +513,6 @@ struct JoinConditionResolver<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
-    m_cte_bound_ctx: HashMap<IndexType, BindContext>,
-    ctes_map: Box<IndexMap<String, CteInfo>>,
     join_op: JoinOperator,
     left_column_bindings: &'a [ColumnBinding],
     right_column_bindings: &'a [ColumnBinding],
@@ -530,8 +526,6 @@ impl<'a> JoinConditionResolver<'a> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        m_cte_bound_ctx: HashMap<IndexType, BindContext>,
-        ctes_map: Box<IndexMap<String, CteInfo>>,
         join_op: JoinOperator,
         left_column_bindings: &'a [ColumnBinding],
         right_column_bindings: &'a [ColumnBinding],
@@ -542,8 +536,6 @@ impl<'a> JoinConditionResolver<'a> {
             ctx,
             name_resolution_ctx,
             metadata,
-            m_cte_bound_ctx,
-            ctes_map,
             join_op,
             left_column_bindings,
             right_column_bindings,
@@ -689,8 +681,6 @@ impl<'a> JoinConditionResolver<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         // Given two tables: t1(a, b), t2(a, b)
         // A predicate can be regarded as an equi-predicate iff:
@@ -840,8 +830,6 @@ impl<'a> JoinConditionResolver<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let (predicate, _) = scalar_binder.bind(predicate)?;
         let predicate_used_columns = predicate.used_columns();

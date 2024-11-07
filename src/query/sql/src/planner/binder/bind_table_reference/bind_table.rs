@@ -70,8 +70,8 @@ impl Binder {
         };
 
         // Check and bind common table expression
-        let ctes_map = self.ctes_map.clone();
-        if let Some(cte_info) = ctes_map.get(&table_name) {
+        let cte_map = bind_context.cte_map.clone();
+        if let Some(cte_info) = cte_map.get(&table_name) {
             if self
                 .metadata
                 .read()
@@ -117,8 +117,8 @@ impl Binder {
                             break;
                         }
                         let bind_context = parent.unwrap().as_mut();
-                        let ctes_map = self.ctes_map.clone();
-                        if let Some(cte_info) = ctes_map.get(&table_name) {
+                        let cte_map = bind_context.cte_map.clone();
+                        if let Some(cte_info) = cte_map.get(&table_name) {
                             return if !cte_info.materialized {
                                 self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                             } else {

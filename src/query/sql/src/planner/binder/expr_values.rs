@@ -110,15 +110,9 @@ impl BindContext {
                 exprs
             )));
         }
-        let mut scalar_binder = ScalarBinder::new(
-            self,
-            ctx.clone(),
-            name_resolution_ctx,
-            metadata.clone(),
-            &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
-        );
+        let mut scalar_binder =
+            ScalarBinder::new(self, ctx.clone(), name_resolution_ctx, metadata.clone(), &[
+            ]);
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
 

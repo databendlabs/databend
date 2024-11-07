@@ -179,8 +179,6 @@ pub struct TypeChecker<'a> {
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
-    ctes_map: Box<IndexMap<String, CteInfo>>,
-    m_cte_bound_ctx: HashMap<IndexType, BindContext>,
 
     aliases: &'a [(String, ScalarExpr)],
 
@@ -212,21 +210,11 @@ impl<'a> TypeChecker<'a> {
             func_ctx,
             name_resolution_ctx,
             metadata,
-            ctes_map: Box::default(),
-            m_cte_bound_ctx: Default::default(),
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
             forbid_udf,
         })
-    }
-
-    pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {
-        self.m_cte_bound_ctx = m_cte_bound_ctx;
-    }
-
-    pub fn set_ctes_map(&mut self, ctes_map: Box<IndexMap<String, CteInfo>>) {
-        self.ctes_map = ctes_map;
     }
 
     #[allow(dead_code)]
@@ -2994,10 +2982,6 @@ impl<'a> TypeChecker<'a> {
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
-        for (cte_idx, bound_ctx) in self.m_cte_bound_ctx.iter() {
-            binder.set_m_cte_bound_ctx(*cte_idx, bound_ctx.clone());
-        }
-        binder.ctes_map = self.ctes_map.clone();
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));

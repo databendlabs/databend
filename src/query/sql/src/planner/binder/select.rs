@@ -83,8 +83,6 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
 
@@ -130,7 +128,7 @@ impl Binder {
                 ));
             }
             // Add recursive cte's columns to cte info
-            let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            let mut_cte_info = bind_context.cte_map.get_mut(cte_name).unwrap();
             // The recursive cte may be used by multiple times in main query, so clear cte_info's columns
             mut_cte_info.columns.clear();
             for column in left_bind_context.columns.iter() {
@@ -261,11 +259,14 @@ impl Binder {
         )?;
 
         if let Some(cte_name) = &cte_name {
-            for (col, cte_col) in new_bind_context
-                .columns
-                .iter_mut()
-                .zip(self.ctes_map.get(cte_name).unwrap().columns.iter())
-            {
+            for (col, cte_col) in new_bind_context.columns.iter_mut().zip(
+                new_bind_context
+                    .cte_map
+                    .get(cte_name)
+                    .unwrap()
+                    .columns
+                    .iter(),
+            ) {
                 col.table_name = cte_col.table_name.clone();
                 col.column_name = cte_col.column_name.clone();
             }
@@ -403,7 +404,7 @@ impl Binder {
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
-        let mut new_bind_context = BindContext::new();
+        let mut new_bind_context = BindContext::with_parent(Box::new(left_bind_context.clone()));
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()

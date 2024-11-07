@@ -258,8 +258,6 @@ impl Binder {
             &name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
 
         // Bind matched clause columns and add update fields and exprs

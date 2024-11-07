@@ -70,7 +70,7 @@ impl Binder {
 
         for (idx, cte) in with.ctes.iter().enumerate() {
             let table_name = self.normalize_identifier(&cte.alias.name).name;
-            if bind_context.cte_map_ref.contains_key(&table_name) {
+            if bind_context.cte_map.contains_key(&table_name) {
                 return Err(ErrorCode::SemanticError(format!(
                     "Duplicate common table expression: {table_name}"
                 )));
@@ -90,8 +90,7 @@ impl Binder {
                 used_count: 0,
                 columns: vec![],
             };
-            self.ctes_map.insert(table_name.clone(), cte_info.clone());
-            bind_context.cte_map_ref.insert(table_name, cte_info);
+            bind_context.cte_map.insert(table_name, cte_info);
         }
 
         Ok(())
@@ -117,8 +116,6 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let mut order_by_items = Vec::with_capacity(query.order_by.len());
 

@@ -14,6 +14,7 @@
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::hash::Hash;
 
 use dashmap::DashMap;
@@ -40,6 +41,7 @@ use crate::binder::column_binding::ColumnBinding;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
@@ -119,8 +121,14 @@ pub struct BindContext {
 
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
+    /// Use `IndexMap` because need to keep the insertion order
+    /// Then wrap materialized ctes to main plan.
+    pub cte_map: Box<IndexMap<String, CteInfo>>,
 
-    pub cte_map_ref: Box<IndexMap<String, CteInfo>>,
+    // Save the bound context for materialized cte, the key is cte_idx
+    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -175,7 +183,10 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             cte_name: None,
-            cte_map_ref: Box::default(),
+            cte_map: Box::new(Default::default()),
+            m_cte_bound_ctx: Default::default(),
+            m_cte_bound_s_expr: Default::default(),
+            m_cte_materialized_indexes: Default::default(),
             in_grouping: false,
             view_info: None,
             srfs: Vec::new(),
@@ -197,7 +208,9 @@ impl BindContext {
             aggregate_info: Default::default(),
             windows: Default::default(),
             cte_name: parent.cte_name,
-            cte_map_ref: parent.cte_map_ref.clone(),
+            cte_map: parent.cte_map.clone(),
+            m_cte_bound_ctx: parent.m_cte_bound_ctx.clone(),
+            m_cte_bound_s_expr: parent.m_cte_bound_s_expr.clone(),
             in_grouping: false,
             view_info: None,
             srfs: Vec::new(),
@@ -208,6 +221,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
+            m_cte_materialized_indexes: parent.m_cte_materialized_indexes.clone(),
         }
     }
 
@@ -216,7 +230,10 @@ impl BindContext {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
         bind_context.cte_name = self.cte_name.clone();
-        bind_context.cte_map_ref = self.cte_map_ref.clone();
+        bind_context.cte_map = self.cte_map.clone();
+        bind_context.m_cte_bound_s_expr = self.m_cte_bound_s_expr.clone();
+        bind_context.m_cte_bound_ctx = self.m_cte_bound_ctx.clone();
+        bind_context.m_cte_materialized_indexes = self.m_cte_materialized_indexes.clone();
         bind_context
     }
 
@@ -571,6 +588,14 @@ impl BindContext {
 
     pub fn set_expr_context(&mut self, expr_context: ExprContext) {
         self.expr_context = expr_context;
+    }
+
+    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bind_context: BindContext) {
+        self.m_cte_bound_ctx.insert(cte_idx, bind_context);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 }
 
