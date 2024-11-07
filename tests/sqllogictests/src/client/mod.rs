@@ -14,6 +14,7 @@
 
 mod http_client;
 mod mysql_client;
+mod gloable_cookie_store;
 
 use std::borrow::Cow;
 use std::fmt;
