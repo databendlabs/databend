@@ -28,8 +28,9 @@ use std::sync::Mutex;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
+use databend_common_meta_raft_store::log::raft_log_2;
 use databend_common_meta_raft_store::ondisk::DataVersion;
-use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV004;
+use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV003;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
@@ -147,7 +148,7 @@ async fn import_v003(
     let writer = snapshot_store.new_writer()?;
     let (tx, join_handle) = writer.spawn_writer_thread("import_v003");
 
-    let mut converter = SnapshotUpgradeV002ToV004 {
+    let mut converter = SnapshotUpgradeV002ToV003 {
         sys_data: sys_data.clone(),
     };
 
@@ -371,9 +372,14 @@ async fn init_new_cluster(
         }
     }
 
-    // TODO: Reset node id
-    // let raft_state = RaftState::open_create(&db, &raft_config, Some(()), None).await?;
-    // raft_state.set_node_id(args.id).await?;
+    // Reset node id
+    {
+        let mut log = sto.log.write().await;
+        log.save_user_data(Some(raft_log_2::LogStoreMeta {
+            node_id: Some(args.id),
+        }));
+        raft_log_2::blocking_flush(&mut log).await?;
+    }
 
     Ok(())
 }
