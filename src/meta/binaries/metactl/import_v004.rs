@@ -19,7 +19,8 @@ use std::sync::Mutex;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
-use databend_common_meta_raft_store::log::raft_log_2;
+use databend_common_meta_raft_store::raft_log_v004;
+use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
 use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV004;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
@@ -41,9 +42,9 @@ pub async fn import_v004(
     let mut raft_log_importer = {
         let raft_log_config = raft_config.clone().to_raft_log_config();
         let raft_log_config = Arc::new(raft_log_config);
-        let raft_log = raft_log_2::RaftLog2::open(raft_log_config)?;
+        let raft_log = RaftLogV004::open(raft_log_config)?;
 
-        raft_log_2::Importer::new(raft_log)
+        raft_log_v004::Importer::new(raft_log)
     };
 
     let snapshot_store = SnapshotStoreV004::new(raft_config);

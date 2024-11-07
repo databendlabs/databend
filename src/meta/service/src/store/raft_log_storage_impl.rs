@@ -18,9 +18,9 @@ use std::ops::RangeBounds;
 
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::display::display_option::DisplayOptionExt;
-use databend_common_meta_raft_store::log::codec_wrapper::Cw;
-use databend_common_meta_raft_store::log::raft_log_2;
-use databend_common_meta_raft_store::log::raft_log_2::IODesc;
+use databend_common_meta_raft_store::raft_log_v004;
+use databend_common_meta_raft_store::raft_log_v004::codec_wrapper::Cw;
+use databend_common_meta_raft_store::raft_log_v004::io_desc::IODesc;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
 use databend_common_meta_sled_store::openraft::EntryPayload;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
@@ -193,7 +193,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             let mut log = self.log.write().await;
 
             log.save_vote(Cw(*vote)).map_err(|e| io.err_submit(e))?;
-            log.flush(raft_log_2::Callback::new_oneshot(tx, &io))
+            log.flush(raft_log_v004::Callback::new_oneshot(tx, &io))
                 .map_err(|e| io.err_submit_flush(e))?;
         }
 
@@ -230,7 +230,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
         debug!("{}", io.ok_submit());
 
-        log.flush(raft_log_2::Callback::new_io_flushed(callback, &io))
+        log.flush(raft_log_v004::Callback::new_io_flushed(callback, &io))
             .map_err(|e| io.err_submit_flush(e))?;
 
         info!("{}", io.ok_submit_flush());

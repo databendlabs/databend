@@ -25,10 +25,11 @@ use databend_common_base::base::tokio::sync::RwLockWriteGuard;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
-use databend_common_meta_raft_store::log::raft_log_2;
-use databend_common_meta_raft_store::log::raft_log_2::RaftLog2;
 use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
+use databend_common_meta_raft_store::raft_log_v004;
+use databend_common_meta_raft_store::raft_log_v004::util;
+use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::SMV003;
@@ -72,7 +73,7 @@ pub struct StoreInner {
     is_opened: bool,
 
     /// A series of raft logs.
-    pub log: Arc<RwLock<RaftLog2>>,
+    pub log: Arc<RwLock<RaftLogV004>>,
 
     /// The Raft state machine.
     pub state_machine: Arc<RwLock<SMV003>>,
@@ -118,8 +119,7 @@ impl StoreInner {
             to_startup_err(err)
         })?;
 
-        let mut log =
-            raft_log_2::RaftLog2::open(raft_log_config.clone()).map_err(to_startup_err)?;
+        let mut log = RaftLogV004::open(raft_log_config.clone()).map_err(to_startup_err)?;
         info!("RaftLog opened at: {}", raft_log_config.dir);
 
         let state = log.log_state();
@@ -131,12 +131,12 @@ impl StoreInner {
         let id = stored_node_id.unwrap_or(config.id);
 
         if !is_open {
-            log.save_user_data(Some(raft_log_2::LogStoreMeta {
+            log.save_user_data(Some(raft_log_v004::log_store_meta::LogStoreMeta {
                 node_id: Some(config.id),
             }))
             .map_err(to_startup_err)?;
 
-            raft_log_2::blocking_flush(&mut log)
+            util::blocking_flush(&mut log)
                 .await
                 .map_err(to_startup_err)?;
         }

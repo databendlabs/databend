@@ -22,8 +22,8 @@ use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 
-use crate::log::raft_log_2;
 use crate::ondisk::DATA_VERSION;
+use crate::raft_log_v004;
 
 pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");
@@ -213,7 +213,7 @@ impl RaftConfig {
             )
     }
 
-    pub fn to_raft_log_config(&self) -> raft_log_2::RaftLogConfig {
+    pub fn to_raft_log_config(&self) -> raft_log_v004::RaftLogConfig {
         let p = Path::new(&self.raft_dir)
             .join("df_meta")
             .join(format!("{}", DATA_VERSION))
@@ -221,7 +221,7 @@ impl RaftConfig {
 
         let dir = p.to_str().unwrap().to_string();
 
-        raft_log_2::RaftLogConfig {
+        raft_log_v004::RaftLogConfig {
             dir,
             log_cache_max_items: Some(self.log_cache_max_items as usize),
             log_cache_capacity: Some(self.log_cache_capacity as usize),
