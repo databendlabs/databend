@@ -127,7 +127,7 @@ impl Hash for StackFrame {
 // - Almost lock-free (backtrace-rs requires large-grained locks or frequent lock operations)
 // - Symbol resolution is lazy, only resolved when outputting
 // - Cache the all stack frames for the stack, not just a single stack frame
-// - Output the physical addresses of the stack instead of virtual addresses, even in the absence of symbols (this will help us use backtraces to get cause in the case of splitted symbol tables)
+// - Output the physical addresses of the stack instead of virtual addresses, even in the absence of symbols (this will help us use backtraces to get cause in the case of split symbol tables)
 // - Output inline functions and marked it
 //
 // What's different from gimli-addr2line[https://github.com/gimli-rs/addr2line](why not use gimli-addr2line):
