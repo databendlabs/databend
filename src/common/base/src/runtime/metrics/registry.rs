@@ -43,8 +43,8 @@ use crate::runtime::metrics::process_collector::ProcessCollector;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::ThreadTracker;
 
-pub const MIN_HISTOGRAM_BOUND: f64 = i64::MIN as f64;
-pub const MAX_HISTOGRAM_BOUND: f64 = i64::MAX as f64;
+pub const MIN_HISTOGRAM_BOUND: f64 = f64::MIN;
+pub const MAX_HISTOGRAM_BOUND: f64 = f64::MAX;
 
 pub static GLOBAL_METRICS_REGISTRY: LazyLock<GlobalRegistry> =
     LazyLock::new(GlobalRegistry::create);

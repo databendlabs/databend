@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
-use databend_common_meta_types::NodeId;
+use databend_common_meta_types::raft_types::NodeId;
 use http::StatusCode;
 use log::info;
 use log::warn;

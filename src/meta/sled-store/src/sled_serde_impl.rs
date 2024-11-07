@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::Membership;
+use databend_common_meta_types::raft_types::SnapshotMeta;
+use databend_common_meta_types::raft_types::StoredMembership;
+use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::Membership;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::SeqNum;
-use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::StoredMembership;
-use databend_common_meta_types::Vote;
 
 use crate::SledBytesError;
 use crate::SledSerde;

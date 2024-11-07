@@ -18,6 +18,7 @@ use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
+use databend_common_ast::ast::RenameDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
 use databend_common_ast::ast::ShowDictionariesStmt;
 use databend_common_ast::ast::ShowLimit;
@@ -35,6 +36,7 @@ use log::debug;
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
+use crate::plans::RenameDictionaryPlan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDictionaryPlan;
 use crate::BindContext;
@@ -434,5 +436,51 @@ impl Binder {
             RewriteKind::ShowDictionaries(database.clone()),
         )
         .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_rename_dictionary(
+        &mut self,
+        stmt: &RenameDictionaryStmt,
+    ) -> Result<Plan> {
+        let RenameDictionaryStmt {
+            if_exists,
+            catalog,
+            database,
+            dictionary,
+            new_catalog,
+            new_database,
+            new_dictionary,
+        } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+        let (catalog, database, dictionary) =
+            self.normalize_object_identifier_triple(catalog, database, dictionary);
+
+        let (new_catalog, new_database, new_dictionary) =
+            self.normalize_object_identifier_triple(new_catalog, new_database, new_dictionary);
+
+        if new_catalog != catalog {
+            return Err(ErrorCode::BadArguments(
+                "Rename dictionary not allow modify catalog",
+            ));
+        }
+
+        let catalog_info = self.ctx.get_catalog(&catalog).await?;
+        let db = catalog_info.get_database(&tenant, &database).await?;
+        let database_id = db.get_db_info().database_id.db_id;
+
+        let new_db = catalog_info.get_database(&tenant, &new_database).await?;
+        let new_database_id = new_db.get_db_info().database_id.db_id;
+
+        Ok(Plan::RenameDictionary(Box::new(RenameDictionaryPlan {
+            tenant,
+            if_exists: *if_exists,
+            catalog,
+            database_id,
+            dictionary,
+            new_database_id,
+            new_dictionary,
+        })))
     }
 }

@@ -22,6 +22,8 @@
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(box_patterns)]
+// FIXME: Remove this once the deprecated code is removed
+#![allow(deprecated)]
 
 mod parquet_part;
 mod parquet_rs;

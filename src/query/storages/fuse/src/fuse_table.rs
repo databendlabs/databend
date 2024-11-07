@@ -36,11 +36,11 @@ use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -218,6 +218,13 @@ impl FuseTable {
             .get(OPT_KEY_BLOOM_INDEX_COLUMNS)
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
+
+        let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
+        if !table_info.meta.part_prefix.is_empty() {
+            return Err(ErrorCode::StorageOther(
+                "Location_prefix no longer supported. The last version that supports it is: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
+            ));
+        }
 
         let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
 
@@ -461,6 +468,10 @@ impl FuseTable {
 
     pub fn get_storage_format(&self) -> FuseStorageFormat {
         self.storage_format
+    }
+
+    pub fn get_storage_prefix(&self) -> &str {
+        self.meta_location_generator.prefix()
     }
 }
 

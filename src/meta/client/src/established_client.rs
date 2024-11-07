@@ -147,6 +147,7 @@ impl EstablishedClient {
         self.error.lock().take()
     }
 
+    #[async_backtrace::framed]
     pub async fn kv_api(
         &mut self,
         request: impl tonic::IntoRequest<RaftRequest>,
@@ -154,6 +155,7 @@ impl EstablishedClient {
         self.client.kv_api(request).await.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn kv_read_v1(
         &mut self,
         request: impl tonic::IntoRequest<RaftRequest>,
@@ -162,6 +164,7 @@ impl EstablishedClient {
         resp.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn export(
         &mut self,
         request: impl tonic::IntoRequest<Empty>,
@@ -169,6 +172,7 @@ impl EstablishedClient {
         self.client.export(request).await.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn export_v1(
         &mut self,
         request: impl tonic::IntoRequest<pb::ExportRequest>,
@@ -176,6 +180,7 @@ impl EstablishedClient {
         self.client.export_v1(request).await.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn watch(
         &mut self,
         request: impl tonic::IntoRequest<WatchRequest>,
@@ -183,6 +188,7 @@ impl EstablishedClient {
         self.client.watch(request).await.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn transaction(
         &mut self,
         request: impl tonic::IntoRequest<TxnRequest>,
@@ -190,6 +196,7 @@ impl EstablishedClient {
         self.client.transaction(request).await.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn member_list(
         &mut self,
         request: impl tonic::IntoRequest<MemberListRequest>,
@@ -197,6 +204,7 @@ impl EstablishedClient {
         self.client.member_list(request).await.update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn get_cluster_status(
         &mut self,
         request: impl tonic::IntoRequest<Empty>,
@@ -207,6 +215,7 @@ impl EstablishedClient {
             .update_client(self)
     }
 
+    #[async_backtrace::framed]
     pub async fn get_client_info(
         &mut self,
         request: impl tonic::IntoRequest<Empty>,

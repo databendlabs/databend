@@ -101,6 +101,7 @@ impl Client for ScriptClient {
             .await?;
 
         let mut planner = Planner::new(ctx.clone());
+        // In script ignore query level settings.
         let (plan, _) = planner.plan_sql(query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_base::base::tokio;
-use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
 use databend_common_storage::read_parquet_schema_async_rs;
+use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -52,10 +52,6 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
 
     let snapshot_opt = fuse_table.read_table_snapshot().await?;
     let snapshot = snapshot_opt.unwrap();
-
-    let projection = Projection::Columns(vec![]);
-    let block_reader =
-        fuse_table.create_block_reader(table_ctx.clone(), projection, false, false, false)?;
 
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
@@ -108,7 +104,9 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
                     .await
                     .ok(),
                 FuseStorageFormat::Native => {
-                    block_reader.async_read_native_schema(&virtual_loc).await
+                    BlockReader::async_read_native_schema(dal, &virtual_loc)
+                        .await
+                        .map(|(_, schema)| schema)
                 }
             };
             assert!(schema.is_some());

@@ -83,28 +83,36 @@ impl BlockEntry {
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     #[allow(clippy::borrowed_box)]
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        panic!(
+            "The reason for not implementing equals is usually because the higher-level logic doesn't allow/need the meta to be compared."
+        )
+    }
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        panic!(
+            "The reason for not implementing clone_self is usually because the higher-level logic doesn't allow/need the associated block to be cloned."
+        )
+    }
 }
 
-pub trait BlockMetaInfoDowncast: Sized {
-    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self>;
+pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
+    fn boxed(self) -> BlockMetaInfoPtr {
+        Box::new(self)
+    }
 
-    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self>;
-}
-
-impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
         let boxed: Box<dyn Any> = boxed;
         boxed.downcast().ok().map(|x| *x)
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        let boxed: &dyn Any = boxed.as_ref();
+        let boxed = boxed.as_ref() as &dyn Any;
         boxed.downcast_ref()
     }
 }
+
+impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
 
 impl DataBlock {
     #[inline]
@@ -633,8 +641,8 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_any: &dyn Any = self.as_ref();
-        let other_any: &dyn Any = other.as_ref();
+        let this_any = self.as_ref() as &dyn Any;
+        let other_any = other.as_ref() as &dyn Any;
 
         match this_any.type_id() == other_any.type_id() {
             true => self.equals(other),
@@ -667,4 +675,29 @@ fn check_type(data_type: &DataType, value: &Value<AnyType>) {
         Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
         Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
+}
+
+#[macro_export]
+macro_rules! local_block_meta_serde {
+    ($T:ty) => {
+        impl serde::Serialize for $T {
+            fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
+            where S: serde::Serializer {
+                unreachable!(
+                    "{} must not be exchanged between multiple nodes.",
+                    stringify!($T)
+                )
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for $T {
+            fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
+            where D: serde::Deserializer<'de> {
+                unreachable!(
+                    "{} must not be exchanged between multiple nodes.",
+                    stringify!($T)
+                )
+            }
+        }
+    };
 }

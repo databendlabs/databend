@@ -17,7 +17,8 @@ explain pipeline select a from t1 ignore_result
 ----
 EmptySink × 1
   NativeDeserializeDataTransform × 1
-    SyncReadNativeDataSource × 1
+    SyncReadNativeDataTransform × 1
+      BlockPartitionSource × 1
 
 
 statement ok

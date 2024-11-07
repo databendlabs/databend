@@ -207,6 +207,10 @@ impl<'a> Binder {
                 }
             }
 
+            Statement::StatementWithSettings { settings, stmt } => {
+                self.bind_statement_settings(bind_context, settings, stmt).await?
+            }
+
             Statement::Explain { query, options, kind } => {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
@@ -305,6 +309,7 @@ impl<'a> Binder {
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
             Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -708,7 +713,9 @@ impl<'a> Binder {
             }
         }
 
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
+        self.ctx
+            .get_settings()
+            .set_batch_settings(&hint_settings, true)
     }
 
     // After the materialized cte was bound, add it to `m_cte_bound_ctx`

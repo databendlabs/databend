@@ -83,9 +83,9 @@ impl ORCSourceForCopy {
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
             .map_err(|e| map_orc_error(e, &path))?;
-        let mut reader = builder.build_async();
-        let factory = mem::take(&mut reader.factory).unwrap();
-        let schema = reader.schema();
+        let reader = builder.build_async();
+        let (factory, schema) = reader.into_parts();
+        let factory = factory.expect("factory must has been created");
         let schema = HashableSchema::try_create(schema)?;
 
         self.reader = Some((path, factory, schema, size));

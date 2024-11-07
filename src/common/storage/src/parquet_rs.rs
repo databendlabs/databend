@@ -22,7 +22,10 @@ use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::FieldIndex;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
+// FIXME(xuanwo): refactor code here.
+#[allow(deprecated)]
 use parquet::file::footer::decode_footer;
+#[allow(deprecated)]
 use parquet::file::footer::decode_metadata;
 use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
@@ -113,6 +116,7 @@ pub async fn read_metadata_async(
         .await?
         .to_vec();
     let buffer_len = buffer.len();
+    #[allow(deprecated)]
     let metadata_len = decode_footer(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
@@ -124,6 +128,7 @@ pub async fn read_metadata_async(
     if (footer_len as usize) <= buffer_len {
         // The whole metadata is in the bytes we already read
         let offset = buffer_len - footer_len as usize;
+        #[allow(deprecated)]
         Ok(decode_metadata(&buffer[offset..])?)
     } else {
         // The end of file read by default is not long enough, read again including the metadata.
@@ -136,6 +141,7 @@ pub async fn read_metadata_async(
             .await?
             .to_vec();
         metadata.extend(buffer);
+        #[allow(deprecated)]
         Ok(decode_metadata(&metadata)?)
     }
 }
@@ -161,6 +167,7 @@ pub fn read_metadata_sync(
         .call()?
         .to_vec();
     let buffer_len = buffer.len();
+    #[allow(deprecated)]
     let metadata_len = decode_footer(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
@@ -172,6 +179,7 @@ pub fn read_metadata_sync(
     if (footer_len as usize) <= buffer_len {
         // The whole metadata is in the bytes we already read
         let offset = buffer_len - footer_len as usize;
+        #[allow(deprecated)]
         Ok(decode_metadata(&buffer[offset..])?)
     } else {
         let mut metadata = blocking
@@ -180,6 +188,7 @@ pub fn read_metadata_sync(
             .call()?
             .to_vec();
         metadata.extend(buffer);
+        #[allow(deprecated)]
         Ok(decode_metadata(&metadata)?)
     }
 }

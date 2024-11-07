@@ -391,7 +391,12 @@ fn prune_and_generate_partitions(
             let page_locations = meta.offset_index().map(|x| {
                 x[rg]
                     .iter()
-                    .map(|x| x.iter().map(SerdePageLocation::from).collect())
+                    .map(|x| {
+                        x.page_locations()
+                            .iter()
+                            .map(SerdePageLocation::from)
+                            .collect()
+                    })
                     .collect()
             });
 

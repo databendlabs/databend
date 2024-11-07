@@ -13,7 +13,7 @@ query_url2 = "http://localhost:8002/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
 logout_url = "http://localhost:8000/v1/session/logout"
 renew_url = "http://localhost:8000/v1/session/refresh"
-verify_url = "http://localhost:8000/v1/auth/verify"
+verify_url = "http://localhost:8000/v1/verify"
 auth = ("root", "")
 
 
@@ -117,10 +117,10 @@ def fake_expired_token(ty):
         "sid": "",
     }
     return (
-        "bend-v1-"
-        + ty
-        + "-"
-        + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
+            "bend-v1-"
+            + ty
+            + "-"
+            + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
     )
 
 
@@ -135,7 +135,7 @@ def main():
     query_resp = do_query("select 1", session_token)
     pprint(query_resp.get("data"))
     pprint(query_resp.get("session").get("need_sticky"))
-    pprint(query_resp.get("session").get("need_refresh"))
+    pprint(query_resp.get("session").get("need_keep_alive"))
 
     # cluster
     query_resp = do_query("select count(*) from system.clusters", session_token)
@@ -149,11 +149,11 @@ def main():
     # temp table
     query_resp = do_query("CREATE TEMP TABLE t(c1 int)", session_token)
     pprint(query_resp.get("session").get("need_sticky"))
-    pprint(query_resp.get("session").get("need_refresh"))
+    pprint(query_resp.get("session").get("need_keep_alive"))
 
     query_resp = do_query("drop TABLE t", session_token)
     pprint(query_resp.get("session").get("need_sticky"))
-    pprint(query_resp.get("session").get("need_refresh"))
+    pprint(query_resp.get("session").get("need_keep_alive"))
 
     # errors
     do_query("select 2", "xxx")
@@ -190,7 +190,8 @@ def main():
 
 
 if __name__ == "__main__":
+    import logging
     try:
         main()
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.exception(f"An error occurred: {e}")
