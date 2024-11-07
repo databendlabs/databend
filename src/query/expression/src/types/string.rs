@@ -314,20 +314,22 @@ impl StringColumn {
         let view = unsafe { col.data.views().as_slice().get_unchecked_release(i) };
         let prefix = load_prefix(value.as_bytes());
 
-        match view.prefix.to_le_bytes().as_slice().cmp(prefix) {
-            Ordering::Equal => unsafe {
-                let value_i = col.data.value_unchecked(i);
-                value_i.cmp(value)
-            },
-            non_eq => non_eq,
+        if view.prefix == prefix {
+            let value_i = unsafe { col.data.value_unchecked(i) };
+            value_i.cmp(value)
+        } else {
+            view.prefix.to_le_bytes().as_slice().cmp(value.as_bytes())
         }
     }
 }
 
 // Loads (up to) the first 4 bytes of s as little-endian, padded with zeros.
 #[inline]
-fn load_prefix(s: &[u8]) -> &[u8] {
-    &s[..s.len().min(4)]
+fn load_prefix(s: &[u8]) -> u32 {
+    let start = &s[..s.len().min(4)];
+    let mut tmp = [0u8; 4];
+    tmp[..start.len()].copy_from_slice(start);
+    u32::from_le_bytes(tmp)
 }
 
 impl PartialEq for StringColumn {

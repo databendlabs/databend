@@ -410,8 +410,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ltrim",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_str(val.trim_start());
-            output.commit_row();
+            output.put_and_commit(val.trim_start());
         }),
     );
 
@@ -419,8 +418,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "rtrim",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_str(val.trim_end());
-            output.commit_row();
+            output.put_and_commit(val.trim_end());
         }),
     );
 
@@ -428,8 +426,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_str(val.trim());
-            output.commit_row();
+            output.put_and_commit(val.trim());
         }),
     );
 
@@ -439,13 +436,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
             |val, trim_str, output, _| {
                 if trim_str.is_empty() {
-                    output.put_str(val);
-                    output.commit_row();
+                    output.put_and_commit(val);
                     return;
                 }
 
-                output.put_str(val.trim_start_matches(trim_str));
-                output.commit_row();
+                output.put_and_commit(val.trim_start_matches(trim_str));
             },
         ),
     );
@@ -456,13 +451,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
             |val, trim_str, output, _| {
                 if trim_str.is_empty() {
-                    output.put_str(val);
-                    output.commit_row();
+                    output.put_and_commit(val);
                     return;
                 }
 
-                output.put_str(val.trim_end_matches(trim_str));
-                output.commit_row();
+                output.put_and_commit(val.trim_end_matches(trim_str));
             },
         ),
     );
@@ -473,8 +466,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
             |val, trim_str, output, _| {
                 if trim_str.is_empty() {
-                    output.put_str(val);
-                    output.commit_row();
+                    output.put_and_commit(val);
                     return;
                 }
 
@@ -487,8 +479,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     res = &res[..res.len() - trim_str.len()];
                 }
 
-                output.put_str(res);
-                output.commit_row();
+                output.put_and_commit(res);
             },
         ),
     );
@@ -629,11 +620,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let n = n as usize;
                 let s_len = s.chars().count();
                 if n < s_len {
-                    output.put_str(s.slice(0..n));
+                    output.put_and_commit(s.slice(0..n));
                 } else {
-                    output.put_str(s);
+                    output.put_and_commit(s);
                 }
-                output.commit_row();
             },
         ),
     );
@@ -646,11 +636,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let n = n as usize;
                 let s_len = s.chars().count();
                 if n < s_len {
-                    output.put_str(s.slice(s_len - n..));
+                    output.put_and_commit(s.slice(s_len - n..));
                 } else {
-                    output.put_str(s);
+                    output.put_and_commit(s);
                 }
-                output.commit_row();
             },
         ),
     );
@@ -710,12 +699,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     if s == sep {
                         output.builder.commit_row();
                     } else if sep.is_empty() {
-                        output.builder.put_str(s);
-                        output.builder.commit_row();
+                        output.builder.put_and_commit(s);
                     } else {
                         for v in s.split(sep) {
-                            output.builder.put_str(v);
-                            output.builder.commit_row();
+                            output.builder.put_and_commit(v);
                         }
                     }
                     output.commit_row();

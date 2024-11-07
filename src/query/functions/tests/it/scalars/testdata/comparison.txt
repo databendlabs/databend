@@ -1255,6 +1255,29 @@ evaluation (internal):
 +--------+----------------------------------------------------------+
 
 
+ast            : lhs like 'ab%'
+raw expr       : like(lhs::String, 'ab%')
+checked expr   : like<String, String>(lhs, "ab%")
+evaluation:
++--------+-----------------+---------------+
+|        | lhs             | Output        |
++--------+-----------------+---------------+
+| Type   | String          | Boolean       |
+| Domain | {"abc"..="abf"} | {FALSE, TRUE} |
+| Row 0  | 'abc'           | true          |
+| Row 1  | 'abd'           | true          |
+| Row 2  | 'abe'           | true          |
+| Row 3  | 'abf'           | true          |
++--------+-----------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------+
+| Column | Data                                                     |
++--------+----------------------------------------------------------+
+| lhs    | StringColumn { data: Utf8ViewArray[abc, abd, abe, abf] } |
+| Output | Boolean([0b____1111])                                    |
++--------+----------------------------------------------------------+
+
+
 ast            : lhs like 'c'
 raw expr       : like(lhs::String, 'c')
 checked expr   : like<String, String>(lhs, "c")
