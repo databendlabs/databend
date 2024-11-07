@@ -2247,9 +2247,9 @@ checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
 
 [[package]]
 name = "codeq"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "228f6f07a8cd3d00de1e8d054a9a52d3af1bc032011cb3c2b22ac6cd70dfe396"
+checksum = "93a9092f38f07d18434ac49a148db55fdd887b8b852a4655bece6e2f347a8490"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -12050,9 +12050,9 @@ dependencies = [
 
 [[package]]
 name = "raft-log"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b89cbb1f7b56f909d02b361e3ff00647484a1e781ba22cb1a5d74614419a8b24"
+checksum = "6c5e7f06d77e694fc984ba36494c091169d9c6695ce2af174e8f1e167a05f588"
 dependencies = [
  "byteorder",
  "clap",

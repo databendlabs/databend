@@ -19,6 +19,7 @@ use std::sync::Mutex;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
+use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
 use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV004;
@@ -37,6 +38,8 @@ pub async fn import_v004(
     raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
+    OnDisk::ensure_dirs(&raft_config.raft_dir)?;
+
     let mut n = 0;
 
     let mut raft_log_importer = {

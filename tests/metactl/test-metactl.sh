@@ -7,8 +7,10 @@ BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
 meta_json_v002="$SCRIPT_PATH/meta_v002.txt"
-want_exported_v003="$SCRIPT_PATH/want_exported_v003"
-want_snapshot_v003="$SCRIPT_PATH/want_snapshot_v003"
+meta_json_v003="$SCRIPT_PATH/meta_v003.txt"
+meta_json_v004="$SCRIPT_PATH/meta_v004.txt"
+want_exported_v004="$SCRIPT_PATH/want_exported_v004"
+want_snapshot_v004="$SCRIPT_PATH/want_snapshot_v004"
 
 exported="$SCRIPT_PATH/exported"
 grpc_exported="$SCRIPT_PATH/grpc_exported"
@@ -40,7 +42,7 @@ metactl_import_export () {
     echo " === ${title} 1.1. Check snapshot data"
     echo " === "
 
-    snapshot_path="$(ls $meta_dir/df_meta/V003/snapshot/1-0-83-*.snap)"
+    snapshot_path="$(ls $meta_dir/df_meta/V004/snapshot/1-0-83-*.snap)"
     echo "=== snapshot path:"
     ls $snapshot_path
 
@@ -83,7 +85,9 @@ metactl_import_export () {
     sleep 1
 }
 
-metactl_import_export 'V003' "$meta_json_v002" "$want_exported_v003" "$want_snapshot_v003"
+metactl_import_export 'V002' "$meta_json_v002" "$want_exported_v004" "$want_snapshot_v004"
+metactl_import_export 'V003' "$meta_json_v003" "$want_exported_v004" "$want_snapshot_v004"
+metactl_import_export 'V004' "$meta_json_v004" "$want_exported_v004" "$want_snapshot_v004"
 
 
 echo " === "
@@ -116,7 +120,7 @@ else
 fi
 
 echo " === check if there is a header record in it"
-if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V003","upgrading":null}}}]' $grpc_exported; then
+if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V004"}}}]' $grpc_exported; then
     echo " === Header record found, good!"
 else
     echo " === No Header record found!!!"
@@ -127,6 +131,7 @@ fi
 kill $METASRV_PID
 
 sleep 3
+
 
 echo " === "
 echo " === 5. Test import data with incompatible header $grpc_exported to dir $meta_dir"
