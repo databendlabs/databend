@@ -335,6 +335,31 @@ function install_mysql_client {
 	esac
 }
 
+function install_tzdata {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing tzdata..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg tzdata "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		install_pkg tzdata "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg tzdata "$PACKAGE_MANAGER"
+		;;
+	yum | dnf | brew)
+		install_pkg tzdata "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install tzdata with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
 function install_sqlite3 {
 	PACKAGE_MANAGER=$1
 
@@ -652,6 +677,7 @@ fi
 
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_mysql_client "$PACKAGE_MANAGER"
+	install_tzdata "$PACKAGE_MANAGER"
 	install_pkg git "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
