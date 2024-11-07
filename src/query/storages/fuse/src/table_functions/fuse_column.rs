@@ -117,7 +117,7 @@ impl TableMetaFunc for FuseColumn {
 
                             column_name.put_and_commit(&f.name);
 
-                            column_type.put_and_commit(&f.data_type.to_string());
+                            column_type.put_and_commit(f.data_type.to_string());
 
                             column_id.push(*id);
 

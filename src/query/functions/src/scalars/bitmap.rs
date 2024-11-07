@@ -182,7 +182,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Ok(rb) => {
                     let raw = rb.into_iter().collect::<Vec<_>>();
                     let s = join(raw.iter(), ",");
-                    builder.put_and_commit(&s);
+                    builder.put_and_commit(s);
                 }
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());

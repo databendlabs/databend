@@ -683,7 +683,7 @@ fn unnest_variant_obj(
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
             for (key, val) in vals {
-                key_builder.put_and_commit(&String::from_utf8_lossy(&key));
+                key_builder.put_and_commit(String::from_utf8_lossy(&key));
                 val_builder.put_slice(&val);
                 val_builder.commit_row();
             }

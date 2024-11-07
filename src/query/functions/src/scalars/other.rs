@@ -94,7 +94,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_byte_size(val.into());
-            output.put_and_commit(&new_val);
+            output.put_and_commit(new_val);
         }),
     );
 
@@ -103,7 +103,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
-            output.put_and_commit(&new_val);
+            output.put_and_commit(new_val);
         }),
     );
 
@@ -292,7 +292,7 @@ fn register_inet_ntoa(registry: &mut FunctionRegistry) {
             match num_traits::cast::cast::<i64, u32>(val) {
                 Some(val) => {
                     let addr_str = Ipv4Addr::from(val.to_be_bytes()).to_string();
-                    output.put_and_commit(&addr_str);
+                    output.put_and_commit(addr_str);
                 }
                 None => {
                     ctx.set_error(
@@ -404,7 +404,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     .and_then(|entry| entry.process_i64(value))
                 {
                     Ok(s) => {
-                        builder.put_and_commit(&s);
+                        builder.put_and_commit(s);
                     }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());

@@ -243,7 +243,7 @@ impl InternalColumn {
             }
             InternalColumnType::SnapshotName => {
                 let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_and_commit(&meta.snapshot_location.clone().unwrap_or("".to_string()));
+                builder.put_and_commit(meta.snapshot_location.clone().unwrap_or("".to_string()));
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),

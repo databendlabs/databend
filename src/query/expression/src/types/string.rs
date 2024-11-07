@@ -296,26 +296,26 @@ impl StringColumn {
         let view_i = unsafe { col_i.data.views().as_slice().get_unchecked_release(i) };
         let view_j = unsafe { col_j.data.views().as_slice().get_unchecked_release(j) };
 
-        match view_i.prefix.cmp(&view_j.prefix) {
-            Ordering::Equal => unsafe {
+        if view_i.prefix == view_j.prefix {
+            unsafe {
                 let value_i = col_i.data.value_unchecked(i);
                 let value_j = col_j.data.value_unchecked(j);
                 value_i.cmp(value_j)
-            },
-            non_eq => non_eq,
+            }
+        } else {
+            view_i.prefix.to_be().cmp(&view_j.prefix.to_be())
         }
     }
 
     pub fn compare_str(col: &Self, i: usize, value: &str) -> Ordering {
         let view = unsafe { col.data.views().as_slice().get_unchecked_release(i) };
         let prefix = load_prefix(value.as_bytes());
-        let be_prefix = prefix.to_be();
 
         if view.prefix != prefix {
             let value_i = unsafe { col.data.value_unchecked(i) };
             value_i.cmp(value)
         } else {
-            view.prefix.to_be().cmp(&be_prefix)
+            view.prefix.to_be().cmp(&prefix.to_be())
         }
     }
 }

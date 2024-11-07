@@ -214,7 +214,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let result = openai.completion_text_request(data.to_string());
             match result {
                 Ok((resp, _)) => {
-                    output.put_and_commit(&resp);
+                    output.put_and_commit(resp);
                 }
                 Err(e) => {
                     ctx.set_error(

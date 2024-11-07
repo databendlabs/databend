@@ -272,7 +272,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<UInt64Type, StringType>(|h3, builder, ctx| {
             match CellIndex::try_from(h3) {
-                Ok(index) => builder.put_and_commit(&index.to_string()),
+                Ok(index) => builder.put_and_commit(index.to_string()),
                 Err(err) => {
                     ctx.set_error(builder.len(), err.to_string());
                     builder.put_and_commit("");
