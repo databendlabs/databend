@@ -310,18 +310,15 @@ impl<R: Reader> Unit<R> {
                             attrs.set_attr(attr, self);
                         }
 
-                        // if let Some(range_offset) = self.attrs.ranges_offset {
-                        //     if !self.match_range(probe, range_offset) {
-                        //         continue;
-                        //     }
-                        // } else if !attrs.match_pc(probe) {
-                        //     continue;
-                        // }
+                        let match_range = match attrs.ranges_offset {
+                            None => false,
+                            Some(range_offset) => self.match_range(probe, range_offset),
+                        };
 
-                        // eprintln!(
-                        //     "match pc or range {:?}, {:?}, {:?}",
-                        //     attrs.low_pc, attrs.high_pc, probe
-                        // );
+                        if !match_range && !attrs.match_pc(probe) {
+                            continue
+                        }
+
                         if let Some(name) = &attrs.name {
                             if let Ok(name) = name.to_string_lossy() {
                                 if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
@@ -335,7 +332,7 @@ impl<R: Reader> Unit<R> {
                             }
                         }
 
-                        // self.inlined_functions(entries, probe, next_depth, res)?;
+                        self.inlined_functions(entries, probe, next_depth, res)?;
 
                         // return Ok(());
                     }
@@ -407,85 +404,5 @@ impl<R: Reader> Unit<R> {
         Ok(())
     }
 }
-//
-//
-// fn name_attr<R>(
-//     attr: gimli::AttributeValue<R>,
-//     mut file: DebugFile,
-//     unit: &gimli::Unit<R>,
-//     ctx: &Context<R>,
-//     sections: &gimli::Dwarf<R>,
-//     recursion_limit: usize,
-// ) -> std::result::Result<Option<R>, Error>
-//     where
-//         R: gimli::Reader,
-// {
-//     if recursion_limit == 0 {
-//         return Ok(None);
-//     }
-//
-//     match attr {
-//         gimli::AttributeValue::UnitRef(offset) => {
-//             name_entry(file, unit, offset, ctx, sections, recursion_limit)
-//         }
-//         gimli::AttributeValue::DebugInfoRef(dr) => {
-//             let (unit, offset) = ctx.find_unit(dr, file)?;
-//             name_entry(file, unit, offset, ctx, sections, recursion_limit)
-//         }
-//         _ => Ok(None),
-//     }
-// }
-//
-// fn name_entry<R>(
-//     file: DebugFile,
-//     unit: &gimli::Unit<R>,
-//     offset: gimli::UnitOffset<R::Offset>,
-//     ctx: &Context<R>,
-//     sections: &gimli::Dwarf<R>,
-//     recursion_limit: usize,
-// ) -> std::result::Result<Option<R>, Error>
-//     where
-//         R: gimli::Reader,
-// {
-//     let mut entries = unit.entries_raw(Some(offset))?;
-//     let abbrev = if let Some(abbrev) = entries.read_abbreviation()? {
-//         abbrev
-//     } else {
-//         return Err(gimli::Error::NoEntryAtGivenOffset);
-//     };
-//
-//     let mut name = None;
-//     let mut next = None;
-//     for spec in abbrev.attributes() {
-//         match entries.read_attribute(*spec) {
-//             Ok(ref attr) => match attr.name() {
-//                 gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
-//                     if let Ok(val) = sections.attr_string(unit, attr.value()) {
-//                         return Ok(Some(val));
-//                     }
-//                 }
-//                 gimli::DW_AT_name => {
-//                     if let Ok(val) = sections.attr_string(unit, attr.value()) {
-//                         name = Some(val);
-//                     }
-//                 }
-//                 gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-//                     next = Some(attr.value());
-//                 }
-//                 _ => {}
-//             },
-//             Err(e) => return Err(e),
-//         }
-//     }
-//
-//     if name.is_some() {
-//         return Ok(name);
-//     }
-//
-//     if let Some(next) = next {
-//         return name_attr(next, file, unit, ctx, sections, recursion_limit - 1);
-//     }
-//
-//     Ok(None)
-// }
+
 
