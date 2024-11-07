@@ -127,8 +127,8 @@ def fake_expired_token(ty):
 def main():
     login_resp = do_login()
     pprint(sorted(login_resp.keys()))
-    session_token = login_resp.get("session_token")
-    refresh_token = login_resp.get("refresh_token")
+    session_token = login_resp.get("tokens").get("session_token")
+    refresh_token = login_resp.get("tokens").get("refresh_token")
     # print(session_token)
 
     # ok
@@ -163,8 +163,8 @@ def main():
 
     renew_resp = do_refresh(1, refresh_token, session_token)
     pprint(sorted(renew_resp.keys()))
-    new_session_token = renew_resp.get("session_token")
-    new_refresh_token = renew_resp.get("refresh_token")
+    new_session_token = renew_resp.get("tokens").get("session_token")
+    new_refresh_token = renew_resp.get("tokens").get("refresh_token")
 
     # old session_token still valid
     query_resp = do_query("select 6", session_token)
