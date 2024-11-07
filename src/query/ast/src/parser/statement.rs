@@ -1018,6 +1018,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let rename_dictionary = map(
+        rule! {
+            RENAME ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
+        },
+        |(
+            _,
+            _,
+            opt_if_exists,
+            (catalog, database, dictionary),
+            _,
+            (new_catalog, new_database, new_dictionary),
+        )| {
+            Statement::RenameDictionary(RenameDictionaryStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                dictionary,
+                new_catalog,
+                new_database,
+                new_dictionary,
+            })
+        },
+    );
 
     let create_view = map_res(
         rule! {
@@ -2336,6 +2359,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
             | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
             | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
+            | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
         ),
         // view,index
         rule!(
