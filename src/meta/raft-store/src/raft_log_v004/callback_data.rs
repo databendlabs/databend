@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod codec_wrapper;
-pub mod raft_log_2;
+use std::io;
+use std::sync::mpsc::SyncSender;
 
-pub const TREE_RAFT_LOG: &str = "raft_log";
+use databend_common_meta_types::raft_types;
+use tokio::sync::oneshot;
+
+pub enum CallbackData {
+    Oneshot(oneshot::Sender<Result<(), io::Error>>),
+    SyncOneshot(SyncSender<Result<(), io::Error>>),
+    IOFlushed(raft_types::IOFlushed),
+}
