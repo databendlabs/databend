@@ -44,6 +44,7 @@ geozero = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 log = { workspace = true }
@@ -60,6 +61,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }
+time = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
 unicode-segmentation = { workspace = true }

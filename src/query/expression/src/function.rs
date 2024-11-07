@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -98,6 +99,7 @@ pub enum FunctionEval {
 #[derive(Clone)]
 pub struct FunctionContext {
     pub tz: TzLUT,
+    pub jiff_tz: TimeZone,
     pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
@@ -120,6 +122,7 @@ impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
             tz: Default::default(),
+            jiff_tz: TimeZone::UTC,
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,

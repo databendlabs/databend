@@ -42,6 +42,8 @@ use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::GeometryDataType;
 use geozero::wkb::Ewkb;
+
+use jiff::tz::TimeZone;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -66,6 +68,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                jiff_timezone: options.jiff_timezone.clone(),
                 binary_format: Default::default(),
                 geometry_format: Default::default(),
             },
@@ -73,7 +76,11 @@ impl FieldEncoderValues {
         }
     }
 
-    pub fn create_for_http_handler(timezone: Tz, geometry_format: GeometryDataType) -> Self {
+    pub fn create_for_http_handler(
+        jiff_timezone: TimeZone,
+        timezone: Tz,
+        geometry_format: GeometryDataType,
+    ) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -82,6 +89,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                jiff_timezone,
                 binary_format: Default::default(),
                 geometry_format,
             },
@@ -93,7 +101,11 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(timezone: Tz, geometry_format: GeometryDataType) -> Self {
+    pub fn create_for_mysql_handler(
+        jiff_timezone: TimeZone,
+        timezone: Tz,
+        geometry_format: GeometryDataType,
+    ) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -102,6 +114,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                jiff_timezone,
                 binary_format: Default::default(),
                 geometry_format,
             },
@@ -260,7 +273,7 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(*v as i64, self.common_settings().timezone).to_string();
+        let s = date_to_string(*v as i64, &self.common_settings().jiff_timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -272,7 +285,7 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
+        let s = timestamp_to_string(*v, &self.common_settings().jiff_timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

@@ -19,7 +19,6 @@ use std::iter::once;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use chrono::Datelike;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::string_to_date;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -64,6 +63,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
+use jiff::civil::date;
+use jiff::Unit;
 use jsonb::array_distinct;
 use jsonb::array_except;
 use jsonb::array_insert;
@@ -347,7 +348,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if idx < 0 || idx > i32::MAX.into() {
+                if idx < 0 || idx > i32::MAX as i64 {
                     output.push_null();
                 } else {
                     match get_by_index(val, idx as usize) {
@@ -415,7 +416,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if idx < 0 || idx > i32::MAX.into() {
+                if idx < 0 || idx > i32::MAX as i64 {
                     output.push_null();
                 } else {
                     match get_by_index(val, idx as usize) {
@@ -897,7 +898,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ScalarRef::Null => Value::Scalar(Scalar::Null),
                         _ => {
                             let mut buf = Vec::new();
-                            cast_scalar_to_variant(scalar.clone(), ctx.func_ctx.tz, &mut buf);
+                            cast_scalar_to_variant(scalar.clone(), &ctx.func_ctx.jiff_tz, &mut buf);
                             Value::Scalar(Scalar::Variant(buf))
                         }
                     },
@@ -909,7 +910,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             _ => None,
                         };
-                        let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.jiff_tz);
                         if let Some(validity) = validity {
                             Value::Column(NullableColumn::new_column(
                                 Column::Variant(new_col),
@@ -941,7 +942,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 ScalarRef::Null => Value::Scalar(None),
                 _ => {
                     let mut buf = Vec::new();
-                    cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+                    cast_scalar_to_variant(scalar, &ctx.func_ctx.jiff_tz, &mut buf);
                     Value::Scalar(Some(buf))
                 }
             },
@@ -951,7 +952,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
                     _ => Bitmap::new_constant(true, col.len()),
                 };
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.jiff_tz);
                 Value::Column(NullableColumn::new(new_col, validity))
             }
         },
@@ -1042,12 +1043,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_date(
-                    val.as_bytes(),
-                    ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.enable_dst_hour_fix,
-                ) {
-                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+                        Ok(s) => output.push(s.get_days()),
+                        Err(e) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("cannot parse to type `DATE`. {}", e),
+                            );
+                            output.push(0);
+                        }
+                    },
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
@@ -1076,12 +1082,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_date(
-                    val.as_bytes(),
-                    ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.enable_dst_hour_fix,
-                ) {
-                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+                        Ok(s) => output.push(s.get_days()),
+                        Err(e) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("cannot parse to type `DATE`. {}", e),
+                            );
+                            output.push(0);
+                        }
+                    },
                     Err(_) => output.push_null(),
                 },
                 None => output.push_null(),
@@ -1101,12 +1112,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_timestamp(
-                    val.as_bytes(),
-                    ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.enable_dst_hour_fix,
-                ) {
-                    Ok(ts) => output.push(ts.timestamp_micros()),
+                Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
@@ -1136,12 +1143,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let val = as_str(val);
                 match val {
-                    Some(val) => match string_to_timestamp(
-                        val.as_bytes(),
-                        ctx.func_ctx.tz.tz,
-                        ctx.func_ctx.enable_dst_hour_fix,
-                    ) {
-                        Ok(ts) => output.push(ts.timestamp_micros()),
+                    Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                        Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                         Err(_) => {
                             output.push_null();
                         }
@@ -1758,7 +1761,7 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
         for column in &columns {
             let v = unsafe { column.index_unchecked(idx) };
             let mut val = vec![];
-            cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+            cast_scalar_to_variant(v, &ctx.func_ctx.jiff_tz, &mut val);
             items.push(val);
         }
         if let Err(err) = build_array(items.iter().map(|b| &b[..]), &mut builder.data) {
@@ -1824,7 +1827,7 @@ fn json_object_impl_fn(
                 }
                 set.insert(key);
                 let mut val = vec![];
-                cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+                cast_scalar_to_variant(v, &ctx.func_ctx.jiff_tz, &mut val);
                 kvs.push((key, val));
             }
             if !has_err {
@@ -2181,7 +2184,7 @@ fn json_object_insert_fn(
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
-                cast_scalar_to_variant(new_val.clone(), ctx.func_ctx.tz, &mut new_val_buf);
+                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.jiff_tz, &mut new_val_buf);
                 jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
             }
         };
