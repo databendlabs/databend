@@ -22,6 +22,171 @@ statement ok
 set timezone='Asia/Shanghai'
 
 query T
+select last_day(to_date('2024-10-22'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-10-27'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-02-01'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_date('2024-02-01'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_date('2024-02-01'), year);
+----
+2024-12-31
+
+query T
+select last_day(to_timestamp('2024-10-24 01:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-24 23:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-27 01:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-27 23:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-02-11 01:00:00'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_timestamp('2024-02-11 23:00:00'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_timestamp('2024-02-11 01:00:00'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_timestamp('2024-02-11 23:00:00'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_timestamp('2024-02-11 01:00:00'), year);
+----
+2024-12-31
+
+query T
+select last_day(to_timestamp('2024-02-11 23:00:00'), year);
+----
+2024-12-31
+
+query T
+select previous_day(to_date('2024-10-25'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_date('2024-10-25'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_date('2024-10-25'), saturday);
+----
+2024-10-19
+
+query T
+select previous_day(to_timestamp('2024-10-25 01:00:00'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_timestamp('2024-10-25 23:00:00'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_timestamp('2024-10-25 01:00:00'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_timestamp('2024-10-25 23:00:00'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_timestamp('2024-10-25 01:00:00'), sunday);
+----
+2024-10-20
+
+query T
+select previous_day(to_timestamp('2024-10-25 23:00:00'), sunday);
+----
+2024-10-20
+
+query T
+select next_day(to_date('2024-10-25'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_date('2024-10-25'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_date('2024-10-25'), saturday);
+----
+2024-10-26
+
+query T
+select next_day(to_timestamp('2024-10-25 01:00:00'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_timestamp('2024-10-25 23:00:00'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_timestamp('2024-10-25 01:00:00'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_timestamp('2024-10-25 23:00:00'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_timestamp('2024-10-25 01:00:00'), sunday);
+----
+2024-10-27
+
+query T
+select next_day(to_timestamp('2024-10-25 23:00:00'), sunday);
+----
+2024-10-27
+
+query T
 select to_timestamp(1630320462000000)
 ----
 2021-08-30 18:47:42.000000
