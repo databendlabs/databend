@@ -34,6 +34,7 @@ use databend_common_base::base::tokio;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_sled_store::init_sled_db;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
@@ -361,6 +362,10 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
     let _guards = init_logging("metactl", &log_config, BTreeMap::new());
+
+    if let Some(raft_dir) = &app.globals.raft_dir {
+        OnDisk::ensure_dirs(raft_dir)?;
+    }
 
     match app.command {
         Some(ref cmd) => match cmd {
