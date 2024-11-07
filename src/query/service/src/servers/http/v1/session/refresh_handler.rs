@@ -42,11 +42,21 @@ pub async fn refresh_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<RefreshRequest>,
 ) -> PoemResult<impl IntoResponse> {
+    let client_session_id = ctx
+        .client_session_id
+        .as_ref()
+        .expect("login_handler expect session id in ctx")
+        .clone();
     let mgr = ClientSessionManager::instance();
     match &ctx.credential {
         Credential::DatabendToken { token, .. } => {
             let (_, token_pair) = mgr
-                .new_token_pair(&ctx.session, Some(token.clone()), req.session_token)
+                .new_token_pair(
+                    &ctx.session,
+                    client_session_id,
+                    Some(token.clone()),
+                    req.session_token,
+                )
                 .await
                 .map_err(HttpErrorCode::server_error)?;
             Ok(Json(RefreshResponse {

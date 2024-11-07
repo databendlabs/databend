@@ -173,6 +173,7 @@ impl ClientSessionManager {
     pub async fn new_token_pair(
         &self,
         session: &Arc<Session>,
+        client_session_id: String,
         old_refresh_token: Option<String>,
         old_session_token: Option<String>,
     ) -> Result<(String, TokenPair)> {
@@ -181,22 +182,12 @@ impl ClientSessionManager {
         let tenant_name = tenant.tenant_name().to_string();
         let user = session.get_current_user()?.name;
         let auth_role = session.privilege_mgr().get_auth_role();
-        let client_session_id = if let Some(old) = &old_refresh_token {
-            let (claim, _) = SessionClaim::decode(old)?;
-            assert_eq!(tenant_name, claim.tenant);
-            assert_eq!(user, claim.user);
-            assert_eq!(auth_role, claim.auth_role);
-            claim.session_id
-        } else {
-            uuid::Uuid::new_v4().to_string()
-        };
-
         let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
 
         // new refresh token
         let now = unix_ts();
         let mut claim = SessionClaim::new(
-            None,
+            client_session_id.clone(),
             &tenant_name,
             &user,
             &auth_role,

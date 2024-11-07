@@ -93,15 +93,19 @@ pub async fn login_handler(
     Json(req): Json<LoginRequest>,
     Query(query): Query<LoginQuery>,
 ) -> PoemResult<impl IntoResponse> {
+    let session_id = ctx
+        .client_session_id
+        .as_ref()
+        .expect("login_handler expect session id in ctx")
+        .clone();
     let version = DATABEND_SEMVER.to_string();
     check_login(ctx, &req)
         .await
         .map_err(HttpErrorCode::bad_request)?;
     let id_only = || {
-        let session_id = uuid::Uuid::new_v4().to_string();
         Ok(Json(LoginResponse {
             version: version.clone(),
-            session_id,
+            session_id: session_id.clone(),
             tokens: None,
         }))
     };
@@ -113,7 +117,7 @@ pub async fn login_handler(
                 id_only()
             } else {
                 let (session_id, token_pair) = ClientSessionManager::instance()
-                    .new_token_pair(&ctx.session, None, None)
+                    .new_token_pair(&ctx.session, session_id, None, None)
                     .await
                     .map_err(HttpErrorCode::server_error)?;
                 Ok(Json(LoginResponse {
