@@ -138,11 +138,7 @@ pub struct Unit<R: Reader> {
     pub(crate) range_list: RangeLists<R>,
     pub(crate) debug_str_offsets: DebugStrOffsets<R>,
 
-    // addr_base: DebugAddrBase,
     pub(crate) abbreviations: Abbreviations,
-    // loclists_base: DebugLocListsBase,
-    // rnglists_base: DebugRngListsBase,
-    // str_offsets_base: DebugStrOffsetsBase,
     pub(crate) attrs: UnitAttrs<R>,
 }
 

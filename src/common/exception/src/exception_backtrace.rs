@@ -70,7 +70,6 @@ pub struct ResolvedStackFrame {
     pub file: Option<String>,
     pub line: Option<u32>,
     pub column: Option<u32>,
-    // pub location: Location,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -256,11 +255,6 @@ impl Debug for StackTrace {
         drop(display_guard);
 
         writeln!(f, "{}", display_text)?;
-        // log::info!(
-        //     "format stack trace elapsed: {:?}, {:?}",
-        //     instance.elapsed(),
-        //     std::thread::current().name()
-        // );
         Ok(())
     }
 }
