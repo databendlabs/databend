@@ -25,9 +25,10 @@ use raft_log::codeq::error_context_ext::ErrorContextExt;
 use tokio::io;
 
 use crate::key_spaces::RaftStoreEntry;
-use crate::log::raft_log_2;
 use crate::ondisk::DataVersion;
 use crate::ondisk::OnDisk;
+use crate::raft_log_v004::importer;
+use crate::raft_log_v004::RaftLogV004;
 use crate::sm_v003::SnapshotStoreV003;
 use crate::sm_v003::SnapshotStoreV004;
 
@@ -44,8 +45,8 @@ impl OnDisk {
 
         let raft_log_config = self.config.clone().to_raft_log_config();
         let raft_log_config = Arc::new(raft_log_config);
-        let raft_log = raft_log_2::RaftLog2::open(raft_log_config)?;
-        let mut importer = raft_log_2::Importer::new(raft_log);
+        let raft_log = RaftLogV004::open(raft_log_config)?;
+        let mut importer = importer::Importer::new(raft_log);
 
         let tree_names = ["raft_state", "raft_log"];
 

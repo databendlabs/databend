@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(coroutines)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(try_blocks)]
-#![allow(clippy::diverging_sub_expression)]
-extern crate core;
+use std::io;
 
-pub mod applier;
-pub mod config;
-pub mod key_spaces;
-pub mod leveled_store;
-pub(crate) mod marked;
-pub mod ondisk;
-pub mod raft_log_v004;
-pub mod sm_v003;
-pub mod snapshot_config;
-pub mod state;
-pub mod state_machine;
-pub mod utils;
+use raft_log::api::raft_log_writer::RaftLogWriter;
+use tokio::sync::oneshot;
+
+use crate::raft_log_v004::callback::Callback;
+use crate::raft_log_v004::RaftLogV004;
+
+pub async fn blocking_flush(rl: &mut RaftLogV004) -> Result<(), io::Error> {
+    let (tx, rx) = oneshot::channel();
+    let callback = Callback::new_oneshot(tx, "blocking_flush");
+
+    rl.flush(callback)?;
+    rx.await.map_err(|_e| {
+        io::Error::new(io::ErrorKind::Other, "Failed to receive flush completion")
+    })??;
+    Ok(())
+}
