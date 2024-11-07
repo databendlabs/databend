@@ -17,11 +17,10 @@
 extern crate core;
 
 mod context;
+#[cfg(target_os = "linux")]
+mod elf;
 pub mod exception;
 mod exception_backtrace;
-// #[cfg(target_os = "linux")]
-mod elf;
-mod exception_backtrace_elf;
 mod exception_code;
 mod exception_flight;
 mod exception_into;

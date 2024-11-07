@@ -61,7 +61,7 @@ pub fn capture() -> StackTrace {
     StackTrace::capture()
 }
 
-// #[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
 pub struct ResolvedStackFrame {
     pub virtual_address: usize,
     pub physical_address: usize,

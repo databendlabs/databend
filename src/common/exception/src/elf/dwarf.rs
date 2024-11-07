@@ -211,3 +211,10 @@ impl Dwarf {
         }
     }
 }
+
+// #[cfg(target_os = "linux")]
+#[derive(Copy, Clone, Debug)]
+pub enum HighPc {
+    Addr(u64),
+    Offset(u64),
+}

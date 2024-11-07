@@ -27,7 +27,6 @@ use crate::elf::library_symbol::Symbol;
 use crate::elf::ElfFile;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
-use crate::exception_backtrace_elf;
 
 pub struct Library {
     pub name: String,

@@ -20,8 +20,8 @@ use gimli::Reader;
 use gimli::Result;
 use gimli::UnitOffset;
 
+use crate::elf::dwarf::HighPc;
 use crate::elf::dwarf_unit::Unit;
-use crate::exception_backtrace_elf::HighPc;
 
 pub struct SubprogramAttrs<R: Reader> {
     high_pc: Option<HighPc>,

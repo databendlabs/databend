@@ -47,8 +47,8 @@ use gimli::UnitHeader;
 use gimli::UnitOffset;
 
 use crate::elf::dwarf::CallLocation;
+use crate::elf::dwarf::HighPc;
 use crate::elf::dwarf_subprogram::SubprogramAttrs;
-use crate::exception_backtrace_elf::HighPc;
 
 // Unit first die attrs
 pub struct UnitAttrs<R: Reader> {

@@ -13,26 +13,3 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-
-pub struct Location {
-    pub file: String,
-    pub line: Option<u32>,
-    pub column: Option<u32>,
-}
-
-impl Location {
-    pub fn unknown() -> Location {
-        Location {
-            file: String::from("<unknown>"),
-            line: None,
-            column: None,
-        }
-    }
-}
-
-// #[cfg(target_os = "linux")]
-#[derive(Copy, Clone, Debug)]
-pub enum HighPc {
-    Addr(u64),
-    Offset(u64),
-}

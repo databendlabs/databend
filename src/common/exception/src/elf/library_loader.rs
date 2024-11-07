@@ -34,7 +34,6 @@ use object::ObjectSymbolTable;
 use crate::elf::library_manager::Library;
 use crate::elf::library_symbol::Symbol;
 use crate::elf::ElfFile;
-use crate::exception_backtrace_elf;
 
 #[derive(Debug)]
 pub struct LibraryLoader {

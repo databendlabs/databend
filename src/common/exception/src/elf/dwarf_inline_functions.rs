@@ -24,10 +24,10 @@ use gimli::Result;
 use gimli::UnitOffset;
 
 use crate::elf::dwarf::CallLocation;
+use crate::elf::dwarf::HighPc;
 use crate::elf::dwarf_subprogram::SubprogramAttrs;
 use crate::elf::dwarf_unit::Unit;
 use crate::elf::dwarf_unit::UnitAttrs;
-use crate::exception_backtrace_elf::HighPc;
 
 pub struct SubroutineAttrs<R: Reader> {
     high_pc: Option<HighPc>,
@@ -112,9 +112,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
