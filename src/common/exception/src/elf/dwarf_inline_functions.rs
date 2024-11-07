@@ -36,7 +36,7 @@ pub struct SubroutineAttrs<R: Reader> {
 
     name: Option<R>,
     line: Option<u32>,
-    file: Option<u64>,
+    file: Option<String>,
     column: Option<u32>,
 }
 
@@ -69,15 +69,6 @@ impl<R: Reader> SubroutineAttrs<R> {
                 _ => {}
             },
             gimli::DW_AT_ranges => {
-                // match attr.value() {
-                //     AttributeValue::RangeListsRef(offset) => {
-                //         self.ranges_offset =
-                //         Ok(Some(self.ranges_offset_from_raw(unit, offset)))
-                //     }
-                //     AttributeValue::DebugRngListsIndex(index) => self.ranges_offset(unit, index).map(Some),
-                //     _ => Ok(None),
-                // }
-
                 if let AttributeValue::RangeListsRef(v) = attr.value() {
                     self.ranges_offset = Some(RangeListsOffset(v.0));
                 }
@@ -101,7 +92,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             }
             gimli::DW_AT_call_file => {
                 if let AttributeValue::FileIndex(idx) = attr.value() {
-                    self.file = Some(idx);
+                    if let Ok(filename) = unit.find_file(idx) {
+                        self.file = filename;
+                    }
                 }
             }
             gimli::DW_AT_call_line => {
@@ -194,8 +187,6 @@ impl<R: Reader> Unit<R> {
         match v {
             AttributeValue::UnitRef(offset) => self.name_entry(offset, recursion),
             AttributeValue::DebugInfoRef(dr) => {
-                let mut offset = DebugInfoOffset(R::Offset::from_u8(0));
-
                 let mut head = None;
                 let mut units = self.debug_info.units();
 
@@ -305,9 +296,9 @@ impl<R: Reader> Unit<R> {
 
                         inlined_functions.push(CallLocation {
                             symbol: name,
-                            file: None,
-                            line: None,
-                            column: None,
+                            file: attrs.file,
+                            line: attrs.line,
+                            column: attrs.column,
                             is_inlined: true,
                         });
 

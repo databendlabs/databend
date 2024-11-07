@@ -176,6 +176,43 @@ impl<R: Reader> Unit<R> {
         false
     }
 
+    pub fn find_file(&self, file_idx: u64) -> gimli::Result<Option<String>> {
+        if let Some(offset) = &self.attrs.debug_line_offset {
+            let program = self.debug_line.program(
+                *offset,
+                self.head.address_size(),
+                self.attrs.comp_dir.clone(),
+                self.attrs.name.clone(),
+            )?;
+
+            let header = program.header();
+
+            if let Some(file) = header.file(file_idx) {
+                let mut path_buf = PathBuf::new();
+
+                if let Some(dir) = &self.attrs.comp_dir {
+                    path_buf.push(dir.to_string_lossy().unwrap().into_owned());
+                }
+
+                if file.directory_index() != 0 {
+                    if let Some(v) = file.directory(header) {
+                        if let Some(v) = v.string_value(&self.debug_str) {
+                            path_buf.push(v.to_string_lossy().unwrap().into_owned());
+                        }
+                    }
+                }
+
+                if let Some(v) = file.path_name().string_value(&self.debug_str) {
+                    path_buf.push(v.to_string_lossy().unwrap().into_owned());
+                }
+
+                return Ok(Some(format!("{}", path_buf.display())));
+            }
+        }
+
+        Ok(None)
+    }
+
     pub fn find_location(&self, probe: u64) -> gimli::Result<Option<Location>> {
         if let Some(offset) = &self.attrs.debug_line_offset {
             let program = self.debug_line.program(
@@ -200,19 +237,19 @@ impl<R: Reader> Unit<R> {
                     if row.address() > probe {
                         let address = row.address();
 
-                        while let Some((_, row)) = rows.next_row()? {
-                            if address == row.address() {
-                                file_idx = row.file_index();
-                                line = row.line().map(NonZeroU64::get).unwrap_or(0) as u32;
-                                column = match row.column() {
-                                    gimli::ColumnType::LeftEdge => 0,
-                                    gimli::ColumnType::Column(x) => x.get() as u32,
-                                };
-                                continue;
-                            }
-
-                            break;
-                        }
+                        // while let Some((_, row)) = rows.next_row()? {
+                        //     if !row.end_sequence() && address == row.address() {
+                        //         file_idx = row.file_index();
+                        //         line = row.line().map(NonZeroU64::get).unwrap_or(0) as u32;
+                        //         column = match row.column() {
+                        //             gimli::ColumnType::LeftEdge => 0,
+                        //             gimli::ColumnType::Column(x) => x.get() as u32,
+                        //         };
+                        //         continue;
+                        //     break;
+                        // }
+                        //     }
+                        //
                         let mut path_buf = PathBuf::new();
 
                         if let Some(dir) = &self.attrs.comp_dir {
