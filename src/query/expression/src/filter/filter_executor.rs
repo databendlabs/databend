@@ -126,7 +126,7 @@ impl FilterExecutor {
             if self.keep_order && self.has_or {
                 self.true_selection[0..result_count].sort();
             }
-            data_block.take(&self.true_selection[0..result_count])
+            data_block.take_with_optimize_size(&self.true_selection[0..result_count])
         }
     }
 

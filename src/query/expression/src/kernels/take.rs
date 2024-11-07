@@ -46,7 +46,7 @@ impl DataBlock {
         self.take_inner(taker)
     }
 
-    pub fn scatter_take<I>(&self, indices: &[I]) -> Result<Self>
+    pub fn take_with_optimize_size<I>(&self, indices: &[I]) -> Result<Self>
     where I: databend_common_arrow::arrow::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
