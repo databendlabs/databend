@@ -304,11 +304,7 @@ impl Column {
     pub fn maybe_gc(self) -> Self {
         match self {
             Column::String(c) => {
-                let data = if c.data.is_sliced() {
-                    c.data.maybe_gc()
-                } else {
-                    c.data
-                };
+                let data = c.data.maybe_gc();
                 let c = StringColumn::new(data);
                 Column::String(c)
             }

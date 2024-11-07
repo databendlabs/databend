@@ -356,6 +356,21 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
         }
     }
 
+    fn total_unshared_buffer_len(&self) -> usize {
+        // Given this function is only called in `maybe_gc()`,
+        // it may not be worthy to add an extra field for this.
+        self.buffers
+            .iter()
+            .map(|buf| {
+                if buf.shared_count_strong() > 1 {
+                    0
+                } else {
+                    buf.len()
+                }
+            })
+            .sum()
+    }
+
     /// Get the length of bytes that are stored in the variadic buffers.
     pub fn total_buffer_len(&self) -> usize {
         self.total_buffer_len
@@ -395,6 +410,13 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
         if self.total_buffer_len <= GC_MINIMUM_SAVINGS {
             return self;
         }
+
+        // if Arc::strong_count(&self.buffers) != 1 {
+        //     // There are multiple holders of this `buffers`.
+        //     // If we allow gc in this case,
+        //     // it may end up copying the same content multiple times.
+        //     return self;
+        // }
 
         // Subtract the maximum amount of inlined strings to get a lower bound
         // on the number of buffer bytes needed (assuming no dedup).
