@@ -29,8 +29,7 @@ use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
 use databend_common_meta_raft_store::ondisk::DataVersion;
-use databend_common_meta_raft_store::raft_log_v004::log_store_meta;
-use databend_common_meta_raft_store::raft_log_v004::util;
+use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV003;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
@@ -52,6 +51,7 @@ use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::Node;
 use databend_meta::store::RaftStore;
+use raft_log::api::raft_log_writer::RaftLogWriter;
 use url::Url;
 
 use crate::reading;
@@ -376,10 +376,10 @@ async fn init_new_cluster(
     // Reset node id
     {
         let mut log = sto.log.write().await;
-        log.save_user_data(Some(log_store_meta::LogStoreMeta {
+        log.save_user_data(Some(raft_log_v004::LogStoreMeta {
             node_id: Some(args.id),
-        }));
-        util::blocking_flush(&mut log).await?;
+        }))?;
+        raft_log_v004::util::blocking_flush(&mut log).await?;
     }
 
     Ok(())
