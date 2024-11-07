@@ -116,10 +116,8 @@ impl OnDisk {
 
             let p = raft_dir.join("df_meta").join("V004");
 
-            fs::remove_dir_all(&p).context(format!(
-                "remove unfinished upgrade in {}",
-                p.as_path().display()
-            ))?;
+            fs::remove_dir_all(&p)
+                .context(|| format!("remove unfinished upgrade in {}", p.as_path().display()))?;
         }
 
         Ok(())
