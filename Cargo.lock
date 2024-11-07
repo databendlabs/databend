@@ -879,6 +879,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-glue"
+version = "1.53.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf27e013b137b3f441372300d540bf35960db4a87b123ccafe4a36e314502550"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "http 0.2.12",
+ "once_cell",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-s3"
 version = "1.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4294,6 +4316,7 @@ dependencies = [
  "fastrace",
  "futures",
  "iceberg",
+ "iceberg-catalog-glue",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
@@ -8500,6 +8523,23 @@ dependencies = [
  "tokio",
  "typed-builder 0.20.0",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "iceberg-catalog-glue"
+version = "0.3.0"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=fe5df3f#fe5df3fc432f6f3c0e235bca710a3c7db0c5f369"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-glue",
+ "iceberg",
+ "log",
+ "serde_json",
+ "tokio",
+ "typed-builder 0.20.0",
  "uuid",
 ]
 

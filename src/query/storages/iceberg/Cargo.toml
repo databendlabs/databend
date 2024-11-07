@@ -27,6 +27,7 @@ futures = { workspace = true }
 iceberg = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
+iceberg-catalog-glue = { workspace = true }
 match-template = { workspace = true }
 ordered-float = { workspace = true }
 serde = { workspace = true }

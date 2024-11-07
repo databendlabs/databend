@@ -57,6 +57,7 @@ message IcebergCatalogOption {
   oneof iceberg_catalog_option {
     IcebergRestCatalogOption rest_catalog = 2;
     IcebergHmsCatalogOption hms_catalog = 3;
+    IcebergGlueCatalogOption glue_catalog = 4;
   }
 }
 
@@ -76,6 +77,14 @@ message IcebergHmsCatalogOption {
   string address = 1;
   string warehouse = 2;
   map<string, string> props = 3;
+}
+
+message IcebergGlueCatalogOption {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string warehouse = 1;
+  map<string, string> props = 2;
 }
 
 message ShareCatalogOption {

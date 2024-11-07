@@ -78,6 +78,9 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                 IcebergCatalogOption::Hms(cfg) => {
                     format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
                 }
+                IcebergCatalogOption::Glue(cfg) => {
+                    format!("WAREHOUSE\n{}", cfg.warehouse)
+                }
             }),
         };
 
