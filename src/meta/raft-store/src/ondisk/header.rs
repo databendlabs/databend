@@ -31,6 +31,8 @@ pub struct Header {
     /// The target version to upgrade to.
     ///
     /// If it is present, the data is upgrading.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub upgrading: Option<DataVersion>,
 
     /// The second part of the upgrading process:
