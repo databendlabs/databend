@@ -113,7 +113,7 @@ impl TableSnapshot {
 
         if segment_block_timestamp < snapshot_timestamp {
             return Err(ErrorCode::TransactionTimeout(format!(
-                "Snapshot is generated too late, base_timestamp: {:?}, snapshot_lvt: {:?}",
+                "Snapshot is generated too late, segment_block_timestamp: {:?}, snapshot_timestamp: {:?}",
                 segment_block_timestamp, snapshot_timestamp
             )));
         }

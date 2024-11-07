@@ -20,9 +20,9 @@ use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::testing::StatisticsV0;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV1;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
-
 fn default_snapshot() -> TableSnapshot {
     let schema = TableSchema::empty();
     let stats = Default::default();
@@ -72,6 +72,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
 
     // simulating a stalled clock
     prev.timestamp = Some(prev.timestamp.unwrap().add(chrono::Duration::days(1)));
+    let table_meta_timestamps = TableMetaTimestamps::new(None, 2);
 
     let current = TableSnapshot::try_new(
         None,
@@ -81,7 +82,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
         vec![],
         None,
         None,
-        Default::default(),
+        table_meta_timestamps,
     )
     .unwrap();
     let current_ts = current.timestamp.unwrap();
