@@ -56,6 +56,7 @@ pub struct CallLocation {
     pub file: Option<String>,
     pub line: Option<u32>,
     pub column: Option<u32>,
+    pub is_inlined: bool,
 }
 
 pub struct Dwarf {
@@ -174,15 +175,14 @@ impl Dwarf {
         }))
     }
 
-    fn fast_find_function(&self, probe: u64) -> gimli::Result<Option<Vec<CallLocation>>> {
+    fn fast_find_frames(&self, probe: u64) -> gimli::Result<Option<Vec<CallLocation>>> {
         if let Some(debug_info_offset) = self.find_debug_info_offset(probe) {
-            eprintln!("fast find function {:?}", debug_info_offset);
             let head = self.debug_info.header_from_offset(debug_info_offset)?;
 
             let type_ = head.type_();
             if matches!(type_, UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {
-                    return Ok(Some(unit.find_location(probe)?));
+                    return Ok(Some(unit.find_frames(probe)?));
                 }
             }
         }
@@ -190,14 +190,13 @@ impl Dwarf {
         Ok(None)
     }
 
-    fn slow_find_function(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
+    fn slow_find_frames(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
         let mut units = self.debug_info.units();
         while let Some(head) = units.next()? {
             if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {
                     if unit.match_pc(probe) {
-                        eprintln!("slow find function {:?}", head.offset());
-                        return Ok(unit.find_location(probe)?);
+                        return Ok(unit.find_frames(probe)?);
                     }
                 }
             }
@@ -206,10 +205,10 @@ impl Dwarf {
         Ok(vec![])
     }
 
-    pub fn find_function(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
-        match self.fast_find_function(probe)? {
+    pub fn find_frames(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
+        match self.fast_find_frames(probe)? {
             Some(location) => Ok(location),
-            None => self.slow_find_function(probe),
+            None => self.slow_find_frames(probe),
         }
     }
 }

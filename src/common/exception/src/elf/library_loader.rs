@@ -94,7 +94,6 @@ impl LibraryLoader {
     }
 
     unsafe fn mmap_library(&mut self, library_path: PathBuf) -> std::io::Result<Library> {
-        eprintln!("switch library: {}", library_path.display());
         let name = format!("{}", library_path.display());
         let file = std::fs::File::open(library_path)?;
         let file_len = file.metadata()?.len();

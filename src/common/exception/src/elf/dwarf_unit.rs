@@ -167,16 +167,11 @@ impl<R: Reader> Unit<R> {
         ) {
             while let Ok(Some(range)) = ranges.next() {
                 if probe >= range.begin && probe < range.end {
-                    eprintln!(
-                        "range matched {:?} {:?}, {:?}",
-                        range.begin, range.end, probe
-                    );
                     return true;
                 }
             }
         }
 
-        eprintln!("range matched");
         false
     }
 
@@ -257,22 +252,21 @@ impl<R: Reader> Unit<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
     }
 
-    pub fn find_location(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
+    pub fn find_frames(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
         // let Some(location) = self.find_line(probe)? else {
         //     return Ok(vec![]);
         // };
 
         let mut inlined_functions = vec![];
         if let Some(offset) = self.find_subprogram(probe)? {
-            eprintln!("begin find inlined functions {:?} {:?}", self.head.offset(), offset);
             let _ = self.find_function(offset, probe, &mut inlined_functions);
         }
 

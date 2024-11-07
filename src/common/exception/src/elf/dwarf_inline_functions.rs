@@ -93,19 +93,11 @@ impl<R: Reader> SubroutineAttrs<R> {
                 }
             }
             gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                eprintln!(
-                    "gimli::DW_AT_abstract_origin | gimli::DW_AT_specification before {:?} {:?}",
-                    self.name.as_ref().map(|x| x.to_string_lossy()), attr.value(),
-                );
                 if self.name.is_none() {
                     if let Ok(Some(v)) = unit.name_attr(attr.value(), 16) {
                         self.name = Some(v);
                     }
                 }
-                eprintln!(
-                    "gimli::DW_AT_abstract_origin | gimli::DW_AT_specification after {:?}",
-                    self.name.as_ref().map(|x| x.to_string_lossy())
-                );
             }
             gimli::DW_AT_call_file => {
                 if let AttributeValue::FileIndex(idx) = attr.value() {
@@ -127,9 +119,9 @@ impl<R: Reader> SubroutineAttrs<R> {
             (Some(low), Some(high)) => {
                 probe >= low
                     && match high {
-                    HighPc::Addr(high) => probe < high,
-                    HighPc::Offset(size) => probe < low + size,
-                }
+                        HighPc::Addr(high) => probe < high,
+                        HighPc::Offset(size) => probe < low + size,
+                    }
             }
             _ => false,
         }
@@ -140,16 +132,9 @@ impl<R: Reader> Unit<R> {
     pub(crate) fn attr_str(&self, value: AttributeValue<R>) -> Option<R> {
         match value {
             AttributeValue::String(string) => Some(string),
-            AttributeValue::DebugStrRef(offset) => {
-                eprintln!("attr_str DebugStrRef {:?}", offset);
-                self.debug_str.get_str(offset).ok()
-            }
-            AttributeValue::DebugLineStrRef(offset) => {
-                eprintln!("attr_str DebugLineStrRef {:?}", offset);
-                self.debug_line_str.get_str(offset).ok()
-            }
+            AttributeValue::DebugStrRef(offset) => self.debug_str.get_str(offset).ok(),
+            AttributeValue::DebugLineStrRef(offset) => self.debug_line_str.get_str(offset).ok(),
             AttributeValue::DebugStrOffsetsIndex(index) => {
-                eprintln!("attr_str DebugStrOffsetsIndex {:?}", index);
                 let offset = self
                     .debug_str_offsets
                     .get_str_offset(
@@ -175,26 +160,19 @@ impl<R: Reader> Unit<R> {
         let mut name = None;
         let mut next = None;
         for spec in abbrev.attributes() {
-            match entries.read_attribute(*spec) {
-                Ok(ref attr) => match attr.name() {
-                    gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
-                        eprintln!("DW_AT_linkage_name | DW_AT_MIPS_linkage_name");
-                        if let Some(val) = self.attr_str(attr.value()) {
-                            return Ok(Some(val));
-                        }
+            let attr = entries.read_attribute(*spec)?;
+            match attr.name() {
+                gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
+                    if let Some(val) = self.attr_str(attr.value()) {
+                        return Ok(Some(val));
                     }
-                    gimli::DW_AT_name => {
-                        eprintln!("DW_AT_name");
-                        name = self.attr_str(attr.value());
-                    }
-                    gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                        eprintln!("gimli::DW_AT_abstract_origin | gimli::DW_AT_specification {}", attr.name());
-                        next = Some(attr.value());
-                    }
-                    _ => {}
-                },
-                Err(e) => return Err(e),
-            }
+                }
+                gimli::DW_AT_name => name = self.attr_str(attr.value()),
+                gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
+                    next = Some(attr.value())
+                }
+                _ => {}
+            };
         }
 
         if name.is_some() {
@@ -236,8 +214,6 @@ impl<R: Reader> Unit<R> {
                     let unit_offset = dr
                         .to_unit_offset(&head)
                         .ok_or(gimli::Error::NoEntryAtGivenOffset)?;
-
-                    eprintln!("debug info ref offset {:?}, unit offset {:?} entities offset {:?}", dr, head.offset(), unit_offset);
 
                     let abbrev_offset = head.debug_abbrev_offset();
                     let Ok(abbreviations) = self.debug_abbrev.abbreviations(abbrev_offset) else {
@@ -282,7 +258,7 @@ impl<R: Reader> Unit<R> {
         mut entries: EntriesRaw<R>,
         probe: u64,
         depth: isize,
-        res: &mut Vec<CallLocation>,
+        inlined_functions: &mut Vec<CallLocation>,
     ) -> Result<()> {
         loop {
             let next_depth = entries.next_depth();
@@ -294,7 +270,6 @@ impl<R: Reader> Unit<R> {
             if let Some(abbrev) = entries.read_abbreviation()? {
                 match abbrev.tag() {
                     gimli::DW_TAG_subprogram => {
-                        eprintln!("inlined is subprogram");
                         entries.skip_attributes(abbrev.attributes())?;
                         while entries.next_depth() > next_depth {
                             if let Some(abbrev) = entries.read_abbreviation()? {
@@ -303,7 +278,6 @@ impl<R: Reader> Unit<R> {
                         }
                     }
                     gimli::DW_TAG_inlined_subroutine => {
-                        eprintln!("inlined is subprogram DW_TAG_inlined_subroutine");
                         let mut attrs = SubroutineAttrs::create();
                         for spec in abbrev.attributes() {
                             let attr = entries.read_attribute(*spec)?;
@@ -316,28 +290,32 @@ impl<R: Reader> Unit<R> {
                         };
 
                         if !match_range && !attrs.match_pc(probe) {
-                            continue
+                            continue;
                         }
 
-                        if let Some(name) = &attrs.name {
-                            if let Ok(name) = name.to_string_lossy() {
-                                if let Ok(name) = rustc_demangle::try_demangle(name.as_ref()) {
-                                    res.push(CallLocation {
-                                        symbol: Some(format!("{:#}", name)),
-                                        file: None,
-                                        line: attrs.line,
-                                        column: attrs.column,
-                                    });
+                        let name = match attrs.name {
+                            None => None,
+                            Some(name) => match name.to_string_lossy() {
+                                Err(_) => None,
+                                Ok(name) => {
+                                    Some(format!("{:#}", rustc_demangle::demangle(name.as_ref())))
                                 }
-                            }
-                        }
+                            },
+                        };
 
-                        self.inlined_functions(entries, probe, next_depth, res)?;
+                        inlined_functions.push(CallLocation {
+                            symbol: name,
+                            file: None,
+                            line: None,
+                            column: None,
+                            is_inlined: true,
+                        });
+
+                        self.inlined_functions(entries, probe, next_depth, inlined_functions)?;
 
                         return Ok(());
                     }
                     _ => {
-                        eprintln!("inlined is {:?}", abbrev.tag());
                         entries.skip_attributes(abbrev.attributes())?;
                     }
                 }
@@ -349,7 +327,7 @@ impl<R: Reader> Unit<R> {
         &self,
         offset: UnitOffset<R::Offset>,
         probe: u64,
-        res: &mut Vec<CallLocation>,
+        functions: &mut Vec<CallLocation>,
     ) -> Result<()> {
         let mut entries = self.head.entries_raw(&self.abbreviations, Some(offset))?;
         let depth = entries.next_depth();
@@ -379,30 +357,25 @@ impl<R: Reader> Unit<R> {
             };
         }
 
-        self.inlined_functions(entries, probe, depth, res)?;
+        self.inlined_functions(entries, probe, depth, functions)?;
 
-        eprintln!("inline functions: {:?}", res);
-        // TODO: find location
-        if let Some(name) = name {
-            if let Ok(name) = name.to_string_lossy() {
-                res.push(CallLocation {
-                    symbol: Some(format!("{}", rustc_demangle::demangle(name.as_ref()))),
-                    file: None,
-                    line: None,
-                    column: None,
-                })
-            }
-        }
+        let name = match name {
+            None => None,
+            Some(name) => match name.to_string_lossy() {
+                Err(_) => None,
+                Ok(name) => Some(format!("{:#}", rustc_demangle::demangle(name.as_ref()))),
+            },
+        };
 
-        // res.push(CallLocation {
-        //     symbol: name,
-        //     file: None,
-        //     line: None,
-        //     column: None,
-        // });
+        functions.reverse();
+        functions.push(CallLocation {
+            symbol: name,
+            file: None,
+            line: None,
+            column: None,
+            is_inlined: true,
+        });
 
         Ok(())
     }
 }
-
-
