@@ -76,7 +76,7 @@ async fn test_export() -> anyhow::Result<()> {
     }
 
     let want = vec![
-        r#"["header",{"DataHeader":{"key":"header","value":{"version":"V004","upgrading":null}}}]"#,
+        r#"["header",{"DataHeader":{"key":"header","value":{"version":"V004"}}}]"#,
         r#"["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]"#,
         r#"["raft_state",{"RaftStateKV":{"key":"HardState","value":{"HardState":{"leader_id":{"term":1,"node_id":0},"committed":true}}}}]"#,
         r#"["raft_state",{"RaftStateKV":{"key":"Committed","value":{"Committed":{"leader_id":{"term":1,"node_id":0},"index":6}}}}]"#,
