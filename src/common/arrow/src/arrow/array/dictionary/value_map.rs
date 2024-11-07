@@ -21,8 +21,8 @@ use std::hash::BuildHasherDefault;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use hashbrown::hash_map::RawEntryMut;
-use hashbrown::HashMap;
+use hashbrown_v0_14::hash_map::RawEntryMut;
+use hashbrown_v0_14::HashMap;
 
 use super::DictionaryKey;
 use crate::arrow::array::indexable::AsIndexed;

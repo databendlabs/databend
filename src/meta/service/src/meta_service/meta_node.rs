@@ -38,16 +38,19 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::raft_types::CommittedLeaderId;
+use databend_common_meta_types::raft_types::ForwardToLeader;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::MembershipNode;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::RaftMetrics;
+use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::CommittedLeaderId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
-use databend_common_meta_types::ForwardToLeader;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaManagementError;
@@ -55,9 +58,6 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::RaftMetrics;
-use databend_common_meta_types::TypeConfig;
 use fastrace::func_name;
 use fastrace::prelude::*;
 use futures::channel::oneshot;
@@ -287,7 +287,7 @@ impl MetaNode {
             srv.serve_with_shutdown(socket_addr, async move {
                 let _ = running_rx.changed().await;
                 info!(
-                    "signal received, shutting down: id={} {} ",
+                    "running_rx for Raft server received, shutting down: id={} {} ",
                     node_id, ip_port
                 );
             })
@@ -422,7 +422,10 @@ impl MetaNode {
 
                 if let Err(changed_err) = changed {
                     // Shutting down.
-                    error!("{} when watching metrics_rx", changed_err);
+                    info!(
+                        "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
+                        changed_err
+                    );
                     break;
                 }
 
@@ -825,7 +828,7 @@ impl MetaNode {
 
     fn get_db_size(&self) -> Result<u64, MetaError> {
         self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
+            let se = MetaStorageError::Damaged(AnyError::new(&e).add_context(|| "get db_size"));
             MetaError::StorageError(se)
         })
     }

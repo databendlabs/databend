@@ -31,19 +31,17 @@ pub struct LogoutResponse {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn logout_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
-    let error = if let Credential::DatabendToken { token, .. } = &ctx.credential {
+    if let Some(id) = &ctx.client_session_id {
         ClientSessionManager::instance()
-            .drop_client_session(token)
+            .drop_client_session_state(&ctx.session.get_current_tenant(), &ctx.user_name, id)
             .await
             .map_err(HttpErrorCode::server_error)?;
-        None
-    } else {
-        // should not get here since request is already authed
-        Some(QueryError {
-            code: 500,
-            message: "missing session token".to_string(),
-            detail: None,
-        })
-    };
-    Ok(Json(LogoutResponse { error }))
+        if let Credential::DatabendToken { token, .. } = &ctx.credential {
+            ClientSessionManager::instance()
+                .drop_client_session_token(token)
+                .await
+                .map_err(HttpErrorCode::server_error)?;
+        };
+    }
+    return Ok(Json(LogoutResponse { error: None }));
 }

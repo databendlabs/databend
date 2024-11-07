@@ -29,6 +29,7 @@ use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -38,6 +39,10 @@ use crate::ast::Query;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Statement {
     Query(Box<Query>),
+    StatementWithSettings {
+        settings: Option<Settings>,
+        stmt: Box<Statement>,
+    },
     Explain {
         kind: ExplainKind,
         options: Vec<ExplainOption>,
@@ -89,7 +94,6 @@ pub enum Statement {
     SetStmt {
         settings: Settings,
     },
-
     UnSetStmt {
         settings: Settings,
     },
@@ -157,6 +161,7 @@ pub enum Statement {
     DropDictionary(DropDictionaryStmt),
     ShowCreateDictionary(ShowCreateDictionaryStmt),
     ShowDictionaries(ShowDictionariesStmt),
+    RenameDictionary(RenameDictionaryStmt),
 
     // Columns
     ShowColumns(ShowColumnsStmt),
@@ -414,6 +419,23 @@ impl Display for Statement {
                 }
                 write!(f, " {query}")?;
             }
+            Statement::StatementWithSettings { settings, stmt } => {
+                if let Some(setting) = settings {
+                    write!(f, "SETTINGS (")?;
+                    let ids = &setting.identifiers;
+                    if let SetValues::Expr(values) = &setting.values {
+                        let mut expr = Vec::with_capacity(ids.len());
+                        for (id, value) in ids.iter().zip(values.iter()) {
+                            expr.push(format!("{} = {}", id, value));
+                        }
+                        write_comma_separated_list(f, expr)?;
+                    } else {
+                        unreachable!();
+                    }
+                    write!(f, ") ")?;
+                }
+                write!(f, "{stmt}")?;
+            }
             Statement::ExplainAnalyze {
                 partial,
                 graphical,
@@ -555,6 +577,7 @@ impl Display for Statement {
             Statement::DropDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDictionaries(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,

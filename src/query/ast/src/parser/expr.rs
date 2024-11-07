@@ -310,6 +310,18 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    LastDay {
+        unit: IntervalKind,
+        date: Expr,
+    },
+    PreviousDay {
+        unit: Weekday,
+        date: Expr,
+    },
+    NextDay {
+        unit: Weekday,
+        date: Expr,
+    },
     Hole {
         name: String,
     },
@@ -416,6 +428,9 @@ impl ExprElement {
             ExprElement::DateDiff { .. } => Affix::Nilfix,
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
+            ExprElement::LastDay { .. } => Affix::Nilfix,
+            ExprElement::PreviousDay { .. } => Affix::Nilfix,
+            ExprElement::NextDay { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
             ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
@@ -459,6 +474,9 @@ impl Expr {
             Expr::DateDiff { .. } => Affix::Nilfix,
             Expr::DateSub { .. } => Affix::Nilfix,
             Expr::DateTrunc { .. } => Affix::Nilfix,
+            Expr::LastDay { .. } => Affix::Nilfix,
+            Expr::PreviousDay { .. } => Affix::Nilfix,
+            Expr::NextDay { .. } => Affix::Nilfix,
             Expr::Hole { .. } => Affix::Nilfix,
         }
     }
@@ -653,6 +671,21 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 date: Box::new(date),
             },
             ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+            },
+            ExprElement::LastDay { unit, date } => Expr::LastDay {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+            },
+            ExprElement::PreviousDay { unit, date } => Expr::PreviousDay {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+            },
+            ExprElement::NextDay { unit, date } => Expr::NextDay {
                 span: transform_span(elem.span.tokens),
                 unit,
                 date: Box::new(date),
@@ -1222,6 +1255,27 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
 
+    let last_day = map(
+        rule! {
+            LAST_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::LastDay { unit, date },
+    );
+
+    let previous_day = map(
+        rule! {
+            PREVIOUS_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #weekday ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::PreviousDay { unit, date },
+    );
+
+    let next_day = map(
+        rule! {
+            NEXT_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #weekday ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::NextDay { unit, date },
+    );
+
     let date_expr = map(
         rule! {
             DATE ~ #consumed(literal_string)
@@ -1281,18 +1335,24 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #json_op : "<operator>"
                 | #unary_op : "<operator>"
                 | #cast : "`CAST(... AS ...)`"
-                | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_diff: "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
-                | #date_expr: "`DATE <str_literal>`"
-                | #timestamp_expr: "`TIMESTAMP <str_literal>`"
-                | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
                 | #pg_cast : "`::<type_name>`"
-                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
                 | #position : "`POSITION(... IN ...)`"
                 | #variable_access: "`$<ident>`"
+            ),
+            rule! (
+                #date_add : "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
+                | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
+                | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
+                | #date_expr : "`DATE <str_literal>`"
+                | #timestamp_expr : "`TIMESTAMP <str_literal>`"
+                | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
+                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+
             ),
             rule!(
                 #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
@@ -1690,6 +1750,46 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             None => Ok(ty),
         },
     )(i)
+}
+
+pub fn weekday(i: Input) -> IResult<Weekday> {
+    alt((
+        value(Weekday::Sunday, rule! { SUNDAY }),
+        value(Weekday::Monday, rule! { MONDAY }),
+        value(Weekday::Tuesday, rule! { TUESDAY }),
+        value(Weekday::Wednesday, rule! { WEDNESDAY }),
+        value(Weekday::Thursday, rule! { THURSDAY }),
+        value(Weekday::Friday, rule! { FRIDAY }),
+        value(Weekday::Saturday, rule! { SATURDAY }),
+        value(
+            Weekday::Sunday,
+            rule! { #literal_string_eq_ignore_case("SUNDAY") },
+        ),
+        value(
+            Weekday::Monday,
+            rule! { #literal_string_eq_ignore_case("MONDAY") },
+        ),
+        value(
+            Weekday::Tuesday,
+            rule! { #literal_string_eq_ignore_case("TUESDAY") },
+        ),
+        value(
+            Weekday::Wednesday,
+            rule! { #literal_string_eq_ignore_case("WEDNESDAY") },
+        ),
+        value(
+            Weekday::Thursday,
+            rule! { #literal_string_eq_ignore_case("THURSDAY") },
+        ),
+        value(
+            Weekday::Friday,
+            rule! { #literal_string_eq_ignore_case("FRIDAY") },
+        ),
+        value(
+            Weekday::Saturday,
+            rule! { #literal_string_eq_ignore_case("SATURDAY") },
+        ),
+    ))(i)
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {

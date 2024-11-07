@@ -7,9 +7,6 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-arrow-schema = { workspace = true }
-async-backtrace = { workspace = true }
-async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -21,17 +18,21 @@ databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+
+arrow-schema = { workspace = true }
+async-backtrace = { workspace = true }
+async-trait = { workspace = true }
 deltalake = { workspace = true }
 fastrace = { workspace = true }
-match-template = "0.0.1"
+match-template = { workspace = true }
 object_store_opendal = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-typetag = "0.2"
-url = "2.4.1"
+typetag = { workspace = true }
+url = { workspace = true }
 
 [lints]
 workspace = true

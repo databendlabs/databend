@@ -1224,6 +1224,8 @@ Functions overloads:
 26 contains(Array(Boolean), Boolean) :: Boolean
 27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
 28 contains(Array(T0) NULL, T0) :: Boolean
+0 convert_timezone(String, Timestamp) :: Timestamp
+1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32
@@ -2544,9 +2546,12 @@ Functions overloads:
 1 map_contains_key(Map(T0, T1), T0) :: Boolean
 2 map_contains_key(Map(T0, T1) NULL, T0 NULL) :: Boolean NULL
 0 map_delete FACTORY
+0 map_insert(Map(T0, T1) NULL, T0, T1) :: Map(T0, T1)
+1 map_insert(Map(T0, T1) NULL, T0, T1, Boolean) :: Map(T0, T1)
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
+0 map_pick FACTORY
 0 map_size(Map(Nothing)) :: UInt8
 1 map_size(Map(T0, T1)) :: UInt64
 2 map_size(Map(T0, T1) NULL) :: UInt64 NULL
@@ -3980,6 +3985,22 @@ Functions overloads:
 23 to_int8(Float64 NULL) :: Int8 NULL
 24 to_int8(Boolean) :: Int8
 25 to_int8(Boolean NULL) :: Int8 NULL
+0 to_last_of_month(Date) :: Date
+1 to_last_of_month(Date NULL) :: Date NULL
+2 to_last_of_month(Timestamp) :: Date
+3 to_last_of_month(Timestamp NULL) :: Date NULL
+0 to_last_of_quarter(Date) :: Date
+1 to_last_of_quarter(Date NULL) :: Date NULL
+2 to_last_of_quarter(Timestamp) :: Date
+3 to_last_of_quarter(Timestamp NULL) :: Date NULL
+0 to_last_of_week(Date) :: Date
+1 to_last_of_week(Date NULL) :: Date NULL
+2 to_last_of_week(Timestamp) :: Date
+3 to_last_of_week(Timestamp NULL) :: Date NULL
+0 to_last_of_year(Date) :: Date
+1 to_last_of_year(Date NULL) :: Date NULL
+2 to_last_of_year(Timestamp) :: Date
+3 to_last_of_year(Timestamp NULL) :: Date NULL
 0 to_minute(Timestamp) :: UInt8
 1 to_minute(Timestamp NULL) :: UInt8 NULL
 0 to_monday(Date) :: Date
@@ -3990,8 +4011,64 @@ Functions overloads:
 1 to_month(Date NULL) :: UInt8 NULL
 2 to_month(Timestamp) :: UInt8
 3 to_month(Timestamp NULL) :: UInt8 NULL
+0 to_next_friday(Date) :: Date
+1 to_next_friday(Date NULL) :: Date NULL
+2 to_next_friday(Timestamp) :: Date
+3 to_next_friday(Timestamp NULL) :: Date NULL
+0 to_next_monday(Date) :: Date
+1 to_next_monday(Date NULL) :: Date NULL
+2 to_next_monday(Timestamp) :: Date
+3 to_next_monday(Timestamp NULL) :: Date NULL
+0 to_next_saturday(Date) :: Date
+1 to_next_saturday(Date NULL) :: Date NULL
+2 to_next_saturday(Timestamp) :: Date
+3 to_next_saturday(Timestamp NULL) :: Date NULL
+0 to_next_sunday(Date) :: Date
+1 to_next_sunday(Date NULL) :: Date NULL
+2 to_next_sunday(Timestamp) :: Date
+3 to_next_sunday(Timestamp NULL) :: Date NULL
+0 to_next_thursday(Date) :: Date
+1 to_next_thursday(Date NULL) :: Date NULL
+2 to_next_thursday(Timestamp) :: Date
+3 to_next_thursday(Timestamp NULL) :: Date NULL
+0 to_next_tuesday(Date) :: Date
+1 to_next_tuesday(Date NULL) :: Date NULL
+2 to_next_tuesday(Timestamp) :: Date
+3 to_next_tuesday(Timestamp NULL) :: Date NULL
+0 to_next_wednesday(Date) :: Date
+1 to_next_wednesday(Date NULL) :: Date NULL
+2 to_next_wednesday(Timestamp) :: Date
+3 to_next_wednesday(Timestamp NULL) :: Date NULL
 0 to_nullable(NULL) :: NULL
 1 to_nullable(T0 NULL) :: T0 NULL
+0 to_previous_friday(Date) :: Date
+1 to_previous_friday(Date NULL) :: Date NULL
+2 to_previous_friday(Timestamp) :: Date
+3 to_previous_friday(Timestamp NULL) :: Date NULL
+0 to_previous_monday(Date) :: Date
+1 to_previous_monday(Date NULL) :: Date NULL
+2 to_previous_monday(Timestamp) :: Date
+3 to_previous_monday(Timestamp NULL) :: Date NULL
+0 to_previous_saturday(Date) :: Date
+1 to_previous_saturday(Date NULL) :: Date NULL
+2 to_previous_saturday(Timestamp) :: Date
+3 to_previous_saturday(Timestamp NULL) :: Date NULL
+0 to_previous_sunday(Date) :: Date
+1 to_previous_sunday(Date NULL) :: Date NULL
+2 to_previous_sunday(Timestamp) :: Date
+3 to_previous_sunday(Timestamp NULL) :: Date NULL
+0 to_previous_thursday(Date) :: Date
+1 to_previous_thursday(Date NULL) :: Date NULL
+2 to_previous_thursday(Timestamp) :: Date
+3 to_previous_thursday(Timestamp NULL) :: Date NULL
+0 to_previous_tuesday(Date) :: Date
+1 to_previous_tuesday(Date NULL) :: Date NULL
+2 to_previous_tuesday(Timestamp) :: Date
+3 to_previous_tuesday(Timestamp NULL) :: Date NULL
+0 to_previous_wednesday(Date) :: Date
+1 to_previous_wednesday(Date NULL) :: Date NULL
+2 to_previous_wednesday(Timestamp) :: Date
+3 to_previous_wednesday(Timestamp NULL) :: Date NULL
 0 to_quarter(Date) :: UInt8
 1 to_quarter(Date NULL) :: UInt8 NULL
 2 to_quarter(Timestamp) :: UInt8

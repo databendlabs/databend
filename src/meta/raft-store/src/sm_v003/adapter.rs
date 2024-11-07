@@ -17,11 +17,11 @@ use std::iter::repeat_with;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::LogId;
 use databend_common_meta_types::SnapshotData;
-use databend_common_meta_types::StoredMembership;
 use itertools::Itertools;
 use log::info;
 use openraft::SnapshotId;

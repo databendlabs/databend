@@ -15,7 +15,7 @@ memory-profiling = [
 ]
 python-udf = ["databend-query/python-udf"]
 simd = ["databend-query/simd"]
-jemalloc = ["databend-common-base/jemalloc"]
+jemalloc = ["databend-common-base/jemalloc", "databend-query/jemalloc"]
 io-uring = [
     "databend-query/io-uring",
 ]
@@ -34,7 +34,7 @@ databend-enterprise-background-service = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-limits-rs = "0.2.0"
+limits-rs = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }

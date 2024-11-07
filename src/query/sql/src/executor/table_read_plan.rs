@@ -144,9 +144,10 @@ impl ToReadDataSourcePlan for dyn Table {
         };
 
         if let Some(ref push_downs) = push_downs {
-            if let Some(ref virtual_columns) = push_downs.virtual_columns {
+            if let Some(ref virtual_column) = push_downs.virtual_column {
                 let mut schema = output_schema.as_ref().clone();
-                let fields = virtual_columns
+                let fields = virtual_column
+                    .virtual_column_fields
                     .iter()
                     .map(|c| TableField::new(&c.name, *c.data_type.clone()))
                     .collect::<Vec<_>>();

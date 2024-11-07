@@ -28,14 +28,13 @@ databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 log = { workspace = true }
-semver = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }
-strum = "0.24.1"
+strum = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = "1.3.0"
+pretty_assertions = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }

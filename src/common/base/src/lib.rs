@@ -35,6 +35,7 @@ pub mod http_client;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
+pub mod slice_ext;
 pub mod vec_ext;
 pub mod version;
 

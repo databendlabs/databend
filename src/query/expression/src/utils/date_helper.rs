@@ -26,6 +26,7 @@ use chrono::Offset;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
+use chrono::Weekday;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -356,7 +357,8 @@ macro_rules! impl_interval_year_month {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 let mut ts = NaiveDateTime::new(new_ts, ts.time())
-                    .and_utc()
+                    .and_local_timezone(tz.tz)
+                    .unwrap()
                     .timestamp_micros();
                 clamp_timestamp(&mut ts);
                 Ok(ts)
@@ -710,6 +712,24 @@ pub struct ToStartOfMonth;
 pub struct ToStartOfQuarter;
 pub struct ToStartOfYear;
 pub struct ToStartOfISOYear;
+pub struct ToLastOfWeek;
+pub struct ToLastOfMonth;
+pub struct ToLastOfQuarter;
+pub struct ToLastOfYear;
+pub struct ToPreviousMonday;
+pub struct ToPreviousTuesday;
+pub struct ToPreviousWednesday;
+pub struct ToPreviousThursday;
+pub struct ToPreviousFriday;
+pub struct ToPreviousSaturday;
+pub struct ToPreviousSunday;
+pub struct ToNextMonday;
+pub struct ToNextTuesday;
+pub struct ToNextWednesday;
+pub struct ToNextThursday;
+pub struct ToNextFriday;
+pub struct ToNextSaturday;
+pub struct ToNextSunday;
 
 impl ToNumber<i32> for ToLastMonday {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
@@ -759,4 +779,131 @@ impl ToNumber<i32> for ToStartOfISOYear {
             .unwrap();
         datetime_to_date_inner_number(&iso_dt)
     }
+}
+
+impl ToNumber<i32> for ToLastOfWeek {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_monday() as i32
+            + 6
+    }
+}
+
+impl ToNumber<i32> for ToLastOfMonth {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let day = last_day_of_year_month(dt.year(), dt.month());
+        datetime_to_date_inner_number(&dt.with_day(day).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToLastOfQuarter {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let new_month = dt.month0() / 3 * 3 + 3;
+        let day = last_day_of_year_month(dt.year(), new_month);
+        datetime_to_date_inner_number(&dt.with_month(new_month).unwrap().with_day(day).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToLastOfYear {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let day = last_day_of_year_month(dt.year(), 12);
+        datetime_to_date_inner_number(&dt.with_month(12).unwrap().with_day(day).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToPreviousMonday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Mon, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousTuesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Tue, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousWednesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Wed, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousThursday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Thu, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousFriday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Fri, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousSaturday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sat, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousSunday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sun, true)
+    }
+}
+
+impl ToNumber<i32> for ToNextMonday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Mon, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextTuesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Tue, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextWednesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Wed, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextThursday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Thu, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextFriday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Fri, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextSaturday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sat, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextSunday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sun, false)
+    }
+}
+
+pub fn previous_or_next_day(dt: &DateTime<Tz>, target: Weekday, is_previous: bool) -> i32 {
+    let dir = if is_previous { -1 } else { 1 };
+
+    let mut days_diff = (dir
+        * (target.num_days_from_monday() as i32
+            - dt.date_naive().weekday().num_days_from_monday() as i32)
+        + 7)
+        % 7;
+
+    days_diff = if days_diff == 0 { 7 } else { days_diff };
+
+    datetime_to_date_inner_number(dt) + dir * days_diff
 }

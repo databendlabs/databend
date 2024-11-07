@@ -38,6 +38,7 @@ use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::Weekday as ASTWeekday;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
@@ -1060,6 +1061,15 @@ impl<'a> TypeChecker<'a> {
             Expr::DateTrunc {
                 span, unit, date, ..
             } => self.resolve_date_trunc(*span, date, unit)?,
+            Expr::LastDay {
+                span, unit, date, ..
+            } => self.resolve_last_day(*span, date, unit)?,
+            Expr::PreviousDay {
+                span, unit, date, ..
+            } => self.resolve_previous_or_next_day(*span, date, unit, true)?,
+            Expr::NextDay {
+                span, unit, date, ..
+            } => self.resolve_previous_or_next_day(*span, date, unit, false)?,
             Expr::Trim {
                 span,
                 expr,
@@ -2981,6 +2991,59 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    pub fn resolve_last_day(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        kind: &ASTIntervalKind,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        match kind {
+            ASTIntervalKind::Year => {
+                self.resolve_function(span, "to_last_of_year", vec![], &[date])
+            }
+            ASTIntervalKind::Quarter => {
+                self.resolve_function(span, "to_last_of_quarter", vec![], &[date])
+            }
+            ASTIntervalKind::Month => {
+                self.resolve_function(span, "to_last_of_month", vec![], &[date])
+            }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_last_of_week", vec![], &[date])
+            }
+            _ => Err(ErrorCode::SemanticError(
+                "Only these interval types are currently supported: [year, quarter, month, week]"
+                    .to_string(),
+            )
+            .set_span(span)),
+        }
+    }
+
+    pub fn resolve_previous_or_next_day(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        weekday: &ASTWeekday,
+        is_previous: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let prefix = if is_previous {
+            "to_previous_"
+        } else {
+            "to_next_"
+        };
+
+        let func_name = match weekday {
+            ASTWeekday::Monday => format!("{}monday", prefix),
+            ASTWeekday::Tuesday => format!("{}tuesday", prefix),
+            ASTWeekday::Wednesday => format!("{}wednesday", prefix),
+            ASTWeekday::Thursday => format!("{}thursday", prefix),
+            ASTWeekday::Friday => format!("{}friday", prefix),
+            ASTWeekday::Saturday => format!("{}saturday", prefix),
+            ASTWeekday::Sunday => format!("{}sunday", prefix),
+        };
+
+        self.resolve_function(span, &func_name, vec![], &[date])
+    }
+
     pub fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -3705,11 +3768,7 @@ impl<'a> TypeChecker<'a> {
         let file_location = match udf_definition.code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
             None => {
-                let uri = UriLocation::from_uri(
-                    udf_definition.code.clone(),
-                    "".to_string(),
-                    BTreeMap::default(),
-                );
+                let uri = UriLocation::from_uri(udf_definition.code.clone(), BTreeMap::default());
 
                 match uri {
                     Ok(uri) => FileLocation::Uri(uri),

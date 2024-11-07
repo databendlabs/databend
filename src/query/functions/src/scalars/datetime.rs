@@ -110,6 +110,9 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // [date | timestamp] +/- number
     register_timestamp_add_sub(registry);
+
+    // convert_timezone( target_timezone, 'timestamp')
+    register_convert_timezone(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -132,6 +135,59 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
         min: int64_to_timestamp(domain.min.as_()),
         max: int64_to_timestamp(domain.max.as_()),
     })
+}
+
+fn register_convert_timezone(registry: &mut FunctionRegistry) {
+    // 2 arguments function [target_timezone, src_timestamp]
+    registry.register_passthrough_nullable_2_arg::<StringType, TimestampType, TimestampType, _, _>(
+        "convert_timezone",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
+            |target_tz, src_timestamp, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(0);
+                        return;
+                    }
+                }
+                // Convert source timestamp from source timezone to target timezone
+                let p_src_timestamp = src_timestamp.to_timestamp(ctx.func_ctx.tz.tz);
+                let src_dst_from_utc = p_src_timestamp.offset().fix().local_minus_utc();
+                let t_tz: Tz = match target_tz.parse() {
+                    Ok(tz) => tz,
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                        output.push(0);
+                        return;
+                    }
+                };
+
+                let result_timestamp = p_src_timestamp.with_timezone(&t_tz).timestamp_micros();
+                let target_dst_from_utc = p_src_timestamp
+                    .with_timezone(&t_tz)
+                    .offset()
+                    .fix()
+                    .local_minus_utc();
+                let offset_as_micros_sec = (target_dst_from_utc - src_dst_from_utc) as i64;
+                match offset_as_micros_sec.checked_mul(MICROS_PER_SEC) {
+                    Some(offset) => match result_timestamp.checked_add(offset) {
+                        Some(res) => output.push(res),
+                        None => {
+                            ctx.set_error(output.len(), "calc final time error".to_string());
+                            output.push(0);
+                        }
+                    },
+                    None => {
+                        ctx.set_error(output.len(), "calc time offset error".to_string());
+                        output.push(0);
+                    }
+                }
+            },
+        ),
+    );
 }
 
 fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
@@ -1733,55 +1789,31 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
 
     // date | timestamp -> date
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_monday",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToLastMonday>(
-                val,
-                ctx.func_ctx.tz,
-                ctx.func_ctx.enable_dst_hour_fix,
-            ) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_monday",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToLastMonday>(val, ctx.func_ctx.tz)
-        }),
-    );
+    rounder_functions_helper::<ToLastMonday>(registry, "to_monday");
+    rounder_functions_helper::<ToLastSunday>(registry, "to_start_of_week");
+    rounder_functions_helper::<ToStartOfMonth>(registry, "to_start_of_month");
+    rounder_functions_helper::<ToStartOfQuarter>(registry, "to_start_of_quarter");
+    rounder_functions_helper::<ToStartOfYear>(registry, "to_start_of_year");
+    rounder_functions_helper::<ToStartOfISOYear>(registry, "to_start_of_iso_year");
+    rounder_functions_helper::<ToLastOfWeek>(registry, "to_last_of_week");
+    rounder_functions_helper::<ToLastOfMonth>(registry, "to_last_of_month");
+    rounder_functions_helper::<ToLastOfQuarter>(registry, "to_last_of_quarter");
+    rounder_functions_helper::<ToLastOfYear>(registry, "to_last_of_year");
+    rounder_functions_helper::<ToPreviousMonday>(registry, "to_previous_monday");
+    rounder_functions_helper::<ToPreviousTuesday>(registry, "to_previous_tuesday");
+    rounder_functions_helper::<ToPreviousWednesday>(registry, "to_previous_wednesday");
+    rounder_functions_helper::<ToPreviousThursday>(registry, "to_previous_thursday");
+    rounder_functions_helper::<ToPreviousFriday>(registry, "to_previous_friday");
+    rounder_functions_helper::<ToPreviousSaturday>(registry, "to_previous_saturday");
+    rounder_functions_helper::<ToPreviousSunday>(registry, "to_previous_sunday");
+    rounder_functions_helper::<ToNextMonday>(registry, "to_next_monday");
+    rounder_functions_helper::<ToNextTuesday>(registry, "to_next_tuesday");
+    rounder_functions_helper::<ToNextWednesday>(registry, "to_next_wednesday");
+    rounder_functions_helper::<ToNextThursday>(registry, "to_next_thursday");
+    rounder_functions_helper::<ToNextFriday>(registry, "to_next_friday");
+    rounder_functions_helper::<ToNextSaturday>(registry, "to_next_saturday");
+    rounder_functions_helper::<ToNextSunday>(registry, "to_next_sunday");
 
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_start_of_week",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToLastSunday>(
-                val,
-                ctx.func_ctx.tz,
-                ctx.func_ctx.enable_dst_hour_fix,
-            ) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_start_of_week",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToLastSunday>(val, ctx.func_ctx.tz)
-        }),
-    );
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "to_start_of_week",
         |_, _, _| FunctionDomain::Full,
@@ -1824,12 +1856,15 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
             }
         }),
     );
+}
 
+fn rounder_functions_helper<T>(registry: &mut FunctionRegistry, name: &str)
+where T: ToNumber<i32> {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_start_of_month",
+        name,
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToStartOfMonth>(
+        vectorize_with_builder_1_arg::<DateType, DateType>(move |val, output, ctx| {
+            match DateRounder::eval_date::<T>(
                 val,
                 ctx.func_ctx.tz,
                 ctx.func_ctx.enable_dst_hour_fix,
@@ -1843,85 +1878,10 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_start_of_month",
+        name,
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfMonth>(val, ctx.func_ctx.tz)
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_start_of_quarter",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToStartOfQuarter>(
-                val,
-                ctx.func_ctx.tz,
-                ctx.func_ctx.enable_dst_hour_fix,
-            ) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_start_of_quarter",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfQuarter>(val, ctx.func_ctx.tz)
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_start_of_year",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToStartOfYear>(
-                val,
-                ctx.func_ctx.tz,
-                ctx.func_ctx.enable_dst_hour_fix,
-            ) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_start_of_year",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfYear>(val, ctx.func_ctx.tz)
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_start_of_iso_year",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToStartOfISOYear>(
-                val,
-                ctx.func_ctx.tz,
-                ctx.func_ctx.enable_dst_hour_fix,
-            ) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_start_of_iso_year",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfISOYear>(val, ctx.func_ctx.tz)
+        vectorize_1_arg::<TimestampType, DateType>(move |val, ctx| {
+            DateRounder::eval_timestamp::<T>(val, ctx.func_ctx.tz)
         }),
     );
 }

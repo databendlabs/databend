@@ -21,6 +21,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -105,6 +106,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -640,6 +642,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_shared_settings"))
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
@@ -881,6 +887,10 @@ impl TableContext for CtxDelegation {
 
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
+    }
+
+    fn get_runtime(&self) -> Result<Arc<Runtime>> {
+        todo!()
     }
 }
 
@@ -1199,6 +1209,10 @@ impl Catalog for FakedCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        todo!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         todo!()
     }
 }

@@ -1021,7 +1021,8 @@ impl AccessChecker for PrivilegeAccess {
             // Dictionary
             Plan::ShowCreateDictionary(_)
             | Plan::CreateDictionary(_)
-            | Plan::DropDictionary(_) => {
+            | Plan::DropDictionary(_)
+            | Plan::RenameDictionary(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }

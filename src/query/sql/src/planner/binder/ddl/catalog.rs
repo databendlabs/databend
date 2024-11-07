@@ -192,7 +192,7 @@ async fn parse_hive_catalog_url(
         return Ok(None);
     };
 
-    let mut location = UriLocation::from_uri(uri, "".to_string(), options)?;
+    let mut location = UriLocation::from_uri(uri, options)?;
     let sp = parse_storage_params_from_uri(
         &mut location,
         Some(ctx.as_ref()),
