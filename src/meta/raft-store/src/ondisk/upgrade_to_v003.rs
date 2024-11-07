@@ -23,7 +23,7 @@ use openraft::AnyError;
 
 use crate::ondisk::DataVersion;
 use crate::ondisk::OnDisk;
-use crate::sm_v003::adapter::upgrade_snapshot_data_v002_to_v004;
+use crate::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003_or_v004;
 use crate::sm_v003::SnapshotStoreV002;
 use crate::sm_v003::SnapshotStoreV003;
 use crate::state_machine::MetaSnapshotId;
@@ -100,7 +100,7 @@ impl OnDisk {
     ) -> Result<(), io::Error> {
         let ss_store_v003 = SnapshotStoreV003::new(self.config.clone());
 
-        upgrade_snapshot_data_v002_to_v004(
+        upgrade_snapshot_data_v002_to_v003_or_v004(
             &ss_store_v003,
             Box::new(snapshot_data),
             snapshot_id.to_string(),
