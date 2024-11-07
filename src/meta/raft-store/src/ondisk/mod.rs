@@ -81,14 +81,14 @@ impl OnDisk {
         let log_dir = version_dir.join("log");
         if !log_dir.exists() {
             fs::create_dir_all(&log_dir)
-                .context(format!("creating dir {}", log_dir.as_path().display()))?;
+                .context(|| format!("creating dir {}", log_dir.as_path().display()))?;
             info!("Created log dir: {}", log_dir.as_path().display());
         }
 
         let snapshot_dir = version_dir.join("snapshot");
         if !snapshot_dir.exists() {
             fs::create_dir_all(&snapshot_dir)
-                .context(format!("creating dir {}", snapshot_dir.as_path().display()))?;
+                .context(|| format!("creating dir {}", snapshot_dir.as_path().display()))?;
             info!("Created snapshot dir: {}", snapshot_dir.as_path().display());
         }
 
@@ -168,7 +168,7 @@ impl OnDisk {
         let ks = tree.key_space::<DataHeader>();
 
         let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, e).context("open on-disk data")
+            io::Error::new(io::ErrorKind::InvalidData, e).context(|| "open on-disk data")
         })?;
         info!("Found and loaded header from sled: {:?}", header);
 
@@ -178,7 +178,8 @@ impl OnDisk {
             ks.remove_no_return(&Self::KEY_HEADER.to_string(), true)
                 .await
                 .map_err(|e| {
-                    io::Error::new(io::ErrorKind::InvalidData, e).context("remove header from sled")
+                    io::Error::new(io::ErrorKind::InvalidData, e)
+                        .context(|| "remove header from sled")
                 })?;
 
             info!("Removed header from sled");
@@ -198,17 +199,17 @@ impl OnDisk {
     ) -> Result<(), io::Error> {
         let header_path = Self::header_path(config);
         let buf = serde_json::to_vec(header).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, e).context(format!(
-                "serializing header at {}",
-                header_path.as_path().display(),
-            ))
+            io::Error::new(io::ErrorKind::InvalidData, e)
+                .context(|| format!("serializing header at {}", header_path.as_path().display(),))
         })?;
 
-        fs::write(&header_path, &buf).context(format!(
-            "writing version file at {}: {}",
-            header_path.as_path().display(),
-            String::from_utf8_lossy(&buf)
-        ))?;
+        fs::write(&header_path, &buf).context(|| {
+            format!(
+                "writing version file at {}: {}",
+                header_path.as_path().display(),
+                String::from_utf8_lossy(&buf)
+            )
+        })?;
 
         info!(
             "Wrote header {:?}; at {}",
@@ -226,16 +227,12 @@ impl OnDisk {
             return Ok(None);
         }
 
-        let state = fs::read(&header_path).context(format!(
-            "reading version file {}",
-            header_path.as_path().display(),
-        ))?;
+        let state = fs::read(&header_path)
+            .context(|| format!("reading version file {}", header_path.as_path().display(),))?;
 
         let state = serde_json::from_slice::<Header>(&state).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, e).context(format!(
-                "parsing version file {}",
-                header_path.as_path().display(),
-            ))
+            io::Error::new(io::ErrorKind::InvalidData, e)
+                .context(|| format!("parsing version file {}", header_path.as_path().display(),))
         })?;
 
         Ok(Some(state))
