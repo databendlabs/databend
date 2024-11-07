@@ -176,6 +176,7 @@ impl Dwarf {
 
     fn fast_find_function(&self, probe: u64) -> gimli::Result<Option<Vec<CallLocation>>> {
         if let Some(debug_info_offset) = self.find_debug_info_offset(probe) {
+            eprintln!("fast find function {:?}", debug_info_offset);
             let head = self.debug_info.header_from_offset(debug_info_offset)?;
 
             let type_ = head.type_();
@@ -195,6 +196,7 @@ impl Dwarf {
             if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {
                     if unit.match_pc(probe) {
+                        eprintln!("slow find function {:?}", head.offset());
                         return Ok(unit.find_location(probe)?);
                     }
                 }

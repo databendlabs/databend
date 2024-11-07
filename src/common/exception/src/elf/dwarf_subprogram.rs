@@ -85,7 +85,7 @@ impl<R: Reader> Unit<R> {
                         attrs.set_attr(attr);
                     }
 
-                    let range_match = match self.attrs.ranges_offset {
+                    let range_match = match attrs.ranges_offset {
                         None => false,
                         Some(range_offset) => self.match_range(probe, range_offset),
                     };
