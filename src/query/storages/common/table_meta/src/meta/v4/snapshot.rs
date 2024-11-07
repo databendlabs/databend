@@ -42,7 +42,7 @@ use crate::meta::Statistics;
 use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
-/// Compared to v4::TableSnapshot, the v5::TableSnapshot, a new field `least_visible_timestamp` is added.
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot meta data
@@ -89,11 +89,6 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
-
-    /// Some segments and blocks are generated in a transaction, the base snapshot is the latest snapshot committed before the transaction.
-    ///
-    /// If timestamp of the base snapshot is less than the `least_visible_timestamp` of newly generated snapshot, the newly generated snapshot can't be committed.
-    pub least_visible_timestamp: Option<DateTime<Utc>>,
 }
 
 impl TableSnapshot {
@@ -109,20 +104,17 @@ impl TableSnapshot {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         let TableMetaTimestamps {
-            base_timestamp,
-            snapshot_lvt,
+            segment_block_timestamp,
             snapshot_timestamp,
         } = table_meta_timestamps;
-        let snapshot_lvt = monotonically_increased_timestamp(
-            snapshot_lvt,
-            &prev_snapshot.least_visible_timestamp(),
-        );
+
         let snapshot_timestamp =
             monotonically_increased_timestamp(snapshot_timestamp, &prev_snapshot.timestamp());
-        if base_timestamp < snapshot_lvt {
+
+        if segment_block_timestamp < snapshot_timestamp {
             return Err(ErrorCode::TransactionTimeout(format!(
                 "Snapshot is generated too late, base_timestamp: {:?}, snapshot_lvt: {:?}",
-                base_timestamp, snapshot_lvt
+                segment_block_timestamp, snapshot_timestamp
             )));
         }
 
@@ -137,7 +129,6 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
-            least_visible_timestamp: Some(snapshot_lvt),
         })
     }
 
@@ -254,7 +245,6 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            least_visible_timestamp: None,
         }
     }
 }
@@ -277,7 +267,6 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            least_visible_timestamp: None,
         }
     }
 }

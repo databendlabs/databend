@@ -103,7 +103,7 @@ impl TableMetaLocationGenerator {
         &self,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> (Location, Uuid) {
-        let part_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
+        let part_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
         let location_path = format!(
             "{}{}{}_v{}.parquet",
             self.block_location_prefix(),
@@ -128,7 +128,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_segment_info_location(&self, table_meta_timestamps: TableMetaTimestamps) -> String {
-        let segment_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
+        let segment_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
         format!(
             "{}{}{}_v{}.mpk",
             &self.segment_location_prefix(),

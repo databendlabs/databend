@@ -38,7 +38,7 @@ use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 pub const VACUUM2_OBJECT_KEY_PREFIX: &str = "h";
 
-pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
+pub fn trim_timestamp_to_milli_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
         ts.month(),
@@ -48,7 +48,7 @@ pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
         ts.second(),
     )
     .unwrap()
-    .with_nanosecond(ts.timestamp_subsec_micros() * 1_000)
+    .with_nanosecond(ts.timestamp_subsec_millis() * 1_000_000)
     .unwrap()
 }
 
@@ -56,20 +56,24 @@ pub fn monotonically_increased_timestamp(
     timestamp: DateTime<Utc>,
     previous_timestamp: &Option<DateTime<Utc>>,
 ) -> DateTime<Utc> {
-    if let Some(prev_instant) = previous_timestamp {
-        // timestamp of the snapshot should always larger than the previous one's
-        if prev_instant > &timestamp {
-            // if local time is smaller, use the timestamp of previous snapshot, plus 1 ms
-            return prev_instant.add(chrono::Duration::milliseconds(1));
-        }
+    let timestamp = trim_timestamp_to_milli_second(timestamp);
+
+    let Some(prev) = previous_timestamp else {
+        return timestamp;
+    };
+
+    let prev = trim_timestamp_to_milli_second(*prev);
+
+    if prev >= timestamp {
+        prev.add(chrono::Duration::milliseconds(1))
+    } else {
+        timestamp
     }
-    timestamp
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy)]
 pub struct TableMetaTimestamps {
-    pub base_timestamp: chrono::DateTime<chrono::Utc>,
-    pub snapshot_lvt: chrono::DateTime<chrono::Utc>,
+    pub segment_block_timestamp: chrono::DateTime<chrono::Utc>,
     pub snapshot_timestamp: chrono::DateTime<chrono::Utc>,
 }
 
@@ -78,21 +82,16 @@ impl TableMetaTimestamps {
         previous_snapshot: Option<Arc<TableSnapshot>>,
         data_retention_time_in_days: i64,
     ) -> Self {
-        let now = chrono::Utc::now();
         let snapshot_timestamp =
-            monotonically_increased_timestamp(now, &previous_snapshot.timestamp());
-        let snapshot_timestamp = trim_timestamp_to_micro_second(snapshot_timestamp);
-        let snapshot_lvt_candidate =
-            snapshot_timestamp - chrono::Duration::days(data_retention_time_in_days);
-        let snapshot_lvt = monotonically_increased_timestamp(
-            snapshot_lvt_candidate,
-            &previous_snapshot.least_visible_timestamp(),
-        );
-        let base_timestamp = now.max(snapshot_lvt);
+            monotonically_increased_timestamp(chrono::Utc::now(), &previous_snapshot.timestamp());
+
+        let delta = chrono::Duration::days(data_retention_time_in_days);
+
+        let segment_block_timestamp = snapshot_timestamp + delta;
+
         Self {
-            base_timestamp,
-            snapshot_lvt,
             snapshot_timestamp,
+            segment_block_timestamp,
         }
     }
 }

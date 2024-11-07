@@ -89,7 +89,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     ));
 
     let start = std::time::Instant::now();
-    let least_visible_timestamp = gc_root.least_visible_timestamp.unwrap();
+    let gc_root_timestamp = gc_root.timestamp.unwrap();
     let gc_root_segments = gc_root
         .segments
         .iter()
@@ -100,16 +100,16 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         fuse_table
             .meta_location_generator()
             .segment_location_prefix(),
-        least_visible_timestamp,
+        gc_root_timestamp,
         false,
     )
     .await?;
     ctx.set_status_info(&format!(
-        "list segments before gc_root for table {} takes {:?}, segment_dir: {:?}, least_visible_timestamp: {:?}, segments: {:?}",
+        "list segments before gc_root for table {} takes {:?}, segment_dir: {:?}, gc_root_timestamp: {:?}, segments: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         fuse_table.meta_location_generator().segment_location_prefix(),
-        least_visible_timestamp,
+        gc_root_timestamp,
         slice_summary(&segments_before_gc_root)
     ));
 
@@ -145,7 +145,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let blocks_before_gc_root = list_until_timestamp(
         fuse_table,
         fuse_table.meta_location_generator().block_location_prefix(),
-        least_visible_timestamp,
+        gc_root_timestamp,
         false,
     )
     .await?;
@@ -154,7 +154,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         fuse_table.get_table_info().desc,
         start.elapsed(),
         fuse_table.meta_location_generator().block_location_prefix(),
-        least_visible_timestamp,
+        gc_root_timestamp,
         slice_summary(&blocks_before_gc_root)
     ));
 
