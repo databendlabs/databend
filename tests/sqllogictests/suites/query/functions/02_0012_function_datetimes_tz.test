@@ -211,15 +211,16 @@ select to_timestamp('2000-01-01 12:00:00-08')
 ----
 2000-01-02 04:00:00.000000
 
+## will ignore minute offset
 query T
 select to_timestamp('2000-01-01 12:00:00+0811')
 ----
-2000-01-01 11:49:00.000000
+2000-01-01 12:00:00.000000
 
 query T
 select to_timestamp('2000-01-01 12:00:00-0811')
 ----
-2000-01-02 04:11:00.000000
+2000-01-02 04:00:00.000000
 
 statement error 1006
 select to_timestamp('2000-01-01 12:00:00-08112')
@@ -593,13 +594,15 @@ select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_
 statement ok
 set timezone='Europe/London';
 
-statement error 1006
-----
+query T
 select to_date(to_timestamp('2021-03-28 01:00'));
-
-statement error 1006
 ----
+2021-03-28
+
+query T
 select '2021-03-28 01:59:59'::timestamp;
+----
+2021-03-28 02:59:59.000000
 
 statement ok
 set timezone='Asia/Shanghai';
@@ -609,8 +612,10 @@ select to_date('1941-03-15');
 ----
 1941-03-15
 
-statement error 1006
+query T
 select to_date('1941-03-15 00:00:00');
+----
+1941-03-15
 
 query T
 select to_date('1941-03-15 02:00:00');
@@ -728,13 +733,15 @@ set timezone='Asia/Shanghai';
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
 statement error 1006
 select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
@@ -749,8 +756,10 @@ select to_date('1947-04-15')
 ----
 1947-04-15
 
-statement error 1006
+query T
 select to_date('1947-04-15 00:00:00')
+----
+1947-04-15
 
 query T
 select to_timestamp('1990-09-16 01:00:00');
@@ -895,11 +904,15 @@ select to_year(to_date('1919-04-13','%Y-%m-%d'));
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1941-04-15 01:00:00.000000
 
-statement error 1006
+query T
 SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1942-03-15 01:00:00.000000
 
 statement ok
 unset timezone;
@@ -968,8 +981,10 @@ statement ok
 set timezone='Asia/Shanghai';
 
 
-statement error 1006
+query T
 select convert_timezone('Asia/Shanghai', '1947-04-15 00:00:00');
+----
+1947-04-15 01:00:00.000000
 
 statement ok
 set enable_dst_hour_fix=1;

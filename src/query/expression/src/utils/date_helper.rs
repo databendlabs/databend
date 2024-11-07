@@ -17,7 +17,6 @@ use std::sync::LazyLock;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Days;
-use chrono::Duration;
 use chrono::LocalResult;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -30,7 +29,14 @@ use chrono::Weekday;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_io::cursor_ext::unwrap_local_time;
+use jiff::civil::date;
+use jiff::civil::Date;
+use jiff::civil::Weekday;
+use jiff::tz::TimeZone as JiffTimeZone;
+use jiff::SignedDuration;
+use jiff::Timestamp;
+use jiff::Unit;
+use jiff::Zoned;
 use num_traits::AsPrimitive;
 
 use crate::types::date::clamp_date;
@@ -242,17 +248,17 @@ impl TzLUT {
 }
 
 pub trait DateConverter {
-    fn to_date(&self, tz: Tz) -> NaiveDate;
+    fn to_date(&self, tz: JiffTimeZone) -> Date;
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz>;
+    fn to_timestamp_jiff(&self, tz: JiffTimeZone) -> Zoned;
 }
 
 impl<T> DateConverter for T
 where T: AsPrimitive<i64>
 {
-    fn to_date(&self, tz: Tz) -> NaiveDate {
-        let mut dt = tz.with_ymd_and_hms(1970, 1, 1, 0, 0, 0).unwrap();
-        dt = dt.checked_add_signed(Duration::days(self.as_())).unwrap();
-        dt.date_naive()
+    fn to_date(&self, _tz: JiffTimeZone) -> Date {
+        let dur = SignedDuration::from_hours(self.as_() * 24);
+        date(1970, 1, 1).checked_add(dur).unwrap()
     }
 
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
@@ -265,6 +271,26 @@ where T: AsPrimitive<i64>
         }
         tz.timestamp_opt(secs, nanos as u32).unwrap()
     }
+
+    fn to_timestamp_jiff(&self, tz: JiffTimeZone) -> Zoned {
+        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
+        let micros = self.as_();
+        let (mut secs, mut nanos) = (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
+        if nanos < 0 {
+            secs -= 1;
+            nanos += 1_000_000_000;
+        }
+
+        if secs > 253402207200 {
+            secs = 253402207200;
+            nanos = 0;
+        } else if secs < -377705023201 {
+            secs = -377705023201;
+            nanos = 0;
+        }
+        let ts = Timestamp::new(secs, nanos as i32).unwrap();
+        ts.to_zoned(tz)
+    }
 }
 
 pub const MICROSECS_PER_DAY: i64 = 86_400_000_000;
@@ -273,31 +299,28 @@ pub const MICROSECS_PER_DAY: i64 = 86_400_000_000;
 pub const FACTOR_HOUR: i64 = 3600;
 pub const FACTOR_MINUTE: i64 = 60;
 pub const FACTOR_SECOND: i64 = 1;
-const LAST_DAY_LUT: [u8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const LAST_DAY_LUT: [i8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-fn eval_years_base(
-    year: i32,
-    month: u32,
-    day: u32,
-    delta: i64,
-) -> std::result::Result<NaiveDate, String> {
-    let new_year = year + delta as i32;
+fn eval_years_base(year: i16, month: i8, day: i8, delta: i64) -> std::result::Result<Date, String> {
+    let new_year = year as i64 + delta;
     let mut new_day = day;
     if std::intrinsics::unlikely(month == 2 && day == 29) {
-        new_day = last_day_of_year_month(new_year, month);
+        new_day = last_day_of_year_month(new_year as i16, month);
     }
-    NaiveDate::from_ymd_opt(new_year, month, new_day)
-        .ok_or_else(|| format!("Overflow on date YMD {}-{}-{}.", new_year, month, new_day))
+    match Date::new(new_year as i16, month, new_day) {
+        Ok(d) => Ok(d),
+        Err(e) => Err(format!("Invalid date: {}", e)),
+    }
 }
 
 fn eval_months_base(
-    year: i32,
-    month: u32,
-    day: u32,
+    year: i16,
+    month: i8,
+    day: i8,
     delta: i64,
-) -> std::result::Result<NaiveDate, String> {
-    let total_months = month as i64 + delta - 1;
-    let mut new_year = year + (total_months / 12) as i32;
+) -> std::result::Result<Date, String> {
+    let total_months = (month as i64 + delta - 1) as i16;
+    let mut new_year = year + (total_months / 12);
     let mut new_month0 = total_months % 12;
     if new_month0 < 0 {
         new_year -= 1;
@@ -306,27 +329,23 @@ fn eval_months_base(
 
     // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
     let new_day = std::cmp::min::<u32>(
-        day,
-        last_day_of_year_month(new_year, (new_month0 + 1) as u32),
+        day as u32,
+        last_day_of_year_month(new_year, (new_month0 + 1) as i8) as u32,
     );
 
-    NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or_else(|| {
-        format!(
-            "Overflow on date YMD {}-{}-{}.",
-            new_year,
-            new_month0 + 1,
-            new_day
-        )
-    })
+    match Date::new(new_year, (new_month0 + 1) as i8, new_day as i8) {
+        Ok(d) => Ok(d),
+        Err(e) => Err(format!("Invalid date: {}", e)),
+    }
 }
 
 // Get the last day of the year month, could be 28(non leap Feb), 29(leap year Feb), 30 or 31
-fn last_day_of_year_month(year: i32, month: u32) -> u32 {
-    let is_leap_year = NaiveDate::from_ymd_opt(year, 2, 29).is_some();
+fn last_day_of_year_month(year: i16, month: i8) -> i8 {
+    let is_leap_year = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
     if std::intrinsics::unlikely(month == 2 && is_leap_year) {
         return 29;
     }
-    LAST_DAY_LUT[month as usize] as u32
+    LAST_DAY_LUT[month as usize]
 }
 
 macro_rules! impl_interval_year_month {
@@ -337,29 +356,34 @@ macro_rules! impl_interval_year_month {
         impl $name {
             pub fn eval_date(
                 date: i32,
-                tz: TzLUT,
+                tz: JiffTimeZone,
                 delta: impl AsPrimitive<i64>,
             ) -> std::result::Result<i32, String> {
-                let date = date.to_date(tz.tz);
+                let date = date.to_date(tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
+
                 Ok(clamp_date(
                     new_date
-                        .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
-                        .num_days(),
+                        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+                        .unwrap()
+                        .get_days() as i64,
                 ))
             }
 
             pub fn eval_timestamp(
                 us: i64,
-                tz: TzLUT,
+                tz: JiffTimeZone,
                 delta: impl AsPrimitive<i64>,
             ) -> std::result::Result<i64, String> {
-                let ts = us.to_timestamp(tz.tz);
-                let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
-                let mut ts = NaiveDateTime::new(new_ts, ts.time())
-                    .and_local_timezone(tz.tz)
-                    .unwrap()
-                    .timestamp_micros();
+                let ts = us.to_timestamp_jiff(tz.clone());
+                let new_date = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
+
+                let mut ts = new_date
+                    .at(ts.hour(), ts.minute(), ts.second(), ts.subsec_nanosecond())
+                    .to_zoned(tz)
+                    .map_err(|e| format!("{}", e))?
+                    .timestamp()
+                    .as_microsecond();
                 clamp_timestamp(&mut ts);
                 Ok(ts)
             }
@@ -371,15 +395,15 @@ impl_interval_year_month!(EvalYearsImpl, eval_years_base);
 impl_interval_year_month!(EvalMonthsImpl, eval_months_base);
 
 impl EvalYearsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TzLUT) -> i32 {
-        let date_start = date_start.to_date(tz.tz);
-        let date_end = date_end.to_date(tz.tz);
-        date_end.year() - date_start.year()
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: JiffTimeZone) -> i32 {
+        let date_start = date_start.to_date(tz.clone());
+        let date_end = date_end.to_date(tz);
+        (date_end.year() - date_start.year()) as i32
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TzLUT) -> i64 {
-        let date_start = date_start.to_timestamp(tz.tz);
-        let date_end = date_end.to_timestamp(tz.tz);
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: JiffTimeZone) -> i64 {
+        let date_start = date_start.to_timestamp_jiff(tz.clone());
+        let date_end = date_end.to_timestamp_jiff(tz);
         date_end.year() as i64 - date_start.year() as i64
     }
 }
@@ -387,7 +411,7 @@ impl EvalYearsImpl {
 pub struct EvalQuartersImpl;
 
 impl EvalQuartersImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TzLUT) -> i32 {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: JiffTimeZone) -> i32 {
         EvalQuartersImpl::eval_timestamp_diff(
             date_start as i64 * MICROSECS_PER_DAY,
             date_end as i64 * MICROSECS_PER_DAY,
@@ -395,23 +419,23 @@ impl EvalQuartersImpl {
         ) as i32
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TzLUT) -> i64 {
-        let date_start = date_start.to_timestamp(tz.tz);
-        let date_end = date_end.to_timestamp(tz.tz);
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: JiffTimeZone) -> i64 {
+        let date_start = date_start.to_timestamp_jiff(tz.clone());
+        let date_end = date_end.to_timestamp_jiff(tz);
         (date_end.year() - date_start.year()) as i64 * 4 + ToQuarter::to_number(&date_end) as i64
             - ToQuarter::to_number(&date_start) as i64
     }
 }
 
 impl EvalMonthsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TzLUT) -> i32 {
-        let date_start = date_start.to_date(tz.tz);
-        let date_end = date_end.to_date(tz.tz);
-        (date_end.year() - date_start.year()) * 12 + date_end.month() as i32
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: JiffTimeZone) -> i32 {
+        let date_start = date_start.to_date(tz.clone());
+        let date_end = date_end.to_date(tz);
+        (date_end.year() - date_start.year()) as i32 * 12 + date_end.month() as i32
             - date_start.month() as i32
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TzLUT) -> i64 {
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: JiffTimeZone) -> i64 {
         EvalMonthsImpl::eval_date_diff(
             (date_start / MICROSECS_PER_DAY) as i32,
             (date_end / MICROSECS_PER_DAY) as i32,
@@ -541,24 +565,23 @@ pub fn today_date(now: DateTime<Utc>, tz: TzLUT) -> i32 {
 }
 
 pub trait ToNumber<N> {
-    fn to_number(dt: &DateTime<Tz>) -> N;
+    fn to_number(dt: &Zoned) -> N;
 }
 
 pub struct ToNumberImpl;
 
 impl ToNumberImpl {
-    pub fn eval_timestamp<T: ToNumber<R>, R>(us: i64, tz: TzLUT) -> R {
-        let dt = us.to_timestamp(tz.tz);
+    pub fn eval_timestamp<T: ToNumber<R>, R>(us: i64, tz: JiffTimeZone) -> R {
+        let dt = us.to_timestamp_jiff(tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(
-        date: i32,
-        tz: TzLUT,
-        enable_dst_hour_fix: bool,
-    ) -> Result<R> {
-        let naive_dt = date.to_date(tz.tz).and_hms_opt(0, 0, 0).unwrap();
-        let dt = unwrap_local_time(&tz.tz, enable_dst_hour_fix, &naive_dt)?;
+    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: JiffTimeZone) -> Result<R> {
+        let dt = date
+            .to_date(tz.clone())
+            .at(0, 0, 0, 0)
+            .to_zoned(tz)
+            .unwrap();
         Ok(T::to_number(&dt))
     }
 }
@@ -581,25 +604,25 @@ pub struct ToUnixTimestamp;
 pub struct ToWeekOfYear;
 
 impl ToNumber<u32> for ToYYYYMM {
-    fn to_number(dt: &DateTime<Tz>) -> u32 {
-        dt.year() as u32 * 100 + dt.month()
+    fn to_number(dt: &Zoned) -> u32 {
+        dt.year() as u32 * 100 + dt.month() as u32
     }
 }
 
 impl ToNumber<u32> for ToWeekOfYear {
-    fn to_number(dt: &DateTime<Tz>) -> u32 {
-        dt.iso_week().week()
+    fn to_number(dt: &Zoned) -> u32 {
+        dt.date().to_iso_week_date().week() as u32
     }
 }
 
 impl ToNumber<u32> for ToYYYYMMDD {
-    fn to_number(dt: &DateTime<Tz>) -> u32 {
-        dt.year() as u32 * 10_000 + dt.month() * 100 + dt.day()
+    fn to_number(dt: &Zoned) -> u32 {
+        dt.year() as u32 * 10_000 + dt.month() as u32 * 100 + dt.day() as u32
     }
 }
 
 impl ToNumber<u64> for ToYYYYMMDDHH {
-    fn to_number(dt: &DateTime<Tz>) -> u64 {
+    fn to_number(dt: &Zoned) -> u64 {
         dt.year() as u64 * 1_000_000
             + dt.month() as u64 * 10_000
             + dt.day() as u64 * 100
@@ -608,7 +631,7 @@ impl ToNumber<u64> for ToYYYYMMDDHH {
 }
 
 impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
-    fn to_number(dt: &DateTime<Tz>) -> u64 {
+    fn to_number(dt: &Zoned) -> u64 {
         dt.year() as u64 * 10_000_000_000
             + dt.month() as u64 * 100_000_000
             + dt.day() as u64 * 1_000_000
@@ -619,44 +642,45 @@ impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
 }
 
 impl ToNumber<u16> for ToYear {
-    fn to_number(dt: &DateTime<Tz>) -> u16 {
+    fn to_number(dt: &Zoned) -> u16 {
         dt.year() as u16
     }
 }
 
 impl ToNumber<u8> for ToQuarter {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
-        (dt.month0() / 3 + 1) as u8
+    fn to_number(dt: &Zoned) -> u8 {
+        // begin with 0
+        ((dt.month() - 1) / 3 + 1) as u8
     }
 }
 
 impl ToNumber<u8> for ToMonth {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
+    fn to_number(dt: &Zoned) -> u8 {
         dt.month() as u8
     }
 }
 
 impl ToNumber<u16> for ToDayOfYear {
-    fn to_number(dt: &DateTime<Tz>) -> u16 {
-        dt.ordinal() as u16
+    fn to_number(dt: &Zoned) -> u16 {
+        dt.day_of_year() as u16
     }
 }
 
 impl ToNumber<u8> for ToDayOfMonth {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
+    fn to_number(dt: &Zoned) -> u8 {
         dt.day() as u8
     }
 }
 
 impl ToNumber<u8> for ToDayOfWeek {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
-        dt.weekday().number_from_monday() as u8
+    fn to_number(dt: &Zoned) -> u8 {
+        dt.weekday().to_monday_one_offset() as u8
     }
 }
 
 impl ToNumber<i64> for ToUnixTimestamp {
-    fn to_number(dt: &DateTime<Tz>) -> i64 {
-        dt.timestamp()
+    fn to_number(dt: &Zoned) -> i64 {
+        dt.with_time_zone(JiffTimeZone::UTC).timestamp().as_second()
     }
 }
 
@@ -675,19 +699,18 @@ pub enum Round {
 pub struct DateRounder;
 
 impl DateRounder {
-    pub fn eval_timestamp<T: ToNumber<i32>>(us: i64, tz: TzLUT) -> i32 {
-        let dt = us.to_timestamp(tz.tz);
+    pub fn eval_timestamp<T: ToNumber<i32>>(us: i64, tz: JiffTimeZone) -> i32 {
+        let dt = us.to_timestamp_jiff(tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(
-        date: i32,
-        tz: TzLUT,
-        enable_dst_hour_fix: bool,
-    ) -> Result<i32> {
-        let naive_dt = date.to_date(tz.tz).and_hms_opt(0, 0, 0).unwrap();
-        let dt = unwrap_local_time(&tz.tz, enable_dst_hour_fix, &naive_dt)?;
-        Ok(T::to_number(&dt))
+    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: JiffTimeZone) -> Result<i32> {
+        let naive_dt = date
+            .to_date(tz.clone())
+            .at(0, 0, 0, 0)
+            .to_zoned(tz)
+            .unwrap();
+        Ok(T::to_number(&naive_dt))
     }
 }
 
@@ -695,15 +718,11 @@ impl DateRounder {
 ///
 /// It's the days since 1970-01-01.
 #[inline]
-fn datetime_to_date_inner_number(date: &DateTime<Tz>) -> i32 {
-    date.naive_local()
-        .signed_duration_since(
-            NaiveDate::from_ymd_opt(1970, 1, 1)
-                .unwrap()
-                // if dt is dst, should respect dt.time
-                .and_time(date.time()),
-        )
-        .num_days() as i32
+fn datetime_to_date_inner_number(date: &Zoned) -> i32 {
+    date.date()
+        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days()
 }
 
 pub struct ToLastMonday;
@@ -732,52 +751,56 @@ pub struct ToNextSaturday;
 pub struct ToNextSunday;
 
 impl ToNumber<i32> for ToLastMonday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
+    fn to_number(dt: &Zoned) -> i32 {
         // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
-        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_monday() as i32
+        datetime_to_date_inner_number(dt) - dt.date().weekday().to_monday_zero_offset() as i32
     }
 }
 
 impl ToNumber<i32> for ToLastSunday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
+    fn to_number(dt: &Zoned) -> i32 {
         // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
-        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_sunday() as i32
+        datetime_to_date_inner_number(dt) - dt.date().weekday().to_sunday_zero_offset() as i32
     }
 }
 
 impl ToNumber<i32> for ToStartOfMonth {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(&dt.with_day(1).unwrap())
+    fn to_number(dt: &Zoned) -> i32 {
+        datetime_to_date_inner_number(&dt.first_of_month().unwrap())
     }
 }
 
 impl ToNumber<i32> for ToStartOfQuarter {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        let new_month = dt.month0() / 3 * 3 + 1;
-        datetime_to_date_inner_number(&dt.with_day(1).unwrap().with_month(new_month).unwrap())
+    fn to_number(dt: &Zoned) -> i32 {
+        let new_month = (dt.month() - 1) / 3 * 3 + 1;
+        let new_day = date(dt.year(), new_month, 1)
+            .at(0, 0, 0, 0)
+            .to_zoned(dt.time_zone().clone())
+            .unwrap();
+        datetime_to_date_inner_number(&new_day)
     }
 }
 
 impl ToNumber<i32> for ToStartOfYear {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(&dt.with_day(1).unwrap().with_month(1).unwrap())
+    fn to_number(dt: &Zoned) -> i32 {
+        datetime_to_date_inner_number(&dt.first_of_year().unwrap())
     }
 }
 
 impl ToNumber<i32> for ToStartOfISOYear {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        let iso_year = dt.iso_week().year();
-
-        let iso_dt = dt
-            .timezone()
-            .from_local_datetime(
-                &NaiveDate::from_isoywd_opt(iso_year, 1, chrono::Weekday::Mon)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            )
-            .unwrap();
-        datetime_to_date_inner_number(&iso_dt)
+    fn to_number(dt: &Zoned) -> i32 {
+        let iso_year = dt.date().to_iso_week_date().year();
+        for i in 1..=7 {
+            let new_dt = date(iso_year, 1, i)
+                .at(0, 0, 0, 0)
+                .to_zoned(dt.time_zone().clone())
+                .unwrap();
+            if new_dt.date().to_iso_week_date().weekday() == Weekday::Monday {
+                return datetime_to_date_inner_number(&new_dt);
+            }
+        }
+        // Never return 0
+        0
     }
 }
 

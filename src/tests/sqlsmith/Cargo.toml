@@ -20,6 +20,7 @@ databend-driver = { workspace = true }
 databend-driver-core = { workspace = true }
 ethnum = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 rand = { workspace = true }
 tokio = { workspace = true }

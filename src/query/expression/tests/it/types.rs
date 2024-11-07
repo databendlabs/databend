@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use arrow_schema::Schema;
-use chrono_tz::Tz;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use jiff::tz::TimeZone;
 
 use crate::get_all_test_data_types;
 use crate::rand_block_for_all_types;
@@ -27,10 +27,10 @@ use crate::rand_block_for_all_types;
 fn test_timestamp_to_string_formats() {
     // Unix timestamp for "2024-01-01 01:02:03" UTC
     let ts = 1_704_070_923_000_000;
-    let tz = Tz::UTC;
+    let tz = TimeZone::UTC;
 
     assert_eq!(
-        timestamp_to_string(ts, tz).to_string(),
+        timestamp_to_string(ts, &tz).to_string(),
         "2024-01-01 01:02:03.000000"
     );
 }
