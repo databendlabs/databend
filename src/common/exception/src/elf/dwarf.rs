@@ -62,7 +62,7 @@ pub struct Dwarf {
     debug_range_list: RangeLists<EndianSlice<'static, NativeEndian>>,
 }
 
-static EMPTY_BYTES: &'static [u8] = &[];
+static EMPTY_BYTES: &[u8] = &[];
 
 impl Dwarf {
     pub fn create(elf: Arc<ElfFile>) -> Option<Dwarf> {
@@ -76,6 +76,7 @@ impl Dwarf {
                 return EndianSlice::new(EMPTY_BYTES, NativeEndian);
             };
 
+            #[allow(clippy::missing_transmute_annotations)]
             unsafe {
                 match compressed.format != CompressionFormat::None {
                     true => EndianSlice::new(EMPTY_BYTES, NativeEndian),
@@ -147,14 +148,14 @@ impl Dwarf {
             head,
             abbreviations,
             attrs: unit_attrs,
-            debug_str: self.debug_str.clone(),
-            debug_info: self.debug_info.clone(),
-            debug_abbrev: self.debug_abbrev.clone(),
-            debug_line: self.debug_line.clone(),
-            debug_line_str: self.debug_line_str.clone(),
-            debug_str_offsets: self.debug_str_offsets.clone(),
-            debug_addr: self.debug_addr.clone(),
-            range_list: self.debug_range_list.clone(),
+            debug_str: self.debug_str,
+            debug_info: self.debug_info,
+            debug_abbrev: self.debug_abbrev,
+            debug_line: self.debug_line,
+            debug_line_str: self.debug_line_str,
+            debug_str_offsets: self.debug_str_offsets,
+            debug_addr: self.debug_addr,
+            range_list: self.debug_range_list,
         }))
     }
 
@@ -179,7 +180,7 @@ impl Dwarf {
             if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_)) {
                 if let Some(unit) = self.get_unit(head)? {
                     if unit.match_pc(probe) {
-                        return Ok(unit.find_frames(probe)?);
+                        return unit.find_frames(probe);
                     }
                 }
             }

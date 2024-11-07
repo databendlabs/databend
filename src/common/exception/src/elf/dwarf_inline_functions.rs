@@ -126,11 +126,7 @@ impl<R: Reader> Unit<R> {
             AttributeValue::DebugStrOffsetsIndex(index) => {
                 let offset = self
                     .debug_str_offsets
-                    .get_str_offset(
-                        self.head.format(),
-                        self.attrs.str_offsets_base.clone(),
-                        index,
-                    )
+                    .get_str_offset(self.head.format(), self.attrs.str_offsets_base, index)
                     .ok()?;
                 self.debug_str.get_str(offset).ok()
             }
@@ -358,6 +354,7 @@ impl<R: Reader> Unit<R> {
 
         functions.reverse();
 
+        #[allow(clippy::needless_range_loop)]
         for index in 0..functions.len() {
             std::mem::swap(&mut functions[index].file, &mut file);
             std::mem::swap(&mut functions[index].line, &mut line);
