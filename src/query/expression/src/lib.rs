@@ -57,6 +57,7 @@ mod property;
 mod register;
 pub mod row;
 pub mod schema;
+pub mod simpler;
 pub mod type_check;
 pub mod types;
 pub mod utils;
