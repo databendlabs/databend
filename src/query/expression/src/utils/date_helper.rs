@@ -25,7 +25,6 @@ use chrono::Offset;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
-use chrono::Weekday;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -805,124 +804,134 @@ impl ToNumber<i32> for ToStartOfISOYear {
 }
 
 impl ToNumber<i32> for ToLastOfWeek {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_monday() as i32
-            + 6
+    fn to_number(dt: &Zoned) -> i32 {
+        datetime_to_date_inner_number(dt) - dt.date().weekday().to_monday_zero_offset() as i32 + 6
     }
 }
 
 impl ToNumber<i32> for ToLastOfMonth {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
+    fn to_number(dt: &Zoned) -> i32 {
         let day = last_day_of_year_month(dt.year(), dt.month());
-        datetime_to_date_inner_number(&dt.with_day(day).unwrap())
+        let dt = date(dt.year(), dt.month(), day)
+            .at(dt.hour(), dt.minute(), dt.second(), dt.subsec_nanosecond())
+            .to_zoned(dt.time_zone().clone())
+            .unwrap();
+        datetime_to_date_inner_number(&dt)
     }
 }
 
 impl ToNumber<i32> for ToLastOfQuarter {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        let new_month = dt.month0() / 3 * 3 + 3;
+    fn to_number(dt: &Zoned) -> i32 {
+        let new_month = (dt.month() - 1) / 3 * 3 + 3;
         let day = last_day_of_year_month(dt.year(), new_month);
-        datetime_to_date_inner_number(&dt.with_month(new_month).unwrap().with_day(day).unwrap())
+        let dt = date(dt.year(), new_month, day)
+            .at(dt.hour(), dt.minute(), dt.second(), dt.subsec_nanosecond())
+            .to_zoned(dt.time_zone().clone())
+            .unwrap();
+        datetime_to_date_inner_number(&dt)
     }
 }
 
 impl ToNumber<i32> for ToLastOfYear {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
+    fn to_number(dt: &Zoned) -> i32 {
         let day = last_day_of_year_month(dt.year(), 12);
-        datetime_to_date_inner_number(&dt.with_month(12).unwrap().with_day(day).unwrap())
+        let dt = date(dt.year(), 12, day)
+            .at(dt.hour(), dt.minute(), dt.second(), dt.subsec_nanosecond())
+            .to_zoned(dt.time_zone().clone())
+            .unwrap();
+        datetime_to_date_inner_number(&dt)
     }
 }
 
 impl ToNumber<i32> for ToPreviousMonday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Mon, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Monday, true)
     }
 }
 
 impl ToNumber<i32> for ToPreviousTuesday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Tue, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Tuesday, true)
     }
 }
 
 impl ToNumber<i32> for ToPreviousWednesday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Wed, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Wednesday, true)
     }
 }
 
 impl ToNumber<i32> for ToPreviousThursday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Thu, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Thursday, true)
     }
 }
 
 impl ToNumber<i32> for ToPreviousFriday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Fri, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Friday, true)
     }
 }
 
 impl ToNumber<i32> for ToPreviousSaturday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Sat, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Saturday, true)
     }
 }
 
 impl ToNumber<i32> for ToPreviousSunday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Sun, true)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Sunday, true)
     }
 }
 
 impl ToNumber<i32> for ToNextMonday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Mon, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Monday, false)
     }
 }
 
 impl ToNumber<i32> for ToNextTuesday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Tue, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Tuesday, false)
     }
 }
 
 impl ToNumber<i32> for ToNextWednesday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Wed, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Wednesday, false)
     }
 }
 
 impl ToNumber<i32> for ToNextThursday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Thu, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Thursday, false)
     }
 }
 
 impl ToNumber<i32> for ToNextFriday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Fri, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Friday, false)
     }
 }
 
 impl ToNumber<i32> for ToNextSaturday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Sat, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Saturday, false)
     }
 }
 
 impl ToNumber<i32> for ToNextSunday {
-    fn to_number(dt: &DateTime<Tz>) -> i32 {
-        previous_or_next_day(dt, Weekday::Sun, false)
+    fn to_number(dt: &Zoned) -> i32 {
+        previous_or_next_day(dt, Weekday::Sunday, false)
     }
 }
 
-pub fn previous_or_next_day(dt: &DateTime<Tz>, target: Weekday, is_previous: bool) -> i32 {
+pub fn previous_or_next_day(dt: &Zoned, target: Weekday, is_previous: bool) -> i32 {
     let dir = if is_previous { -1 } else { 1 };
-
     let mut days_diff = (dir
-        * (target.num_days_from_monday() as i32
-            - dt.date_naive().weekday().num_days_from_monday() as i32)
+        * (target.to_monday_zero_offset() as i32
+            - dt.date().weekday().to_monday_zero_offset() as i32)
         + 7)
         % 7;
 

@@ -8974,6 +8974,7 @@ version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d9d414fc817d3e3d62b2598616733f76c4cc74fbac96069674739b881295c8"
 dependencies = [
+ "jiff-tzdb",
  "jiff-tzdb-platform",
  "serde",
  "windows-sys 0.59.0",
