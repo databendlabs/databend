@@ -44,7 +44,6 @@ thrift = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]
-databend-common-sql = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

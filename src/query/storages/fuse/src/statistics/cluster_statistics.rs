@@ -106,7 +106,7 @@ impl ClusterStatsGenerator {
 
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
-            block = block.take(&indices, &mut None)?;
+            block = block.take(&indices)?;
         }
 
         block = self

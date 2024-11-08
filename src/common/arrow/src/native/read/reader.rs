@@ -42,6 +42,8 @@ pub fn is_primitive(data_type: &DataType) -> bool {
             | PhysicalType::Utf8
             | PhysicalType::LargeUtf8
             | PhysicalType::Binary
+            | PhysicalType::Utf8View
+            | PhysicalType::BinaryView
             | PhysicalType::LargeBinary
             | PhysicalType::FixedSizeBinary
             | PhysicalType::Dictionary(_)

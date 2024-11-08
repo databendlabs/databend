@@ -187,3 +187,25 @@ fn iter_nth() {
     assert_eq!(array.iter().nth(1), Some(Some(" ".as_bytes())));
     assert_eq!(array.iter().nth(10), None);
 }
+
+#[test]
+fn test_slice() {
+    let data = vec![
+        Some("hello"),
+        Some("world"),
+        Some("databend"),
+        None,
+        Some("y"),
+        Some("z"),
+        Some("abc"),
+    ];
+
+    let array: Utf8ViewArray = data.into_iter().collect();
+
+    let a3 = array.sliced(2, 3);
+    assert_eq!(a3.into_iter().collect::<Vec<_>>(), vec![
+        Some("databend"),
+        None,
+        Some("y"),
+    ]);
+}

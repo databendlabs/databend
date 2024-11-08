@@ -196,7 +196,7 @@ impl NestedValues {
         column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        reader.read_quoted_text(&mut column.data, b'\'')?;
+        reader.read_quoted_text(&mut column.row_buffer, b'\'')?;
         column.commit_row();
         Ok(())
     }

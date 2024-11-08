@@ -50,7 +50,7 @@ pub fn unix_ts() -> Duration {
 
 impl SessionClaim {
     pub fn new(
-        session_id: Option<String>,
+        session_id: String,
         tenant: &str,
         user: &str,
         auth_role: &Option<String>,
@@ -60,7 +60,7 @@ impl SessionClaim {
             tenant: tenant.to_string(),
             user: user.to_string(),
             auth_role: auth_role.clone(),
-            session_id: session_id.unwrap_or(uuid::Uuid::new_v4().to_string()),
+            session_id,
             nonce: generate_secure_nonce(),
             expire_at_in_secs: (unix_ts() + ttl).as_secs(),
         }

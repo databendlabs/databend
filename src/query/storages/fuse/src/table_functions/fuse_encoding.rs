@@ -233,11 +233,11 @@ impl<'a> FuseEncodingImpl<'a> {
         let mut validity_size = Vec::new();
         let mut compressed_size = Vec::new();
         let mut uncompressed_size = Vec::new();
-        let mut l1 = StringColumnBuilder::with_capacity(0, 0);
+        let mut l1 = StringColumnBuilder::with_capacity(0);
         let mut l2 = NullableColumnBuilder::<StringType>::with_capacity(0, &[]);
-        let mut table_name = StringColumnBuilder::with_capacity(0, 0);
-        let mut column_name = StringColumnBuilder::with_capacity(0, 0);
-        let mut column_type = StringColumnBuilder::with_capacity(0, 0);
+        let mut table_name = StringColumnBuilder::with_capacity(0);
+        let mut column_name = StringColumnBuilder::with_capacity(0);
+        let mut column_type = StringColumnBuilder::with_capacity(0);
         let mut all_num_rows = 0;
         for (table, columns_info) in info {
             for (type_str, column_info) in columns_info {
@@ -254,8 +254,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     validity_size.push(p.validity_size);
                     compressed_size.push(p.compressed_size);
                     uncompressed_size.push(p.uncompressed_size);
-                    l1.put_str(&encoding_to_string(&p.body));
-                    l1.commit_row();
+                    l1.put_and_commit(encoding_to_string(&p.body));
                     let l2_encoding = match &p.body {
                         PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
                         PageBody::Freq(freq) => freq

@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
@@ -23,7 +25,9 @@ use reqwest::ClientBuilder;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
+use url::Url;
 
+use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
 use crate::util::parser_rows;
 use crate::util::HttpSessionConf;
@@ -61,8 +65,13 @@ fn format_error(value: serde_json::Value) -> String {
 }
 
 #[derive(Deserialize)]
-struct AuthResponse {
+struct TokenInfo {
     session_token: String,
+}
+
+#[derive(Deserialize)]
+struct LoginResponse {
+    tokens: Option<TokenInfo>,
 }
 
 impl HttpClient {
@@ -73,7 +82,12 @@ impl HttpClient {
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
+        let cookie_provider = GlobalCookieStore::new();
+        let cookie = HeaderValue::from_str("cookie_enabled=true").unwrap();
+        let mut initial_cookies = [&cookie].into_iter();
+        cookie_provider.set_cookies(&mut initial_cookies, &Url::parse("https://a.com").unwrap());
         let client = ClientBuilder::new()
+            .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)
             // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
             .http2_keep_alive_timeout(Duration::from_secs(15))
@@ -91,11 +105,13 @@ impl HttpClient {
             .inspect_err(|e| {
                 println!("fail to send to {}: {:?}", url, e);
             })?
-            .json::<AuthResponse>()
+            .json::<LoginResponse>()
             .await
             .inspect_err(|e| {
                 println!("fail to decode json when call {}: {:?}", url, e);
             })?
+            .tokens
+            .unwrap()
             .session_token;
 
         Ok(Self {

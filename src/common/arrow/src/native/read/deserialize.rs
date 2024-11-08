@@ -126,6 +126,9 @@ where
         }
         ),
         Binary | Utf8 => DynIter::new(BinaryIter::<_, i32>::new(reader, is_nullable, data_type)),
+        BinaryView | Utf8View => {
+            DynIter::new(ViewArrayIter::<_>::new(reader, is_nullable, data_type))
+        }
         LargeBinary | LargeUtf8 => {
             DynIter::new(BinaryIter::<_, i64>::new(reader, is_nullable, data_type))
         }
@@ -179,6 +182,15 @@ where
         Binary | Utf8 => {
             init.push(InitNested::Primitive(field.is_nullable));
             DynIter::new(BinaryNestedIter::<_, i32>::new(
+                readers.pop().unwrap(),
+                field.data_type().clone(),
+                leaves.pop().unwrap(),
+                init,
+            ))
+        }
+        BinaryView | Utf8View => {
+            init.push(InitNested::Primitive(field.is_nullable));
+            DynIter::new(ViewArrayNestedIter::<_>::new(
                 readers.pop().unwrap(),
                 field.data_type().clone(),
                 leaves.pop().unwrap(),
