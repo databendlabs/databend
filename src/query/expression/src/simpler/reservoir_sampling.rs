@@ -12,34 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use rand::Rng;
 
 /// An implementation of Algorithm `L` (https://en.wikipedia.org/wiki/Reservoir_sampling#An_optimal_algorithm)
-pub struct AlgoL<'a, R: Rng + ?Sized> {
+pub struct AlgoL<R: Rng> {
     k: usize,
-    r: &'a mut R,
-
-    i: usize,
     w: f64,
+
+    r: R,
 }
 
-impl<R: Rng + ?Sized> AlgoL<'_, R> {
-    pub fn new<'a>(k: usize, rng: &'a mut R) -> AlgoL<'a, R> {
-        assert!(k > 0);
-        let mut al = AlgoL::<'a, R> {
-            k,
-            i: k - 1,
+impl<R: Rng> AlgoL<R> {
+    pub fn new(k: NonZeroUsize, r: R) -> Self {
+        let mut al = Self {
+            k: k.into(),
             w: 1.0,
-            r: rng,
+            r,
         };
         al.update_w();
         al
     }
 
-    pub fn next_index(&mut self) -> usize {
-        let i = (self.rng().log2() / (1.0 - self.w).log2()).floor() + 1.0 + self.i as f64;
-        if i.is_normal() && i < u64::MAX as f64 {
-            i as usize
+    pub fn search(&mut self) -> usize {
+        let s = (self.rng().log2() / (1.0 - self.w).log2()).floor() + 1.0;
+        if s.is_normal() {
+            s as usize
         } else {
             usize::MAX
         }
@@ -49,17 +48,12 @@ impl<R: Rng + ?Sized> AlgoL<'_, R> {
         self.r.sample(rand::distributions::Uniform::new(0, self.k))
     }
 
-    pub fn update(&mut self, i: usize) {
-        self.i = i;
-        self.update_w()
+    pub fn update_w(&mut self) {
+        self.w *= (self.rng().log2() / self.k as f64).exp2(); // rng ^ (1/k)
     }
 
     fn rng(&mut self) -> f64 {
         self.r.sample(rand::distributions::Open01)
-    }
-
-    fn update_w(&mut self) {
-        self.w *= (self.rng().log2() / self.k as f64).exp2(); // rng ^ (1/k)
     }
 }
 
@@ -72,19 +66,20 @@ mod tests {
 
     #[test]
     fn test_algo_l() {
-        let mut rng = StdRng::seed_from_u64(0);
+        let rng = StdRng::seed_from_u64(0);
         let mut sample = vec![0_u64; 10];
 
-        let mut al = AlgoL::new(10, &mut rng);
+        let mut al = AlgoL::new(10.try_into().unwrap(), rng);
         for (i, v) in sample.iter_mut().enumerate() {
             *v = i as u64
         }
 
+        let mut i = 9;
         loop {
-            let i = al.next_index();
+            i += al.search();
             if i < 100 {
                 sample[al.pos()] = i as u64;
-                al.update(i)
+                al.update_w()
             } else {
                 break;
             }
