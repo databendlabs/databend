@@ -18,7 +18,6 @@ bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 crc32fast = { workspace = true }
-criterion = { workspace = true }
 ctor = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
@@ -67,6 +66,7 @@ twox-hash = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }
+criterion = { workspace = true }
 databend-common-ast = { workspace = true }
 goldenfile = { workspace = true }
 

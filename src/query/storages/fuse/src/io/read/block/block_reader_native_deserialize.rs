@@ -277,6 +277,7 @@ impl BlockReader {
     ) -> Result<ArrayIter<'static>> {
         let field = column_node.field.clone();
         let is_nested = column_node.is_nested;
+
         match self.native_columns_reader.column_iter_to_arrays(
             readers,
             &column_node.leaf_indices,

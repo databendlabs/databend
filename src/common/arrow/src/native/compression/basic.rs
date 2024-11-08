@@ -148,3 +148,43 @@ pub fn compress_snappy(input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<usi
     unsafe { output_buf.set_len(size + len) };
     Ok(size)
 }
+
+use crate::native::read::NativeReadBuf;
+
+impl CommonCompression {
+    pub fn decompress_common_binary<R: NativeReadBuf>(
+        &self,
+        reader: &mut R,
+        uncompressed_size: usize,
+        compressed_size: usize,
+        values: &mut Vec<u8>,
+        scratch: &mut Vec<u8>,
+    ) -> Result<()> {
+        // values
+        values.reserve(uncompressed_size);
+        let mut use_inner = false;
+        reader.fill_buf()?;
+        let input = if reader.buffer_bytes().len() >= compressed_size {
+            use_inner = true;
+            reader.buffer_bytes()
+        } else {
+            scratch.resize(compressed_size, 0);
+            reader.read_exact(scratch.as_mut_slice())?;
+            scratch.as_slice()
+        };
+
+        let out_slice = unsafe {
+            core::slice::from_raw_parts_mut(
+                values.as_mut_ptr().add(values.len()),
+                uncompressed_size,
+            )
+        };
+        self.decompress(&input[..compressed_size], out_slice)?;
+        unsafe { values.set_len(values.len() + uncompressed_size) };
+
+        if use_inner {
+            reader.consume(compressed_size);
+        }
+        Ok(())
+    }
+}

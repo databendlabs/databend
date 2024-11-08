@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::DecimalDomain;
 use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -37,6 +38,7 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
@@ -972,28 +974,25 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                                 let options = NUM_TYPE::lexical_options();
                                 const FORMAT: u128 = lexical_core::format::STANDARD;
 
-                                let mut builder =
-                                    StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                                let values = &mut builder.data;
-
                                 type Native = <NUM_TYPE as Number>::Native;
-                                let mut offset: usize = 0;
+
+                                let mut builder = StringColumnBuilder::with_capacity(from.len());
+
                                 unsafe {
                                     for x in from.iter() {
-                                        values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        let bytes = &mut values[offset..];
-
+                                        builder.row_buffer.resize(
+                                            <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
+                                            0,
+                                        );
                                         let len = lexical_core::write_with_options::<_, FORMAT>(
                                             Native::from(*x),
-                                            bytes,
+                                            &mut builder.row_buffer,
                                             &options,
                                         )
                                         .len();
-                                        offset += len;
-                                        builder.offsets.push(offset as u64);
+                                        builder.row_buffer.truncate(len);
+                                        builder.commit_row();
                                     }
-                                    values.set_len(offset);
                                 }
                                 Value::Column(builder.build())
                             }
@@ -1008,7 +1007,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                             let options = NUM_TYPE::lexical_options();
                             const FORMAT: u128 = lexical_core::format::STANDARD;
                             let mut builder =
-                                StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                                BinaryColumnBuilder::with_capacity(from.len(), from.len() + 1);
                             let values = &mut builder.data;
 
                             type Native = <NUM_TYPE as Number>::Native;
@@ -1029,7 +1028,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                                 }
                                 values.set_len(offset);
                             }
-                            let result = builder.build();
+                            let result = StringColumn::try_from(builder.build()).unwrap();
                             Value::Column(NullableColumn::new(
                                 result,
                                 Bitmap::new_constant(true, from.len()),

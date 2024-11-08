@@ -18,6 +18,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use arrow_array::LargeStringArray;
 use arrow_array::RecordBatch;
 use arrow_schema::Field;
 use arrow_schema::Schema;
@@ -164,7 +165,7 @@ impl Table for UdfEchoTable {
         let result = result_batch
             .column(0)
             .as_any()
-            .downcast_ref::<arrow_array::LargeStringArray>()
+            .downcast_ref::<LargeStringArray>()
             .unwrap();
         let result = result.value(0).to_string();
         let parts = vec![Arc::new(Box::new(StringPart { value: result }) as _)];

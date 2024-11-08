@@ -219,9 +219,9 @@ arrow-ipc = { version = "53" }
 arrow-ord = { version = "53" }
 arrow-schema = { version = "53", features = ["serde"] }
 arrow-select = { version = "53" }
-arrow-udf-js = "0.5.0"
-arrow-udf-python = "0.4.0"
-arrow-udf-wasm = "0.4.0"
+arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
+arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
+arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [

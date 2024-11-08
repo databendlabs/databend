@@ -575,8 +575,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-js"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6151bb7f26cde846e14adb17e08282153f7a9250dd78bbab3fa462b66d7b623"
+source = "git+https://github.com/arrow-udf/arrow-udf?rev=80b09d6#80b09d67ee0c7b796bf7a492a71842ac64622406"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -589,8 +588,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-python"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0b80da061a53aac237e711fddb01709002ba2e006f9fd4c72a430d4938dd921"
+source = "git+https://github.com/arrow-udf/arrow-udf?rev=80b09d6#80b09d67ee0c7b796bf7a492a71842ac64622406"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -604,8 +602,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-wasm"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe31144804e093dd60b4e7a749b64b9454040c05a34ccbeb641fc60fcf5ee92d"
+source = "git+https://github.com/arrow-udf/arrow-udf?rev=80b09d6#80b09d67ee0c7b796bf7a492a71842ac64622406"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -2973,9 +2970,9 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.22.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8770a1c49fa21e62a768a0de442cc3f77998a357303d56ddd3485cb7c58d3a"
+checksum = "0819048a792e2eac58b455bbbcf6077c81e2780b3cc4f565a6e72e92dde56bd1"
 dependencies = [
  "async-trait",
  "log",
@@ -3317,6 +3314,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "comfy-table",
+ "criterion",
  "dashmap 6.1.0",
  "databend-common-arrow",
  "databend-common-ast",
@@ -3327,6 +3325,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "educe 0.4.23",
+ "either",
  "enum-as-inner 0.5.1",
  "ethnum",
  "futures",
@@ -4422,7 +4421,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-settings",
- "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-cache",
  "databend-storages-common-pruner",
@@ -4673,9 +4671,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.22.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "393daaf83f32c5685887103b04bd9762d43298f7820b9f888144877fcf1d89e8"
+checksum = "cbea10312fa203003b572b701b6121cecd8eaf260e7ec7687796b552044541c6"
 dependencies = [
  "arrow",
  "async-compression 0.4.12",
@@ -4698,9 +4696,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-core"
-version = "0.22.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd1abd8ab1c4200648510204cdfcb538af1eca2c9433e12276dee26a1806144"
+checksum = "e1b8f3bf7bb87d0f2fce8a1992eea4a0b442c01165a0d68aab2727a386c945ab"
 dependencies = [
  "arrow",
  "chrono",
@@ -4721,9 +4719,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.22.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5038d47b403ce2351b109fb82627959a27a16a53ce16397bf1ca39307e052b5c"
+checksum = "40bed5c66f36e79baea7c95d2d0dc8433671606ca7152012562c7145e3b909a1"
 dependencies = [
  "quote",
  "syn 2.0.58",
@@ -4757,11 +4755,11 @@ dependencies = [
 name = "databend-enterprise-background-service"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "async-backtrace",
  "async-trait",
  "databend-common-base",
  "databend-common-exception",
+ "databend-common-expression",
  "databend-common-meta-app",
  "serde",
 ]
@@ -4811,7 +4809,6 @@ dependencies = [
 name = "databend-enterprise-query"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "async-backtrace",
  "async-trait",
  "aws-config",
@@ -8419,9 +8416,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.10"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df2dcfbe0677734ab2f3ffa7fa7bfd4706bfdc1ef393f2ee30184aed67e631b4"
+checksum = "41296eb09f183ac68eec06e03cdbea2e759633d4067b2f6552fc2e009bcad08b"
 dependencies = [
  "bytes",
  "futures-channel",
