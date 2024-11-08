@@ -27,22 +27,21 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use jiff::civil::date;
-use jiff::civil::Date as JiffDate;
+use jiff::civil::Date;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone as JiffTimeZone;
 use jiff::Timestamp;
 use jiff::Zoned;
 
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
-use crate::cursor_ext::DateTimeResType::Date;
 
 pub enum DateTimeResType {
     Datetime(Zoned),
-    Date(JiffDate),
+    Date(Date),
 }
 
 pub trait BufferReadDateTimeExt {
-    fn read_date_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<JiffDate>;
+    fn read_date_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<Date>;
     fn read_timestamp_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<DateTimeResType>;
     fn parse_time_offset(
         &mut self,
@@ -52,6 +51,11 @@ pub trait BufferReadDateTimeExt {
         west_tz: bool,
         calc_offset: impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
     ) -> Result<Zoned>;
+    fn read_text_to_datetime(
+        &mut self,
+        jiff_tz: &JiffTimeZone,
+        need_date: bool,
+    ) -> Result<DateTimeResType>;
 }
 
 const DATE_LEN: usize = 10;
@@ -71,15 +75,135 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
 impl<T> BufferReadDateTimeExt for Cursor<T>
 where T: AsRef<[u8]>
 {
-    fn read_date_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<JiffDate> {
+    fn read_date_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<Date> {
         // TODO support YYYYMMDD format
-        self.read_timestamp_text(jiff_tz).map(|dt| match dt {
-            Date(nd) => nd,
-            DateTimeResType::Datetime(dt) => dt.date(),
-        })
+        self.read_text_to_datetime(jiff_tz, true)
+            .map(|dt| match dt {
+                DateTimeResType::Date(nd) => nd,
+                DateTimeResType::Datetime(dt) => dt.date(),
+            })
     }
 
     fn read_timestamp_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<DateTimeResType> {
+        self.read_text_to_datetime(jiff_tz, false)
+    }
+
+    // Only support HH:mm format
+    fn parse_time_offset(
+        &mut self,
+        tz: &JiffTimeZone,
+        buf: &mut Vec<u8>,
+        dt: &Zoned,
+        west_tz: bool,
+        calc_offset: impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
+    ) -> Result<Zoned> {
+        fn get_hour_minute_offset(
+            tz: &JiffTimeZone,
+            dt: &Zoned,
+            west_tz: bool,
+            calc_offset: &impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
+            hour_offset: i32,
+            minute_offset: i32,
+        ) -> Result<Zoned> {
+            if (hour_offset == 14 && minute_offset == 0)
+                || ((0..60).contains(&minute_offset) && hour_offset < 14)
+            {
+                if dt.year() < 1970 {
+                    Ok(date(1970, 1, 1)
+                        .at(0, 0, 0, 0)
+                        .to_zoned(tz.clone())
+                        .map_err_to_code(ErrorCode::BadBytes, || format!("dt parse error"))?)
+                } else {
+                    let current_tz_sec = dt.offset().seconds();
+                    let mut val_tz_sec =
+                        Offset::from_seconds(hour_offset * 3600 + minute_offset * 60)
+                            .map_err_to_code(ErrorCode::BadBytes, || {
+                                "calc offset failed.".to_string()
+                            })?
+                            .seconds();
+                    if west_tz {
+                        val_tz_sec = -val_tz_sec;
+                    }
+                    calc_offset(current_tz_sec.into(), val_tz_sec.into(), dt)
+                }
+            } else {
+                Err(ErrorCode::BadBytes(format!(
+                    "Invalid Timezone Offset: The minute offset '{}' is outside the valid range. Expected range is [00-59] within a timezone gap of [-14:00, +14:00]",
+                    minute_offset
+                )))
+            }
+        }
+        let n = self.keep_read(buf, |f| f.is_ascii_digit());
+        match n {
+            2 => {
+                let hour_offset: i32 =
+                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                if (0..15).contains(&hour_offset) {
+                    buf.clear();
+                    if self.ignore_byte(b':') {
+                        if self.keep_read(buf, |f| f.is_ascii_digit()) != 2 {
+                            // +08[other byte]00 will err in there, e.g. +08-00
+                            return Err(ErrorCode::BadBytes(
+                                "Timezone Parsing Error: Incorrect format in hour part. The time zone format must conform to the ISO 8601 standard",
+                            ));
+                        }
+                        let minute_offset: i32 =
+                            lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                        // max utc: 14:00, min utc: 00:00
+                        get_hour_minute_offset(
+                            tz,
+                            dt,
+                            west_tz,
+                            &calc_offset,
+                            hour_offset,
+                            minute_offset,
+                        )
+                    } else {
+                        get_hour_minute_offset(tz, dt, west_tz, &calc_offset, hour_offset, 0)
+                    }
+                } else {
+                    Err(ErrorCode::BadBytes(format!(
+                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
+                        hour_offset
+                    )))
+                }
+            }
+            4 => {
+                let hour_offset = &buf.as_slice()[..2];
+                let hour_offset: i32 =
+                    lexical_core::FromLexical::from_lexical(hour_offset).unwrap();
+                let minute_offset = &buf.as_slice()[2..];
+                let minute_offset: i32 =
+                    lexical_core::FromLexical::from_lexical(minute_offset).unwrap();
+                buf.clear();
+                // max utc: 14:00, min utc: 00:00
+                if (0..15).contains(&hour_offset) {
+                    get_hour_minute_offset(
+                        tz,
+                        dt,
+                        west_tz,
+                        &calc_offset,
+                        hour_offset,
+                        minute_offset,
+                    )
+                } else {
+                    Err(ErrorCode::BadBytes(format!(
+                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
+                        hour_offset
+                    )))
+                }
+            }
+            _ => Err(ErrorCode::BadBytes(
+                "Timezone Parsing Error: Incorrect format. The time zone format must conform to the ISO 8601 standard",
+            )),
+        }
+    }
+
+    fn read_text_to_datetime(
+        &mut self,
+        jiff_tz: &JiffTimeZone,
+        need_date: bool,
+    ) -> Result<DateTimeResType> {
         // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
@@ -96,14 +220,12 @@ where T: AsRef<[u8]>
             v = "1970-01-01";
         }
 
-        let d = v
-            .parse::<JiffDate>()
-            .map_err_to_code(ErrorCode::BadBytes, || {
-                format!(
-                    "Date Parsing Error: The value '{}' could not be parsed into a valid Date",
-                    v
-                )
-            })?;
+        let d = v.parse::<Date>().map_err_to_code(ErrorCode::BadBytes, || {
+            format!(
+                "Date Parsing Error: The value '{}' could not be parsed into a valid Date",
+                v
+            )
+        })?;
         let less_1000 = |dt: Zoned| {
             // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
             if dt.year() < 1000 {
@@ -226,126 +348,21 @@ where T: AsRef<[u8]>
             }
         } else {
             // only date part
-            if d.year() < 1000 {
-                Ok(DateTimeResType::Datetime(
+            if need_date {
+                Ok(DateTimeResType::Date(if d.year() < 1000 {
                     date(1000, 1, 1)
-                        .at(0, 0, 0, 0)
-                        .to_zoned(jiff_tz.clone())
-                        .unwrap(),
-                ))
+                } else {
+                    d
+                }))
             } else {
+                let d = if d.year() < 1000 { date(1000, 1, 1) } else { d };
                 Ok(DateTimeResType::Datetime(
-                    d.at(0, 0, 0, 0)
-                        .to_zoned(jiff_tz.clone())
+                    d.to_zoned(jiff_tz.clone())
                         .map_err_to_code(ErrorCode::BadBytes, || {
                             format!("Failed to parse date {} as timestamp.", d)
                         })?,
                 ))
             }
-        }
-    }
-
-    // Only support HH:mm format
-    fn parse_time_offset(
-        &mut self,
-        tz: &JiffTimeZone,
-        buf: &mut Vec<u8>,
-        dt: &Zoned,
-        west_tz: bool,
-        calc_offset: impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
-    ) -> Result<Zoned> {
-        fn get_hour_minute_offset(
-            tz: &JiffTimeZone,
-            dt: &Zoned,
-            west_tz: bool,
-            calc_offset: &impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
-            hour_offset: i32,
-            minute_offset: i32,
-        ) -> Result<Zoned> {
-            if (hour_offset == 14 && minute_offset == 0)
-                || ((0..60).contains(&minute_offset) && hour_offset < 14)
-            {
-                if dt.year() < 1970 {
-                    Ok(date(1970, 1, 1)
-                        .at(0, 0, 0, 0)
-                        .to_zoned(tz.clone())
-                        .map_err_to_code(ErrorCode::BadBytes, || format!("dt parse error"))?)
-                } else {
-                    let current_tz_sec = dt.offset().seconds();
-                    let mut val_tz_sec = Offset::from_hours(hour_offset as i8)
-                        .map_err_to_code(ErrorCode::BadBytes, || {
-                            "calc hour offset failed.".to_string()
-                        })?
-                        .seconds();
-                    if west_tz {
-                        val_tz_sec = -val_tz_sec;
-                    }
-                    calc_offset(current_tz_sec.into(), val_tz_sec.into(), dt)
-                }
-            } else {
-                Err(ErrorCode::BadBytes(format!(
-                    "Invalid Timezone Offset: The minute offset '{}' is outside the valid range. Expected range is [00-59] within a timezone gap of [-14:00, +14:00]",
-                    minute_offset
-                )))
-            }
-        }
-        let n = self.keep_read(buf, |f| f.is_ascii_digit());
-        match n {
-            2 => {
-                let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
-                if (0..15).contains(&hour_offset) {
-                    buf.clear();
-                    if self.ignore_byte(b':') {
-                        if self.keep_read(buf, |f| f.is_ascii_digit()) != 2 {
-                            // +08[other byte]00 will err in there, e.g. +08-00
-                            return Err(ErrorCode::BadBytes(
-                                "Timezone Parsing Error: Incorrect format in hour part. The time zone format must conform to the ISO 8601 standard",
-                            ));
-                        }
-                        // jiff offset not support minute.
-                        // let minute_offset: i32 =
-                        //     lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
-                        // max utc: 14:00, min utc: 00:00
-                        get_hour_minute_offset(tz, dt, west_tz, &calc_offset, hour_offset, 0)
-                    } else {
-                        get_hour_minute_offset(tz, dt, west_tz, &calc_offset, hour_offset, 0)
-                    }
-                } else {
-                    Err(ErrorCode::BadBytes(format!(
-                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
-                        hour_offset
-                    )))
-                }
-            }
-            4 => {
-                let hour_offset = &buf.as_slice()[..2];
-                let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(hour_offset).unwrap();
-                let minute_offset = &buf.as_slice()[2..];
-                let minute_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(minute_offset).unwrap();
-                buf.clear();
-                // max utc: 14:00, min utc: 00:00
-                if (0..15).contains(&hour_offset) {
-                    get_hour_minute_offset(
-                        tz,
-                        dt,
-                        west_tz,
-                        &calc_offset,
-                        hour_offset,
-                        minute_offset,
-                    )
-                } else {
-                    Err(ErrorCode::BadBytes(format!(
-                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
-                        hour_offset
-                    )))
-                }
-            }
-            _ => Err(ErrorCode::BadBytes(
-                "Timezone Parsing Error: Incorrect format. The time zone format must conform to the ISO 8601 standard",
-            )),
         }
     }
 }
@@ -357,7 +374,7 @@ where T: AsRef<[u8]>
 // -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
 // select to_date(to_timestamp('2021-03-28 01:00:00'));
 // Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
-fn get_local_time(tz: &JiffTimeZone, d: &JiffDate, times: &mut Vec<u32>) -> Result<Zoned> {
+fn get_local_time(tz: &JiffTimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned> {
     d.at(times[0] as i8, times[1] as i8, times[2] as i8, 0)
         .to_zoned(tz.clone())
         .map_err_to_code(ErrorCode::BadBytes, || {

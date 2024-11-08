@@ -716,7 +716,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<DateType, StringType>(|val, output, ctx| {
             write!(
-                output.data,
+                output.row_buffer,
                 "{}",
                 date_to_string(val, &ctx.func_ctx.jiff_tz)
             )
@@ -1803,49 +1803,6 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     rounder_functions_helper::<ToNextSaturday>(registry, "to_next_saturday");
     rounder_functions_helper::<ToNextSunday>(registry, "to_next_sunday");
 
-/*=======
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_monday",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToLastMonday>(val, ctx.func_ctx.jiff_tz.clone()) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_monday",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToLastMonday>(val, ctx.func_ctx.jiff_tz.clone())
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
-        "to_start_of_week",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
-            match DateRounder::eval_date::<ToLastSunday>(val, ctx.func_ctx.jiff_tz.clone()) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "to_start_of_week",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToLastSunday>(val, ctx.func_ctx.jiff_tz.clone())
-        }),
-    );
->>>>>>> f2ab3bf7f3 (chore: use jiff crate replace some chrono)*/
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "to_start_of_week",
         |_, _, _| FunctionDomain::Full,

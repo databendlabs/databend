@@ -228,7 +228,7 @@ pub fn parse_jiff_timezone(settings: &Settings) -> Result<TimeZone> {
     let tz = settings.get_timezone()?;
     TimeZone::get(&tz).map_err(|e| {
         ErrorCode::InvalidTimezone(format!(
-            "Timezone has been checked and should be valid with error: {}",
+            "Timezone has been checked and should be valid but got error: {}",
             e
         ))
     })
