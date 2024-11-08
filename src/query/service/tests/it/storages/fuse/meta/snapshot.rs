@@ -51,7 +51,7 @@ fn snapshot_timestamp_monotonic_increase() {
     let schema = TableSchema::empty();
     let current = TableSnapshot::try_new(
         None,
-        None,
+        Some(Arc::new(prev.clone())),
         schema,
         Default::default(),
         vec![],
