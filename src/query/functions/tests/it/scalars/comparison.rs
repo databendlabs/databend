@@ -365,6 +365,7 @@ fn test_like(file: &mut impl Write) {
     )];
     run_ast(file, "lhs like 'a%'", &columns);
     run_ast(file, "lhs like 'b%'", &columns);
+    run_ast(file, "lhs like 'ab%'", &columns);
     run_ast(file, "lhs like 'c'", &columns);
 
     let columns = [

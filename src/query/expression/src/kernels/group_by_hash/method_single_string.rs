@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use crate::types::binary::BinaryIterator;
+use crate::types::BinaryColumn;
 use crate::Column;
 use crate::HashMethod;
 use crate::InputColumns;
@@ -44,7 +44,6 @@ impl HashMethod for HashMethodSingleBinary {
             KeysState::Column(Column::Binary(col))
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => Ok(col.iter()),
-            KeysState::Column(Column::String(col)) => Ok(col.iter_binary()),
             _ => unreachable!(),
         }
     }
@@ -56,14 +55,7 @@ impl HashMethod for HashMethodSingleBinary {
         match keys_state {
             KeysState::Column(Column::Binary(col))
             | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => {
-                let (data, offsets) = col.into_buffer();
-                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
-            }
-            KeysState::Column(Column::String(col)) => {
-                let (data, offsets) = col.into_buffer();
-                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
-            }
+            | KeysState::Column(Column::Bitmap(col)) => Ok(Box::new(col)),
             _ => unreachable!(),
         }
     }
@@ -75,26 +67,12 @@ impl HashMethod for HashMethodSingleBinary {
             | KeysState::Column(Column::Bitmap(col)) => {
                 hashes.extend(col.iter().map(hash_join_fast_string_hash));
             }
-            KeysState::Column(Column::String(col)) => {
-                hashes.extend(col.iter_binary().map(hash_join_fast_string_hash));
-            }
             _ => unreachable!(),
         }
     }
 }
 
-pub struct BinaryKeyAccessor {
-    data: Buffer<u8>,
-    offsets: Buffer<u64>,
-}
-
-impl BinaryKeyAccessor {
-    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
-        Self { data, offsets }
-    }
-}
-
-impl KeyAccessor for BinaryKeyAccessor {
+impl KeyAccessor for BinaryColumn {
     type Key = [u8];
 
     /// # Safety

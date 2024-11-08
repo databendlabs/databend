@@ -270,7 +270,7 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.data, positions)?;
+        self.read_string_inner(reader, &mut column.row_buffer, positions)?;
         column.commit_row();
         Ok(())
     }

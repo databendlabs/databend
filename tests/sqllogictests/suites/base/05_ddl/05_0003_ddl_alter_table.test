@@ -122,7 +122,7 @@ statement ok
 set hide_options_in_show_create_table=1
 
 statement ok
-CREATE TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
+CREATE OR REPLACE TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))
@@ -154,7 +154,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY) NULL, d TUPLE(1 BINARY, 2 BINARY) NULL ) ENGINE=FUSE
 
-query 
+query
 SELECT * FROM `05_0003_at_t4`
 ----
 61 62 [6331,6332] (6431,6432)
