@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -130,8 +131,11 @@ pub struct FuseTable {
 
     table_type: FuseTableType,
 
-    // If this is set, reading from fuse_table should only returns the increment blocks
+    // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    // A table instance level cache of snapshot_location, if this table is attaching to someone else.
+    attached_table_location: tokio::sync::OnceCell<String>,
 }
 
 impl FuseTable {
@@ -238,6 +242,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            attached_table_location: Default::default(),
         }))
     }
 
@@ -368,15 +373,25 @@ impl FuseTable {
                 let options = self.table_info.options();
 
                 if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
-                    // if table is attached, parse snapshot location from hint file
-                    let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                    let snapshot_loc = {
-                        let hint_content = self.operator.read(&hint).await?.to_vec();
-                        let snapshot_full_path = String::from_utf8(hint_content)?;
-                        let operator_info = self.operator.info();
-                        snapshot_full_path[operator_info.root().len()..].to_string()
-                    };
-                    Ok(Some(snapshot_loc))
+                    // If the table is attaching to someone else,
+                    // parse the snapshot location from the hint file.
+                    //
+                    // The snapshot location is allowed
+                    // to be fetched from the table level instance cache.
+                    let snapshot_location = self
+                        .attached_table_location
+                        .get_or_try_init(|| async {
+                            let hint =
+                                format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+                            let hint_content = self.operator.read(&hint).await?.to_vec();
+                            let snapshot_full_path = String::from_utf8(hint_content)?;
+                            let operator_info = self.operator.info();
+                            Ok::<_, ErrorCode>(
+                                snapshot_full_path[operator_info.root().len()..].to_string(),
+                            )
+                        })
+                        .await?;
+                    Ok(Some(snapshot_location.to_owned()))
                 } else {
                     Ok(options
                         .get(OPT_KEY_SNAPSHOT_LOCATION)
