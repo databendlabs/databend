@@ -115,6 +115,7 @@ use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use jiff::tz;
 use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
@@ -748,9 +749,31 @@ impl TableContext for QueryContext {
         let tz_string = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz_string)?;
         let jiff_tz = TimeZone::get(&tz_string).map_err(|e| {
+            let mut valid_tz = vec![];
+            for tz in tz::db().available() {
+                valid_tz.push(tz);
+            }
+            use std::fs;
+
+            // 读取 /etc 目录
+            println!("/usr/share/zoneinfo");
+            let mut path = Vec::new();
+            let mut er = Vec::new();
+            match fs::read_dir("/usr/share/zoneinfo") {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => path.push(format!("{}", entry.path().display())),
+                            Err(err) => er.push(format!("  read with err: {}", err)),
+                        }
+                    }
+                }
+                Err(err) => er.push(format!("read /usr/share/zoneinfo: {}", err)),
+            }
+
             ErrorCode::InvalidTimezone(format!(
-                "Timezone has been checked and should be valid with error: {}",
-                e
+                "Timezone has been checked and should be valid {:?} , path is {:?}, err is {:?} but got error: {}",
+                valid_tz, path, er, e
             ))
         })?;
         let now = Utc::now();

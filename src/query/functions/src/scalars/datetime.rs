@@ -716,7 +716,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<DateType, StringType>(|val, output, ctx| {
             write!(
-                output.data,
+                output.row_buffer,
                 "{}",
                 date_to_string(val, &ctx.func_ctx.jiff_tz)
             )
