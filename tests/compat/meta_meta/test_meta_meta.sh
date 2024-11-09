@@ -151,8 +151,10 @@ echo " === Shutdown databend-meta servers"
 killall databend-meta
 sleep 3
 
-cat ./.databend/leader-tmp   | grep 'state_machine' | sort > ./.databend/leader-sm
-cat ./.databend/follower-tmp | grep 'state_machine' | sort > ./.databend/follower-sm
+# Old version SM exported data contains DataHeader
+
+cat ./.databend/leader-tmp   | grep 'state_machine' | grep -v DataHeader | sort > ./.databend/leader-sm
+cat ./.databend/follower-tmp | grep 'state_machine' | grep -v DataHeader | sort > ./.databend/follower-sm
 
 echo " === diff SM data between Leader and Follower"
 diff ./.databend/leader-sm ./.databend/follower-sm
@@ -171,12 +173,12 @@ mkdir -p ./.databend/_upgrade_meta_2
 #
 # Thus we skip all state machine data, but keeps log data and SM meta.
 
-echo " === Import Leader's data log data"
+echo " === Import Leader's log data"
 cat ./.databend/leader-tmp \
     | grep -v '"Expire":\|"GenericKV":' \
     | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_1
 
-echo " === Import Follower's data"
+echo " === Import Follower's log data"
 cat ./.databend/follower-tmp \
     | grep -v '"Expire":\|"GenericKV":' \
     | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_2
@@ -197,21 +199,6 @@ echo " === Export Follower's data"
     | sort \
     > ./.databend/follower
 
-
-# ./bins/$leader_meta_ver/bin/databend-metactl \
-#     --export \
-#     --grpc-api-address $(grpc_addr 1) \
-#     | grep -v 'NodeId\|DataHeader' \
-#     | sort \
-#     > ./.databend/leader
-
-# echo " === Export follower meta data to ./.databend/follower"
-# ./bins/$follower_meta_ver/bin/databend-metactl \
-#     --export \
-#     --grpc-api-address $(grpc_addr 2) \
-#     | grep -v 'NodeId\|DataHeader' \
-#     | sort \
-#     > ./.databend/follower
 
 echo " === diff leader exported and follower exported"
 diff ./.databend/leader ./.databend/follower
