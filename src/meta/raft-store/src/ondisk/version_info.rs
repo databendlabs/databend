@@ -102,11 +102,10 @@ impl VersionInfo {
     }
 
     const fn v003() -> Self {
-        // TODO(rotbl): update these values when merged.
         Self::new(
-            "3694e259c8e7c227fadfac5faa881cd2f2af6bbe",
-            "2024-05-31",
-            new_semver(1, 2, 53),
+            "af63a77b73ecb4b331cc84cf923007e432021a1c",
+            "2024-06-27",
+            new_semver(1, 2, 547),
             "Persistent snapshot in rotbl, rotbl backed in-memory state-machine",
         )
     }

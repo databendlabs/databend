@@ -151,18 +151,34 @@ echo " === Shutdown databend-meta servers"
 killall databend-meta
 sleep 3
 
+cat ./.databend/leader-tmp   | grep 'state_machine' | sort > ./.databend/leader-sm
+cat ./.databend/follower-tmp | grep 'state_machine' | sort > ./.databend/follower-sm
+
+echo " === diff SM data between Leader and Follower"
+diff ./.databend/leader-sm ./.databend/follower-sm
+
+
 
 echo " === mkdir to import with latest datbend-metactl"
 mkdir -p ./.databend/_upgrade_meta_1
 mkdir -p ./.databend/_upgrade_meta_2
 
 
-echo " === Import Leader's data"
+# Exported log data format has changed, re-import them and compare.
+#
+# SM data in V002 does not output in correct order: exp- is after kv-,
+# which is out of order when import to rotbl.
+#
+# Thus we skip all state machine data, but keeps log data and SM meta.
+
+echo " === Import Leader's data log data"
 cat ./.databend/leader-tmp \
+    | grep -v '"Expire":\|"GenericKV":' \
     | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_1
 
 echo " === Import Follower's data"
 cat ./.databend/follower-tmp \
+    | grep -v '"Expire":\|"GenericKV":' \
     | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_2
 
 # skip DataHeader that contains distinguished version info
@@ -199,6 +215,3 @@ echo " === Export Follower's data"
 
 echo " === diff leader exported and follower exported"
 diff ./.databend/leader ./.databend/follower
-
-
-
