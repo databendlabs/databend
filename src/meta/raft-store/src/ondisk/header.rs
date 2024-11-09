@@ -44,17 +44,17 @@ pub struct Header {
 
 impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "version: {}, upgrading: {}, cleaning: {}",
-            self.version,
-            if let Some(upgrading) = self.upgrading {
-                upgrading.to_string()
-            } else {
-                "None".to_string()
-            },
-            self.cleaning
-        )
+        write!(f, "{}", self.version)?;
+
+        if let Some(upgrading) = self.upgrading {
+            write!(f, " -> {}", upgrading)?;
+        };
+
+        if self.cleaning {
+            write!(f, " (cleaning)")?;
+        }
+
+        Ok(())
     }
 }
 

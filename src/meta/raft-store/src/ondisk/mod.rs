@@ -333,7 +333,6 @@ impl OnDisk {
         assert!(self.header.upgrading.is_none(), "can not upgrade twice");
 
         self.header.upgrading = self.header.version.next();
-        self.progress(format_args!("Begin upgrading: {}", self.header));
 
         self.write_header(&self.header)?;
         Ok(())
@@ -343,7 +342,7 @@ impl OnDisk {
         assert!(self.header.upgrading.is_some());
 
         self.header.cleaning = true;
-        self.progress(format_args!("Clean upgrading: {}", self.header));
+        self.progress(format_args!("    Clean upgrading: {}", self.header));
 
         self.write_header(&self.header)?;
         Ok(())
@@ -354,7 +353,7 @@ impl OnDisk {
         self.header.version = self.header.upgrading.unwrap();
         self.header.upgrading = None;
         self.header.cleaning = false;
-        self.progress(format_args!("Finished upgrading: {}", self.header));
+        self.progress(format_args!("    Finished upgrading: {}", self.header));
 
         self.write_header(&self.header)?;
         Ok(())
@@ -362,8 +361,6 @@ impl OnDisk {
 
     fn write_header(&self, header: &Header) -> Result<(), MetaStorageError> {
         Self::write_header_to_fs(&self.config, header)?;
-
-        self.progress(format_args!("Write header: {}", header));
         Ok(())
     }
 

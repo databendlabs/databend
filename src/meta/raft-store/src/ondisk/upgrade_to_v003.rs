@@ -49,7 +49,7 @@ impl OnDisk {
         let loaded = ss_store_v002.load_last_snapshot().await?;
 
         let Some((snapshot_id, snapshot_data)) = loaded else {
-            self.progress(format_args!("No V002 snapshot, skip upgrade"));
+            self.progress(format_args!("    No V002 snapshot, skip upgrade"));
             self.finish_upgrading()?;
             return Ok(());
         };

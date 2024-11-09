@@ -120,28 +120,30 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     on_disk.log_stderr(true);
 
     let h = &on_disk.header;
-    println!("Disk  Data: {:?}; Upgrading: {:?}", h.version, h.upgrading);
-    println!("      Dir: {}", conf.raft_config.raft_dir);
-    println!();
-    println!("Log   File:   {}", conf.log.file);
-    println!("      Stderr: {}", conf.log.stderr);
-    if conf.log.otlp.on {
-        println!("    OpenTelemetry: {}", conf.log.otlp);
+
+    #[rustfmt::skip]
+    {
+        println!("Disk  Data: {:?}; Upgrading: {:?}", h.version, h.upgrading);
+        println!("      Dir: {}", conf.raft_config.raft_dir);
+        println!();
+        println!("Log   File:   {}", conf.log.file);
+        println!("      Stderr: {}", conf.log.stderr);
+        if conf.log.otlp.on {
+            println!("    OpenTelemetry: {}", conf.log.otlp);
+        }
+        if conf.log.tracing.on {
+            println!("    Tracing: {}", conf.log.tracing);
+        }
+        let r = &conf.raft_config;
+        println!("Raft  Id: {}; Cluster: {}", r.id, r.cluster_name);
+        println!("      Dir: {}", r.raft_dir);
+        println!("      Status: {}", single_or_join);
+        println!();
+        println!("HTTP API listen at: {}", conf.admin_api_address);
+        println!("gRPC API listen at: {} advertise: {}", conf.grpc_api_address, grpc_advertise);
+        println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
+        println!();
     }
-    if conf.log.tracing.on {
-        println!("    Tracing: {}", conf.log.tracing);
-    }
-    let r = &conf.raft_config;
-    println!("Raft  Id: {}; Cluster: {}", r.id, r.cluster_name);
-    println!("      Dir: {}", r.raft_dir);
-    println!("      Status: {}", single_or_join);
-    println!();
-    println!("HTTP API listen at: {}", conf.admin_api_address);
-    println!("gRPC API listen at: {}", conf.grpc_api_address);
-    println!("         advertise: {}", grpc_advertise);
-    println!("Raft API listen at: {}", raft_listen);
-    println!("         advertise: {}", raft_advertise,);
-    println!();
 
     on_disk.upgrade().await?;
 

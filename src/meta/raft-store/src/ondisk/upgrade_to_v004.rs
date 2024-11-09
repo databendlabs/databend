@@ -18,6 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use databend_common_meta_sled_store::drop_sled_db;
 use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -44,7 +45,7 @@ impl OnDisk {
 
         // 1.1. upgrade raft log
 
-        self.progress(format_args!("Upgrade V003 raft log in sled db to V004"));
+        self.progress(format_args!("    Upgrade V003 raft log in sled db to V004"));
 
         let raft_log_config = self.config.clone().to_raft_log_config();
         let raft_log_config = Arc::new(raft_log_config);
@@ -148,7 +149,7 @@ impl OnDisk {
     async fn remove_v003_logs(&mut self) -> Result<(), MetaStorageError> {
         // After upgrading, no sled db is required.
 
-        self.progress(format_args!("Remove V003 log from sled db",));
+        self.progress(format_args!("    Remove V003 log from sled db",));
 
         let db = init_get_sled_db(self.config.raft_dir.clone(), self.config.sled_cache_size());
         for tree_name in db.tree_names() {
@@ -157,7 +158,7 @@ impl OnDisk {
             }
 
             self.progress(format_args!(
-                "    Removing sled tree: {}",
+                "        Removing sled tree: {}",
                 String::from_utf8_lossy(&tree_name)
             ));
 
@@ -175,10 +176,9 @@ impl OnDisk {
                 ?;
         }
 
-        self.progress(format_args!("Done: Remove V003 log from sled db",));
+        self.progress(format_args!("    Done: Remove V003 log from sled db",));
 
-        // TODO: remove sled db from self
-        // drop_sled_db();
+        drop_sled_db();
 
         //</_databend/meta_1/
         // ▸ df_meta/
@@ -188,32 +188,33 @@ impl OnDisk {
         //   DO_NOT_USE_THIS_DIRECTORY_FOR_ANYTHING
         //   snap.00000000269348D9
 
-        // let raft_dir = self.config.raft_dir.clone();
-        // let raft_dir = Path::new(&raft_dir);
-        // let ctx = format!(
-        //     "when remove V003 raft-log store based on sled: '{}'",
-        //     raft_dir
-        // );
-        //
-        // let mut list_dir = fs::read_dir(&raft_dir).context(format!("listing; {ctx}"))?;
-        //
-        // while let Some(entry) = list_dir.next() {
-        //     let entry = entry.context(format!("get dir entry; {ctx}"))?;
-        //     let path = entry.path();
-        //
-        //     if path.to_str() == Some("df_meta") {
-        //         continue;
-        //     }
-        //
-        //     let p = raft_dir.join(&path);
-        //     if p.is_dir() {
-        //         fs::remove_dir_all(&p)
-        //             .context(format!("remove dir {}; {ctx}", p.as_path().display()))?;
-        //     } else {
-        //         fs::remove_file(&p)
-        //             .context(format!("remove file {}; {ctx}", p.as_path().display()))?;
-        //     }
-        // }
+        let raft_dir = self.config.raft_dir.clone();
+        let raft_dir = Path::new(&raft_dir);
+        let ctx = format!(
+            "when remove V003 raft-log store based on sled: '{}'",
+            raft_dir.display()
+        );
+
+        let mut list_dir = fs::read_dir(&raft_dir).context(|| format!("listing; {ctx}"))?;
+
+        while let Some(entry) = list_dir.next() {
+            let entry = entry.context(|| format!("get dir entry; {ctx}"))?;
+
+            if entry.file_name().to_str() == Some("df_meta") {
+                continue;
+            }
+
+            let p = entry.path();
+            self.progress(format!("        Removing: {}", p.display()));
+
+            if p.is_dir() {
+                fs::remove_dir_all(&p)
+                    .context(|| format!("remove dir {}; {ctx}", p.as_path().display()))?;
+            } else {
+                fs::remove_file(&p)
+                    .context(|| format!("remove file {}; {ctx}", p.as_path().display()))?;
+            }
+        }
 
         Ok(())
     }
