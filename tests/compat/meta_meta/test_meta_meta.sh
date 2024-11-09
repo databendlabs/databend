@@ -134,25 +134,68 @@ curl -qs $(admin_addr 2)/v1/cluster/status
 
 echo " === Check consistency between leader and follower"
 echo ""
-echo " === Export leader meta data to ./.databend/leader"
+
+echo " === Export leader meta data to ./.databend/leader-tmp"
+./bins/$leader_meta_ver/bin/databend-metactl \
+    --export \
+    --grpc-api-address $(grpc_addr 1) \
+    > ./.databend/leader-tmp
+
+echo " === Export follower meta data to ./.databend/follower-tmp"
+./bins/$follower_meta_ver/bin/databend-metactl \
+    --export \
+    --grpc-api-address $(grpc_addr 2) \
+    > ./.databend/follower-tmp
+
+echo " === Shutdown databend-meta servers"
+killall databend-meta
+sleep 3
+
+
+echo " === mkdir to import with latest datbend-metactl"
+mkdir -p ./.databend/_upgrade_meta_1
+mkdir -p ./.databend/_upgrade_meta_2
+
+
+echo " === Import Leader's data"
+cat ./.databend/leader-tmp \
+    | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_1
+
+echo " === Import Follower's data"
+cat ./.databend/follower-tmp \
+    | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_2
 
 # skip DataHeader that contains distinguished version info
 # skip NodeId
 # sort because newer version export `Sequence` in different order
-./bins/$leader_meta_ver/bin/databend-metactl \
-    --export \
-    --grpc-api-address $(grpc_addr 1) \
+
+echo " === Export Leader's data"
+./bins/current/bin/databend-metactl --export --raft-dir ./.databend/_upgrade_meta_1 \
     | grep -v 'NodeId\|DataHeader' \
     | sort \
     > ./.databend/leader
 
-echo " === Export follower meta data to ./.databend/follower"
-./bins/$follower_meta_ver/bin/databend-metactl \
-    --export \
-    --grpc-api-address $(grpc_addr 2) \
+echo " === Export Follower's data"
+./bins/current/bin/databend-metactl --export --raft-dir ./.databend/_upgrade_meta_2 \
     | grep -v 'NodeId\|DataHeader' \
     | sort \
     > ./.databend/follower
+
+
+# ./bins/$leader_meta_ver/bin/databend-metactl \
+#     --export \
+#     --grpc-api-address $(grpc_addr 1) \
+#     | grep -v 'NodeId\|DataHeader' \
+#     | sort \
+#     > ./.databend/leader
+
+# echo " === Export follower meta data to ./.databend/follower"
+# ./bins/$follower_meta_ver/bin/databend-metactl \
+#     --export \
+#     --grpc-api-address $(grpc_addr 2) \
+#     | grep -v 'NodeId\|DataHeader' \
+#     | sort \
+#     > ./.databend/follower
 
 echo " === diff leader exported and follower exported"
 diff ./.databend/leader ./.databend/follower
