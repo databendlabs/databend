@@ -22,8 +22,6 @@ use crate::raft_log_v004::codec_wrapper::Cw;
 use crate::raft_log_v004::log_store_meta::LogStoreMeta;
 use crate::raft_log_v004::util;
 use crate::raft_log_v004::RaftLogV004;
-use crate::state::RaftStateKey;
-use crate::state_machine::LogMetaKey;
 
 /// Import series of [`RaftStoreEntry`] record into [`RaftLogV004`].
 ///
@@ -51,55 +49,68 @@ impl Importer {
             RaftStoreEntry::DataHeader { .. } => {
                 // V004 RaftLog does not store DataHeader
             }
-            RaftStoreEntry::Logs { key: _, value } => {
-                let (log_id, payload) = (value.log_id, value.payload);
+
+            //////////////////////////// V004 log ////////////////////////////
+            RaftStoreEntry::LogEntry(log_entry) => {
+                let log_id = log_entry.log_id;
+                let payload = log_entry.payload;
 
                 self.raft_log.append([(Cw(log_id), Cw(payload))])?;
-                self.max_log_id = std::cmp::max(self.max_log_id, Some(value.log_id));
+                self.max_log_id = std::cmp::max(self.max_log_id, Some(log_id));
             }
-            RaftStoreEntry::RaftStateKV { key, value } => match key {
-                RaftStateKey::Id => {
-                    self.raft_log.save_user_data(Some(LogStoreMeta {
-                        node_id: Some(value.node_id()),
-                    }))?;
+
+            RaftStoreEntry::NodeId(node_id) => {
+                self.raft_log
+                    .save_user_data(Some(LogStoreMeta { node_id }))?;
+            }
+
+            RaftStoreEntry::Vote(vote) => {
+                if let Some(vote) = vote {
+                    self.raft_log.save_vote(Cw(vote))?;
                 }
-                RaftStateKey::HardState => {
-                    self.raft_log.save_vote(Cw(value.vote()))?;
+            }
+
+            RaftStoreEntry::Committed(committed) => {
+                if let Some(committed) = committed {
+                    self.raft_log.commit(Cw(committed))?;
                 }
-                RaftStateKey::StateMachineId => {
-                    unreachable!("StateMachineId is removed");
-                }
-                RaftStateKey::Committed => {
-                    if let Some(value) = value.committed() {
-                        self.raft_log.commit(Cw(value))?;
-                    }
-                }
-            },
-            RaftStoreEntry::LogMeta { key, value } => match key {
-                LogMetaKey::LastPurged => {
-                    let purged = value.log_id();
+            }
+
+            RaftStoreEntry::Purged(purged) => {
+                if let Some(purged) = purged {
                     self.raft_log.purge(Cw(purged))?;
                 }
-            },
+            }
 
-            //////////////////////////////////////////////////////////////////
+            ///////////////////////// V003 and before Log ////////////////////
+            RaftStoreEntry::Logs { .. } => {
+                unreachable!("V003 Logs should be written to V004 log");
+            }
+            RaftStoreEntry::RaftStateKV { .. } => {
+                unreachable!("V003 RaftStateKV should be written to V004 log");
+            }
+            RaftStoreEntry::LogMeta { .. } => {
+                unreachable!("V003 LogMeta should be written to V004 log");
+            }
+
+            //////////////////////// State machine entries ///////////////////////
             RaftStoreEntry::StateMachineMeta { .. } => {
-                unreachable!("StateMachineMeta should be written to snapshot");
+                unreachable!("StateMachineMeta should be written to log");
             }
             RaftStoreEntry::Nodes { .. } => {
-                unreachable!("Nodes should be written to snapshot");
+                unreachable!("Nodes should be written to log");
             }
             RaftStoreEntry::Expire { .. } => {
-                unreachable!("Expire should be written to snapshot");
+                unreachable!("Expire should be written to log");
             }
             RaftStoreEntry::GenericKV { .. } => {
-                unreachable!("GenericKV should be written to snapshot");
+                unreachable!("GenericKV should be written to log");
             }
             RaftStoreEntry::Sequences { .. } => {
-                unreachable!("Sequences should be written to snapshot");
+                unreachable!("Sequences should be written to log");
             }
             RaftStoreEntry::ClientLastResps { .. } => {
-                unreachable!("ClientLastResps should be written to snapshot");
+                unreachable!("ClientLastResps should be written to log");
             }
         }
 

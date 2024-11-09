@@ -242,9 +242,43 @@ pub enum RaftStoreEntry {
     Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences        as SledKeySpace>::V, },
     ClientLastResps  { key: <ClientLastResps  as SledKeySpace>::K, value: <ClientLastResps  as SledKeySpace>::V, },
     LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: <LogMeta          as SledKeySpace>::V, },
+
+    // V004 log:
+    LogEntry(Entry),
+    NodeId(Option<NodeId>),
+    Vote(Option<Vote>),
+    Committed(Option<LogId>),
+    Purged(Option<LogId>),
 }
 
 impl RaftStoreEntry {
+    /// Upgrade V003 to V004
+    pub fn upgrade(self) -> Self {
+        match self.clone() {
+            Self::Logs { key: _, value } => Self::LogEntry(value),
+            Self::RaftStateKV { key: _, value } => match value {
+                RaftStateValue::NodeId(node_id) => Self::NodeId(Some(node_id)),
+                RaftStateValue::HardState(vote) => Self::Vote(Some(vote)),
+                RaftStateValue::Committed(committed) => Self::Committed(committed),
+                RaftStateValue::StateMachineId(_) => self,
+            },
+            Self::LogMeta { key: _, value } => Self::Purged(Some(value.log_id())),
+
+            RaftStoreEntry::DataHeader { .. }
+            | RaftStoreEntry::Nodes { .. }
+            | RaftStoreEntry::StateMachineMeta { .. }
+            | RaftStoreEntry::Expire { .. }
+            | RaftStoreEntry::GenericKV { .. }
+            | RaftStoreEntry::Sequences { .. }
+            | RaftStoreEntry::ClientLastResps { .. }
+            | RaftStoreEntry::LogEntry(_)
+            | RaftStoreEntry::NodeId(_)
+            | RaftStoreEntry::Vote(_)
+            | RaftStoreEntry::Committed(_)
+            | RaftStoreEntry::Purged(_) => self,
+        }
+    }
+
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
     #[rustfmt::skip]
     pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
@@ -260,6 +294,14 @@ impl RaftStoreEntry {
             Self::Sequences        { key, value } => serialize_for_sled!(Sequences,        key, value),
             Self::ClientLastResps  { key, value } => serialize_for_sled!(ClientLastResps,  key, value),
             Self::LogMeta          { key, value } => serialize_for_sled!(LogMeta,          key, value),
+
+            RaftStoreEntry::LogEntry(_) |
+            RaftStoreEntry::NodeId(_)|
+            RaftStoreEntry::Vote(_) |
+            RaftStoreEntry::Committed(_)|
+            RaftStoreEntry::Purged(_) => {
+                unreachable!("V004 entries should not be serialized for sled")
+            }
         }
     }
 
@@ -297,41 +339,6 @@ impl RaftStoreEntry {
             value: header,
         }
     }
-
-    pub fn new_node_id(node_id: NodeId) -> Self {
-        Self::RaftStateKV {
-            key: RaftStateKey::Id,
-            value: RaftStateValue::NodeId(node_id),
-        }
-    }
-
-    pub fn new_vote(vote: Vote) -> Self {
-        Self::RaftStateKV {
-            key: RaftStateKey::HardState,
-            value: RaftStateValue::HardState(vote),
-        }
-    }
-
-    pub fn new_committed(committed: Option<LogId>) -> Self {
-        Self::RaftStateKV {
-            key: RaftStateKey::Committed,
-            value: RaftStateValue::Committed(committed),
-        }
-    }
-
-    pub fn new_purged(purged: LogId) -> Self {
-        Self::LogMeta {
-            key: LogMetaKey::LastPurged,
-            value: LogMetaValue::LogId(purged),
-        }
-    }
-
-    pub fn new_log_entry(log: Entry) -> Self {
-        Self::Logs {
-            key: log.log_id.index,
-            value: log,
-        }
-    }
 }
 
 impl TryInto<SMEntry> for RaftStoreEntry {
@@ -351,6 +358,14 @@ impl TryInto<SMEntry> for RaftStoreEntry {
             Self::RaftStateKV      { .. } => {Err("SMEntry does not contain RaftStateKV".to_string())}
             Self::ClientLastResps  { .. } => {Err("SMEntry does not contain ClientLastResps".to_string())}
             Self::LogMeta          { .. } => {Err("SMEntry does not contain LogMeta".to_string())}
+
+
+            Self::LogEntry        (_) => {Err("SMEntry does not contain LogEntry".to_string())}
+            Self::Vote            (_) => {Err("SMEntry does not contain Vote".to_string())}
+            Self::NodeId          (_) => {Err("SMEntry does not contain NodeId".to_string())}
+            Self::Committed       (_) => {Err("SMEntry does not contain Committed".to_string())}
+            Self::Purged          (_) => {Err("SMEntry does not contain Purged".to_string())}
+
         }
     }
 }

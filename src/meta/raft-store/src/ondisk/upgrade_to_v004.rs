@@ -57,7 +57,7 @@ impl OnDisk {
             let kvs = tree.export()?;
             for kv in kvs {
                 let ent = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
-                importer.import_raft_store_entry(ent)?;
+                importer.import_raft_store_entry(ent.upgrade())?;
             }
         }
 

@@ -29,6 +29,7 @@ use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::util;
+use databend_common_meta_raft_store::raft_log_v004::Cw;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
@@ -378,34 +379,27 @@ impl StoreInner {
 
         // Export raft state
         {
-            let tree_name = "raft_state";
+            let tree_name = "raft_log";
 
-            if let Some(ud) = &state.user_data {
-                if let Some(node_id) = ud.node_id {
-                    let entry = RaftStoreEntry::new_node_id(node_id);
-                    yield encode_entry(tree_name, &entry)?;
-                }
-            }
+            let node_id = state.user_data.as_ref().and_then(|ud| ud.node_id);
+            let entry = RaftStoreEntry::NodeId(node_id);
+            yield encode_entry(tree_name, &entry)?;
 
-            if let Some(vote) = state.vote() {
-                let vote = (*vote).unpack();
-                let entry = RaftStoreEntry::new_vote(vote);
-                yield encode_entry(tree_name, &entry)?;
-            }
+            let vote = state.vote().map(Cw::to_inner);
+            let entry = RaftStoreEntry::Vote(vote);
+            yield encode_entry(tree_name, &entry)?;
 
-            let committed = state.committed().map(|x| (*x).unpack());
-            let entry = RaftStoreEntry::new_committed(committed);
+            let committed = state.committed().map(Cw::to_inner);
+            let entry = RaftStoreEntry::Committed(committed);
             yield encode_entry(tree_name, &entry)?;
         };
 
         {
             let tree_name = "raft_log";
 
-            let purged = state.purged().map(|x| (*x).unpack());
-            if let Some(purged) = purged {
-                let entry = RaftStoreEntry::new_purged(purged);
-                yield encode_entry(tree_name, &entry)?;
-            }
+            let purged = state.purged().map(Cw::to_inner);
+            let entry = RaftStoreEntry::Purged(purged);
+            yield encode_entry(tree_name, &entry)?;
 
             for res in dump.iter() {
                 let (log_id, payload) = res?;
@@ -414,7 +408,7 @@ impl StoreInner {
 
                 let log_entry = Entry { log_id, payload };
 
-                let entry = RaftStoreEntry::new_log_entry(log_entry);
+                let entry = RaftStoreEntry::LogEntry(log_entry);
                 yield encode_entry(tree_name, &entry)?;
             }
         }

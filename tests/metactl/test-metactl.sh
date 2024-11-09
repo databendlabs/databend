@@ -112,7 +112,7 @@ cat $grpc_exported
 echo " === grpc_exported file data end"
 
 echo " === check if there is a node record in it"
-if grep -Fxq '["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]' $grpc_exported; then
+if grep -Fxq '["raft_log",{"NodeId":0}]' $grpc_exported; then
     echo " === Node record found, good!"
 else
     echo " === No Node record found!!!"
@@ -138,7 +138,7 @@ echo " === 5. Test import data with incompatible header $grpc_exported to dir $m
 echo " === "
 
 
-echo '["header",{"DataHeader":{"key":"header","value":{"version":"V100","upgrading":null}}}]' > $grpc_exported
+echo '["header",{"DataHeader":{"key":"header","value":{"version":"V100"}}}]' > $grpc_exported
 
 echo " === import into $meta_dir"
 cat $grpc_exported |
