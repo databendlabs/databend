@@ -23,7 +23,6 @@ use databend_common_base::base::Stoppable;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::Cmd;

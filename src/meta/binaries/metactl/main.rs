@@ -34,7 +34,6 @@ use databend_common_base::base::tokio;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_sled_store::init_sled_db;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
@@ -313,7 +312,7 @@ impl App {
             None => {
                 export_from_grpc::export_from_running_node(args).await?;
             }
-            Some(ref dir) => {
+            Some(ref _dir) => {
                 export_from_disk::export_from_dir(args).await?;
             }
         }

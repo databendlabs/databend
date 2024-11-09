@@ -34,9 +34,7 @@ use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV003
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
-use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_get_sled_db;
-use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_types::raft_types::CommittedLeaderId;
