@@ -195,9 +195,9 @@ impl OnDisk {
             raft_dir.display()
         );
 
-        let mut list_dir = fs::read_dir(&raft_dir).context(|| format!("listing; {ctx}"))?;
+        let mut list_dir = fs::read_dir(raft_dir).context(|| format!("listing; {ctx}"))?;
 
-        while let Some(entry) = list_dir.next() {
+        for entry in list_dir {
             let entry = entry.context(|| format!("get dir entry; {ctx}"))?;
 
             if entry.file_name().to_str() == Some("df_meta") {
