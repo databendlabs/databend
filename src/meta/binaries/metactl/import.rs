@@ -35,6 +35,7 @@ use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
@@ -71,8 +72,6 @@ pub async fn import_data(args: &ImportArgs) -> anyhow::Result<()> {
     eprintln!("    }}");
 
     let nodes = build_nodes(args.initial_cluster.clone(), args.id)?;
-
-    init_sled_db(raft_dir.clone(), 64 * 1024 * 1024 * 1024);
 
     clear(args)?;
     let max_log_id = import_from_stdin_or_file(args).await?;
@@ -137,7 +136,7 @@ async fn import_v003(
     raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
-    let db = get_sled_db();
+    let db = init_get_sled_db(raft_config.raft_dir.clone(), raft_config.sled_cache_size());
 
     let mut n = 0;
     let mut max_log_id: Option<LogId> = None;
@@ -389,7 +388,7 @@ async fn init_new_cluster(
 fn clear(args: &ImportArgs) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Clear All Sled Trees Before Import:");
-    let db = get_sled_db();
+    let db = init_get_sled_db(args.raft_dir.clone().unwrap(), 64 * 1024 * 1024 * 1024);
 
     let tree_names = db.tree_names();
     for n in tree_names.iter() {

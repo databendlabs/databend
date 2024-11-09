@@ -18,6 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 use fs_extra::dir::CopyOptions;
@@ -50,10 +51,12 @@ impl OnDisk {
         let raft_log = RaftLogV004::open(raft_log_config)?;
         let mut importer = importer::Importer::new(raft_log);
 
+        let db = init_get_sled_db(self.config.raft_dir.clone(), self.config.sled_cache_size());
+
         let tree_names = ["raft_state", "raft_log"];
 
         for tree_name in tree_names.iter() {
-            let tree = SledTree::open(self.db.as_ref().unwrap(), tree_name, self.config.is_sync())?;
+            let tree = SledTree::open(&db, tree_name, self.config.is_sync())?;
             let kvs = tree.export()?;
             for kv in kvs {
                 let ent = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
@@ -147,7 +150,7 @@ impl OnDisk {
 
         self.progress(format_args!("Remove V003 log from sled db",));
 
-        let db = self.db.as_ref().unwrap();
+        let db = init_get_sled_db(self.config.raft_dir.clone(), self.config.sled_cache_size());
         for tree_name in db.tree_names() {
             if tree_name == "__sled__default" {
                 continue;

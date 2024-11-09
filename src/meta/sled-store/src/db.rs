@@ -114,6 +114,11 @@ pub fn get_sled_db() -> sled::Db {
     panic!("init_sled_db() or init_temp_sled_db() has to be called before using get_sled_db()");
 }
 
+pub fn init_get_sled_db(path: String, cache_size: u64) -> sled::Db {
+    init_sled_db(path, cache_size);
+    get_sled_db()
+}
+
 /// Drop the global sled db.
 ///
 /// Which means this program will not use sled db anymore.

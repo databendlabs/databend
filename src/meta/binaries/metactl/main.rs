@@ -314,7 +314,6 @@ impl App {
                 export_from_grpc::export_from_running_node(args).await?;
             }
             Some(ref dir) => {
-                init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
                 export_from_disk::export_from_dir(args).await?;
             }
         }

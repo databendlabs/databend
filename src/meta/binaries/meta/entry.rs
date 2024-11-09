@@ -23,7 +23,6 @@ use databend_common_base::base::Stoppable;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_store::MetaStoreProvider;
@@ -89,11 +88,6 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    init_sled_db(
-        conf.raft_config.raft_dir.clone(),
-        conf.raft_config.sled_cache_size(),
-    );
-
     let single_or_join = if conf.raft_config.single {
         "single".to_string()
     } else {
@@ -123,8 +117,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
 
-    let db = get_sled_db();
-    let mut on_disk = OnDisk::open(&db, &conf.raft_config).await?;
+    let mut on_disk = OnDisk::open(&conf.raft_config).await?;
     on_disk.log_stderr(true);
 
     println!("On Disk Data:");

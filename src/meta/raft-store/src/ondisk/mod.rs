@@ -28,7 +28,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use data_version::DataVersion;
-use databend_common_meta_sled_store::sled;
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
@@ -52,9 +52,6 @@ pub static DATA_VERSION: DataVersion = DataVersion::V004;
 #[derive(Debug, Clone)]
 pub struct OnDisk {
     pub header: Header,
-
-    #[allow(dead_code)]
-    db: Option<sled::Db>,
 
     config: RaftConfig,
 
@@ -97,18 +94,18 @@ impl OnDisk {
 
     /// Initialize data version for local store, returns the loaded version.
     #[fastrace::trace]
-    pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
+    pub async fn open(config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
         info!(config :? =(config); "open and initialize data-version");
 
         Self::ensure_dirs(&config.raft_dir)?;
 
-        Self::upgrade_header(db, config).await?;
+        Self::upgrade_header(config).await?;
 
         let header = Self::load_header_from_fs(config)?;
         info!("Loaded header from fs: {:?}", header);
 
         if let Some(v) = header {
-            return Ok(OnDisk::new(v, db, config));
+            return Ok(OnDisk::new(v, config));
         }
 
         // Without header, by default it is the oldest compatible version: V002.
@@ -121,10 +118,10 @@ impl OnDisk {
 
         Self::write_header_to_fs(config, &header)?;
 
-        Ok(OnDisk::new(header, db, config))
+        Ok(OnDisk::new(header, config))
     }
 
-    fn new(header: Header, db: &sled::Db, config: &RaftConfig) -> Self {
+    fn new(header: Header, config: &RaftConfig) -> Self {
         let min_compatible = DATA_VERSION.min_compatible_data_version();
 
         if header.version < min_compatible {
@@ -150,21 +147,22 @@ impl OnDisk {
 
         Self {
             header,
-            db: Some(db.clone()),
             config: config.clone(),
             log_stderr: false,
         }
     }
 
-    async fn upgrade_header(db: &sled::Db, config: &RaftConfig) -> Result<(), io::Error> {
+    async fn upgrade_header(config: &RaftConfig) -> Result<(), io::Error> {
         let header_path = Self::header_path(config);
         if header_path.exists() {
             info!("Header file exists, no need to upgrade");
             return Ok(());
         }
 
+        let db = init_get_sled_db(config.raft_dir.clone(), config.sled_cache_size());
+
         let tree_name = config.tree_name(TREE_HEADER);
-        let tree = SledTree::open(db, &tree_name, config.is_sync())?;
+        let tree = SledTree::open(&db, &tree_name, config.is_sync())?;
         let ks = tree.key_space::<DataHeader>();
 
         let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {

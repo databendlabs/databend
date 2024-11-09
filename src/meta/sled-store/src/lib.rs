@@ -20,6 +20,7 @@
 pub use bytes_error::SledBytesError;
 pub use db::drop_sled_db;
 pub use db::get_sled_db;
+pub use db::init_get_sled_db;
 pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
 pub use openraft;

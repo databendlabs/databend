@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
-use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::AsKeySpace;
 use databend_common_meta_sled_store::SledKeySpace;
@@ -140,7 +140,7 @@ impl StateMachine {
 
     #[fastrace::trace]
     pub async fn open(config: &RaftConfig, sm_id: u64) -> Result<StateMachine, MetaStorageError> {
-        let db = get_sled_db();
+        let db = init_get_sled_db(config.raft_dir.clone(), config.sled_cache_size());
 
         let tree_name = StateMachine::tree_name(config, sm_id);
         debug!("opening tree: {}", &tree_name);
