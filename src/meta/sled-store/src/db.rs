@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
+use log::warn;
 use tempfile::TempDir;
 
 pub(crate) struct GlobalSledDb {
@@ -94,7 +95,7 @@ pub fn init_sled_db(path: String, cache_size: u64) {
     };
 
     if inited_as_temp {
-        panic!(
+        warn!(
             "sled db is already initialized with temp dir: {}, can not re-init with path {}",
             curr_path, path
         );
