@@ -195,7 +195,7 @@ impl OnDisk {
             raft_dir.display()
         );
 
-        let mut list_dir = fs::read_dir(raft_dir).context(|| format!("listing; {ctx}"))?;
+        let list_dir = fs::read_dir(raft_dir).context(|| format!("listing; {ctx}"))?;
 
         for entry in list_dir {
             let entry = entry.context(|| format!("get dir entry; {ctx}"))?;
