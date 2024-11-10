@@ -16,7 +16,6 @@ default = ["simd"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 simd = ["databend-common-arrow/simd"]
 io-uring = [
-    "sled/io_uring",
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
 ]
@@ -54,11 +53,11 @@ maplit = { workspace = true }
 poem = { workspace = true }
 prometheus-client = { workspace = true }
 prost = { workspace = true }
+raft-log = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
-sled = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }

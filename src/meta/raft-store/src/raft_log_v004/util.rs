@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::ondisk::OnDisk;
+use std::io;
 
-/// Upgrade the data in raft_dir to the latest version.
-pub async fn upgrade(raft_config: &RaftConfig) -> anyhow::Result<()> {
-    let mut on_disk = OnDisk::open(raft_config).await?;
-    on_disk.log_stderr(true);
-    on_disk.upgrade().await?;
+use raft_log::api::raft_log_writer::RaftLogWriter;
+use tokio::sync::oneshot;
 
+use crate::raft_log_v004::callback::Callback;
+use crate::raft_log_v004::RaftLogV004;
+
+pub async fn blocking_flush(rl: &mut RaftLogV004) -> Result<(), io::Error> {
+    let (tx, rx) = oneshot::channel();
+    let callback = Callback::new_oneshot(tx, "blocking_flush");
+
+    rl.flush(callback)?;
+    rx.await.map_err(|_e| {
+        io::Error::new(io::ErrorKind::Other, "Failed to receive flush completion")
+    })??;
     Ok(())
 }
