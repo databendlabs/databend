@@ -55,8 +55,7 @@ impl fmt::Debug for DataVersion {
             ),
             Self::V002 => write!(f, "V002(2023-07-22: Store snapshot in a file)"),
             Self::V003 => write!(f, "V003(2024-06-27: Store snapshot in rotbl)"),
-            // TODO(raft-log): udpate the date when merged.
-            Self::V004 => write!(f, "V004(2024-11-04: WAL based raft-log)"),
+            Self::V004 => write!(f, "V004(2024-11-11: WAL based raft-log)"),
         }
     }
 }
