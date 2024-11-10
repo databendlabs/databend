@@ -111,11 +111,10 @@ impl VersionInfo {
     }
 
     const fn v004() -> Self {
-        // TODO(raft-log): update these values when merged.
         Self::new(
-            "3694e259c8e7c227fadfac5faa881cd2f2af6bbe",
-            "2024-11-04",
-            new_semver(1, 2, 53),
+            "3d76dc68e79db72341c6006808a6e1773ab8b565",
+            "2024-11-11",
+            new_semver(1, 2, 655),
             "WAL based raft-log",
         )
     }
