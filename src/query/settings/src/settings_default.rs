@@ -162,6 +162,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
+                ("max_retryable_transaction_duration_in_hours", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(72),
+                    desc: "Sets the maximum retryable transaction duration in hours.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=240)),
+                }),
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
                     desc: "Sets the maximum number of concurrent spill I/O requests.",

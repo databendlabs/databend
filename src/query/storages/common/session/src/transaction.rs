@@ -358,10 +358,10 @@ impl TxnManager {
         &mut self,
         table_id: u64,
         previous_snapshot: Option<Arc<TableSnapshot>>,
-        data_retention_time_in_days: i64,
+        delta: i64,
     ) -> TableMetaTimestamps {
         if !self.is_active() {
-            return TableMetaTimestamps::new(previous_snapshot, data_retention_time_in_days);
+            return TableMetaTimestamps::new(previous_snapshot, delta);
         }
 
         let entry = self.txn_buffer.table_meta_timestamps.entry(table_id);
@@ -369,7 +369,7 @@ impl TxnManager {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
                 let timestamps =
-                    TableMetaTimestamps::new(previous_snapshot, data_retention_time_in_days);
+                    TableMetaTimestamps::new(previous_snapshot, delta);
                 e.insert(timestamps);
                 timestamps
             }

@@ -220,6 +220,14 @@ impl Settings {
         self.try_get_u64("data_retention_time_in_days")
     }
 
+    pub fn get_max_retryable_transaction_duration_in_hours(&self) -> Result<u64> {
+        self.try_get_u64("max_retryable_transaction_duration_in_hours")
+    }
+
+    pub fn set_max_retryable_transaction_duration_in_hours(&self, val: u64) -> Result<()> {
+        self.try_set_u64("max_retryable_transaction_duration_in_hours", val)
+    }
+
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_storage_io_requests")
     }

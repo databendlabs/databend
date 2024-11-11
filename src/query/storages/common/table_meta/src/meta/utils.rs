@@ -78,14 +78,11 @@ pub struct TableMetaTimestamps {
 }
 
 impl TableMetaTimestamps {
-    pub fn new(
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-        data_retention_time_in_days: i64,
-    ) -> Self {
+    pub fn new(previous_snapshot: Option<Arc<TableSnapshot>>, delta: i64) -> Self {
         let snapshot_timestamp =
             monotonically_increased_timestamp(chrono::Utc::now(), &previous_snapshot.timestamp());
 
-        let delta = chrono::Duration::days(data_retention_time_in_days);
+        let delta = chrono::Duration::hours(delta);
 
         let segment_block_timestamp = snapshot_timestamp + delta;
 

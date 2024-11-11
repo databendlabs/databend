@@ -1260,7 +1260,9 @@ impl TableContext for QueryContext {
                 let ts = self.txn_mgr().lock().get_table_meta_timestamps(
                     table_id,
                     previous_snapshot,
-                    self.get_settings().get_data_retention_time_in_days()? as i64,
+                    self.get_settings()
+                        .get_max_retryable_transaction_duration_in_hours()?
+                        as i64,
                 );
                 cache.lock().insert(table_id, ts);
                 Ok(ts)
