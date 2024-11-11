@@ -368,8 +368,7 @@ impl TxnManager {
         match entry {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
-                let timestamps =
-                    TableMetaTimestamps::new(previous_snapshot, delta);
+                let timestamps = TableMetaTimestamps::new(previous_snapshot, delta);
                 e.insert(timestamps);
                 timestamps
             }
