@@ -336,7 +336,7 @@ select $1,$2,$3 from @s6_merge_into order by $1,$2,$3;
 
 ## test CSV
 query TT
-merge into target_table using (select $1,$2,$3 from @s5_merge_into) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+merge into target_table using (select $1,$2,$3 from @s6_merge_into) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
 ----
 1 2
 
