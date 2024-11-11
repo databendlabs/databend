@@ -7,6 +7,9 @@ import time
 import requests
 from pprint import pprint
 
+from http.cookiejar import Cookie
+from requests.cookies import RequestsCookieJar
+
 # Define the URLs and credentials
 query_url = "http://localhost:8000/v1/query"
 query_url2 = "http://localhost:8002/v1/query"
@@ -15,6 +18,19 @@ logout_url = "http://localhost:8000/v1/session/logout"
 renew_url = "http://localhost:8000/v1/session/refresh"
 verify_url = "http://localhost:8000/v1/verify"
 auth = ("root", "")
+
+class GlobalCookieJar(RequestsCookieJar):
+    def __init__(self):
+        super().__init__()
+
+    def set_cookie(self, cookie: Cookie, *args, **kwargs):
+        cookie.domain = ''
+        cookie.path = '/'
+        super().set_cookie(cookie, *args, **kwargs)
+
+client = requests.session()
+client.cookies = GlobalCookieJar()
+client.cookies.set("cookie_enabled", "true")
 
 
 def print_error(func):
@@ -34,7 +50,7 @@ def print_error(func):
 @print_error
 def do_login():
     payload = {}
-    response = requests.post(
+    response = client.post(
         login_url,
         auth=auth,
         headers={"Content-Type": "application/json"},
@@ -45,7 +61,7 @@ def do_login():
 
 @print_error
 def do_logout(_case_id, session_token):
-    response = requests.post(
+    response = client.post(
         logout_url,
         headers={"Authorization": f"Bearer {session_token}"},
     )
@@ -55,7 +71,7 @@ def do_logout(_case_id, session_token):
 def do_verify(session_token):
     for token in [session_token, "xxx"]:
         print("---- verify token ", token)
-        response = requests.get(
+        response = client.get(
             verify_url,
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -64,7 +80,7 @@ def do_verify(session_token):
 
     for a in [auth, ("u", "p")]:
         print("---- verify password: ", a)
-        response = requests.post(
+        response = client.post(
             verify_url,
             auth=a,
         )
@@ -72,7 +88,7 @@ def do_verify(session_token):
         print(response.text)
 
     print("---- verify no auth header ", token)
-    response = requests.get(
+    response = client.get(
         verify_url,
     )
     print(response.status_code)
@@ -82,7 +98,7 @@ def do_verify(session_token):
 @print_error
 def do_refresh(_case_id, refresh_token, session_token):
     payload = {"session_token": session_token}
-    response = requests.post(
+    response = client.post(
         renew_url,
         headers={
             "Content-Type": "application/json",
@@ -96,7 +112,7 @@ def do_refresh(_case_id, refresh_token, session_token):
 @print_error
 def do_query(query, session_token, url=query_url):
     query_payload = {"sql": query, "pagination": {"wait_time_secs": 11}}
-    response = requests.post(
+    response = client.post(
         url,
         headers={
             "Content-Type": "application/json",
@@ -117,18 +133,18 @@ def fake_expired_token(ty):
         "sid": "",
     }
     return (
-            "bend-v1-"
-            + ty
-            + "-"
-            + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
+        "bend-v1-"
+        + ty
+        + "-"
+        + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
     )
 
 
 def main():
     login_resp = do_login()
     pprint(sorted(login_resp.keys()))
-    session_token = login_resp.get("session_token")
-    refresh_token = login_resp.get("refresh_token")
+    session_token = login_resp.get("tokens").get("session_token")
+    refresh_token = login_resp.get("tokens").get("refresh_token")
     # print(session_token)
 
     # ok
@@ -163,8 +179,8 @@ def main():
 
     renew_resp = do_refresh(1, refresh_token, session_token)
     pprint(sorted(renew_resp.keys()))
-    new_session_token = renew_resp.get("session_token")
-    new_refresh_token = renew_resp.get("refresh_token")
+    new_session_token = renew_resp.get("tokens").get("session_token")
+    new_refresh_token = renew_resp.get("tokens").get("refresh_token")
 
     # old session_token still valid
     query_resp = do_query("select 6", session_token)
@@ -191,6 +207,7 @@ def main():
 
 if __name__ == "__main__":
     import logging
+
     try:
         main()
     except Exception as e:

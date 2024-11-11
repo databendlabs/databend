@@ -76,6 +76,12 @@ impl From<UnabortableTransactionError> for MetaStorageError {
     }
 }
 
+impl From<io::Error> for MetaStorageError {
+    fn from(error: io::Error) -> Self {
+        MetaStorageError::Damaged(AnyError::new(&error))
+    }
+}
+
 impl From<MetaStorageError> for io::Error {
     fn from(e: MetaStorageError) -> Self {
         io::Error::new(io::ErrorKind::InvalidData, e)

@@ -16,7 +16,7 @@ use std::fs;
 use std::io::Read;
 
 use databend_common_arrow::arrow::array::ViewType;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::openraft::error::SnapshotMismatch;
 use databend_common_meta_sled_store::openraft::testing::log_id;
@@ -288,7 +288,7 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     };
 
     // build a temp snapshot data
-    let ss_store = SnapshotStoreV003::new(tc0.config.raft_config.clone());
+    let ss_store = SnapshotStoreV004::new(tc0.config.raft_config.clone());
     let writer = ss_store.new_writer()?;
 
     let snapshot_data = {

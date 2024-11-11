@@ -110,6 +110,8 @@ pub fn next_port() -> u16 {
 
 /// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.
 pub struct MetaSrvTestContext {
+    pub _temp_dir: tempfile::TempDir,
+
     pub config: configs::Config,
 
     pub meta_node: Option<Arc<MetaNode>>,
@@ -126,6 +128,8 @@ impl Drop for MetaSrvTestContext {
 impl MetaSrvTestContext {
     /// Create a new Config for test, with unique port assigned
     pub fn new(id: u64) -> MetaSrvTestContext {
+        let temp_dir = tempfile::tempdir().unwrap();
+
         let config_id = next_port();
 
         let mut config = configs::Config::default();
@@ -141,7 +145,8 @@ impl MetaSrvTestContext {
         config.raft_config.config_id = config_id.to_string();
 
         // Use a unique dir for each test case.
-        config.raft_config.raft_dir = format!("{}-{}", config.raft_config.raft_dir, config_id);
+        config.raft_config.raft_dir =
+            format!("{}/{}/raft_dir", temp_dir.path().display(), config_id);
 
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
@@ -175,6 +180,7 @@ impl MetaSrvTestContext {
             config,
             meta_node: None,
             grpc_srv: None,
+            _temp_dir: temp_dir,
         };
 
         c.rm_raft_dir("new MetaSrvTestContext");
@@ -243,6 +249,11 @@ impl MetaSrvTestContext {
 
         client.forward(req).await?;
         Ok(())
+    }
+
+    pub fn drop_meta_node(&mut self) {
+        self.meta_node.take();
+        self.grpc_srv.take();
     }
 }
 

@@ -17,31 +17,32 @@
 mod data_version;
 mod header;
 pub(crate) mod upgrade_to_v003;
+pub(crate) mod upgrade_to_v004;
 pub(crate) mod version_info;
 
-use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Debug;
+use std::fs;
+use std::io;
+use std::path::Path;
+use std::path::PathBuf;
 
 pub use data_version::DataVersion;
-use databend_common_meta_sled_store::sled;
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
 use log::info;
-use openraft::AnyError;
+use raft_log::codeq::error_context_ext::ErrorContextExt;
 
 use crate::config::RaftConfig;
 use crate::key_spaces::DataHeader;
-use crate::log::TREE_RAFT_LOG;
-use crate::sm_v003::SnapshotStoreV002;
-use crate::state::TREE_RAFT_STATE;
 
 /// The sled tree name to store the data versions.
 pub const TREE_HEADER: &str = "header";
 
 /// The working data version the program runs on
-pub static DATA_VERSION: DataVersion = DataVersion::V003;
+pub static DATA_VERSION: DataVersion = DataVersion::V004;
 
 /// On disk data descriptor.
 ///
@@ -51,9 +52,6 @@ pub static DATA_VERSION: DataVersion = DataVersion::V003;
 #[derive(Debug, Clone)]
 pub struct OnDisk {
     pub header: Header,
-
-    #[allow(dead_code)]
-    db: sled::Db,
 
     config: RaftConfig,
 
@@ -71,33 +69,43 @@ impl fmt::Display for OnDisk {
 }
 
 impl OnDisk {
-    pub(crate) const KEY_HEADER: &'static str = "header";
+    pub const KEY_HEADER: &'static str = "header";
+
+    pub fn ensure_dirs(raft_dir: &str) -> Result<(), io::Error> {
+        let raft_dir = Path::new(raft_dir);
+        let version_dir = raft_dir.join("df_meta").join(format!("{}", DATA_VERSION));
+
+        let log_dir = version_dir.join("log");
+        if !log_dir.exists() {
+            fs::create_dir_all(&log_dir)
+                .context(|| format!("creating dir {}", log_dir.as_path().display()))?;
+            info!("Created log dir: {}", log_dir.as_path().display());
+        }
+
+        let snapshot_dir = version_dir.join("snapshot");
+        if !snapshot_dir.exists() {
+            fs::create_dir_all(&snapshot_dir)
+                .context(|| format!("creating dir {}", snapshot_dir.as_path().display()))?;
+            info!("Created snapshot dir: {}", snapshot_dir.as_path().display());
+        }
+
+        Ok(())
+    }
 
     /// Initialize data version for local store, returns the loaded version.
     #[fastrace::trace]
-    pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
+    pub async fn open(config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
         info!(config :? =(config); "open and initialize data-version");
 
-        let tree_name = config.tree_name(TREE_HEADER);
-        let tree = SledTree::open(db, &tree_name, config.is_sync())?;
-        let ks = tree.key_space::<DataHeader>();
+        Self::ensure_dirs(&config.raft_dir)?;
 
-        let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {
-            MetaStorageError::Damaged(
-                AnyError::error(format!(
-                    "Unable to read meta-service data version from disk; \
-                    Possible reasons: opening future version meta-service with old version binary, \
-                    or the on-disk data is damaged. \
-                    error: {}",
-                    e
-                ))
-                .add_context(|| "open on-disk data"),
-            )
-        })?;
-        info!("Loaded header: {:?}", header);
+        Self::upgrade_header(config).await?;
+
+        let header = Self::load_header_from_fs(config)?;
+        info!("Loaded header from fs: {:?}", header);
 
         if let Some(v) = header {
-            return Ok(OnDisk::new(v, db, config));
+            return Ok(OnDisk::new(v, config));
         }
 
         // Without header, by default it is the oldest compatible version: V002.
@@ -105,14 +113,15 @@ impl OnDisk {
         let header = Header {
             version: DataVersion::V002,
             upgrading: None,
+            cleaning: false,
         };
 
-        ks.insert(&Self::KEY_HEADER.to_string(), &header).await?;
+        Self::write_header_to_fs(config, &header)?;
 
-        Ok(OnDisk::new(header, db, config))
+        Ok(OnDisk::new(header, config))
     }
 
-    fn new(header: Header, db: &sled::Db, config: &RaftConfig) -> Self {
+    fn new(header: Header, config: &RaftConfig) -> Self {
         let min_compatible = DATA_VERSION.min_compatible_data_version();
 
         if header.version < min_compatible {
@@ -138,10 +147,93 @@ impl OnDisk {
 
         Self {
             header,
-            db: db.clone(),
             config: config.clone(),
             log_stderr: false,
         }
+    }
+
+    async fn upgrade_header(config: &RaftConfig) -> Result<(), io::Error> {
+        let header_path = Self::header_path(config);
+        if header_path.exists() {
+            info!("Header file exists, no need to upgrade");
+            return Ok(());
+        }
+
+        let db = init_get_sled_db(config.raft_dir.clone(), config.sled_cache_size());
+
+        let tree_name = config.tree_name(TREE_HEADER);
+        let tree = SledTree::open(&db, &tree_name, config.is_sync())?;
+        let ks = tree.key_space::<DataHeader>();
+
+        let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, e).context(|| "open on-disk data")
+        })?;
+        info!("Found and loaded header from sled: {:?}", header);
+
+        if let Some(header) = header {
+            Self::write_header_to_fs(config, &header)?;
+
+            ks.remove_no_return(&Self::KEY_HEADER.to_string(), true)
+                .await
+                .map_err(|e| {
+                    io::Error::new(io::ErrorKind::InvalidData, e)
+                        .context(|| "remove header from sled")
+                })?;
+
+            info!("Removed header from sled");
+        }
+
+        Ok(())
+    }
+
+    fn header_path(config: &RaftConfig) -> PathBuf {
+        let raft_dir = Path::new(&config.raft_dir);
+        raft_dir.join("df_meta").join("VERSION")
+    }
+
+    pub(crate) fn write_header_to_fs(
+        config: &RaftConfig,
+        header: &Header,
+    ) -> Result<(), io::Error> {
+        let header_path = Self::header_path(config);
+        let buf = serde_json::to_vec(header).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, e)
+                .context(|| format!("serializing header at {}", header_path.as_path().display(),))
+        })?;
+
+        fs::write(&header_path, &buf).context(|| {
+            format!(
+                "writing version file at {}: {}",
+                header_path.as_path().display(),
+                String::from_utf8_lossy(&buf)
+            )
+        })?;
+
+        info!(
+            "Wrote header {:?}; at {}",
+            header,
+            header_path.as_path().display()
+        );
+
+        Ok(())
+    }
+
+    pub(crate) fn load_header_from_fs(config: &RaftConfig) -> Result<Option<Header>, io::Error> {
+        let header_path = Self::header_path(config);
+
+        if !header_path.exists() {
+            return Ok(None);
+        }
+
+        let state = fs::read(&header_path)
+            .context(|| format!("reading version file {}", header_path.as_path().display(),))?;
+
+        let state = serde_json::from_slice::<Header>(&state).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, e)
+                .context(|| format!("parsing version file {}", header_path.as_path().display(),))
+        })?;
+
+        Ok(Some(state))
     }
 
     /// Enable or disable logging crucial steps to stderr, when upgrading.
@@ -169,33 +261,23 @@ impl OnDisk {
                     unreachable!("Upgrading to V0 is not supported");
                 }
                 DataVersion::V001 => {
-                    unreachable!("Upgrading to V001 is not supported since 2024-06-13, 1.2.528");
+                    unreachable!("Upgrading V0 to V001 is not supported since 2024-06-13, 1.2.528");
                 }
                 DataVersion::V002 => {
-                    let snapshot_store = SnapshotStoreV002::new(self.config.clone());
-
-                    let last_snapshot = snapshot_store.load_last_snapshot().await.map_err(|e| {
-                        let ae = AnyError::new(&e).add_context(|| "load last snapshot");
-                        MetaStorageError::Damaged(ae)
-                    })?;
-
-                    if last_snapshot.is_some() {
-                        self.progress(format_args!(
-                            "There is V002 snapshot, upgrade is done; Finish upgrading"
-                        ));
-                        self.v001_remove_all_state_machine_trees().await?;
-
-                        // Note that this will increase `header.version`.
-                        self.finish_upgrading().await?;
-                    }
+                    unreachable!(
+                        "Upgrading V001 to V002 is not supported since 2024-06-13, 1.2.528"
+                    );
                 }
                 DataVersion::V003 => {
                     self.clean_in_progress_v002_to_v003().await?;
                 }
+                DataVersion::V004 => {
+                    self.clean_in_progress_v003_to_v004().await?;
+                }
             }
 
             self.header.upgrading = None;
-            self.write_header(&self.header).await?;
+            self.write_header(&self.header)?;
             self.progress(format_args!("Cleared upgrading flag"));
         }
 
@@ -219,6 +301,9 @@ impl OnDisk {
                     self.upgrade_v002_to_v003().await?;
                 }
                 DataVersion::V003 => {
+                    self.upgrade_v003_to_v004().await?;
+                }
+                DataVersion::V004 => {
                     unreachable!("{} is the latest version", self.header.version)
                 }
             }
@@ -230,51 +315,6 @@ impl OnDisk {
         ));
 
         Ok(())
-    }
-
-    async fn v001_remove_all_state_machine_trees(&mut self) -> Result<(), MetaStorageError> {
-        let tree_names = self.tree_names().await?;
-
-        let sm_tree_names = tree_names
-            .iter()
-            .filter(|&name| name.starts_with("state_machine/"))
-            .collect::<Vec<_>>();
-
-        self.progress(format_args!(
-            "Remove state machine trees: {:?}",
-            sm_tree_names
-        ));
-
-        for tree_name in sm_tree_names {
-            self.db.drop_tree(tree_name)?;
-        }
-
-        Ok(())
-    }
-
-    async fn tree_names(&self) -> Result<Vec<String>, MetaStorageError> {
-        let mut present_tree_names = {
-            let mut tree_names = BTreeSet::new();
-            for n in self.db.tree_names() {
-                let name = String::from_utf8(n.to_vec())?;
-                tree_names.insert(name);
-            }
-            tree_names
-        };
-
-        // Export in header, raft_state, log and other order.
-        let mut tree_names = vec![];
-
-        for name in [TREE_HEADER, TREE_RAFT_STATE, TREE_RAFT_LOG] {
-            if present_tree_names.remove(name) {
-                tree_names.push(name.to_string());
-            } else {
-                self.progress(format_args!("tree {} not found", name));
-            }
-        }
-        tree_names.extend(present_tree_names.into_iter().collect::<Vec<_>>());
-
-        Ok(tree_names)
     }
 
     /// Set upgrading flag indicating the upgrading is in progress.
@@ -293,44 +333,35 @@ impl OnDisk {
         assert!(self.header.upgrading.is_none(), "can not upgrade twice");
 
         self.header.upgrading = self.header.version.next();
-        self.progress(format_args!("Begin upgrading: {}", self.header));
 
-        self.write_header(&self.header).await?;
+        self.write_header(&self.header)?;
+        Ok(())
+    }
+
+    fn clean_upgrading(&mut self) -> Result<(), io::Error> {
+        assert!(self.header.upgrading.is_some());
+
+        self.header.cleaning = true;
+        self.progress(format_args!("    Clean upgrading: {}", self.header));
+
+        self.write_header(&self.header)?;
         Ok(())
     }
 
     /// Reset upgrading flag indicating the upgrading is finished, and set header.version to next version.
-    async fn finish_upgrading(&mut self) -> Result<(), MetaStorageError> {
+    fn finish_upgrading(&mut self) -> Result<(), MetaStorageError> {
         self.header.version = self.header.upgrading.unwrap();
         self.header.upgrading = None;
-        self.progress(format_args!("Finished upgrading: {}", self.header));
+        self.header.cleaning = false;
+        self.progress(format_args!("    Finished upgrading: {}", self.header));
 
-        self.write_header(&self.header).await?;
+        self.write_header(&self.header)?;
         Ok(())
     }
 
-    async fn write_header(&self, header: &Header) -> Result<(), MetaStorageError> {
-        let tree = self.header_tree()?;
-        let ks = tree.key_space::<DataHeader>();
-
-        ks.insert(&Self::KEY_HEADER.to_string(), header).await?;
-
-        self.progress(format_args!("Write header: {}", header));
+    fn write_header(&self, header: &Header) -> Result<(), MetaStorageError> {
+        Self::write_header_to_fs(&self.config, header)?;
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn read_header(&self) -> Result<Option<Header>, MetaStorageError> {
-        let tree = self.header_tree()?;
-        let ks = tree.key_space::<DataHeader>();
-
-        let header = ks.get(&Self::KEY_HEADER.to_string())?;
-        Ok(header)
-    }
-
-    fn header_tree(&self) -> Result<SledTree, MetaStorageError> {
-        let tree_name = self.config.tree_name(TREE_HEADER);
-        SledTree::open(&self.db, tree_name, self.config.is_sync())
     }
 
     fn progress(&self, s: impl fmt::Display) {
