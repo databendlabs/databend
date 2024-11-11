@@ -464,14 +464,12 @@ fn test_write_read(chunk: Chunk<Box<dyn Array>>) {
 
     for compression in compressions {
         for page_size in &page_sizes {
-            dbg!("start", page_size);
             test_write_read_with_options(chunk.clone(), WriteOptions {
                 default_compression: compression,
                 max_page_size: Some(*page_size),
                 default_compress_ratio: Some(2.0f64),
                 forbidden_compressions: vec![],
             });
-            dbg!("end", page_size);
         }
     }
 }

@@ -207,7 +207,6 @@ arrow-buffer = { version = "53" }
 arrow-cast = { version = "53", features = ["prettyprint"] }
 arrow-data = { version = "53" }
 arrow-flight = { version = "53", features = ["flight-sql-experimental", "tls"] }
-arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
 arrow-ipc = { version = "53" }
 arrow-ord = { version = "53" }
 arrow-schema = { version = "53", features = ["serde"] }
@@ -601,7 +600,6 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "5502823a" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = [

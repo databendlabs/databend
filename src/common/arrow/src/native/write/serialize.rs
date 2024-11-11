@@ -125,7 +125,6 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
 
         if nest.is_nullable() {
             let (_, validity) = nest.inner();
-
             if let Some(bitmap) = validity {
                 w.write_all(&(bitmap.len() as u32).to_le_bytes())?;
                 let (s, offset, _) = bitmap.as_slice();
@@ -139,8 +138,6 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
             }
         }
     } else {
-        w.write_all(&(nesteds.len() as u32).to_le_bytes())?;
-
         for nested in nesteds {
             let (values, validity) = nested.inner();
 

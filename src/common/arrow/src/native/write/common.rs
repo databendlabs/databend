@@ -21,6 +21,7 @@ use crate::arrow::chunk::Chunk;
 use crate::arrow::error::Result;
 use crate::native::compression::CommonCompression;
 use crate::native::compression::Compression;
+use crate::native::nested::slice_nest_array;
 use crate::native::nested::to_leaves;
 use crate::native::nested::to_nested;
 use crate::native::ColumnMeta;
@@ -50,45 +51,50 @@ impl<W: Write> NativeWriter<W> {
 
         for (array, field) in chunk.arrays().iter().zip(self.schema.fields.iter()) {
             let length = array.len();
-            let mut page_metas = Vec::with_capacity((length + 1) / page_size + 1);
-            let start = self.writer.offset;
-            for offset in (0..length).step_by(page_size) {
-                let length = if offset + page_size > length {
-                    length - offset
-                } else {
-                    page_size
-                };
 
-                let array = array.sliced(offset, length);
-                let nested = to_nested(array.as_ref(), field)?;
-                let leaf_arrays = to_leaves(array.as_ref());
+            let nested = to_nested(array.as_ref(), field)?;
+            let leaf_arrays = to_leaves(array.as_ref());
 
-                dbg!(nested.len(), leaf_arrays.len());
-                for (leaf_array, nested) in leaf_arrays.iter().zip(nested.into_iter()) {
-                    let leaf_array = leaf_array.to_boxed();
+            for (leaf_array, nested) in leaf_arrays.iter().zip(nested.into_iter()) {
+                let leaf_array = leaf_array.to_boxed();
+                let mut page_metas = Vec::with_capacity((length + 1) / page_size + 1);
+                let start = self.writer.offset;
 
-                    let page_start = self.writer.offset;
-                    write(
-                        &mut self.writer,
-                        leaf_array.as_ref(),
-                        &nested,
-                        self.options.clone(),
-                        &mut self.scratch,
-                    )
-                    .unwrap();
+                for offset in (0..length).step_by(page_size) {
+                    let length = if offset + page_size > length {
+                        length - offset
+                    } else {
+                        page_size
+                    };
 
-                    let page_end = self.writer.offset;
-                    page_metas.push(PageMeta {
-                        length: (page_end - page_start),
-                        num_values: leaf_array.len() as u64,
-                    });
+                    let mut sub_array = leaf_array.clone();
+                    let mut sub_nested = nested.clone();
+                    slice_nest_array(sub_array.as_mut(), &mut sub_nested, offset, length);
+
+                    {
+                        let page_start = self.writer.offset;
+                        write(
+                            &mut self.writer,
+                            sub_array.as_ref(),
+                            &sub_nested,
+                            self.options.clone(),
+                            &mut self.scratch,
+                        )
+                        .unwrap();
+
+                        let page_end = self.writer.offset;
+                        page_metas.push(PageMeta {
+                            length: (page_end - page_start),
+                            num_values: sub_array.len() as u64,
+                        });
+                    }
                 }
-            }
 
-            self.metas.push(ColumnMeta {
-                offset: start,
-                pages: page_metas,
-            })
+                self.metas.push(ColumnMeta {
+                    offset: start,
+                    pages: page_metas,
+                })
+            }
         }
         Ok(())
     }

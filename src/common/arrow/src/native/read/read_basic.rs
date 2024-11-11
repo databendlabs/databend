@@ -18,8 +18,11 @@ use std::io::Read;
 use super::NativeReadBuf;
 use crate::arrow::bitmap::Bitmap;
 use crate::arrow::error::Result;
+use crate::arrow::offset::Offsets;
+use crate::arrow::offset::OffsetsBuffer;
 use crate::native::compression::Compression;
 use crate::native::nested::InitNested;
+use crate::native::nested::ListNested;
 use crate::native::nested::Nested;
 
 pub fn read_validity<R: NativeReadBuf>(reader: &mut R) -> Result<Option<Bitmap>> {
@@ -50,6 +53,7 @@ pub fn read_nested<R: NativeReadBuf>(
         } else {
             None
         };
+
         Ok((vec![], bitmap))
     } else {
         let mut results = Vec::with_capacity(init.len());
@@ -71,7 +75,12 @@ pub fn read_nested<R: NativeReadBuf>(
                     let bytes: &mut [u8] = bytemuck::cast_slice_mut(values.as_mut());
                     reader.read_exact(bytes)?;
 
-                    results.push(Nested::List(values.len(), n.is_nullable(), values, bitmap))
+                    let offsets = Offsets::try_from(values).unwrap();
+                    results.push(Nested::LargeList(ListNested::new(
+                        OffsetsBuffer::from(offsets),
+                        bitmap,
+                        n.is_nullable(),
+                    )))
                 }
                 InitNested::Struct(_) => {
                     results.push(Nested::Struct(leaf_length, n.is_nullable(), bitmap))

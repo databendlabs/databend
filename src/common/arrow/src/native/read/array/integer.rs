@@ -70,11 +70,8 @@ where
         num_values: u64,
         buffer: Vec<u8>,
     ) -> Result<(NestedState, Box<dyn Array>)> {
-        dbg!("start dd ", &self.init);
-
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
-        dbg!("deserialize", nested.len(), num_values);
         let length = num_values as usize;
 
         let mut values = Vec::with_capacity(length);

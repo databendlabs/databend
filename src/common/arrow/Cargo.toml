@@ -14,9 +14,6 @@ test = true
 default = ["arrow-default"]
 
 arrow = ["arrow-buffer", "arrow-schema", "arrow-data", "arrow-array"]
-io_flight = ["io_ipc", "arrow-format/flight-data"]
-io_ipc = []
-io_ipc_compression = []
 
 # sample testing of generated arrow data
 
@@ -36,16 +33,11 @@ compute_sort = ["compute_take"]
 compute_take = []
 
 serde_types = ["serde", "serde_derive"]
-simd = []
 
 arrow-default = [
     "arrow",
-    "io_ipc",
-    "io_ipc_compression",
-    "io_flight",
     "compute",
     "serde_types",
-    "simd",
 ]
 
 
@@ -54,7 +46,6 @@ ahash = { workspace = true }
 arrow-array = { workspace = true, optional = true }
 arrow-buffer = { workspace = true, optional = true }
 arrow-data = { workspace = true, optional = true }
-arrow-format = { workspace = true }
 arrow-schema = { workspace = true, optional = true }
 async-stream = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }

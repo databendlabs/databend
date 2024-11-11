@@ -18,22 +18,44 @@ use crate::arrow::array::ListArray;
 use crate::arrow::array::MapArray;
 use crate::arrow::array::StructArray;
 use crate::arrow::bitmap::Bitmap;
+use crate::arrow::buffer::Buffer;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::Field;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Error;
 use crate::arrow::error::Result;
+use crate::arrow::offset::Offset;
 use crate::arrow::offset::Offsets;
+use crate::arrow::offset::OffsetsBuffer;
 
 /// Descriptor of nested information of a field
 #[derive(Debug, Clone, PartialEq)]
 pub enum Nested {
     /// A primitive array
     Primitive(usize, bool, Option<Bitmap>),
-    /// A list array
-    List(usize, bool, Vec<i64>, Option<Bitmap>),
+    /// a list
+    List(ListNested<i32>),
+    /// a list
+    LargeList(ListNested<i64>),
     /// A struct array
     Struct(usize, bool, Option<Bitmap>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListNested<O: Offset> {
+    pub is_nullable: bool,
+    pub offsets: OffsetsBuffer<O>,
+    pub validity: Option<Bitmap>,
+}
+
+impl<O: Offset> ListNested<O> {
+    pub fn new(offsets: OffsetsBuffer<O>, validity: Option<Bitmap>, is_nullable: bool) -> Self {
+        Self {
+            is_nullable,
+            offsets,
+            validity,
+        }
+    }
 }
 
 pub type NestedState = Vec<Nested>;
@@ -42,7 +64,8 @@ impl Nested {
     pub fn length(&self) -> usize {
         match self {
             Nested::Primitive(len, _, _) => *len,
-            Nested::List(len, _, _, _) => *len,
+            Nested::List(l) => l.offsets.len_proxy(),
+            Nested::LargeList(l) => l.offsets.len_proxy(),
             Nested::Struct(len, _, _) => *len,
         }
     }
@@ -50,29 +73,49 @@ impl Nested {
     pub fn is_nullable(&self) -> bool {
         match self {
             Nested::Primitive(_, b, _) => *b,
-            Nested::List(_, b, _, _) => *b,
+            Nested::List(l) => l.is_nullable,
+            Nested::LargeList(l) => l.is_nullable,
             Nested::Struct(_, b, _) => *b,
         }
     }
 
-    pub fn inner(&self) -> (Vec<i64>, &Option<Bitmap>) {
+    pub fn inner(&self) -> (Buffer<i64>, &Option<Bitmap>) {
         match self {
-            Nested::Primitive(_, _, v) => (vec![], v),
-            Nested::List(_, _, values, v) => (values.clone(), v),
-            Nested::Struct(_, _, v) => (vec![], v),
+            Nested::Primitive(_, _, v) => (Buffer::new(), v),
+            Nested::List(l) => {
+                let start = l.offsets.first();
+                let buffer = l
+                    .offsets
+                    .buffer()
+                    .iter()
+                    .map(|x| (*x - start) as i64)
+                    .collect();
+                (buffer, &l.validity)
+            }
+            Nested::LargeList(l) => {
+                let start = l.offsets.first();
+                let buffer = if *start == 0 {
+                    l.offsets.buffer().clone()
+                } else {
+                    l.offsets.buffer().iter().map(|x| *x - start).collect()
+                };
+                (buffer, &l.validity)
+            }
+            Nested::Struct(_, _, v) => (Buffer::new(), v),
         }
     }
 
     pub fn validity(&self) -> &Option<Bitmap> {
         match self {
             Nested::Primitive(_, _, v) => v,
-            Nested::List(_, _, _, v) => v,
+            Nested::List(l) => &l.validity,
+            Nested::LargeList(l) => &l.validity,
             Nested::Struct(_, _, v) => v,
         }
     }
 
     pub fn is_list(&self) -> bool {
-        matches!(self, Nested::List(_, _, _, _))
+        matches!(self, Nested::List(_) | Nested::LargeList(_))
     }
 }
 
@@ -89,6 +132,50 @@ pub fn is_nested_type(t: &DataType) -> bool {
         t,
         DataType::Struct(_) | DataType::List(_) | DataType::LargeList(_) | DataType::Map(_, _)
     )
+}
+
+/// Slices the [`Array`] to `Box<dyn Array>` and `Vec<Nested>`.
+pub fn slice_nest_array(
+    primitive_array: &mut dyn Array,
+    nested: &mut [Nested],
+    mut current_offset: usize,
+    mut current_length: usize,
+) {
+    for nested in nested.iter_mut() {
+        match nested {
+            Nested::LargeList(l_nested) => {
+                l_nested.offsets.slice(current_offset, current_length + 1);
+                if let Some(validity) = l_nested.validity.as_mut() {
+                    validity.slice(current_offset, current_length)
+                };
+
+                current_length = l_nested.offsets.range() as usize;
+                current_offset = *l_nested.offsets.first() as usize;
+            }
+            Nested::List(l_nested) => {
+                l_nested.offsets.slice(current_offset, current_length + 1);
+                if let Some(validity) = l_nested.validity.as_mut() {
+                    validity.slice(current_offset, current_length)
+                };
+
+                current_length = l_nested.offsets.range() as usize;
+                current_offset = *l_nested.offsets.first() as usize;
+            }
+            Nested::Struct(length, _, validity) => {
+                *length = current_length;
+                if let Some(validity) = validity.as_mut() {
+                    validity.slice(current_offset, current_length)
+                };
+            }
+            Nested::Primitive(length, _, validity) => {
+                *length = current_length;
+                if let Some(validity) = validity.as_mut() {
+                    validity.slice(current_offset, current_length)
+                };
+                primitive_array.slice(current_offset, current_length);
+            }
+        }
+    }
 }
 
 fn to_nested_recursive(
@@ -123,12 +210,11 @@ fn to_nested_recursive(
             let array = array.as_any().downcast_ref::<ListArray<i32>>().unwrap();
 
             if let DataType::List(fs) = lt {
-                parents.push(Nested::List(
-                    array.len(),
-                    nullable,
-                    array.offsets().buffer().iter().map(|v| *v as i64).collect(),
+                parents.push(Nested::List(ListNested::new(
+                    array.offsets().clone(),
                     array.validity().cloned(),
-                ));
+                    nullable,
+                )));
                 to_nested_recursive(array.values().as_ref(), fs.as_ref(), nested, parents)?;
             } else {
                 return Err(Error::InvalidArgumentError(
@@ -139,12 +225,11 @@ fn to_nested_recursive(
         LargeList => {
             let array = array.as_any().downcast_ref::<ListArray<i64>>().unwrap();
             if let DataType::LargeList(fs) = lt {
-                parents.push(Nested::List(
-                    array.len(),
-                    nullable,
-                    array.offsets().buffer().to_vec(),
+                parents.push(Nested::LargeList(ListNested::<i64>::new(
+                    array.offsets().clone(),
                     array.validity().cloned(),
-                ));
+                    nullable,
+                )));
                 to_nested_recursive(array.values().as_ref(), fs.as_ref(), nested, parents)?;
             } else {
                 return Err(Error::InvalidArgumentError(
@@ -155,12 +240,11 @@ fn to_nested_recursive(
         Map => {
             let array = array.as_any().downcast_ref::<MapArray>().unwrap();
             if let DataType::Map(fs, _) = lt {
-                parents.push(Nested::List(
-                    array.len(),
-                    nullable,
-                    array.offsets().buffer().iter().map(|v| *v as i64).collect(),
+                parents.push(Nested::List(ListNested::new(
+                    array.offsets().clone(),
                     array.validity().cloned(),
-                ));
+                    nullable,
+                )));
                 to_nested_recursive(array.field().as_ref(), fs.as_ref(), nested, parents)?;
             } else {
                 return Err(Error::InvalidArgumentError(
@@ -244,11 +328,9 @@ pub fn create_list(
     values: Box<dyn Array>,
 ) -> Box<dyn Array> {
     let n = nested.pop().unwrap();
-    let (mut offsets, validity) = n.inner();
+    let (offsets, validity) = n.inner();
     match data_type.to_logical_type() {
         DataType::List(_) => {
-            offsets.push(values.len() as i64);
-
             let offsets = offsets.iter().map(|x| *x as i32).collect::<Vec<_>>();
             let offsets: Offsets<i32> = offsets
                 .try_into()
@@ -256,21 +338,17 @@ pub fn create_list(
 
             Box::new(ListArray::<i32>::new(
                 data_type,
-                offsets.into(),
+                OffsetsBuffer::from(offsets),
                 values,
                 validity.clone(),
             ))
         }
-        DataType::LargeList(_) => {
-            offsets.push(values.len() as i64);
-
-            Box::new(ListArray::<i64>::new(
-                data_type,
-                offsets.try_into().expect("List too large"),
-                values,
-                validity.clone(),
-            ))
-        }
+        DataType::LargeList(_) => Box::new(ListArray::<i64>::new(
+            data_type,
+            unsafe { OffsetsBuffer::new_unchecked(offsets) },
+            values,
+            validity.clone(),
+        )),
         DataType::FixedSizeList(_, _) => {
             Box::new(FixedSizeListArray::new(data_type, values, validity.clone()))
         }
@@ -285,10 +363,9 @@ pub fn create_map(
     values: Box<dyn Array>,
 ) -> Box<dyn Array> {
     let n = nested.pop().unwrap();
-    let (mut offsets, validity) = n.inner();
+    let (offsets, validity) = n.inner();
     match data_type.to_logical_type() {
         DataType::Map(_, _) => {
-            offsets.push(values.len() as i64);
             let offsets = offsets.iter().map(|x| *x as i32).collect::<Vec<_>>();
 
             let offsets: Offsets<i32> = offsets
