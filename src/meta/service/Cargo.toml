@@ -14,7 +14,7 @@ test = true
 [features]
 default = ["simd"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
-simd = []
+simd = ["databend-common-arrow/simd"]
 io-uring = [
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
