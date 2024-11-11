@@ -188,7 +188,7 @@ pub fn init_logging(
                     .parse(&cfg.file.level),
             ))
             .filter(make_log_filter(&cfg.file.prefix_filter))
-            .append(normal_log_file);
+            .append(normal_log_file.with_layout(get_layout(&cfg.file.format)));
         logger = logger.dispatch(dispatch);
     }
 
