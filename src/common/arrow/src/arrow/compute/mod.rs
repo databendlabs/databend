@@ -26,7 +26,7 @@
 //! Some dynamically-typed operators have an auxiliary function, `can_*`, that returns
 //! true if the operator can be applied to the particular `DataType`.
 
-#[cfg(any(feature = "compute_aggregate", feature = "io_parquet"))]
+#[cfg(any(feature = "compute_aggregate"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "compute_aggregate")))]
 pub mod aggregate;
 pub mod arity;

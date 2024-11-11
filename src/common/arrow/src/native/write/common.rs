@@ -19,16 +19,13 @@ use super::NativeWriter;
 use crate::arrow::array::*;
 use crate::arrow::chunk::Chunk;
 use crate::arrow::error::Result;
-use crate::arrow::io::parquet::write::num_values;
-use crate::arrow::io::parquet::write::slice_parquet_array;
-use crate::arrow::io::parquet::write::to_leaves;
-use crate::arrow::io::parquet::write::to_nested;
-use crate::arrow::io::parquet::write::to_parquet_leaves;
 use crate::native::compression::CommonCompression;
 use crate::native::compression::Compression;
+use crate::native::nested::to_leaves;
+use crate::native::nested::to_nested;
 use crate::native::ColumnMeta;
 use crate::native::PageMeta;
-use crate::native::CONTINUATION_MARKER;
+use crate::native::EOF_MARKER;
 
 /// Options declaring the behaviour of writing to IPC
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -51,72 +48,56 @@ impl<W: Write> NativeWriter<W> {
             .unwrap_or(chunk.len())
             .min(chunk.len());
 
-        for (array, type_) in chunk
-            .arrays()
-            .iter()
-            .zip(self.schema_descriptor.fields().to_vec())
-        {
-            let array = array.as_ref();
-            let nested = to_nested(array, &type_)?;
-            let types: Vec<parquet2::schema::types::PrimitiveType> = to_parquet_leaves(type_);
-            let leaf_arrays = to_leaves(array);
+        for (array, field) in chunk.arrays().iter().zip(self.schema.fields.iter()) {
             let length = array.len();
+            let mut page_metas = Vec::with_capacity((length + 1) / page_size + 1);
+            let start = self.writer.offset;
+            for offset in (0..length).step_by(page_size) {
+                let length = if offset + page_size > length {
+                    length - offset
+                } else {
+                    page_size
+                };
 
-            for ((leaf_array, nested), type_) in leaf_arrays
-                .iter()
-                .zip(nested.into_iter())
-                .zip(types.into_iter())
-            {
-                let start = self.writer.offset;
-                let leaf_array = leaf_array.to_boxed();
+                let array = array.sliced(offset, length);
+                let nested = to_nested(array.as_ref(), field)?;
+                let leaf_arrays = to_leaves(array.as_ref());
 
-                let page_metas: Vec<PageMeta> = (0..length)
-                    .step_by(page_size)
-                    .map(|offset| {
-                        let length = if offset + page_size > length {
-                            length - offset
-                        } else {
-                            page_size
-                        };
-                        let mut sub_array = leaf_array.clone();
-                        let mut sub_nested = nested.clone();
-                        slice_parquet_array(sub_array.as_mut(), &mut sub_nested, offset, length);
-                        let page_start = self.writer.offset;
-                        write(
-                            &mut self.writer,
-                            sub_array.as_ref(),
-                            &sub_nested,
-                            type_.clone(),
-                            length,
-                            self.options.clone(),
-                            &mut self.scratch,
-                        )
-                        .unwrap();
+                dbg!(nested.len(), leaf_arrays.len());
+                for (leaf_array, nested) in leaf_arrays.iter().zip(nested.into_iter()) {
+                    let leaf_array = leaf_array.to_boxed();
 
-                        let page_end = self.writer.offset;
-                        let num_values = num_values(&sub_nested);
-                        PageMeta {
-                            length: (page_end - page_start),
-                            num_values: num_values as u64,
-                        }
-                    })
-                    .collect();
+                    let page_start = self.writer.offset;
+                    write(
+                        &mut self.writer,
+                        leaf_array.as_ref(),
+                        &nested,
+                        self.options.clone(),
+                        &mut self.scratch,
+                    )
+                    .unwrap();
 
-                self.metas.push(ColumnMeta {
-                    offset: start,
-                    pages: page_metas,
-                })
+                    let page_end = self.writer.offset;
+                    page_metas.push(PageMeta {
+                        length: (page_end - page_start),
+                        num_values: leaf_array.len() as u64,
+                    });
+                }
             }
-        }
 
+            self.metas.push(ColumnMeta {
+                offset: start,
+                pages: page_metas,
+            })
+        }
         Ok(())
     }
 }
 
 /// Write a record batch to the writer, writing the message size before the message
 /// if the record batch is being written to a stream
-pub fn write_continuation<W: Write>(writer: &mut W, total_len: i32) -> Result<usize> {
-    writer.write_all(&CONTINUATION_MARKER)?;
+pub fn write_eof<W: Write>(writer: &mut W, total_len: i32) -> Result<usize> {
+    writer.write_all(&EOF_MARKER)?;
     writer.write_all(&total_len.to_le_bytes()[..])?;
     Ok(8)
 }

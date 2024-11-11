@@ -15,155 +15,72 @@
 use std::convert::TryInto;
 use std::io::Read;
 
-use parquet2::encoding::hybrid_rle::BitmapIter;
-use parquet2::encoding::hybrid_rle::Decoder;
-use parquet2::encoding::hybrid_rle::HybridEncoded;
-use parquet2::encoding::hybrid_rle::HybridRleDecoder;
-use parquet2::metadata::ColumnDescriptor;
-use parquet2::read::levels::get_bit_width;
-
 use super::NativeReadBuf;
 use crate::arrow::bitmap::Bitmap;
-use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::error::Result;
-use crate::arrow::io::parquet::read::init_nested;
-use crate::arrow::io::parquet::read::InitNested;
-use crate::arrow::io::parquet::read::NestedState;
 use crate::native::compression::Compression;
+use crate::native::nested::InitNested;
+use crate::native::nested::Nested;
 
-pub fn read_validity<R: NativeReadBuf>(
-    reader: &mut R,
-    length: usize,
-    builder: &mut MutableBitmap,
-) -> Result<()> {
+pub fn read_validity<R: NativeReadBuf>(reader: &mut R) -> Result<Option<Bitmap>> {
     let mut buf = vec![0u8; 4];
-    let def_levels_len = read_u32(reader, buf.as_mut_slice())?;
-    if def_levels_len == 0 {
-        return Ok(());
+    let length = read_u32(reader, &mut buf)? as usize;
+    if length > 0 {
+        buf.resize((length + 7) / 8, 0);
+        reader.read_exact(&mut buf)?;
+        Ok(Some(Bitmap::try_new(buf, length)?))
+    } else {
+        Ok(None)
     }
-    let mut def_levels = vec![0u8; def_levels_len as usize];
-    reader.read_exact(def_levels.as_mut_slice())?;
-
-    let decoder = Decoder::new(def_levels.as_slice(), 1);
-    for encoded in decoder {
-        let encoded = encoded.unwrap();
-        match encoded {
-            HybridEncoded::Bitpacked(r) => {
-                let bitmap_iter = BitmapIter::new(r, 0, length);
-                for v in bitmap_iter {
-                    unsafe { builder.push_unchecked(v) };
-                }
-            }
-            HybridEncoded::Rle(_, _) => unreachable!(),
-        }
-    }
-    Ok(())
 }
 
-pub fn read_validity_nested<R: NativeReadBuf>(
+// Read nested from reader and pop the leaf nested
+pub fn read_nested<R: NativeReadBuf>(
     reader: &mut R,
-    num_values: usize,
-    leaf: &ColumnDescriptor,
-    init: Vec<InitNested>,
-) -> Result<(NestedState, Option<Bitmap>)> {
-    let mut buf = vec![0u8; 4];
-    let additional = read_u32(reader, buf.as_mut_slice())?;
-    let rep_levels_len = read_u32(reader, buf.as_mut_slice())?;
-    let def_levels_len = read_u32(reader, buf.as_mut_slice())?;
-    let max_rep_level = leaf.descriptor.max_rep_level;
-    let max_def_level = leaf.descriptor.max_def_level;
+    init: &[InitNested],
+    leaf_length: usize,
+) -> Result<(Vec<Nested>, Option<Bitmap>)> {
+    assert!(!init.is_empty());
+    let is_simple_nested = init.len() == 1;
 
-    let mut rep_levels = vec![0u8; rep_levels_len as usize];
-    reader.read_exact(rep_levels.as_mut_slice())?;
-    let mut def_levels = vec![0u8; def_levels_len as usize];
-    reader.read_exact(def_levels.as_mut_slice())?;
+    if is_simple_nested {
+        let n = init[0];
+        let bitmap = if n.is_nullable() {
+            read_validity(reader)?
+        } else {
+            None
+        };
+        Ok((vec![], bitmap))
+    } else {
+        let mut results = Vec::with_capacity(init.len());
+        for n in init {
+            let bitmap = if n.is_nullable() {
+                read_validity(reader)?
+            } else {
+                None
+            };
 
-    let reps = HybridRleDecoder::try_new(&rep_levels, get_bit_width(max_rep_level), num_values)?;
-    let defs = HybridRleDecoder::try_new(&def_levels, get_bit_width(max_def_level), num_values)?;
-    let mut page_iter = reps.zip(defs).peekable();
+            match n {
+                InitNested::Primitive(_) => {
+                    results.push(Nested::Primitive(leaf_length, n.is_nullable(), bitmap))
+                }
+                InitNested::List(_) => {
+                    let mut buf = vec![0u8; 4];
+                    let length = read_u32(reader, &mut buf)?;
+                    let mut values = vec![0i64; length as usize];
+                    let bytes: &mut [u8] = bytemuck::cast_slice_mut(values.as_mut());
+                    reader.read_exact(bytes)?;
 
-    let mut nested = init_nested(&init, num_values);
-
-    // The following code is copied from arrow2 `extend_offsets2` function.
-    // https://github.com/jorgecarleitao/arrow2/blob/main/src/io/parquet/read/deserialize/nested_utils.rs#L403
-    // The main purpose of this code is to calculate the `NestedState` and `Bitmap`
-    // of the nested information by decode `rep_levels` and `def_levels`.
-    let max_depth = nested.nested.len();
-
-    let mut cum_sum = vec![0u32; max_depth + 1];
-    for (i, nest) in nested.nested.iter().enumerate() {
-        let delta = nest.is_nullable() as u32 + nest.is_repeated() as u32;
-        cum_sum[i + 1] = cum_sum[i] + delta;
-    }
-
-    let mut cum_rep = vec![0u32; max_depth + 1];
-    for (i, nest) in nested.nested.iter().enumerate() {
-        let delta = nest.is_repeated() as u32;
-        cum_rep[i + 1] = cum_rep[i] + delta;
-    }
-
-    let mut is_nullable = false;
-    let mut builder = MutableBitmap::with_capacity(num_values);
-
-    let mut rows = 0;
-    while let Some((rep, def)) = page_iter.next() {
-        let rep = rep?;
-        let def = def?;
-        if rep == 0 {
-            rows += 1;
-        }
-
-        let mut is_required = false;
-        for depth in 0..max_depth {
-            let right_level = rep <= cum_rep[depth] && def >= cum_sum[depth];
-            if is_required || right_level {
-                let length = nested
-                    .nested
-                    .get(depth + 1)
-                    .map(|x| x.len() as i64)
-                    // the last depth is the leaf, which is always increased by 1
-                    .unwrap_or(1);
-
-                let nest = &mut nested.nested[depth];
-
-                let is_valid = nest.is_nullable() && def > cum_sum[depth];
-                nest.push(length, is_valid);
-                is_required = nest.is_required() && !is_valid;
-
-                if depth == max_depth - 1 {
-                    // the leaf / primitive
-                    is_nullable = nest.is_nullable();
-                    if is_nullable {
-                        let is_valid = (def != cum_sum[depth]) || !nest.is_nullable();
-                        if right_level && is_valid {
-                            unsafe { builder.push_unchecked(true) };
-                        } else {
-                            unsafe { builder.push_unchecked(false) };
-                        }
-                    }
+                    results.push(Nested::List(values.len(), n.is_nullable(), values, bitmap))
+                }
+                InitNested::Struct(_) => {
+                    results.push(Nested::Struct(leaf_length, n.is_nullable(), bitmap))
                 }
             }
         }
-
-        let next_rep = *page_iter
-            .peek()
-            .map(|x| x.0.as_ref())
-            .transpose()
-            .unwrap() // todo: fix this
-            .unwrap_or(&0);
-
-        if next_rep == 0 && rows == additional {
-            break;
-        }
+        let bitmap = results.pop().unwrap().validity().clone();
+        Ok((results, bitmap))
     }
-
-    let validity = if is_nullable {
-        Some(std::mem::take(&mut builder).into())
-    } else {
-        None
-    };
-
-    Ok((nested, validity))
 }
 
 #[inline(always)]

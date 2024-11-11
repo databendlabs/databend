@@ -25,7 +25,6 @@ pub mod types;
 pub mod array;
 pub mod chunk;
 pub mod compute;
-pub mod io;
 pub mod scalar;
 pub mod temporal_conversions;
 pub mod util;

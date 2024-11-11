@@ -11,37 +11,14 @@ doctest = false
 test = true
 
 [features]
-default = ["arrow-default", "parquet-default"]
+default = ["arrow-default"]
 
 arrow = ["arrow-buffer", "arrow-schema", "arrow-data", "arrow-array"]
 io_flight = ["io_ipc", "arrow-format/flight-data"]
 io_ipc = []
 io_ipc_compression = []
 
-# base64 + io_ipc because arrow schemas are stored as base64-encoded ipc format.
-io_parquet = ["io_ipc", "base64", "streaming-iterator", "fallible-streaming-iterator"]
-io_parquet_async = ["futures", "io_parquet", "parquet2/async"]
-
-io_parquet_compression = [
-    "io_parquet_zstd",
-    "io_parquet_gzip",
-    "io_parquet_snappy",
-    "io_parquet_lz4",
-    "io_parquet_brotli",
-]
-
 # sample testing of generated arrow data
-io_parquet_sample_test = ["io_parquet_async"]
-
-# compression backends
-io_parquet_brotli = ["parquet2/brotli"]
-io_parquet_gzip = ["parquet2/gzip"]
-io_parquet_lz4 = ["parquet2/lz4"]
-io_parquet_snappy = ["parquet2/snappy"]
-io_parquet_zstd = ["parquet2/zstd"]
-
-# parquet bloom filter functions
-io_parquet_bloom_filter = ["parquet2/bloom_filter"]
 
 compute = [
     "compute_aggregate",
@@ -66,22 +43,11 @@ arrow-default = [
     "io_ipc",
     "io_ipc_compression",
     "io_flight",
-    "io_parquet_async",
-    "io_parquet_compression",
-    "io_parquet",
     "compute",
     "serde_types",
     "simd",
 ]
 
-parquet-default = [
-    "parquet2/lz4",
-    "parquet2/zstd",
-    "parquet2/snappy",
-    # this feature can't be built in musl
-    # "parquet2/gzip_zlib_ng",
-    "parquet2/brotli",
-]
 
 [dependencies]
 ahash = { workspace = true }
@@ -112,9 +78,9 @@ log = { workspace = true }
 lz4 = { workspace = true }
 num = { workspace = true, features = ["std"] }
 num-traits = { workspace = true }
+serde_json = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parquet2 = { workspace = true }
 rand = { workspace = true }
 ringbuffer = { workspace = true }
 roaring = { workspace = true }

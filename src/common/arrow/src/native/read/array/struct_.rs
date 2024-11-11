@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use crate::arrow::array::Array;
-use crate::arrow::array::StructArray;
-use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::Field;
 use crate::arrow::error::Result;
-use crate::arrow::io::parquet::read::NestedState;
+use crate::native::nested::create_struct;
+use crate::native::nested::NestedState;
 use crate::native::read::deserialize::NestedIters;
 
 type StructValues = Vec<Option<Result<(NestedState, Box<dyn Array>)>>>;
@@ -59,11 +58,9 @@ impl<'a> StructIterator<'a> {
                 Err(e) => return Some(Err(e)),
             }
         }
-        Some(Ok(create_struct(
-            self.fields.clone(),
-            &mut nested,
-            new_values,
-        )))
+
+        let array = create_struct(self.fields.clone(), &mut nested, new_values);
+        Some(Ok(array))
     }
 }
 
@@ -89,21 +86,4 @@ impl<'a> Iterator for StructIterator<'a> {
 
         self.deserialize(values)
     }
-}
-
-pub fn create_struct(
-    fields: Vec<Field>,
-    nested: &mut Vec<NestedState>,
-    values: Vec<Box<dyn Array>>,
-) -> (NestedState, Box<dyn Array>) {
-    let mut nested = nested.pop().unwrap();
-    let (_, validity) = nested.nested.pop().unwrap().inner();
-    (
-        nested,
-        Box::new(StructArray::new(
-            DataType::Struct(fields),
-            values,
-            validity.and_then(|x| x.into()),
-        )),
-    )
 }

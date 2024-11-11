@@ -61,6 +61,7 @@ pub struct DictPageBody {
 pub fn stat_simple<'a, I>(reader: I, field: Field) -> Result<ColumnInfo>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a {
     let mut pages = vec![];
+
     for compressed in reader {
         let (_, buffer) = compressed?;
 
@@ -69,7 +70,9 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 
         if field.is_nullable {
             let validity_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
             buffer = &buffer[4 + validity_size as usize..];
-            opt_validity_size = Some(u32::from_le_bytes(buffer[0..4].try_into().unwrap()));
+            if validity_size > 0 {
+                opt_validity_size = Some(validity_size)
+            }
         };
 
         let physical_type = field.data_type.to_physical_type();

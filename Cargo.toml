@@ -27,7 +27,6 @@ members = [
     "src/common/storage",
     "src/common/vector",
     "src/common/license",
-    "src/common/parquet2",
     "src/query/ast",
     "src/query/codegen",
     "src/query/config",
@@ -140,7 +139,6 @@ databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-openai = { path = "src/common/openai" }
-databend-common-parquet2 = { path = "src/common/parquet2" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
 databend-common-pipeline-sources = { path = "src/query/pipeline/sources" }
@@ -196,11 +194,6 @@ databend-storages-common-session = { path = "src/query/storages/common/session" 
 databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
-# Specific dependencies
-parquet2 = { package = "databend-common-parquet2", path = "src/common/parquet2", default-features = false, features = [
-    "serde_types",
-    "async",
-] }
 
 # Crates.io dependencies
 ahash = "0.8"
