@@ -21,6 +21,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::select::SelectList;
 use crate::binder::ColumnBindingBuilder;
+use crate::format_scalar;
 use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
@@ -52,13 +53,14 @@ impl<'a> SetReturningRewriter<'a> {
         let srf_func = ScalarExpr::FunctionCall(func.clone());
         let data_type = srf_func.data_type()?;
 
+        let column_name = format_scalar(&ScalarExpr::FunctionCall(func.clone()));
         let column_index = self.metadata.write().add_derived_column(
-            func.func_name.clone(),
+            column_name.clone(),
             data_type.clone(),
             Some(srf_func.clone()),
         );
         let column = ColumnBindingBuilder::new(
-            func.func_name.clone(),
+            column_name,
             column_index,
             Box::new(data_type),
             Visibility::InVisible,

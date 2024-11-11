@@ -227,6 +227,21 @@ select number % 3 a, max(number) - 3,  number % 2 b, sum(number) + 4 from number
 2 995 0 83504
 2 992 1 83004
 
+statement ok
+CREATE OR REPLACE TABLE t_str (col1 string, col2 string);
+
+statement ok
+INSERT INTO t_str VALUES ('test', 'a1,a2');
+
+query TT
+SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2;
+----
+test a1
+test a2
+
+statement ok
+DROP TABLE t_str
+
 query TTT rowsort
 SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
 ----
