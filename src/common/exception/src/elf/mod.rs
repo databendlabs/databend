@@ -12,26 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+mod dwarf;
+mod dwarf_inline_functions;
+mod dwarf_subprogram;
+mod dwarf_unit;
+mod library_loader;
+mod library_manager;
+mod library_symbol;
 
-extern crate core;
+#[cfg(target_pointer_width = "32")]
+type ElfFile = object::read::elf::ElfFile32<'static, object::NativeEndian, &'static [u8]>;
 
-mod context;
-#[cfg(target_os = "linux")]
-mod elf;
-pub mod exception;
-mod exception_backtrace;
-mod exception_code;
-mod exception_flight;
-mod exception_into;
+#[cfg(target_pointer_width = "64")]
+type ElfFile = object::read::elf::ElfFile64<'static, object::NativeEndian, &'static [u8]>;
 
-pub use context::display_error_stack;
-pub use context::ErrorFrame;
-pub use context::ResultExt;
-pub use exception::ErrorCode;
-pub use exception::Result;
-pub use exception::ToErrorCode;
-pub use exception_backtrace::set_backtrace;
-pub use exception_backtrace::StackTrace;
-pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
-pub use exception_into::SerializedError;
+pub use library_manager::LibraryManager;
