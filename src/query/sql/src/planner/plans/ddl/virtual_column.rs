@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_storages_common_table_meta::meta::Location;
 
@@ -25,7 +26,7 @@ pub struct CreateVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub virtual_columns: Vec<String>,
+    pub virtual_columns: Vec<(String, TableDataType)>,
 }
 
 impl CreateVirtualColumnPlan {
@@ -40,7 +41,7 @@ pub struct AlterVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub virtual_columns: Vec<String>,
+    pub virtual_columns: Vec<(String, TableDataType)>,
 }
 
 impl AlterVirtualColumnPlan {
@@ -68,7 +69,7 @@ pub struct RefreshVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub virtual_columns: Vec<String>,
+    pub virtual_columns: Vec<(String, TableDataType)>,
     pub segment_locs: Option<Vec<Location>>,
 }
 

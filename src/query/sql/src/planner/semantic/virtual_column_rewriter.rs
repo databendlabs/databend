@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -52,7 +51,7 @@ pub(crate) struct VirtualColumnRewriter {
 
     /// Mapping: (table index) -> (virtual column names)
     /// This is used to check whether the virtual column has be created
-    virtual_column_names: HashMap<IndexType, HashSet<String>>,
+    virtual_column_names: HashMap<IndexType, HashMap<String, TableDataType>>,
 
     /// Mapping: (table index) -> (next virtual column id)
     /// The is used to generate virtual column id for virtual columns.
@@ -121,10 +120,13 @@ impl VirtualColumnRewriter {
 
         if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
             if !virtual_column_metas.is_empty() {
-                let virtual_column_name_set =
-                    HashSet::from_iter(virtual_column_metas[0].virtual_columns.iter().cloned());
+                let mut virtual_column_name_map =
+                    HashMap::with_capacity(virtual_column_metas[0].virtual_columns.len());
+                for (name, typ) in virtual_column_metas[0].virtual_columns.iter() {
+                    virtual_column_name_map.insert(name.clone(), typ.clone());
+                }
                 self.virtual_column_names
-                    .insert(table_entry.index(), virtual_column_name_set);
+                    .insert(table_entry.index(), virtual_column_name_map);
             }
         }
         Ok(())
@@ -250,11 +252,12 @@ impl VirtualColumnRewriter {
                         // and push down to the storage layer.
                         // Those virtual columns can be generated from the source column.
                         // This can be used to reminder user to create it to speed up the query.
-                        let is_created =
-                            match self.virtual_column_names.get(&base_column.table_index) {
-                                Some(names) => names.contains(&name),
-                                None => false,
-                            };
+                        let virtual_type = self
+                            .virtual_column_names
+                            .get(&base_column.table_index)
+                            .and_then(|names| names.get(&name));
+
+                        let is_created = virtual_type.is_some();
 
                         let mut index = 0;
                         // Check for duplicate virtual columns
@@ -268,16 +271,22 @@ impl VirtualColumnRewriter {
                                 break;
                             }
                         }
+
+                        let table_data_type = if let Some(virtual_type) = virtual_type {
+                            virtual_type.wrap_nullable()
+                        } else {
+                            TableDataType::Nullable(Box::new(TableDataType::Variant))
+                        };
+
                         if index == 0 {
                             let column_id =
                                 self.next_column_ids.get(&base_column.table_index).unwrap();
-                            let table_data_type =
-                                TableDataType::Nullable(Box::new(TableDataType::Variant));
+
                             index = self.metadata.write().add_virtual_column(
                                 &base_column,
                                 *column_id,
                                 name.clone(),
-                                table_data_type,
+                                table_data_type.clone(),
                                 constant.value.clone(),
                                 item_index,
                                 is_created,
@@ -300,10 +309,11 @@ impl VirtualColumnRewriter {
                                 .insert(base_column.table_index, vec![index]);
                         }
 
+                        let data_type = DataType::from(&table_data_type);
                         let column_binding = ColumnBindingBuilder::new(
                             name,
                             index,
-                            Box::new(DataType::Nullable(Box::new(DataType::Variant))),
+                            Box::new(data_type),
                             Visibility::InVisible,
                         )
                         .table_index(Some(base_column.table_index))

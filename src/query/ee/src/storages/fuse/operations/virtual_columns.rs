@@ -82,7 +82,7 @@ use opendal::Operator;
 pub async fn do_refresh_virtual_column(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
-    virtual_columns: Vec<String>,
+    virtual_columns: Vec<(String, TableDataType)>,
     segment_locs: Option<Vec<Location>>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
@@ -106,7 +106,7 @@ pub async fn do_refresh_virtual_column(
         if f.data_type().remove_nullable() != TableDataType::Variant {
             continue;
         }
-        let is_src_field = virtual_columns.iter().any(|v| v.starts_with(f.name()));
+        let is_src_field = virtual_columns.iter().any(|v| v.0.starts_with(f.name()));
         if is_src_field {
             field_indices.push(i);
         }
@@ -171,7 +171,7 @@ pub async fn do_refresh_virtual_column(
             let all_generated = if let Some(schema) = schema {
                 virtual_columns
                     .iter()
-                    .all(|virtual_name| schema.fields.iter().any(|f| f.name() == virtual_name))
+                    .all(|v| schema.fields.iter().any(|f| *f.name() == v.0))
             } else {
                 false
             };
@@ -203,9 +203,18 @@ pub async fn do_refresh_virtual_column(
 
     let mut virtual_fields = Vec::with_capacity(virtual_columns.len());
     let mut virtual_exprs = Vec::with_capacity(virtual_columns.len());
-    for virtual_column in virtual_columns {
-        let virtual_expr =
+    for (virtual_column, virtual_type) in virtual_columns {
+        let mut virtual_expr =
             parse_computed_expr(ctx.clone(), source_schema.clone(), &virtual_column)?;
+
+        if virtual_type.remove_nullable() != TableDataType::Variant {
+            virtual_expr = Expr::Cast {
+                span: None,
+                is_try: true,
+                expr: Box::new(virtual_expr),
+                dest_type: (&virtual_type).into(),
+            }
+        }
         let virtual_field = TableField::new(
             &virtual_column,
             infer_schema_type(virtual_expr.data_type())?,

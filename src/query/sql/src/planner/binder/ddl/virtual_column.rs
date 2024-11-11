@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 
 use databend_common_ast::ast::AlterVirtualColumnStmt;
@@ -39,6 +39,7 @@ use crate::plans::DropVirtualColumnPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
+use crate::resolve_type_name;
 use crate::BindContext;
 use crate::SelectBuilder;
 
@@ -197,10 +198,30 @@ impl Binder {
         &mut self,
         virtual_columns: &[Expr],
         schema: TableSchemaRef,
-    ) -> Result<Vec<String>> {
-        let mut virtual_names = HashSet::with_capacity(virtual_columns.len());
+    ) -> Result<Vec<(String, TableDataType)>> {
+        let mut virtual_names = HashMap::with_capacity(virtual_columns.len());
         for virtual_column in virtual_columns.iter() {
+            let mut typ = None;
             let mut expr = virtual_column;
+            match expr {
+                Expr::Cast {
+                    expr: inner_expr,
+                    target_type,
+                    ..
+                } => {
+                    expr = inner_expr;
+                    typ = Some(target_type);
+                }
+                Expr::TryCast {
+                    expr: inner_expr,
+                    target_type,
+                    ..
+                } => {
+                    expr = inner_expr;
+                    typ = Some(target_type);
+                }
+                _ => {}
+            }
             let mut paths = VecDeque::new();
             while let Expr::MapAccess {
                 expr: inner_expr,
@@ -253,7 +274,15 @@ impl Binder {
                         }
                         virtual_name.push(']');
                     }
-                    virtual_names.insert(virtual_name);
+
+                    let data_type = if let Some(typ) = typ {
+                        let data_type = resolve_type_name(typ, false)?;
+                        data_type.wrap_nullable()
+                    } else {
+                        TableDataType::Nullable(Box::new(TableDataType::Variant))
+                    };
+
+                    virtual_names.insert(virtual_name, data_type);
                 } else {
                     return Err(ErrorCode::SemanticError(format!(
                         "Column is not exist: {:?}",
@@ -267,8 +296,7 @@ impl Binder {
                 )));
             }
         }
-        let mut virtual_columns: Vec<_> = virtual_names.into_iter().collect();
-        virtual_columns.sort();
+        let virtual_columns: Vec<_> = virtual_names.into_iter().collect();
 
         Ok(virtual_columns)
     }

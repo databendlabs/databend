@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::TableContext;
+use itertools::Itertools;
 
 use crate::columns_table::dump_tables;
 use crate::table::AsyncOneBlockSystemTable;
@@ -79,7 +80,13 @@ impl AsyncSystemTable for VirtualColumnsTable {
                     if let Some(virtual_column_meta) = virtual_column_meta_map.remove(&table_id) {
                         database_names.push(database.clone());
                         table_names.push(table.name().to_string());
-                        virtual_columns.push(virtual_column_meta.virtual_columns.join(", "));
+                        virtual_columns.push(
+                            virtual_column_meta
+                                .virtual_columns
+                                .iter()
+                                .map(|col| format!("{} {}", col.0, col.1))
+                                .join(", "),
+                        );
                         created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
                         updated_on_columns
                             .push(virtual_column_meta.updated_on.map(|u| u.timestamp_micros()));
