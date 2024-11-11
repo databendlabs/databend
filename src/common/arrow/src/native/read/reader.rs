@@ -27,7 +27,6 @@ use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::datatypes::Schema;
 use crate::arrow::error::Error;
 use crate::arrow::error::Result;
-use crate::arrow::io::ipc::read::deserialize_schema;
 use crate::native::ColumnMeta;
 use crate::native::PageMeta;
 
@@ -132,6 +131,11 @@ impl<R: NativeReadBuf + std::io::Seek> Iterator for NativeReader<R> {
         self.current_page += 1;
         Some(Ok((page_meta.num_values, buffer)))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.page_metas.len() - self.current_page;
+        (remaining, Some(remaining))
+    }
 }
 
 impl<R: NativeReadBuf + std::io::Seek> NativeReader<R> {
@@ -190,9 +194,9 @@ pub fn infer_schema<Reader: Read + Seek>(reader: &mut Reader) -> Result<Schema> 
     reader.seek(SeekFrom::Current(
         -(column_meta_size as i64) - (schema_size as i64) - 8,
     ))?;
-    let mut schema_bytes = vec![0u8; schema_size];
-    reader.read_exact(&mut schema_bytes)?;
-    let (schema, _) = deserialize_schema(&schema_bytes).expect("deserialize schema error");
+    let mut schema_buf = vec![0u8; schema_size];
+    reader.read_exact(&mut schema_buf)?;
+    let schema = serde_json::from_slice(&schema_buf).expect("deserialize schema error");
     Ok(schema)
 }
 
@@ -237,7 +241,7 @@ pub async fn read_meta_async(
 
     let mut schema_buf = vec![0u8; schema_size as usize];
     footer_reader.read_exact(&mut schema_buf)?;
-    let (schema, _) = deserialize_schema(&schema_buf)?;
+    let schema = serde_json::from_slice(&schema_buf).expect("deserialize schema error");
 
     footer_reader.seek(SeekFrom::End(-footer_size - meta_size))?;
     let mut meta_buf = vec![0u8; meta_size as usize];

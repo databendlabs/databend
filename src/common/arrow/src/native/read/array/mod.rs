@@ -26,7 +26,6 @@ mod view;
 pub use view::*;
 
 mod null;
-pub use null::*;
 mod struct_;
 pub use struct_::*;
 mod list;
