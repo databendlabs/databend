@@ -31,6 +31,7 @@ use crate::arrow::io::parquet::write::write_rep_and_def;
 use crate::arrow::io::parquet::write::Nested;
 use crate::arrow::io::parquet::write::Version;
 use crate::native::write::binary::write_binary;
+use crate::native::write::view::write_view;
 use crate::with_match_primitive_type;
 
 /// Writes an [`Array`] to the file
@@ -120,6 +121,24 @@ pub fn write_simple<W: Write>(
             );
             write_binary::<i64, W>(w, &binary_array, write_options, scratch)?;
         }
+        BinaryView => {
+            let array: &BinaryViewArray = array.as_any().downcast_ref().unwrap();
+            if is_optional {
+                write_validity::<W>(w, is_optional, array.validity(), array.len(), scratch)?;
+            }
+
+            write_view::<W>(w, array, write_options, scratch)?;
+        }
+        Utf8View => {
+            let array: &Utf8ViewArray = array.as_any().downcast_ref().unwrap();
+            let array = array.clone().to_binview();
+
+            if is_optional {
+                write_validity::<W>(w, is_optional, array.validity(), array.len(), scratch)?;
+            }
+
+            write_view::<W>(w, &array, write_options, scratch)?;
+        }
         Struct => unreachable!(),
         List => unreachable!(),
         FixedSizeList => unreachable!(),
@@ -185,6 +204,15 @@ pub fn write_nested<W: Write>(
             );
 
             write_binary::<i64, W>(w, &binary_array, write_options, scratch)?;
+        }
+        BinaryView => {
+            let array: &BinaryViewArray = array.as_any().downcast_ref().unwrap();
+            write_view::<W>(w, array, write_options, scratch)?;
+        }
+        Utf8View => {
+            let array: &Utf8ViewArray = array.as_any().downcast_ref().unwrap();
+            let array = array.clone().to_binview();
+            write_view::<W>(w, &array, write_options, scratch)?;
         }
         Struct => unreachable!(),
         List => unreachable!(),

@@ -34,6 +34,14 @@ pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
+#[derive(Debug)]
+pub enum CredentialType {
+    DatabendToken,
+    Jwt,
+    Password,
+    NoNeed,
+}
+
 #[derive(Clone)]
 pub enum Credential {
     DatabendToken {
@@ -49,6 +57,17 @@ pub enum Credential {
         client_ip: Option<String>,
     },
     NoNeed,
+}
+
+impl Credential {
+    pub fn type_name(&self) -> CredentialType {
+        match self {
+            Credential::DatabendToken { .. } => CredentialType::DatabendToken,
+            Credential::Jwt { .. } => CredentialType::Jwt,
+            Credential::Password { .. } => CredentialType::Password,
+            Credential::NoNeed => CredentialType::NoNeed,
+        }
+    }
 }
 
 impl AuthMgr {

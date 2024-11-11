@@ -152,7 +152,7 @@ fn size_of_primitive(p: PrimitiveType) -> usize {
         PrimitiveType::Int16 => 2,
         PrimitiveType::Int32 => 4,
         PrimitiveType::Int64 => 8,
-        PrimitiveType::Int128 => 16,
+        PrimitiveType::Int128 | PrimitiveType::UInt128 => 16,
         PrimitiveType::Int256 => 32,
         PrimitiveType::UInt8 => 1,
         PrimitiveType::UInt16 => 2,
@@ -163,7 +163,6 @@ fn size_of_primitive(p: PrimitiveType) -> usize {
         PrimitiveType::Float64 => 8,
         PrimitiveType::DaysMs => unimplemented!(),
         PrimitiveType::MonthDayNano => unimplemented!(),
-        PrimitiveType::UInt128 => unimplemented!(),
     }
 }
 

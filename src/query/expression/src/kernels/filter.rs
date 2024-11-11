@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
+use binary::BinaryColumnBuilder;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::bitmap::TrueIdxIter;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
+use string::StringColumnBuilder;
 
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -118,7 +117,7 @@ pub enum IterationStrategy {
 }
 
 /// based on <https://dl.acm.org/doi/abs/10.1145/3465998.3466009>
-const SELECTIVITY_THRESHOLD: f64 = 0.8;
+pub const SELECTIVITY_THRESHOLD: f64 = 0.8;
 
 impl IterationStrategy {
     fn default_strategy(length: usize, true_count: usize) -> Self {
@@ -172,7 +171,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         match value {
             Value::Scalar(c) => self.visit_scalar(c),
             Value::Column(c) => {
-                assert!(c.len() == self.original_rows);
+                assert_eq!(c.len(), self.original_rows);
                 match self.strategy {
                     IterationStrategy::None => self.result = Some(Value::Column(c.slice(0..0))),
                     IterationStrategy::All => self.result = Some(Value::Column(c)),
@@ -226,6 +225,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                 });
             }
         }
+
         self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
         Ok(())
     }
@@ -304,10 +304,9 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
     }
 
     fn visit_string(&mut self, column: StringColumn) -> Result<()> {
-        let column: BinaryColumn = column.into();
-        self.result = Some(Value::Column(StringType::upcast_column(unsafe {
-            StringColumn::from_binary_unchecked(self.filter_binary_types(&column))
-        })));
+        self.result = Some(Value::Column(StringType::upcast_column(
+            self.filter_string_types(&column),
+        )));
         Ok(())
     }
 
@@ -337,126 +336,45 @@ impl<'a> FilterVisitor<'a> {
         }
     }
 
-    // TODO: optimize this after BinaryView is introduced by @andy
-    fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        // Each element of `items` is (string pointer(u64), string length).
-        let mut items: Vec<(u64, usize)> = Vec::with_capacity(self.filter_rows);
-        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
-        let values_offset = values.offsets().as_slice();
-        let values_data_ptr = values.data().as_slice().as_ptr();
-        let mut offsets: Vec<u64> = Vec::with_capacity(self.filter_rows + 1);
-        let mut offsets_ptr = offsets.as_mut_ptr();
-        let mut items_ptr = items.as_mut_ptr();
-        let mut data_size = 0;
+    fn filter_string_types(&mut self, values: &StringColumn) -> StringColumn {
+        match self.strategy {
+            IterationStrategy::IndexIterator => {
+                let mut builder = StringColumnBuilder::with_capacity(self.filter_rows);
 
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            store_advance_aligned::<u64>(0, &mut offsets_ptr);
-            let mut idx = 0;
-            let (mut slice, offset, mut length) = self.filter.as_slice();
-            if offset > 0 {
-                let mut mask = slice[0];
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
-                    // need to ensure that we cannot iterate more than `length` bits.
-                    if n >= offset && n < offset + length {
-                        let start = *values_offset.get_unchecked(n - offset) as usize;
-                        let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
-                        data_size += len as u64;
-                        store_advance_aligned(data_size, &mut offsets_ptr);
-                        store_advance_aligned(
-                            (values_data_ptr.add(start) as u64, len),
-                            &mut items_ptr,
-                        );
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+                for i in iter {
+                    unsafe {
+                        builder.put_and_commit(values.index_unchecked(i));
                     }
-                    mask = mask & (mask - 1);
                 }
-                let bits_to_align = 8 - offset;
-                length = if length >= bits_to_align {
-                    length - bits_to_align
-                } else {
-                    0
+                builder.build()
+            }
+            _ => {
+                // reuse the buffers
+                let new_views = self.filter_primitive_types(values.data.views().clone());
+                let new_col = unsafe {
+                    Utf8ViewArray::new_unchecked_unknown_md(
+                        values.data.data_type().clone(),
+                        new_views,
+                        values.data.data_buffers().clone(),
+                        None,
+                        Some(values.data.total_buffer_len()),
+                    )
                 };
-                slice = &slice[1..];
-                idx += bits_to_align;
+                StringColumn::new(new_col)
             }
-
-            const CHUNK_SIZE: usize = 64;
-            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-            let mut continuous_selected = 0;
-            for mut mask in mask_chunks.by_ref() {
-                if mask == u64::MAX {
-                    continuous_selected += CHUNK_SIZE;
-                } else {
-                    if continuous_selected > 0 {
-                        let start = *values_offset.get_unchecked(idx) as usize;
-                        let len = *values_offset.get_unchecked(idx + continuous_selected) as usize
-                            - start;
-                        store_advance_aligned(
-                            (values_data_ptr.add(start) as u64, len),
-                            &mut items_ptr,
-                        );
-                        for i in 0..continuous_selected {
-                            data_size += *values_offset.get_unchecked(idx + i + 1)
-                                - *values_offset.get_unchecked(idx + i);
-                            store_advance_aligned(data_size, &mut offsets_ptr);
-                        }
-                        idx += continuous_selected;
-                        continuous_selected = 0;
-                    }
-                    while mask != 0 {
-                        let n = mask.trailing_zeros() as usize;
-                        let start = *values_offset.get_unchecked(idx + n) as usize;
-                        let len = *values_offset.get_unchecked(idx + n + 1) as usize - start;
-                        data_size += len as u64;
-                        store_advance_aligned(
-                            (values_data_ptr.add(start) as u64, len),
-                            &mut items_ptr,
-                        );
-                        store_advance_aligned(data_size, &mut offsets_ptr);
-                        mask = mask & (mask - 1);
-                    }
-                    idx += CHUNK_SIZE;
-                }
-            }
-            if continuous_selected > 0 {
-                let start = *values_offset.get_unchecked(idx) as usize;
-                let len = *values_offset.get_unchecked(idx + continuous_selected) as usize - start;
-                store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
-                for i in 0..continuous_selected {
-                    data_size += *values_offset.get_unchecked(idx + i + 1)
-                        - *values_offset.get_unchecked(idx + i);
-                    store_advance_aligned(data_size, &mut offsets_ptr);
-                }
-                idx += continuous_selected;
-            }
-
-            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
-                if is_selected {
-                    let start = *values_offset.get_unchecked(idx + i) as usize;
-                    let len = *values_offset.get_unchecked(idx + i + 1) as usize - start;
-                    data_size += len as u64;
-                    store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
-                    store_advance_aligned(data_size, &mut offsets_ptr);
-                }
-            }
-            set_vec_len_by_ptr(&mut items, items_ptr);
-            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
         }
+    }
 
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-
-        unsafe {
-            for (str_ptr, len) in items.iter() {
-                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
+    fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
+        let mut builder = BinaryColumnBuilder::with_capacity(self.filter_rows, 0);
+        let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+        for i in iter {
+            unsafe {
+                builder.put_slice(values.index_unchecked(i));
+                builder.commit_row();
             }
-            set_vec_len_by_ptr(&mut data, data_ptr);
         }
-
-        BinaryColumn::new(data.into(), offsets.into())
+        builder.build()
     }
 }

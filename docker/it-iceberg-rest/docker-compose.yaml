@@ -15,8 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-version: '3.8'
-
 services:
   rest:
     image: tabulario/iceberg-rest:0.10.0
@@ -47,7 +45,7 @@ services:
     expose:
       - 9001
       - 9000
-    command: [ "server", "/data", "--console-address", ":9001" ]
+    command: ["server", "/data", "--console-address", ":9001"]
     ports:
       - "9000:9000"
 

@@ -193,8 +193,8 @@ alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
 query TTTTT
 select database,table,name,data_type,comment from system.columns where table='t' and database='default';
 ----
-default t c1 VARCHAR 'c1-column'
-default t c2 INT 'test'
+default t c1 VARCHAR c1-column
+default t c2 INT test
 
 statement ok
 alter table t comment='s1';

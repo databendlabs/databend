@@ -83,15 +83,13 @@ impl CsvDecoder {
                     }
                     EmptyFieldAs::String => match builder {
                         ColumnBuilder::String(b) => {
-                            b.put_str("");
-                            b.commit_row();
+                            b.put_and_commit("");
                         }
                         ColumnBuilder::Nullable(box NullableColumnBuilder {
                             builder: ColumnBuilder::String(b),
                             validity,
                         }) => {
-                            b.put_str("");
-                            b.commit_row();
+                            b.put_and_commit("");
                             validity.push(true);
                         }
                         _ => {
@@ -188,14 +186,8 @@ impl RowDecoder for CsvDecoder {
 
     fn flush(&self, columns: Vec<Column>, num_rows: usize) -> Vec<Column> {
         if let Some(projection) = &self.load_context.pos_projection {
-            let empty_strings = Column::String(
-                StringColumnBuilder {
-                    need_estimated: false,
-                    data: vec![],
-                    offsets: vec![0; num_rows + 1],
-                }
-                .build(),
-            );
+            let empty_strings =
+                Column::String(StringColumnBuilder::repeat_default(num_rows).build());
             columns
                 .into_iter()
                 .enumerate()

@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
-use std::sync::Arc;
 
+use databend_common_arrow::arrow::array::growable::make_growable;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BooleanArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
@@ -22,35 +24,22 @@ use databend_common_exception::Result;
 use ethnum::i256;
 use itertools::Itertools;
 
-use crate::copy_continuous_bits;
-use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
-use crate::types::binary::BinaryColumn;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
-use crate::types::geography::GeographyColumn;
-use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
-use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArrayType;
-use crate::types::BinaryType;
-use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalType;
-use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
-use crate::types::VariantType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
@@ -164,14 +153,6 @@ impl Column {
                 columns.map(|col| col.into_boolean().unwrap()),
                 capacity,
             )),
-            Column::Binary(_) => BinaryType::upcast_column(Self::concat_binary_types(
-                columns.map(|col| col.into_binary().unwrap()),
-                capacity,
-            )),
-            Column::String(_) => StringType::upcast_column(Self::concat_string_types(
-                columns.map(|col| col.into_string().unwrap()),
-                capacity,
-            )),
             Column::Timestamp(_) => {
                 let buffer = Self::concat_primitive_types(
                     columns.map(|col| TimestampType::try_downcast_column(&col).unwrap()),
@@ -210,10 +191,6 @@ impl Column {
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
             }
-            Column::Bitmap(_) => BitmapType::upcast_column(Self::concat_binary_types(
-                columns.map(|col| col.into_bitmap().unwrap()),
-                capacity,
-            )),
             Column::Nullable(_) => {
                 let column: Vec<Column> = columns
                     .clone()
@@ -239,19 +216,13 @@ impl Column {
                     .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
-            Column::Variant(_) => VariantType::upcast_column(Self::concat_binary_types(
-                columns.map(|col| col.into_variant().unwrap()),
-                capacity,
-            )),
-            Column::Geometry(_) => GeometryType::upcast_column(Self::concat_binary_types(
-                columns.map(|col| col.into_geometry().unwrap()),
-                capacity,
-            )),
-            Column::Geography(_) => {
-                GeographyType::upcast_column(GeographyColumn(Self::concat_binary_types(
-                    columns.map(|col| col.into_geography().unwrap().0),
-                    capacity,
-                )))
+            Column::Variant(_)
+            | Column::Geometry(_)
+            | Column::Geography(_)
+            | Column::Binary(_)
+            | Column::String(_)
+            | Column::Bitmap(_) => {
+                Self::concat_use_grows(columns, first_column.data_type(), capacity)
             }
         };
         Ok(column)
@@ -271,108 +242,38 @@ impl Column {
         builder.into()
     }
 
-    pub fn concat_binary_types(
-        cols: impl Iterator<Item = BinaryColumn> + Clone,
+    pub fn concat_use_grows(
+        cols: impl Iterator<Item = Column>,
+        data_type: DataType,
         num_rows: usize,
-    ) -> BinaryColumn {
-        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut data_size = 0;
+    ) -> Column {
+        let arrays: Vec<Box<dyn databend_common_arrow::arrow::array::Array>> =
+            cols.map(|c| c.as_arrow()).collect();
 
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        offsets.push(0);
-        for col in cols.clone() {
-            let mut start = col.offsets()[0];
-            for end in col.offsets()[1..].iter() {
-                data_size += end - start;
-                start = *end;
-                offsets.push(data_size);
-            }
+        let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();
+        let mut grow = make_growable(&arrays, false, num_rows);
+
+        for (idx, array) in arrays.iter().enumerate() {
+            grow.extend(idx, 0, array.len());
         }
-
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-
-        unsafe {
-            for col in cols {
-                let offsets = col.offsets();
-                let col_data = &(col.data().as_slice())
-                    [offsets[0] as usize..offsets[offsets.len() - 1] as usize];
-                copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
-            }
-            set_vec_len_by_ptr(&mut data, data_ptr);
-        }
-
-        BinaryColumn::new(data.into(), offsets.into())
-    }
-
-    pub fn concat_string_types(
-        cols: impl Iterator<Item = StringColumn> + Clone,
-        num_rows: usize,
-    ) -> StringColumn {
-        unsafe {
-            StringColumn::from_binary_unchecked(Self::concat_binary_types(
-                cols.map(Into::into),
-                num_rows,
-            ))
-        }
+        let array = grow.as_box();
+        Column::from_arrow(array.as_ref(), &data_type).unwrap()
     }
 
     pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
-        let capacity = num_rows.saturating_add(7) / 8;
-        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_ptr = builder.as_mut_ptr();
-        let mut builder_idx = 0;
-        let mut unset_bits = 0;
-        let mut buf = 0;
+        use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
+        let arrays: Vec<BooleanArray> = bitmaps
+            .map(|c| BooleanArray::new(ArrowType::Boolean, c, None))
+            .collect();
+        let arrays = arrays.iter().map(|c| c as &dyn Array).collect::<Vec<_>>();
+        let mut grow = make_growable(&arrays, false, num_rows);
 
-        unsafe {
-            for bitmap in bitmaps {
-                let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
-                let mut idx = 0;
-                let len = bitmap.len();
-                if builder_idx % 8 != 0 {
-                    while idx < len {
-                        if bitmap.get_bit_unchecked(idx) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        builder_idx += 1;
-                        idx += 1;
-                        if builder_idx % 8 == 0 {
-                            store_advance_aligned(buf, &mut builder_ptr);
-                            buf = 0;
-                            break;
-                        }
-                    }
-                }
-                let remaining = len - idx;
-                if remaining > 0 {
-                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
-                        &mut builder_ptr,
-                        bitmap_slice,
-                        builder_idx,
-                        idx + bitmap_offset,
-                        remaining,
-                    );
-                    builder_idx += remaining;
-                    unset_bits += cur_unset_bits;
-                    buf = cur_buf;
-                }
-            }
-
-            if builder_idx % 8 != 0 {
-                store_advance_aligned(buf, &mut builder_ptr);
-            }
-
-            set_vec_len_by_ptr(&mut builder, builder_ptr);
-            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
-                .ok()
-                .unwrap()
+        for (idx, array) in arrays.iter().enumerate() {
+            grow.extend(idx, 0, array.len());
         }
+        let array = grow.as_box();
+        let array = array.as_any().downcast_ref::<BooleanArray>().unwrap();
+        array.values().clone()
     }
 
     fn concat_value_types<T: ValueType>(

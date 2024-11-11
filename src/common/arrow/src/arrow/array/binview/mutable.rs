@@ -41,9 +41,9 @@ pub struct MutableBinaryViewArray<T: ViewType + ?Sized> {
     pub(super) validity: Option<MutableBitmap>,
     pub(super) phantom: std::marker::PhantomData<T>,
     /// Total bytes length if we would concatenate them all.
-    pub(super) total_bytes_len: usize,
+    pub total_bytes_len: usize,
     /// Total bytes in the buffer (excluding remaining capacity)
-    pub(super) total_buffer_len: usize,
+    pub total_buffer_len: usize,
 }
 
 impl<T: ViewType + ?Sized> Clone for MutableBinaryViewArray<T> {
@@ -153,16 +153,15 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
     /// - caller must allocate enough capacity
     /// - caller must ensure the view and buffers match.
     #[inline]
-    pub unsafe fn push_view(&mut self, v: View, buffers: &[(*const u8, usize)]) {
+    pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
         let len = v.length;
         self.total_bytes_len += len as usize;
         if len <= 12 {
             debug_assert!(self.views.capacity() > self.views.len());
-            self.views.push(v);
+            self.views.push(v)
         } else {
             self.total_buffer_len += len as usize;
-            let (data_ptr, data_len) = *buffers.get_unchecked(v.buffer_idx as usize);
-            let data = std::slice::from_raw_parts(data_ptr, data_len);
+            let data = buffers.get_unchecked(v.buffer_idx as usize);
             let offset = v.offset as usize;
             let bytes = data.get_unchecked(offset..offset + len as usize);
             let t = T::from_bytes_unchecked(bytes);
@@ -191,7 +190,11 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
             // buffer index + offset -> real binary data
             self.total_buffer_len += bytes.len();
             let required_cap = self.in_progress_buffer.len() + bytes.len();
-            if self.in_progress_buffer.capacity() < required_cap {
+
+            let does_not_fit_in_buffer = self.in_progress_buffer.capacity() < required_cap;
+            let offset_will_not_fit = self.in_progress_buffer.len() > u32::MAX as usize;
+
+            if does_not_fit_in_buffer || offset_will_not_fit {
                 let new_capacity = (self.in_progress_buffer.capacity() * 2)
                     .clamp(DEFAULT_BLOCK_SIZE, 16 * 1024 * 1024)
                     .max(bytes.len());
@@ -403,6 +406,20 @@ impl MutableBinaryViewArray<[u8]> {
         self.finish_in_progress();
         // views are correct
         unsafe { validate_utf8_only(&self.views, &self.completed_buffers) }
+    }
+}
+
+impl MutableBinaryViewArray<str> {
+    pub fn pop(&mut self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+
+        let value = unsafe { self.value_unchecked(self.len() - 1).to_string() };
+
+        self.views.pop();
+
+        Some(value)
     }
 }
 

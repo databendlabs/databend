@@ -147,9 +147,10 @@ impl AggregateFunction for AggregateStringAggFunction {
         let builder = StringType::try_downcast_builder(builder).unwrap();
         if !state.values.is_empty() {
             let len = state.values.len() - self.delimiter.len();
-            builder.put_str(&state.values[..len]);
+            builder.put_and_commit(&state.values[..len]);
+        } else {
+            builder.put_and_commit("");
         }
-        builder.commit_row();
         Ok(())
     }
 

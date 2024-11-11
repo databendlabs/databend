@@ -1009,8 +1009,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             let json_str = cast_to_string(val);
-            output.put_str(&json_str);
-            output.commit_row();
+            output.put_and_commit(json_str);
         }),
     );
 
@@ -1953,7 +1952,7 @@ fn get_by_keypath_fn(
     let len = len_opt.unwrap_or(1);
 
     let mut builder = if string_res {
-        ColumnBuilder::String(StringColumnBuilder::with_capacity(len, len * 50))
+        ColumnBuilder::String(StringColumnBuilder::with_capacity(len))
     } else {
         ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(len, len * 50))
     };
