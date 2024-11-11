@@ -445,7 +445,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "trim_leading",
         |_, _, _| FunctionDomain::Full,
