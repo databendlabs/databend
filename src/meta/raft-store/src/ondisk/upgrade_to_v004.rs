@@ -41,6 +41,9 @@ impl OnDisk {
     /// `V004` saves log in WAL based raft log.
     #[fastrace::trace]
     pub(crate) async fn upgrade_v003_to_v004(&mut self) -> Result<(), io::Error> {
+        // The previous cleaning step may remove the dir
+        Self::ensure_dirs(&self.config.raft_dir)?;
+
         self.begin_upgrading(DataVersion::V003).await?;
 
         // 1.1. upgrade raft log
