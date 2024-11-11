@@ -133,10 +133,10 @@ def fake_expired_token(ty):
         "sid": "",
     }
     return (
-            "bend-v1-"
-            + ty
-            + "-"
-            + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
+        "bend-v1-"
+        + ty
+        + "-"
+        + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
     )
 
 
@@ -207,6 +207,7 @@ def main():
 
 if __name__ == "__main__":
     import logging
+
     try:
         main()
     except Exception as e:

@@ -14,6 +14,8 @@
 
 use std::fs;
 use std::io;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
@@ -27,13 +29,42 @@ use crate::snapshot_config::SnapshotConfig;
 
 #[derive(Debug)]
 pub struct SnapshotStoreV003 {
-    snapshot_config: SnapshotConfig,
+    v004: SnapshotStoreV004,
 }
 
 impl SnapshotStoreV003 {
     pub fn new(config: RaftConfig) -> Self {
         SnapshotStoreV003 {
-            snapshot_config: SnapshotConfig::new(DataVersion::V003, config),
+            v004: SnapshotStoreV004 {
+                snapshot_config: SnapshotConfig::new(DataVersion::V003, config),
+            },
+        }
+    }
+}
+
+impl Deref for SnapshotStoreV003 {
+    type Target = SnapshotStoreV004;
+
+    fn deref(&self) -> &Self::Target {
+        &self.v004
+    }
+}
+
+impl DerefMut for SnapshotStoreV003 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.v004
+    }
+}
+
+#[derive(Debug)]
+pub struct SnapshotStoreV004 {
+    snapshot_config: SnapshotConfig,
+}
+
+impl SnapshotStoreV004 {
+    pub fn new(config: RaftConfig) -> Self {
+        SnapshotStoreV004 {
+            snapshot_config: SnapshotConfig::new(DataVersion::V004, config),
         }
     }
 
