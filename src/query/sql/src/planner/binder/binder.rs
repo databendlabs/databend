@@ -166,14 +166,14 @@ impl<'a> Binder {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                for (_, cte_info) in bind_context.cte_map.iter().rev() {
+                for (_, cte_info) in bind_context.cte_context.cte_map.iter().rev() {
                     if !cte_info.materialized || cte_info.used_count == 0 {
                         continue;
                     }
-                    let cte_s_expr = bind_context.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+                    let cte_s_expr = bind_context.cte_context.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
                     let materialized_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: bind_context.m_cte_materialized_indexes.clone() })),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: bind_context.cte_context.m_cte_materialized_indexes.clone() })),
                         Arc::new(s_expr),
                         Arc::new(cte_s_expr.clone()),
                     );

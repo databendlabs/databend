@@ -169,6 +169,7 @@ impl Binder {
                 None,
             );
             bind_context
+                .cte_context
                 .m_cte_materialized_indexes
                 .insert(column.index, materialized_index);
             fields.push(DataField::new(
@@ -182,7 +183,6 @@ impl Binder {
                 cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
                 materialized_indexes,
-                // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
                 stat: Arc::new(StatInfo::default()),
             }
@@ -199,7 +199,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        if let Some(cte_name) = &bind_context.cte_name {
+        if let Some(cte_name) = &bind_context.cte_context.cte_name {
             // `cte_name` exists, which means the current cte is a nested cte
             // If the `cte_name` is the same as the current cte's name, it means the cte is recursive
             if cte_name == table_name {
@@ -215,10 +215,7 @@ impl Binder {
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),
-            cte_name: Some(table_name.to_string()),
-            cte_map: bind_context.cte_map.clone(),
-            m_cte_bound_ctx: bind_context.m_cte_bound_ctx.clone(),
-            m_cte_bound_s_expr: bind_context.m_cte_bound_s_expr.clone(),
+            cte_context: bind_context.cte_context.clone(),
             in_grouping: false,
             view_info: None,
             srfs: vec![],
@@ -229,8 +226,9 @@ impl Binder {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-            m_cte_materialized_indexes: bind_context.m_cte_materialized_indexes.clone(),
         };
+
+        new_bind_context.cte_context.cte_name = Some(table_name.to_string());
 
         let (s_expr, mut res_bind_context) =
             self.bind_query(&mut new_bind_context, &cte_info.query)?;
@@ -277,47 +275,49 @@ impl Binder {
         alias: &Option<TableAlias>,
         span: &Span,
     ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = if cte_info.used_count == 0 {
+        let mut new_bind_context = if cte_info.used_count == 0 {
             let (cte_s_expr, mut cte_bind_ctx) =
                 self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
             cte_bind_ctx
+                .cte_context
                 .cte_map
                 .entry(table_name.clone())
                 .and_modify(|cte_info| {
+                    cte_info.used_count += 1;
                     cte_info.columns = cte_bind_ctx.columns.clone();
                 });
-            cte_bind_ctx.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
-            cte_bind_ctx.set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
+            cte_bind_ctx
+                .cte_context
+                .set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
             cte_bind_ctx
         } else {
-            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
-            let mut bound_ctx = bind_context
-                .m_cte_bound_ctx
-                .get(&cte_info.cte_idx)
-                .unwrap()
-                .clone();
+            let mut bound_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
             // Resolve the alias name for the bound cte.
             let alias_table_name = alias
                 .as_ref()
                 .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
                 .unwrap_or_else(|| table_name.to_string());
-            for column in bound_ctx.columns.iter_mut() {
+            for column in cte_info.columns.iter() {
+                let mut column = column.clone();
                 column.database_name = None;
                 column.table_name = Some(alias_table_name.clone());
+                bound_ctx.columns.push(column);
             }
-            // Pass parent to bound_ctx
-            bound_ctx.parent = bind_context.parent.clone();
+            bound_ctx
+                .cte_context
+                .cte_map
+                .entry(table_name.clone())
+                .and_modify(|cte_info| {
+                    cte_info.used_count += 1;
+                });
             bound_ctx
         };
-        // `bind_context` is the main BindContext for the whole query
-        // Update the `used_count` which will be used in runtime phase
-        bind_context
+        let cte_info = new_bind_context
+            .cte_context
             .cte_map
-            .entry(table_name.clone())
-            .and_modify(|cte_info| {
-                cte_info.used_count += 1;
-            });
-        let cte_info = bind_context.cte_map.get(table_name).unwrap().clone();
+            .get(table_name)
+            .unwrap()
+            .clone();
         self.bind_cte_scan(&cte_info, new_bind_context)
     }
 
@@ -375,6 +375,7 @@ impl Binder {
         }
         // Update the cte_info of the recursive cte
         bind_context
+            .cte_context
             .cte_map
             .entry(cte_name.to_string())
             .and_modify(|cte_info| {

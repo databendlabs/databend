@@ -128,7 +128,7 @@ impl Binder {
                 ));
             }
             // Add recursive cte's columns to cte info
-            let mut_cte_info = bind_context.cte_map.get_mut(cte_name).unwrap();
+            let mut_cte_info = bind_context.cte_context.cte_map.get_mut(cte_name).unwrap();
             // The recursive cte may be used by multiple times in main query, so clear cte_info's columns
             mut_cte_info.columns.clear();
             for column in left_bind_context.columns.iter() {
@@ -143,6 +143,7 @@ impl Binder {
                 mut_cte_info.columns.push(col);
             }
         }
+        bind_context.set_cte_context(left_bind_context.cte_context.clone());
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None)?;
 
@@ -254,13 +255,14 @@ impl Binder {
             left_span,
             right_span,
             left_context,
-            right_context,
+            right_context.clone(),
             coercion_types,
         )?;
-
+        new_bind_context.set_cte_context(right_context.cte_context.clone());
         if let Some(cte_name) = &cte_name {
             for (col, cte_col) in new_bind_context.columns.iter_mut().zip(
                 new_bind_context
+                    .cte_context
                     .cte_map
                     .get(cte_name)
                     .unwrap()
@@ -341,7 +343,7 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_context: BindContext,
+        mut left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
@@ -385,6 +387,7 @@ impl Binder {
         };
         let s_expr =
             self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
+        left_context.set_cte_context(right_context.cte_context.clone());
         Ok((s_expr, left_context))
     }
 

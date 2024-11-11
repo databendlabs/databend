@@ -97,6 +97,7 @@ impl MutationExpression {
                     binder.bind_table_reference(bind_context, source)?;
 
                 // Bind target table reference.
+                bind_context.set_cte_context(source_context.cte_context.clone());
                 let (mut target_s_expr, mut target_context) =
                     binder.bind_table_reference(bind_context, target)?;
 

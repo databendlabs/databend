@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -26,6 +27,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use indexmap::IndexMap;
+use itertools::Itertools;
 
 use crate::binder::CteInfo;
 use crate::binder::Finder;
@@ -86,9 +88,13 @@ impl Binder {
             )?;
             return Ok((result_expr, bind_context));
         }
-        let (right_child, right_context) = if join.right.is_lateral_subquery() {
+        let (right_child, mut right_context) = if join.right.is_lateral_subquery() {
             self.bind_table_reference(&mut left_context, &join.right)?
         } else {
+            // Merge cte info from left context to `bind_context`
+            bind_context
+                .cte_context
+                .merge(left_context.cte_context.clone(), false);
             self.bind_table_reference(bind_context, &join.right)?
         };
 
@@ -122,8 +128,17 @@ impl Binder {
             build_side_cache_info,
         )?;
 
-        let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
+        let mut bind_context = join_bind_context(
+            &join_type,
+            bind_context,
+            left_context.clone(),
+            right_context.clone(),
+        );
 
+        right_context
+            .cte_context
+            .merge(bind_context.cte_context.clone(), true);
+        bind_context.set_cte_context(right_context.cte_context);
         Ok((s_expr, bind_context))
     }
 
@@ -164,8 +179,13 @@ impl Binder {
             right_child,
             None,
         )?;
-        let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
-
+        let mut bind_context = join_bind_context(
+            &join_type,
+            bind_context,
+            left_context.clone(),
+            right_context,
+        );
+        bind_context.set_cte_context(left_context.cte_context);
         Ok((s_expr, bind_context))
     }
 
