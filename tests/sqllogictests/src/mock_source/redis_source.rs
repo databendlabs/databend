@@ -19,7 +19,7 @@ use tokio::net::TcpStream;
 
 pub async fn run_redis_source() {
     // Bind the listener to the address
-    let listener = TcpListener::bind("0.0.0.0:6379").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:6179").await.unwrap();
 
     loop {
         let (socket, _) = listener.accept().await.unwrap();
