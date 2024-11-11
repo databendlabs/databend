@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::ondisk::OnDisk;
+use std::io;
 
-/// Upgrade the data in raft_dir to the latest version.
-pub async fn upgrade(raft_config: &RaftConfig) -> anyhow::Result<()> {
-    let mut on_disk = OnDisk::open(raft_config).await?;
-    on_disk.log_stderr(true);
-    on_disk.upgrade().await?;
+use databend_common_meta_types::raft_types::ErrorSubject;
+use databend_common_meta_types::raft_types::ErrorVerb;
 
-    Ok(())
+use crate::raft_log_v004::io_phase::IOPhase;
+
+/// Describe the error that occurred during IO operations to RaftLog.
+#[derive(Debug, thiserror::Error)]
+#[error("RaftLogIOError: {verb}-{subject:?}: {ctx}: failed to {phase}; error: {error}")]
+pub struct RaftLogIOError {
+    pub subject: ErrorSubject,
+    pub verb: ErrorVerb,
+    pub phase: IOPhase,
+    pub error: io::Error,
+    pub ctx: String,
 }
