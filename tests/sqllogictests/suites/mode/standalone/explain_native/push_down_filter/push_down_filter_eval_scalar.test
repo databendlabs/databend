@@ -61,14 +61,14 @@ AggregateFinal
     ├── aggregate functions: []
     ├── estimated rows: 0.00
     └── UnionAll
-        ├── output columns: [t.id (#0), de (#8)]
+        ├── output columns: [t.id (#0), de (#6)]
         ├── estimated rows: 0.00
         ├── EvalScalar
-        │   ├── output columns: [t.id (#0), de (#8)]
-        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL)]
+        │   ├── output columns: [t.id (#0), de (#6)]
+        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#5)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#5)) AS Int64 NULL), true, 0, NULL)]
         │   ├── estimated rows: 0.00
         │   └── AggregateFinal
-        │       ├── output columns: [sum(tb.de) (#7), t.id (#0)]
+        │       ├── output columns: [sum(tb.de) (#5), t.id (#0)]
         │       ├── group by: [id]
         │       ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │       ├── estimated rows: 0.00
@@ -77,14 +77,14 @@ AggregateFinal
         │           ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │           ├── estimated rows: 0.00
         │           └── HashJoin
-        │               ├── output columns: [t.id (#0), sum(coalesce(t3.val, 0)) (#5)]
+        │               ├── output columns: [t.id (#0), sum(coalesce(t3.val, 0)) (#4)]
         │               ├── join type: LEFT OUTER
         │               ├── build keys: [tb.sid (#1)]
         │               ├── probe keys: [t.id (#0)]
         │               ├── filters: []
         │               ├── estimated rows: 0.00
         │               ├── AggregateFinal(Build)
-        │               │   ├── output columns: [sum(coalesce(t3.val, 0)) (#5), t2.sid (#1)]
+        │               │   ├── output columns: [sum(coalesce(t3.val, 0)) (#4), t2.sid (#1)]
         │               │   ├── group by: [sid]
         │               │   ├── aggregate functions: [sum(sum_arg_0)]
         │               │   ├── estimated rows: 0.00
@@ -93,7 +93,7 @@ AggregateFinal
         │               │       ├── aggregate functions: [sum(sum_arg_0)]
         │               │       ├── estimated rows: 0.00
         │               │       └── EvalScalar
-        │               │           ├── output columns: [t2.sid (#1), sum_arg_0 (#4)]
+        │               │           ├── output columns: [t2.sid (#1), sum_arg_0 (#3)]
         │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL)]
         │               │           ├── estimated rows: 0.00
         │               │           └── TableScan
@@ -115,11 +115,11 @@ AggregateFinal
         │                   ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
         │                   └── estimated rows: 0.00
         └── EvalScalar
-            ├── output columns: [t.id (#9), de (#11)]
+            ├── output columns: [t.id (#7), de (#8)]
             ├── expressions: [0]
             ├── estimated rows: 0.00
             └── AggregateFinal
-                ├── output columns: [t.id (#9)]
+                ├── output columns: [t.id (#7)]
                 ├── group by: [id]
                 ├── aggregate functions: []
                 ├── estimated rows: 0.00
@@ -129,12 +129,12 @@ AggregateFinal
                     ├── estimated rows: 0.00
                     └── TableScan
                         ├── table: default.default.t1
-                        ├── output columns: [id (#9)]
+                        ├── output columns: [id (#7)]
                         ├── read rows: 0
                         ├── read size: 0
                         ├── partitions total: 0
                         ├── partitions scanned: 0
-                        ├── push downs: [filters: [is_true(t1.id (#9) = 1)], limit: NONE]
+                        ├── push downs: [filters: [is_true(t1.id (#7) = 1)], limit: NONE]
                         └── estimated rows: 0.00
 
 statement ok
