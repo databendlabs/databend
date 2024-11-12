@@ -96,7 +96,7 @@ impl CrashHandler {
         }
 
         writer.flush().unwrap();
-        std::thread::sleep(Duration::from_secs(4));
+        std::thread::sleep(Duration::from_secs(10));
     }
 }
 
@@ -426,6 +426,8 @@ impl SignalListener {
                 eprintln!("QueryId: {:?}", crash_query_id);
                 eprintln!("{}", signal_message(sig, si_code, si_addr));
                 eprintln!("Backtrace:\n {:?}", backtrace);
+
+                let _ = std::io::stderr().flush();
 
                 log::error!("{:#^80}", " Crash fault info ");
                 log::error!("PID: {}", std::process::id());
