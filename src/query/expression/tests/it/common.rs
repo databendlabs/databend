@@ -14,12 +14,13 @@
 
 use std::io::Write;
 
-use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
+
+type MergeSlice = (usize, usize, usize);
 
 pub fn new_block(columns: &[Column]) -> DataBlock {
     let len = columns.first().map_or(1, |c| c.len());

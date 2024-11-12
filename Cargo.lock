@@ -3649,7 +3649,6 @@ dependencies = [
  "anyhow",
  "arrow-flight",
  "async-backtrace",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
