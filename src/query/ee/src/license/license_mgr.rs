@@ -54,7 +54,7 @@ impl LicenseManager for RealLicenseManager {
         while let Some(r_pos) = remain_str.find("-----END PUBLIC KEY-----") {
             let key_str = &remain_str[..r_pos + len];
             public_keys.push(key_str.to_string());
-            remain_str = &remain_str[r_pos + len..].trim();
+            remain_str = remain_str[r_pos + len..].trim();
         }
 
         public_keys.push(LICENSE_PUBLIC_KEY.to_string());
