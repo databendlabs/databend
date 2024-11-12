@@ -207,19 +207,19 @@ impl PartitionReader {
             return Ok(Some(task.as_ref().clone()));
         }
 
-        let partitions = self.steal_parititions()?;
+        let partitions = self.steal_partitions()?;
         if !partitions.is_empty() {
             let source_reader = self.create_source_reader()?;
             return Ok(Some(DataBlock::empty_with_meta(PartitionScanMeta::create(
                 partitions,
                 source_reader,
             ))));
-        } else if self.partition_scan_state.num_readed_partitions() == 0 {
+        } else if self.partition_scan_state.num_readded_partitions() == 0 {
             self.is_finished = true;
             return Ok(None);
         }
 
-        if self.partition_scan_state.num_readed_partitions()
+        if self.partition_scan_state.num_readded_partitions()
             == self.partition_scan_state.num_deserialized_partitions()
         {
             self.is_finished = true;
@@ -234,7 +234,7 @@ impl PartitionReader {
         }
     }
 
-    fn steal_parititions(&mut self) -> Result<Vec<PartInfoPtr>> {
+    fn steal_partitions(&mut self) -> Result<Vec<PartInfoPtr>> {
         let _guard = self.partition_scan_state.mutex.lock().unwrap();
         let mut partitions = Vec::with_capacity(self.batch_size);
         while partitions.len() < self.batch_size {
@@ -264,7 +264,7 @@ impl PartitionReader {
             }
         }
         self.partition_scan_state
-            .inc_num_readed_partitions(partitions.len());
+            .inc_num_readded_partitions(partitions.len());
         Ok(partitions)
     }
 
@@ -571,7 +571,7 @@ impl Processor for PartitionReader {
 pub struct PartitionScanState {
     mutex: Mutex<()>,
     is_stealable_partitions_empty: AtomicBool,
-    num_readed_partitions: AtomicUsize,
+    num_readded_partitions: AtomicUsize,
     num_deserialized_partitions: AtomicUsize,
 }
 
@@ -580,7 +580,7 @@ impl PartitionScanState {
         Self {
             mutex: Mutex::new(()),
             is_stealable_partitions_empty: AtomicBool::new(false),
-            num_readed_partitions: AtomicUsize::new(0),
+            num_readded_partitions: AtomicUsize::new(0),
             num_deserialized_partitions: AtomicUsize::new(0),
         }
     }
@@ -589,8 +589,8 @@ impl PartitionScanState {
         self.is_stealable_partitions_empty.load(Ordering::Acquire)
     }
 
-    pub fn num_readed_partitions(&self) -> usize {
-        self.num_readed_partitions.load(Ordering::Acquire)
+    pub fn num_readded_partitions(&self) -> usize {
+        self.num_readded_partitions.load(Ordering::Acquire)
     }
 
     pub fn num_deserialized_partitions(&self) -> usize {
@@ -602,8 +602,8 @@ impl PartitionScanState {
             .store(true, Ordering::Release);
     }
 
-    pub fn inc_num_readed_partitions(&self, num: usize) {
-        self.num_readed_partitions.fetch_add(num, Ordering::AcqRel);
+    pub fn inc_num_readded_partitions(&self, num: usize) {
+        self.num_readded_partitions.fetch_add(num, Ordering::AcqRel);
     }
 
     pub fn inc_num_deserialized_partitions(&self, num: usize) {
@@ -616,6 +616,6 @@ impl PartitionScanState {
             .num_deserialized_partitions
             .fetch_add(num, Ordering::AcqRel);
         self.is_stealable_partitions_empty()
-            && self.num_readed_partitions() == num_deserialized_partitions + num
+            && self.num_readded_partitions() == num_deserialized_partitions + num
     }
 }

@@ -281,7 +281,7 @@ pub fn build_partition_source_pipeline(
     let partitions = StealablePartitions::new(partitions, ctx.clone());
     let partition_scan_state = Arc::new(PartitionScanState::new());
     let read_settings = ReadSettings::from_ctx(&partitions.ctx)?;
-    let (sender, reciever) = async_channel::unbounded();
+    let (sender, receiver) = async_channel::unbounded();
 
     let mut source_builder = SourcePipeBuilder::create();
     for i in 0..max_io_requests {
@@ -299,7 +299,7 @@ pub fn build_partition_source_pipeline(
                 bloom_filter_columns.clone(),
                 column_indices.clone(),
                 partition_scan_state.clone(),
-                reciever.clone(),
+                receiver.clone(),
                 operator.clone(),
                 plan.query_internal_columns,
                 plan.update_stream_columns,

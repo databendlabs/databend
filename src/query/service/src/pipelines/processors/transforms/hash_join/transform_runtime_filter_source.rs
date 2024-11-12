@@ -35,7 +35,7 @@ pub struct TransformRuntimeFilterSource {
     output_data: Option<DataBlock>,
     node_id: String,
     hash_join_state: Arc<HashJoinState>,
-    is_runtime_filter_readed: bool,
+    is_runtime_filter_readded: bool,
 }
 
 impl TransformRuntimeFilterSource {
@@ -50,7 +50,7 @@ impl TransformRuntimeFilterSource {
                 output_data: None,
                 node_id,
                 hash_join_state,
-                is_runtime_filter_readed: false,
+                is_runtime_filter_readded: false,
             },
         )))
     }
@@ -97,7 +97,7 @@ impl Processor for TransformRuntimeFilterSource {
             self.output.push_data(Ok(data_block));
         }
 
-        if !self.is_runtime_filter_readed {
+        if !self.is_runtime_filter_readded {
             Ok(Event::Async)
         } else {
             self.output.finish();
@@ -148,7 +148,7 @@ impl Processor for TransformRuntimeFilterSource {
         };
 
         self.output_data = Some(data_block);
-        self.is_runtime_filter_readed = true;
+        self.is_runtime_filter_readded = true;
         Ok(())
     }
 }
