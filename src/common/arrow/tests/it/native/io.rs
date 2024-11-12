@@ -349,14 +349,16 @@ fn create_map(size: usize, null_density: f32) -> MapArray {
 
 fn create_struct(size: usize, null_density: f32, uniq: usize) -> StructArray {
     let dt = DataType::Struct(vec![
-        Field::new("name", DataType::LargeBinary, true),
         Field::new("age", DataType::Int32, true),
+        Field::new("name", DataType::Utf8View, true),
+        Field::new("name2", DataType::LargeBinary, true),
     ]);
     StructArray::try_new(
         dt,
         vec![
-            Box::new(create_random_string(size, null_density, uniq)) as _,
             Box::new(create_random_index(size, null_density, uniq)) as _,
+            Box::new(create_random_view(size, null_density, uniq)) as _,
+            Box::new(create_random_string(size, null_density, uniq)) as _,
         ],
         None,
     )
@@ -513,7 +515,7 @@ fn test_write_read_with_options(chunk: Chunk<Box<dyn Array>>, options: WriteOpti
             native_readers.push(native_reader);
         }
 
-        let mut array_iter = column_iter_to_arrays(native_readers, field.clone()).unwrap();
+        let mut array_iter = column_iter_to_arrays(native_readers, field.clone(), vec![]).unwrap();
 
         let mut arrays = vec![];
         for array in array_iter.by_ref() {

@@ -190,9 +190,15 @@ where
 }
 
 /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
-pub fn column_iter_to_arrays<'a, I>(readers: Vec<I>, field: Field) -> Result<ArrayIter<'a>>
-where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a {
-    let iter = deserialize_nested(readers, field, vec![])?;
+pub fn column_iter_to_arrays<'a, I>(
+    readers: Vec<I>,
+    field: Field,
+    init: Vec<InitNested>,
+) -> Result<ArrayIter<'a>>
+where
+    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
+{
+    let iter = deserialize_nested(readers, field, init)?;
     let nested_iter = NestedIter::new(iter);
     Ok(DynIter::new(nested_iter))
 }

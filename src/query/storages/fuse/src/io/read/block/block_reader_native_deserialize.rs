@@ -276,10 +276,11 @@ impl BlockReader {
     ) -> Result<ArrayIter<'static>> {
         let field = column_node.field.clone();
 
-        match self
-            .native_columns_reader
-            .column_iter_to_arrays(readers, field)
-        {
+        match self.native_columns_reader.column_iter_to_arrays(
+            readers,
+            field,
+            column_node.init.clone(),
+        ) {
             Ok(array_iter) => Ok(array_iter),
             Err(err) => Err(err.into()),
         }
@@ -300,7 +301,7 @@ impl BlockReader {
         );
         let schema = ArrowSchema::from(vec![field.clone()]);
         let native_column_reader = NativeColumnsReader::new(schema)?;
-        match native_column_reader.column_iter_to_arrays(readers, field) {
+        match native_column_reader.column_iter_to_arrays(readers, field, vec![]) {
             Ok(array_iter) => Ok(array_iter),
             Err(err) => Err(err.into()),
         }

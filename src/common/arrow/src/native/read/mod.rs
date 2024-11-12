@@ -25,6 +25,7 @@ use crate::arrow::error::Result;
 pub(crate) mod read_basic;
 use std::io::BufReader;
 
+use super::nested::InitNested;
 use super::PageMeta;
 use crate::arrow::datatypes::Schema;
 pub mod reader;
@@ -83,11 +84,12 @@ impl NativeColumnsReader {
         &self,
         readers: Vec<I>,
         field: Field,
+        init: Vec<InitNested>,
     ) -> Result<ArrayIter<'a>>
     where
         I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
     {
-        column_iter_to_arrays(readers, field)
+        column_iter_to_arrays(readers, field, init)
     }
 
     /// Read all pages of column at once.
