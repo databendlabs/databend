@@ -16,15 +16,12 @@
 use std::any::Any;
 
 use crate::arrow::array::Array;
-use crate::arrow::array::FromFfi;
 use crate::arrow::array::MutableArray;
-use crate::arrow::array::ToFfi;
 use crate::arrow::bitmap::Bitmap;
 use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Error;
-use crate::arrow::ffi;
 
 /// The concrete [`Array`] of [`DataType::Null`].
 #[derive(Clone)]
@@ -172,29 +169,6 @@ impl MutableArray for MutableNullArray {
 impl std::fmt::Debug for NullArray {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "NullArray({})", self.len())
-    }
-}
-
-unsafe impl ToFfi for NullArray {
-    fn buffers(&self) -> Vec<Option<*const u8>> {
-        // `None` is technically not required by the specification, but older C++ implementations require it, so leaving
-        // it here for backward compatibility
-        vec![None]
-    }
-
-    fn offset(&self) -> Option<usize> {
-        Some(0)
-    }
-
-    fn to_ffi_aligned(&self) -> Self {
-        self.clone()
-    }
-}
-
-impl<A: ffi::ArrowArrayRef> FromFfi<A> for NullArray {
-    unsafe fn try_from_ffi(array: A) -> Result<Self, Error> {
-        let data_type = array.data_type().clone();
-        Self::try_new(data_type, array.array().len())
     }
 }
 

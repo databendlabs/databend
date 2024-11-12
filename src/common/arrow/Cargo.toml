@@ -18,19 +18,9 @@ arrow = ["arrow-buffer", "arrow-schema", "arrow-data", "arrow-array"]
 # sample testing of generated arrow data
 
 compute = [
-    "compute_aggregate",
-    "compute_cast",
     "compute_concatenate",
-    "compute_merge_sort",
-    "compute_sort",
-    "compute_take",
 ]
-compute_aggregate = []
-compute_cast = ["lexical-core", "compute_take"]
 compute_concatenate = []
-compute_merge_sort = ["itertools", "compute_sort"]
-compute_sort = ["compute_take"]
-compute_take = []
 
 serde_types = ["serde", "serde_derive"]
 simd = []

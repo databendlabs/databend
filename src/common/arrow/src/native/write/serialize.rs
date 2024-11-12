@@ -15,7 +15,6 @@
 use std::io::Write;
 
 use super::boolean::write_bitmap;
-use super::primitive::write_primitive;
 use super::WriteOptions;
 use crate::arrow::array::*;
 use crate::arrow::datatypes::DataType;
@@ -24,6 +23,7 @@ use crate::arrow::error::Result;
 use crate::native::nested::Nested;
 use crate::native::util::encode_bool;
 use crate::native::write::binary::write_binary;
+use crate::native::write::primitive::write_primitive;
 use crate::native::write::view::write_view;
 use crate::with_match_primitive_type;
 

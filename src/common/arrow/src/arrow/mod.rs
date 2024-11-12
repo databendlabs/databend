@@ -17,7 +17,6 @@ pub mod bitmap;
 pub mod buffer;
 pub mod datatypes;
 pub mod error;
-pub mod ffi;
 pub mod offset;
 pub mod trusted_len;
 pub mod types;
