@@ -112,8 +112,8 @@ impl LibraryManager {
                 StackFrame::PhysicalAddr(addr) => *addr,
                 StackFrame::Ip(addr) => {
                     let mut resolved_frame = ResolvedStackFrame {
-                        virtual_address: addr,
-                        physical_address: addr,
+                        virtual_address: *addr,
+                        physical_address: *addr,
                         symbol: String::from("<unknown>"),
                         inlined: false,
                         file: None,

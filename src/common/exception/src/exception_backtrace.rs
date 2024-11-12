@@ -99,7 +99,7 @@ impl PartialEq for StackFrame {
                     addr == other_addr
                 }
                 _ => false,
-            };
+            }
         }
 
         #[cfg(not(target_os = "linux"))]
@@ -119,7 +119,7 @@ impl Hash for StackFrame {
                 StackFrame::Ip(addr) => addr.hash(state),
                 StackFrame::PhysicalAddr(addr) => addr.hash(state),
                 _ => false,
-            };
+            }
         }
 
         #[cfg(not(target_os = "linux"))]
@@ -227,7 +227,7 @@ impl StackTrace {
     fn fmt_frames(&self, f: &mut String, mut address: bool) -> std::fmt::Result {
         if !address {
             let binary_id = crate::elf::LibraryManager::instance().build_id();
-            address = match (binary_id, self.build_id) {
+            address = match (&binary_id, &self.build_id) {
                 (Some(binary_id), Some(build_id)) => binary_id != build_id,
                 _ => true,
             };
