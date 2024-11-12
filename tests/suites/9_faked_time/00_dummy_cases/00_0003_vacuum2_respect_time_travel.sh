@@ -29,7 +29,7 @@ stmt "insert into test_vacuum2_respect_time_travel values(3);"
 # should have 4 snapshots
 query "select count(*) from fuse_snapshot('default','test_vacuum2_respect_time_travel')"
 
-RESULTS=$(echo "set data_retention_time_in_days = 0;select * from fuse_vacuum2('default','test_vacuum2_respect_time_travel');" | $BENDSQL_CLIENT_CONNECT)
+RESULTS=$(echo "set data_retention_time_in_days = 0;select * from fuse_vacuum2('default','test_vacuum2_respect_time_travel',true);" | $BENDSQL_CLIENT_CONNECT)
 IFS=$'\n' read -d '' -r -a results <<< "$RESULTS"
 
 # verify the vacuum result
