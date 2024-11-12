@@ -27,7 +27,7 @@ use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Error;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// The Arrow's equivalent to `Vec<Option<bool>>`, but with `1/16` of its size.
 /// Converting a [`MutableBooleanArray`] into a [`BooleanArray`] is `O(1)`.

@@ -21,7 +21,7 @@ mod merge;
 pub use chunks_exact::BitChunksExact;
 pub(crate) use merge::merge_reversed;
 
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 pub use crate::arrow::types::BitChunk;
 use crate::arrow::types::BitChunkIter;
 

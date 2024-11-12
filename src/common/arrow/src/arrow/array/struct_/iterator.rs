@@ -18,7 +18,7 @@ use crate::arrow::bitmap::utils::BitmapIter;
 use crate::arrow::bitmap::utils::ZipValidity;
 use crate::arrow::scalar::new_scalar;
 use crate::arrow::scalar::Scalar;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 pub struct StructValueIter<'a> {
     array: &'a StructArray,

@@ -15,7 +15,7 @@
 
 use crate::arrow::bitmap::Bitmap;
 use crate::arrow::bitmap::TrueIdxIter;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 mod private {
     pub trait Sealed {}

@@ -20,8 +20,8 @@ use std::sync::Arc;
 use either::Either;
 use num_traits::Zero;
 
+use super::iterator::IntoIter;
 use super::Bytes;
-use super::IntoIter;
 
 /// [`Buffer`] is a contiguous memory region that can be shared across
 /// thread boundaries.

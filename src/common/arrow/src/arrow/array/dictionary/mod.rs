@@ -24,7 +24,7 @@ use crate::arrow::datatypes::IntegerType;
 use crate::arrow::error::Error;
 use crate::arrow::scalar::new_scalar;
 use crate::arrow::scalar::Scalar;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 use crate::arrow::types::NativeType;
 
 #[cfg(feature = "arrow")]

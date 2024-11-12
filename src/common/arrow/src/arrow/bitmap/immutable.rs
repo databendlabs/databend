@@ -31,7 +31,7 @@ use super::IntoIter;
 use super::MutableBitmap;
 use crate::arrow::buffer::Bytes;
 use crate::arrow::error::Error;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// An immutable container semantically equivalent to `Arc<Vec<bool>>` but represented as `Arc<Vec<u8>>` where
 /// each boolean is represented as a single bit.

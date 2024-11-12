@@ -15,7 +15,7 @@
 
 use super::UnionArray;
 use crate::arrow::scalar::Scalar;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 #[derive(Debug, Clone)]
 pub struct UnionIter<'a> {

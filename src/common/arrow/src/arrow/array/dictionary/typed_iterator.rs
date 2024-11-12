@@ -19,7 +19,7 @@ use crate::arrow::array::PrimitiveArray;
 use crate::arrow::array::Utf8Array;
 use crate::arrow::error::Error;
 use crate::arrow::error::Result;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 use crate::arrow::types::Offset;
 
 pub trait DictValue {

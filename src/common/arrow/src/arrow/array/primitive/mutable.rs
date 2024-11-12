@@ -28,7 +28,7 @@ use crate::arrow::bitmap::Bitmap;
 use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::error::Error;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 use crate::arrow::types::NativeType;
 
 /// The Arrow's equivalent to `Vec<Option<T>>` where `T` is byte-size (e.g. `i32`).

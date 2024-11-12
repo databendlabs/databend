@@ -33,7 +33,7 @@ use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::arrow::offset::Offset;
 use crate::arrow::offset::Offsets;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// A [`MutableArray`] that builds a [`BinaryArray`]. It differs
 /// from [`MutableBinaryArray`] in that it builds non-null [`BinaryArray`].

@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
 use std::io::Write;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
@@ -26,7 +27,6 @@ use borsh::BorshSerialize;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

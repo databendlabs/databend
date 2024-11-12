@@ -29,7 +29,7 @@ use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::arrow::offset::Offset;
 use crate::arrow::offset::Offsets;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// The mutable version of [`ListArray`].
 #[derive(Debug, Clone)]

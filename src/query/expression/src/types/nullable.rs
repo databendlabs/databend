@@ -18,7 +18,7 @@ use std::ops::Range;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 use super::AnyType;
 use super::DecimalSize;

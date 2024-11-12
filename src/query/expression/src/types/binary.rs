@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use serde::Deserialize;

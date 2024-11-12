@@ -23,7 +23,7 @@ use super::utils::BitChunkIterExact;
 use super::utils::BitChunksExact;
 use super::Bitmap;
 use crate::arrow::bitmap::MutableBitmap;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// Creates a [Vec<u8>] from an [`Iterator`] of [`BitChunk`].
 /// # Safety

@@ -29,7 +29,7 @@ use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::buffer::Buffer;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::error::Result;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 use crate::arrow::types::NativeType;
 
 const DEFAULT_BLOCK_SIZE: usize = 8 * 1024;

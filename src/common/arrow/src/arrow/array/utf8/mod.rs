@@ -29,7 +29,7 @@ use crate::arrow::error::Result;
 use crate::arrow::offset::Offset;
 use crate::arrow::offset::Offsets;
 use crate::arrow::offset::OffsetsBuffer;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 #[cfg(feature = "arrow")]
 mod data;

@@ -35,9 +35,9 @@ pub mod variant;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;

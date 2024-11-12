@@ -16,7 +16,7 @@
 use std::convert::TryFrom;
 
 use super::NativeType;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// Sealed trait describing the subset of [`NativeType`] (`i32`, `i64`, `u32` and `u64`)
 /// that can be used to index a slot of an array.

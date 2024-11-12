@@ -17,7 +17,7 @@ use super::MapArray;
 use crate::arrow::array::Array;
 use crate::arrow::bitmap::utils::BitmapIter;
 use crate::arrow::bitmap::utils::ZipValidity;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// Iterator of values of an [`ListArray`].
 #[derive(Clone, Debug)]

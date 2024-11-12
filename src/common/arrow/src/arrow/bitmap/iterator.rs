@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use super::Bitmap;
 use crate::arrow::bitmap::bitmask::BitMask;
-use crate::arrow::trusted_len::TrustedLen;
 
 pub struct TrueIdxIter<'a> {
     mask: BitMask<'a>,

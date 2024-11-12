@@ -18,7 +18,7 @@ use std::slice::ChunksExact;
 
 use super::BitChunk;
 use super::BitChunkIterExact;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// An iterator over a slice of bytes in [`BitChunk`]s.
 #[derive(Debug)]

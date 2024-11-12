@@ -120,7 +120,7 @@ impl<T: BitChunk> Iterator for BitChunkIter<T> {
 
 // # Safety
 // a mathematical invariant of this iterator
-unsafe impl<T: BitChunk> crate::arrow::trusted_len::TrustedLen for BitChunkIter<T> {}
+unsafe impl<T: BitChunk> std::iter::TrustedLen for BitChunkIter<T> {}
 
 /// An [`Iterator<Item=usize>`] over a [`BitChunk`] returning the index of each bit set in the chunk
 /// See <https://lemire.me/blog/2018/03/08/iterating-over-set-bits-quickly-simd-edition/> for details
@@ -171,4 +171,4 @@ impl<T: BitChunk> Iterator for BitChunkOnes<T> {
 
 // # Safety
 // a mathematical invariant of this iterator
-unsafe impl<T: BitChunk> crate::arrow::trusted_len::TrustedLen for BitChunkOnes<T> {}
+unsafe impl<T: BitChunk> std::iter::TrustedLen for BitChunkOnes<T> {}

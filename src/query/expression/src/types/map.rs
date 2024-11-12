@@ -15,7 +15,7 @@
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 use super::ArrayType;
 use super::DecimalSize;

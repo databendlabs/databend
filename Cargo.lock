@@ -3019,6 +3019,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz 0.8.6",
+ "databend-common-column",
  "dyn-clone",
  "either",
  "env_logger 0.11.5",

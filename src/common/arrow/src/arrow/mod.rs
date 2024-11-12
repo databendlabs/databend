@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod bitmap;
-pub mod buffer;
+pub use databend_common_column::bitmap;
+pub use databend_common_column::buffer;
+pub use databend_common_column::error;
+
 pub mod datatypes;
-pub mod error;
-pub mod offset;
 pub mod trusted_len;
 pub mod types;
 #[macro_use]
 pub mod array;
 pub mod chunk;
 pub mod compute;
+pub mod offset;
 pub mod scalar;
 pub mod temporal_conversions;
 pub mod util;

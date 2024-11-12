@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::Buffer;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// This crates' equivalent of [`std::vec::IntoIter`] for [`Buffer`].
 #[derive(Debug, Clone)]

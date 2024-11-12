@@ -15,6 +15,7 @@
 
 use std::hint::unreachable_unchecked;
 use std::iter::FromIterator;
+use std::iter::TrustedLen;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -30,7 +31,6 @@ use super::Bitmap;
 use crate::arrow::bitmap::utils::merge_reversed;
 use crate::arrow::bitmap::utils::set_bit_unchecked;
 use crate::arrow::error::Error;
-use crate::arrow::trusted_len::TrustedLen;
 
 /// A container of booleans. [`MutableBitmap`] is semantically equivalent
 /// to [`Vec<bool>`].

@@ -19,7 +19,7 @@ use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 use databend_common_exception::Result;
 use databend_common_io::geography::*;
 use databend_common_io::wkb::make_point;

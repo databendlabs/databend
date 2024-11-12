@@ -102,4 +102,3 @@ pub(crate) fn to_bytes<T: crate::types::NativeType>(value: arrow_buffer::Buffer)
 }
 
 pub use immutable::Buffer;
-pub(super) use iterator::IntoIter;

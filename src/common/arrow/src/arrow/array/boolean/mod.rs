@@ -23,7 +23,7 @@ use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Error;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 #[cfg(feature = "arrow")]
 mod data;

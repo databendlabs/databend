@@ -34,7 +34,7 @@ use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::arrow::offset::Offset;
 use crate::arrow::offset::Offsets;
-use crate::arrow::trusted_len::TrustedLen;
+use std::iter::TrustedLen;
 
 /// A [`MutableArray`] that builds a [`Utf8Array`]. It differs
 /// from [`MutableUtf8Array`] in that it builds non-null [`Utf8Array`].
