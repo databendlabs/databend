@@ -16,6 +16,7 @@ pub mod aggregator;
 mod hash_join;
 pub(crate) mod range_join;
 mod runtime_pool;
+pub mod sort;
 mod transform_add_computed_columns;
 mod transform_add_const_columns;
 mod transform_add_internal_columns;
