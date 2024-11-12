@@ -188,6 +188,17 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self
+            .immutable_catalog
+            .list_databases_history(tenant)
+            .await?;
+        let mut other = self.mutable_catalog.list_databases_history(tenant).await?;
+        dbs.append(&mut other);
+        Ok(dbs)
+    }
+
+    #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
         let mut other = self.mutable_catalog.list_databases(tenant).await?;

@@ -165,6 +165,10 @@ impl Catalog for ImmutableCatalog {
         }
     }
 
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
+    }
+
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])

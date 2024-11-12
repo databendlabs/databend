@@ -529,6 +529,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
+    let show_drop_databases = map(
+        rule! {
+            SHOW ~ DROP ~ ( DATABASES | DATABASES ) ~ ( FROM ~ ^#ident )? ~ #show_limit?
+        },
+        |(_, _, _, opt_catalog, limit)| {
+            Statement::ShowDropDatabases(ShowDropDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                limit,
+            })
+        },
+    );
+
     let show_create_database = map(
         rule! {
             SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #dot_separated_idents_1_to_2
@@ -2284,6 +2297,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+            | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
             | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
