@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
