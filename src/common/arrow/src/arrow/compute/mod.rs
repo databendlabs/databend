@@ -26,7 +26,6 @@
 //! Some dynamically-typed operators have an auxiliary function, `can_*`, that returns
 //! true if the operator can be applied to the particular `DataType`.
 
-pub mod arity;
 #[cfg(feature = "compute_concatenate")]
 #[cfg_attr(docsrs, doc(cfg(feature = "compute_concatenate")))]
 pub mod concatenate;
