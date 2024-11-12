@@ -77,7 +77,7 @@ pub struct HiveCatalogOption {
 pub enum IcebergCatalogType {
     Rest = 1,
     Hms = 2,
-    Glue = 3
+    Glue = 3,
 }
 
 /// Option for creating a iceberg catalog
@@ -85,7 +85,7 @@ pub enum IcebergCatalogType {
 pub enum IcebergCatalogOption {
     Rest(IcebergRestCatalogOption),
     Hms(IcebergHmsCatalogOption),
-    Glue(IcebergGlueCatalogOption)
+    Glue(IcebergGlueCatalogOption),
 }
 
 impl IcebergCatalogOption {
@@ -94,7 +94,7 @@ impl IcebergCatalogOption {
         match self {
             IcebergCatalogOption::Rest(_) => IcebergCatalogType::Rest,
             IcebergCatalogOption::Hms(_) => IcebergCatalogType::Hms,
-            IcebergCatalogOption::Glue(_) => IcebergCatalogType::Glue
+            IcebergCatalogOption::Glue(_) => IcebergCatalogType::Glue,
         }
     }
 }

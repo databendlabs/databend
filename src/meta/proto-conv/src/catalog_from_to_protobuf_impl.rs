@@ -142,10 +142,10 @@ impl FromToProto for mt::IcebergCatalogOption {
                 }
                 mt::IcebergCatalogOption::Hms(v) => {
                     pb::iceberg_catalog_option::IcebergCatalogOption::HmsCatalog(v.to_pb()?)
-                },
+                }
                 mt::IcebergCatalogOption::Glue(v) => {
                     pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v.to_pb()?)
-                },
+                }
             }),
         })
     }

@@ -35,9 +35,9 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
-use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
 use crate::binder::parse_storage_params_from_uri;

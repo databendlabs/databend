@@ -103,13 +103,13 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use iceberg_catalog_glue::GlueCatalog;
+use iceberg_catalog_glue::GlueCatalogConfig;
 use iceberg_catalog_hms::HmsCatalog;
 use iceberg_catalog_hms::HmsCatalogConfig;
 use iceberg_catalog_hms::HmsThriftTransport;
 use iceberg_catalog_rest::RestCatalog;
 use iceberg_catalog_rest::RestCatalogConfig;
-use iceberg_catalog_glue::GlueCatalog;
-use iceberg_catalog_glue::GlueCatalogConfig;
 
 use crate::database::IcebergDatabase;
 use crate::IcebergTable;
@@ -211,8 +211,13 @@ impl IcebergCatalog {
                     .build();
 
                 // Due to the AWS Glue catalog creation being asynchronous, forced to run it a bit different way, so we don't have to make the outer function asynchronous.
-                let ctl = tokio::task::block_in_place(|| { tokio::runtime::Handle::current().block_on(GlueCatalog::new(cfg))}).map_err(|err| {
-                    ErrorCode::BadArguments(format!("There was an error building the AWS Glue catalog: {err:?}"))
+                let ctl = tokio::task::block_in_place(|| {
+                    databend_common_base::runtime::block_on(GlueCatalog::new(cfg))
+                })
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!(
+                        "There was an error building the AWS Glue catalog: {err:?}"
+                    ))
                 })?;
                 Arc::new(ctl)
             }
