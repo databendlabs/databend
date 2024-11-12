@@ -178,7 +178,6 @@ impl StackTrace {
         }
     }
 
-
     #[cfg(not(target_os = "linux"))]
     pub fn to_physical(&self) -> StackTrace {
         self.clone()

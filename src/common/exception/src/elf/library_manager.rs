@@ -47,7 +47,7 @@ impl Library {
                 Ok(elf_file) => match elf_file.build_id() {
                     Ok(None) | Err(_) => None,
                     Ok(Some(build)) => Some(Arc::new(build.to_vec())),
-                }
+                },
             }
         };
 
@@ -261,11 +261,10 @@ impl LibraryManager {
     pub fn create() -> Arc<LibraryManager> {
         let loader = LibraryLoader::load();
         let (libraries, symbols, build_id) = loader.finalize();
-        let build_id = build_id.map(|x| Arc::new(x));
         Arc::new(LibraryManager {
             symbols,
             libraries,
-            executable_build_id: build_id,
+            executable_build_id: build_id.map(Arc::new),
         })
     }
 
