@@ -37,11 +37,11 @@ use itertools::Itertools;
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
+use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -117,6 +117,9 @@ pub struct BindContext {
 
     pub windows: WindowInfo,
 
+    /// Set-returning functions info in current context.
+    pub srf_info: SetReturningInfo,
+
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
 
@@ -131,9 +134,6 @@ pub struct BindContext {
     ///
     /// It's used to check if the view has a loop dependency.
     pub view_info: Option<(String, String)>,
-
-    /// Set-returning functions in current context.
-    pub srfs: Vec<ScalarItem>,
 
     /// True if there is async function in current context, need rewrite.
     pub have_async_func: bool,
@@ -174,11 +174,11 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
+            srf_info: SetReturningInfo::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: Vec::new(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
@@ -196,11 +196,11 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
+            srf_info: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
             in_grouping: false,
             view_info: None,
-            srfs: Vec::new(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,

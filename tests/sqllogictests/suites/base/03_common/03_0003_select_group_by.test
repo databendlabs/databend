@@ -231,13 +231,23 @@ statement ok
 CREATE OR REPLACE TABLE t_str (col1 string, col2 string);
 
 statement ok
-INSERT INTO t_str VALUES ('test', 'a1,a2');
+INSERT INTO t_str VALUES ('test', 'a1,a2'),('test', 'a1,a2,a3');
 
 query TT
-SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2;
+SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2;
+----
+test a1
+test a1
+test a2
+test a2
+test a3
+
+query TT
+SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3;
 ----
 test a1
 test a2
+test a3
 
 statement ok
 DROP TABLE t_str

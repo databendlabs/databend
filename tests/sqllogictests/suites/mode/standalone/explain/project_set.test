@@ -114,8 +114,8 @@ query T
 EXPLAIN SELECT json_each(t.b), unnest(t.b) FROM t
 ----
 EvalScalar
-├── output columns: [json_each(t.b (#1)) (#2), unnest(t.b) (#4)]
-├── expressions: [get(1)(unnest(t.b (#1)) (#3))]
+├── output columns: [json_each(t.b) (#4), unnest(t.b) (#5)]
+├── expressions: [json_each(t.b (#1)) (#2), get(1)(unnest(t.b (#1)) (#3))]
 ├── estimated rows: 0.00
 └── ProjectSet
     ├── output columns: [json_each(t.b (#1)) (#2), unnest(t.b (#1)) (#3)]
