@@ -431,6 +431,21 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "ltrim",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
+            |val, trim_str, output, _| {
+                if trim_str.is_empty() {
+                    output.put_and_commit(val);
+                    return;
+                }
+
+                output.put_and_commit(val.trim_start_matches(trim_str));
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "trim_leading",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
@@ -441,6 +456,21 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 output.put_and_commit(val.trim_start_matches(trim_str));
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "rtrim",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
+            |val, trim_str, output, _| {
+                if trim_str.is_empty() {
+                    output.put_and_commit(val);
+                    return;
+                }
+
+                output.put_and_commit(val.trim_end_matches(trim_str));
             },
         ),
     );
