@@ -52,7 +52,7 @@ jobs:
     with:
       build_profile: release
       runner_provider: aws
-      license_type: enterprise
+      license_type: trial
 
   linux_hive:
     needs: changes
