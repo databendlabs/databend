@@ -22,8 +22,10 @@ use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float32Type;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt32Type;
@@ -59,8 +61,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use databend_common_io::number::f64_to_char;
-use databend_common_io::number::i64_to_char;
+use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -93,8 +94,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_byte_size(val.into());
-            output.put_str(&new_val);
-            output.commit_row();
+            output.put_and_commit(new_val);
         }),
     );
 
@@ -103,8 +103,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
-            output.put_str(&new_val);
-            output.commit_row();
+            output.put_and_commit(new_val);
         }),
     );
 
@@ -232,16 +231,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         "gen_random_uuid",
         |_| FunctionDomain::Full,
         |ctx| {
-            let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
-            let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
-            offsets.push(0);
+            let mut builder = BinaryColumnBuilder::with_capacity(ctx.num_rows, 0);
 
             for _ in 0..ctx.num_rows {
                 let value = Uuid::new_v4();
-                offsets.push(offsets.last().unwrap() + 36u64);
-                write!(&mut values, "{:x}", value).unwrap();
+                write!(&mut builder.data, "{}", value).unwrap();
+                builder.commit_row();
             }
-            let col = StringColumn::new(values.into(), offsets.into());
+
+            let col = StringColumn::try_from(builder.build()).unwrap();
             Value::Column(col)
         },
     );
@@ -294,8 +292,7 @@ fn register_inet_ntoa(registry: &mut FunctionRegistry) {
             match num_traits::cast::cast::<i64, u32>(val) {
                 Some(val) => {
                     let addr_str = Ipv4Addr::from(val.to_be_bytes()).to_string();
-                    output.put_str(&addr_str);
-                    output.commit_row();
+                    output.put_and_commit(addr_str);
                 }
                 None => {
                     ctx.set_error(
@@ -401,7 +398,40 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match i64_to_char(value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_i64(value))
+                {
+                    Ok(s) => {
+                        builder.put_and_commit(s);
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f32(*value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
@@ -427,7 +457,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match f64_to_char(*value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f64(*value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
@@ -439,7 +473,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                 }
             },
         ),
-    )
+    );
 }
 
 /// Compute `grouping` by `grouping_id` and `cols`.

@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use databend_common_meta_sled_store::SledTree;
-use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
+use databend_common_meta_types::raft_types::LogIndex;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::LogIndex;
 use databend_common_meta_types::UpsertKV;
 use test_harness::test;
 

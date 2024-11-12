@@ -692,6 +692,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             lateral: false,
             subquery: Box::new(subquery),
             alias: Some(alias),
+            pivot: None,
+            unpivot: None,
         }
     }
 

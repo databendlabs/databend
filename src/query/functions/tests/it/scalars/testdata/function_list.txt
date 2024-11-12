@@ -3,6 +3,7 @@ add -> plus
 array_contains -> contains
 array_get -> get
 array_length -> length
+array_size -> length
 array_slice -> slice
 bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
@@ -1223,6 +1224,8 @@ Functions overloads:
 26 contains(Array(Boolean), Boolean) :: Boolean
 27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
 28 contains(Array(T0) NULL, T0) :: Boolean
+0 convert_timezone(String, Timestamp) :: Timestamp
+1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32
@@ -1236,6 +1239,32 @@ Functions overloads:
 0 degrees(Float64) :: Float64
 1 degrees(Float64 NULL) :: Float64 NULL
 0 delete_by_keypath FACTORY
+0 diff_days(Date, Date) :: Int64
+1 diff_days(Date NULL, Date NULL) :: Int64 NULL
+2 diff_days(Timestamp, Timestamp) :: Int64
+3 diff_days(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_hours(Timestamp, Timestamp) :: Int64
+1 diff_hours(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_minutes(Timestamp, Timestamp) :: Int64
+1 diff_minutes(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_months(Date, Date) :: Int64
+1 diff_months(Date NULL, Date NULL) :: Int64 NULL
+2 diff_months(Timestamp, Timestamp) :: Int64
+3 diff_months(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_quarters(Date, Date) :: Int64
+1 diff_quarters(Date NULL, Date NULL) :: Int64 NULL
+2 diff_quarters(Timestamp, Timestamp) :: Int64
+3 diff_quarters(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_seconds(Timestamp, Timestamp) :: Int64
+1 diff_seconds(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_weeks(Date, Date) :: Int64
+1 diff_weeks(Date NULL, Date NULL) :: Int64 NULL
+2 diff_weeks(Timestamp, Timestamp) :: Int64
+3 diff_weeks(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_years(Date, Date) :: Int64
+1 diff_years(Date NULL, Date NULL) :: Int64 NULL
+2 diff_years(Timestamp, Timestamp) :: Int64
+3 diff_years(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 div(UInt8, UInt8) :: UInt8
 1 div(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 div(UInt8, UInt16) :: UInt16
@@ -2261,7 +2290,17 @@ Functions overloads:
 1 is_true(Boolean NULL) :: Boolean
 0 jq FACTORY
 0 json_array FACTORY
+0 json_array_distinct(Variant) :: Variant
+1 json_array_distinct(Variant NULL) :: Variant NULL
 0 json_array_elements FACTORY
+0 json_array_except(Variant, Variant) :: Variant
+1 json_array_except(Variant NULL, Variant NULL) :: Variant NULL
+0 json_array_insert(Variant, Int32, Variant) :: Variant
+1 json_array_insert(Variant NULL, Int32 NULL, Variant NULL) :: Variant NULL
+0 json_array_intersection(Variant, Variant) :: Variant
+1 json_array_intersection(Variant NULL, Variant NULL) :: Variant NULL
+0 json_array_overlap(Variant, Variant) :: Boolean
+1 json_array_overlap(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_contains_in_left(Variant, Variant) :: Boolean
 1 json_contains_in_left(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_contains_in_right(Variant, Variant) :: Boolean
@@ -2276,8 +2315,11 @@ Functions overloads:
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
 0 json_object FACTORY
+0 json_object_delete FACTORY
+0 json_object_insert FACTORY
 0 json_object_keep_null FACTORY
 0 json_object_keys(Variant NULL) :: Variant NULL
+0 json_object_pick FACTORY
 0 json_path_exists FACTORY
 0 json_path_match FACTORY
 0 json_path_query FACTORY
@@ -2492,6 +2534,8 @@ Functions overloads:
 35 lte FACTORY
 0 ltrim(String) :: String
 1 ltrim(String NULL) :: String NULL
+2 ltrim(String, String) :: String
+3 ltrim(String NULL, String NULL) :: String NULL
 0 map(Array(Nothing), Array(Nothing)) :: Map(Nothing)
 1 map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL
 2 map(Array(T0), Array(T1)) :: Map(T0, T1)
@@ -2504,9 +2548,12 @@ Functions overloads:
 1 map_contains_key(Map(T0, T1), T0) :: Boolean
 2 map_contains_key(Map(T0, T1) NULL, T0 NULL) :: Boolean NULL
 0 map_delete FACTORY
+0 map_insert(Map(T0, T1) NULL, T0, T1) :: Map(T0, T1)
+1 map_insert(Map(T0, T1) NULL, T0, T1, Boolean) :: Map(T0, T1)
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
+0 map_pick FACTORY
 0 map_size(Map(Nothing)) :: UInt8
 1 map_size(Map(T0, T1)) :: UInt64
 2 map_size(Map(T0, T1) NULL) :: UInt64 NULL
@@ -2741,14 +2788,14 @@ Functions overloads:
 223 minus(Float64 NULL, Float32 NULL) :: Float64 NULL
 224 minus(Float64, Float64) :: Float64
 225 minus(Float64 NULL, Float64 NULL) :: Float64 NULL
-226 minus(Date, Int64) :: Date
-227 minus(Date NULL, Int64 NULL) :: Date NULL
-228 minus(Date, Date) :: Int32
-229 minus(Date NULL, Date NULL) :: Int32 NULL
-230 minus(Timestamp, Int64) :: Timestamp
-231 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-232 minus(Timestamp, Timestamp) :: Int64
-233 minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+226 minus(Date, Date) :: Int32
+227 minus(Date NULL, Date NULL) :: Int32 NULL
+228 minus(Timestamp, Timestamp) :: Int64
+229 minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+230 minus(Date, Int64) :: Date
+231 minus(Date NULL, Int64 NULL) :: Date NULL
+232 minus(Timestamp, Int64) :: Timestamp
+233 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 modulo(UInt8, UInt8) :: UInt8
 1 modulo(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 modulo(UInt8, UInt16) :: UInt16
@@ -3409,12 +3456,8 @@ Functions overloads:
 200 plus(Float64 NULL, Float64 NULL) :: Float64 NULL
 201 plus(Date, Int64) :: Date
 202 plus(Date NULL, Int64 NULL) :: Date NULL
-203 plus(Date, Date) :: Int32
-204 plus(Date NULL, Date NULL) :: Int32 NULL
-205 plus(Timestamp, Int64) :: Timestamp
-206 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-207 plus(Timestamp, Timestamp) :: Int64
-208 plus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+203 plus(Timestamp, Int64) :: Timestamp
+204 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 point_in_ellipses FACTORY
 0 point_in_polygon FACTORY
 1 point_in_polygon FACTORY
@@ -3491,6 +3534,8 @@ Functions overloads:
 1 rpad(String NULL, UInt64 NULL, String NULL) :: String NULL
 0 rtrim(String) :: String
 1 rtrim(String NULL) :: String NULL
+2 rtrim(String, String) :: String
+3 rtrim(String NULL, String NULL) :: String NULL
 0 running_difference(Int64) :: Int64
 1 running_difference(Int64 NULL) :: Int64 NULL
 2 running_difference(Date) :: Int32
@@ -3736,8 +3781,10 @@ Functions overloads:
 23 to_boolean(Float64 NULL) :: Boolean NULL
 0 to_char(Int64, String) :: String
 1 to_char(Int64 NULL, String NULL) :: String NULL
-2 to_char(Float64, String) :: String
-3 to_char(Float64 NULL, String NULL) :: String NULL
+2 to_char(Float32, String) :: String
+3 to_char(Float32 NULL, String NULL) :: String NULL
+4 to_char(Float64, String) :: String
+5 to_char(Float64 NULL, String NULL) :: String NULL
 0 to_date(Variant) :: Date
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
@@ -3942,6 +3989,22 @@ Functions overloads:
 23 to_int8(Float64 NULL) :: Int8 NULL
 24 to_int8(Boolean) :: Int8
 25 to_int8(Boolean NULL) :: Int8 NULL
+0 to_last_of_month(Date) :: Date
+1 to_last_of_month(Date NULL) :: Date NULL
+2 to_last_of_month(Timestamp) :: Date
+3 to_last_of_month(Timestamp NULL) :: Date NULL
+0 to_last_of_quarter(Date) :: Date
+1 to_last_of_quarter(Date NULL) :: Date NULL
+2 to_last_of_quarter(Timestamp) :: Date
+3 to_last_of_quarter(Timestamp NULL) :: Date NULL
+0 to_last_of_week(Date) :: Date
+1 to_last_of_week(Date NULL) :: Date NULL
+2 to_last_of_week(Timestamp) :: Date
+3 to_last_of_week(Timestamp NULL) :: Date NULL
+0 to_last_of_year(Date) :: Date
+1 to_last_of_year(Date NULL) :: Date NULL
+2 to_last_of_year(Timestamp) :: Date
+3 to_last_of_year(Timestamp NULL) :: Date NULL
 0 to_minute(Timestamp) :: UInt8
 1 to_minute(Timestamp NULL) :: UInt8 NULL
 0 to_monday(Date) :: Date
@@ -3952,8 +4015,64 @@ Functions overloads:
 1 to_month(Date NULL) :: UInt8 NULL
 2 to_month(Timestamp) :: UInt8
 3 to_month(Timestamp NULL) :: UInt8 NULL
+0 to_next_friday(Date) :: Date
+1 to_next_friday(Date NULL) :: Date NULL
+2 to_next_friday(Timestamp) :: Date
+3 to_next_friday(Timestamp NULL) :: Date NULL
+0 to_next_monday(Date) :: Date
+1 to_next_monday(Date NULL) :: Date NULL
+2 to_next_monday(Timestamp) :: Date
+3 to_next_monday(Timestamp NULL) :: Date NULL
+0 to_next_saturday(Date) :: Date
+1 to_next_saturday(Date NULL) :: Date NULL
+2 to_next_saturday(Timestamp) :: Date
+3 to_next_saturday(Timestamp NULL) :: Date NULL
+0 to_next_sunday(Date) :: Date
+1 to_next_sunday(Date NULL) :: Date NULL
+2 to_next_sunday(Timestamp) :: Date
+3 to_next_sunday(Timestamp NULL) :: Date NULL
+0 to_next_thursday(Date) :: Date
+1 to_next_thursday(Date NULL) :: Date NULL
+2 to_next_thursday(Timestamp) :: Date
+3 to_next_thursday(Timestamp NULL) :: Date NULL
+0 to_next_tuesday(Date) :: Date
+1 to_next_tuesday(Date NULL) :: Date NULL
+2 to_next_tuesday(Timestamp) :: Date
+3 to_next_tuesday(Timestamp NULL) :: Date NULL
+0 to_next_wednesday(Date) :: Date
+1 to_next_wednesday(Date NULL) :: Date NULL
+2 to_next_wednesday(Timestamp) :: Date
+3 to_next_wednesday(Timestamp NULL) :: Date NULL
 0 to_nullable(NULL) :: NULL
 1 to_nullable(T0 NULL) :: T0 NULL
+0 to_previous_friday(Date) :: Date
+1 to_previous_friday(Date NULL) :: Date NULL
+2 to_previous_friday(Timestamp) :: Date
+3 to_previous_friday(Timestamp NULL) :: Date NULL
+0 to_previous_monday(Date) :: Date
+1 to_previous_monday(Date NULL) :: Date NULL
+2 to_previous_monday(Timestamp) :: Date
+3 to_previous_monday(Timestamp NULL) :: Date NULL
+0 to_previous_saturday(Date) :: Date
+1 to_previous_saturday(Date NULL) :: Date NULL
+2 to_previous_saturday(Timestamp) :: Date
+3 to_previous_saturday(Timestamp NULL) :: Date NULL
+0 to_previous_sunday(Date) :: Date
+1 to_previous_sunday(Date NULL) :: Date NULL
+2 to_previous_sunday(Timestamp) :: Date
+3 to_previous_sunday(Timestamp NULL) :: Date NULL
+0 to_previous_thursday(Date) :: Date
+1 to_previous_thursday(Date NULL) :: Date NULL
+2 to_previous_thursday(Timestamp) :: Date
+3 to_previous_thursday(Timestamp NULL) :: Date NULL
+0 to_previous_tuesday(Date) :: Date
+1 to_previous_tuesday(Date NULL) :: Date NULL
+2 to_previous_tuesday(Timestamp) :: Date
+3 to_previous_tuesday(Timestamp NULL) :: Date NULL
+0 to_previous_wednesday(Date) :: Date
+1 to_previous_wednesday(Date NULL) :: Date NULL
+2 to_previous_wednesday(Timestamp) :: Date
+3 to_previous_wednesday(Timestamp NULL) :: Date NULL
 0 to_quarter(Date) :: UInt8
 1 to_quarter(Date NULL) :: UInt8 NULL
 2 to_quarter(Timestamp) :: UInt8

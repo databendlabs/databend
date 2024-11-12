@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
@@ -54,12 +53,8 @@ use crate::MetadataRef;
 /// Correlated exists subquery -> Marker join
 ///
 /// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(
-    ctx: Arc<dyn TableContext>,
-    metadata: MetadataRef,
-    s_expr: SExpr,
-) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(ctx, metadata, None);
+pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
+    let mut rewriter = SubqueryRewriter::new(metadata, None);
     rewriter.rewrite(&s_expr)
 }
 
@@ -308,7 +303,7 @@ impl SubqueryRewriter {
                     Arc::new(left.clone()),
                     Arc::new(flatten_plan),
                 );
-                Ok((s_expr, UnnestResult::SingleJoin { output_index: None }))
+                Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {

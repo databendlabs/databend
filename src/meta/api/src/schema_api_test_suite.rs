@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -98,6 +99,7 @@ use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -160,7 +162,6 @@ pub struct SchemaApiTestSuite {}
 #[derive(PartialEq, Default, Debug)]
 struct DroponInfo {
     pub name: String,
-    pub desc: String,
     pub drop_on_cnt: i32,
     pub non_drop_on_cnt: i32,
 }
@@ -182,19 +183,16 @@ fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: 
     let mut get = BTreeMap::new();
     for item in result.iter() {
         let name = item.name_ident.to_string_key();
-        let drop_on_info = match get.get_mut(&name) {
-            Some(drop_on_info) => drop_on_info,
-            None => {
-                let info = DroponInfo {
-                    name: name.clone(),
-                    desc: "".to_string(),
-                    drop_on_cnt: 0,
-                    non_drop_on_cnt: 0,
-                };
-                get.insert(name.clone(), info);
-                get.get_mut(&name).expect("")
-            }
+        if !get.contains_key(&name) {
+            let info = DroponInfo {
+                name: name.clone(),
+                drop_on_cnt: 0,
+                non_drop_on_cnt: 0,
+            };
+            get.insert(name.clone(), info);
         };
+
+        let drop_on_info = get.get_mut(&name).unwrap();
         if item.meta.drop_on.is_some() {
             drop_on_info.drop_on_cnt += 1;
         } else {
@@ -205,36 +203,33 @@ fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: 
     assert_eq!(get, expected_map);
 }
 
-fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: Vec<DroponInfo>) {
+fn calc_and_compare_drop_on_table_result(result: Vec<TableNIV>, expected: Vec<DroponInfo>) {
     let mut expected_map = BTreeMap::new();
     for expected_item in expected {
         expected_map.insert(expected_item.name.clone(), expected_item);
     }
 
-    let mut get = BTreeMap::new();
+    let mut got = BTreeMap::new();
     for item in result.iter() {
-        let name = item.name.clone();
-        let drop_on_info = match get.get_mut(&name) {
-            Some(drop_on_info) => drop_on_info,
-            None => {
-                let info = DroponInfo {
-                    name: item.name.clone(),
-                    desc: item.desc.clone(),
-                    drop_on_cnt: 0,
-                    non_drop_on_cnt: 0,
-                };
-                get.insert(name.clone(), info);
-                get.get_mut(&name).expect("")
-            }
+        let table_name = item.name().to_string_key();
+        if !got.contains_key(&table_name) {
+            let info = DroponInfo {
+                name: table_name.clone(),
+                drop_on_cnt: 0,
+                non_drop_on_cnt: 0,
+            };
+            got.insert(table_name.clone(), info);
         };
-        if item.meta.drop_on.is_some() {
+
+        let drop_on_info = got.get_mut(&table_name).expect("");
+        if item.value().drop_on.is_some() {
             drop_on_info.drop_on_cnt += 1;
         } else {
             drop_on_info.non_drop_on_cnt += 1;
         }
     }
 
-    assert_eq!(get, expected_map);
+    assert_eq!(got, expected_map);
 }
 
 async fn upsert_test_data(
@@ -355,7 +350,6 @@ impl SchemaApiTestSuite {
         suite.test_sequence(&b.build().await).await?;
 
         suite.dictionary_create_list_drop(&b.build().await).await?;
-
         Ok(())
     }
 
@@ -1184,7 +1178,6 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
-                desc: "".to_string(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -1205,7 +1198,6 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
-                desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -1225,7 +1217,6 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
-                desc: "".to_string(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -1249,7 +1240,6 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
-                desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -1276,7 +1266,6 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
-                desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -1307,13 +1296,11 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
                     name: db_name_ident.to_string_key(),
-                    desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_db_name_ident.to_string_key(),
-                    desc: "".to_string(),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
                 },
@@ -1336,13 +1323,11 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
                     name: db_name_ident.to_string_key(),
-                    desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_db_name_ident.to_string_key(),
-                    desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
@@ -1366,13 +1351,11 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
                     name: db_name_ident.to_string_key(),
-                    desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
                     name: new_db_name_ident.to_string_key(),
-                    desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
@@ -1852,7 +1835,7 @@ impl SchemaApiTestSuite {
                     let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
 
                     let got = mt
-                        .get_table_meta_history(db_name, &TableIdHistoryIdent {
+                        .get_retainable_tables(&TableIdHistoryIdent {
                             database_id: cur_db.database_id.db_id,
                             table_name: tbl_name.to_string(),
                         })
@@ -4020,7 +4003,7 @@ impl SchemaApiTestSuite {
             assert!(table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             assert_eq!(res.len(), 1);
@@ -4038,7 +4021,7 @@ impl SchemaApiTestSuite {
             upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             assert_eq!(res.len(), 0);
@@ -4676,15 +4659,11 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4712,14 +4691,10 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4734,14 +4709,10 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4765,14 +4736,10 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4792,15 +4759,11 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4824,14 +4787,10 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 2,
                 non_drop_on_cnt: 0,
             }]);
@@ -4845,15 +4804,11 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                name: tbl_name.to_string(),
-                desc: format!(
-                    "'{}'.'{}'",
-                    tbl_name_ident.db_name, tbl_name_ident.table_name
-                ),
+                name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4882,27 +4837,19 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let _res = mt.create_table(req.clone()).await?;
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
-                    name: tbl_name.to_string(),
-                    desc: format!(
-                        "'{}'.'{}'",
-                        tbl_name_ident.db_name, tbl_name_ident.table_name
-                    ),
+                    name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
-                    name: new_tbl_name.to_string(),
-                    desc: format!(
-                        "'{}'.'{}'",
-                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
-                    ),
+                    name: DBIdTableName::new(*db_id, new_tbl_name).to_string_key(),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
                 },
@@ -4929,24 +4876,16 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
-                    name: tbl_name.to_string(),
-                    desc: format!(
-                        "'{}'.'{}'",
-                        tbl_name_ident.db_name, tbl_name_ident.table_name
-                    ),
+                    name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
-                    name: new_tbl_name.to_string(),
-                    desc: format!(
-                        "'{}'.'{}'",
-                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
-                    ),
+                    name: DBIdTableName::new(*db_id, new_tbl_name).to_string_key(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
@@ -4966,24 +4905,16 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
+                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
-                    name: tbl_name.to_string(),
-                    desc: format!(
-                        "'{}'.'{}'",
-                        tbl_name_ident.db_name, tbl_name_ident.table_name
-                    ),
+                    name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
-                    name: new_tbl_name.to_string(),
-                    desc: format!(
-                        "'{}'.'{}'",
-                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
-                    ),
+                    name: DBIdTableName::new(*db_id, new_tbl_name).to_string_key(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
@@ -7373,6 +7304,7 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
         let dict_name1 = "dict1";
         let dict_name2 = "dict2";
+        let dict_name3 = "dict3";
         let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
@@ -7430,6 +7362,8 @@ impl SchemaApiTestSuite {
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name2.to_string()),
         );
+        let dict3 = DictionaryIdentity::new(db_id, dict_name3.to_string());
+        let dict_ident3 = DictionaryNameIdent::new(dict_tenant.clone(), dict3.clone());
 
         {
             info!("--- create dictionary");
@@ -7454,6 +7388,24 @@ impl SchemaApiTestSuite {
             let err_code = ErrorCode::from(status);
 
             assert_eq!(ErrorCode::DICTIONARY_ALREADY_EXISTS, err_code.code());
+        }
+
+        {
+            info!("--- prepare db2");
+            let db_name = "db2";
+            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+            {
+                util.create_db().await?;
+            }
+
+            let db_id = util.db_id();
+
+            {
+                info!("--- list dictionary from db2 with no create before");
+                let req = ListDictionaryReq::new(dict_tenant.clone(), *db_id);
+                let res = mt.list_dictionaries(req).await?;
+                assert!(res.is_empty());
+            }
         }
 
         {
@@ -7510,8 +7462,36 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- drop dictionary");
+            info!("--- rename dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            mt.rename_dictionary(rename_req).await?;
             let req = dict_ident1.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_none());
+
+            let req = dict_ident3.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_some());
+
+            let dict_reply = res.unwrap();
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.source, "postgresql".to_string());
+
+            info!("--- rename unknown dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            let res = mt.rename_dictionary(rename_req).await;
+            assert!(res.is_err());
+        }
+
+        {
+            info!("--- drop dictionary");
+            let req = dict_ident3.clone();
             let res = mt.drop_dictionary(req).await?;
             assert!(res.is_some());
         }

@@ -19,9 +19,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use log::info;
@@ -193,7 +193,7 @@ pub(crate) async fn start_meta_node_non_voter(
 
     let raft_conf = &tc.config.raft_config;
 
-    let mn = MetaNode::open_create(raft_conf, None, Some(())).await?;
+    let mn = MetaNode::open(raft_conf).await?;
 
     // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
     // // Log index becomes non-deterministic.

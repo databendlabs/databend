@@ -26,9 +26,9 @@ use databend_common_expression::types::F32;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
-use log::info;
 
 use super::SegmentLocation;
 use crate::pruning::PruningContext;
@@ -54,12 +54,13 @@ impl BlockPruner {
         // Apply block pruning.
         if self.pruning_ctx.bloom_pruner.is_some()
             || self.pruning_ctx.inverted_index_pruner.is_some()
+            || self.pruning_ctx.virtual_column_pruner.is_some()
         {
-            // async pruning with bloom index or inverted index.
+            // async pruning with bloom index, inverted index or virtual columns.
             self.block_pruning(segment_location, block_metas, block_meta_indexes)
                 .await
         } else {
-            // sync pruning without a bloom index and inverted index.
+            // sync pruning without a bloom index, inverted index and virtual columns.
             self.block_pruning_sync(segment_location, block_metas, block_meta_indexes)
         }
     }
@@ -86,7 +87,7 @@ impl BlockPruner {
         }
     }
 
-    // async pruning with bloom index or inverted index.
+    // async pruning with bloom index, inverted index or virtual columns.
     #[async_backtrace::framed]
     async fn block_pruning(
         &self,
@@ -102,6 +103,7 @@ impl BlockPruner {
         let page_pruner = self.pruning_ctx.page_pruner.clone();
         let bloom_pruner = self.pruning_ctx.bloom_pruner.clone();
         let inverted_index_pruner = self.pruning_ctx.inverted_index_pruner.clone();
+        let virtual_column_pruner = self.pruning_ctx.virtual_column_pruner.clone();
 
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
@@ -125,17 +127,13 @@ impl BlockPruner {
                     pruning_stats.set_blocks_range_pruning_before(1);
                 }
 
-                let mut prune_result = BlockPruneResult::new(
-                    block_idx,
-                    block_meta.location.0.clone(),
-                    false,
-                    None,
-                    None,
-                );
+                let mut prune_result =
+                    BlockPruneResult::new(block_idx, block_meta.location.0.clone());
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
-                let should_keep = range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas));
-                if should_keep {
+                prune_result.keep =
+                    range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas));
+                if prune_result.keep {
                     // Perf.
                     {
                         metrics_inc_blocks_range_pruning_after(1);
@@ -149,6 +147,7 @@ impl BlockPruner {
                     let limit_pruner = limit_pruner.clone();
                     let page_pruner = page_pruner.clone();
                     let inverted_index_pruner = inverted_index_pruner.clone();
+                    let virtual_column_pruner = virtual_column_pruner.clone();
                     let block_location = block_meta.location.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
@@ -157,7 +156,7 @@ impl BlockPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            let keep = if let Some(bloom_pruner) = bloom_pruner {
+                            if let Some(bloom_pruner) = bloom_pruner {
                                 // Perf.
                                 {
                                     metrics_inc_blocks_bloom_pruning_before(1);
@@ -169,11 +168,18 @@ impl BlockPruner {
                                 }
 
                                 let keep_by_bloom = bloom_pruner
-                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, &block_meta)
+                                    .should_keep(
+                                        &index_location,
+                                        index_size,
+                                        &block_meta.col_stats,
+                                        column_ids,
+                                        &block_meta,
+                                    )
                                     .await;
 
-                                let keep = keep_by_bloom && limit_pruner.within_limit(row_count);
-                                if keep {
+                                prune_result.keep =
+                                    keep_by_bloom && limit_pruner.within_limit(row_count);
+                                if prune_result.keep {
                                     // Perf.
                                     {
                                         metrics_inc_blocks_bloom_pruning_after(1);
@@ -184,47 +190,54 @@ impl BlockPruner {
                                         pruning_stats.set_blocks_bloom_pruning_after(1);
                                     }
                                 }
-                                keep
                             } else {
-                                limit_pruner.within_limit(row_count)
-                            };
-                            if keep {
+                                prune_result.keep = limit_pruner.within_limit(row_count);
+                            }
+                            if prune_result.keep {
                                 let (keep, range) =
                                     page_pruner.should_keep(&block_meta.cluster_stats);
 
                                 prune_result.keep = keep;
                                 prune_result.range = range;
+                            }
+                            if prune_result.keep {
+                                if let Some(inverted_index_pruner) = inverted_index_pruner {
+                                    // Perf.
+                                    {
+                                        metrics_inc_blocks_inverted_index_pruning_before(1);
+                                        metrics_inc_bytes_block_inverted_index_pruning_before(
+                                            block_meta.block_size,
+                                        );
 
-                                if keep {
-                                    if let Some(inverted_index_pruner) = inverted_index_pruner {
-                                        info!("using inverted index");
+                                        pruning_stats.set_blocks_inverted_index_pruning_before(1);
+                                    }
+                                    let matched_rows = inverted_index_pruner
+                                        .should_keep(&block_location.0, row_count)
+                                        .await?;
+                                    prune_result.keep = matched_rows.is_some();
+                                    prune_result.matched_rows = matched_rows;
+
+                                    if prune_result.keep {
                                         // Perf.
                                         {
-                                            metrics_inc_blocks_inverted_index_pruning_before(1);
-                                            metrics_inc_bytes_block_inverted_index_pruning_before(
+                                            metrics_inc_blocks_inverted_index_pruning_after(1);
+                                            metrics_inc_bytes_block_inverted_index_pruning_after(
                                                 block_meta.block_size,
                                             );
-
-                                            pruning_stats.set_blocks_inverted_index_pruning_before(1);
-                                        }
-                                        let matched_rows = inverted_index_pruner
-                                            .should_keep(&block_location.0, row_count)
-                                            .await?;
-                                        prune_result.keep = matched_rows.is_some();
-                                        prune_result.matched_rows = matched_rows;
-
-                                        if prune_result.keep {
-                                            // Perf.
-                                            {
-                                                metrics_inc_blocks_inverted_index_pruning_after(1);
-                                                metrics_inc_bytes_block_inverted_index_pruning_after(
-                                                    block_meta.block_size,
-                                                );
-
-                                                pruning_stats.set_blocks_inverted_index_pruning_after(1);
-                                            }
+                                            pruning_stats
+                                                .set_blocks_inverted_index_pruning_after(1);
                                         }
                                     }
+                                }
+                            }
+                            if prune_result.keep {
+                                if let Some(virtual_column_pruner) = virtual_column_pruner {
+                                    // Check whether can read virtual columns,
+                                    // and ignore the source columns.
+                                    let virtual_block_meta = virtual_column_pruner
+                                        .prune_virtual_columns(&block_location.0)
+                                        .await?;
+                                    prune_result.virtual_block_meta = virtual_block_meta;
                                 }
                             }
                             Ok(prune_result)
@@ -273,6 +286,7 @@ impl BlockPruner {
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                         matched_rows: prune_result.matched_rows.clone(),
+                        virtual_block_meta: prune_result.virtual_block_meta.clone(),
                     },
                     block,
                 ))
@@ -340,6 +354,7 @@ impl BlockPruner {
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
                             matched_rows: None,
+                            virtual_block_meta: None,
                         },
                         block_meta.clone(),
                     ))
@@ -369,22 +384,19 @@ struct BlockPruneResult {
     // the matched rows and scores should keeped in the block
     // only used by inverted index search
     matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    // the optional block meta of virtual columns
+    virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }
 
 impl BlockPruneResult {
-    fn new(
-        block_idx: usize,
-        block_location: String,
-        keep: bool,
-        range: Option<Range<usize>>,
-        matched_rows: Option<Vec<(usize, Option<F32>)>>,
-    ) -> Self {
+    fn new(block_idx: usize, block_location: String) -> Self {
         Self {
             block_idx,
-            keep,
-            range,
             block_location,
-            matched_rows,
+            keep: false,
+            range: None,
+            matched_rows: None,
+            virtual_block_meta: None,
         }
     }
 }

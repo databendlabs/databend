@@ -2759,81 +2759,6 @@ CreateTable(
                 protocol: "s3",
                 name: "testbucket",
                 path: "/admin/data/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "aws_key_id": "minioadmin",
-                        "aws_secret_key": "minioadmin",
-                        "endpoint_url": "http://127.0.0.1:9900",
-                    },
-                },
-            },
-        ),
-        cluster_by: None,
-        table_options: {},
-        as_query: None,
-        table_type: Normal,
-    },
-)
-
-
----------- Input ----------
-create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-    connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-    location_prefix = 'db';
----------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
----------- AST ------------
-CreateTable(
-    CreateTableStmt {
-        create_option: CreateIfNotExists,
-        catalog: None,
-        database: Some(
-            Identifier {
-                span: Some(
-                    27..28,
-                ),
-                name: "a",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        table: Identifier {
-            span: Some(
-                29..30,
-            ),
-            name: "b",
-            quote: None,
-            ident_type: None,
-        },
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            span: Some(
-                                32..33,
-                            ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        data_type: Int32,
-                        expr: None,
-                        comment: None,
-                    },
-                ],
-                None,
-            ),
-        ),
-        engine: None,
-        uri_location: Some(
-            UriLocation {
-                protocol: "s3",
-                name: "testbucket",
-                path: "/admin/data/",
-                part_prefix: "db",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -7139,6 +7064,290 @@ Query(
 
 
 ---------- Input ----------
+SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;
+---------- Output ---------
+SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
+---------- AST ------------
+StatementWithSettings {
+    settings: Some(
+        Settings {
+            set_type: SettingsQuery,
+            identifiers: [
+                Identifier {
+                    span: Some(
+                        10..20,
+                    ),
+                    name: "max_thread",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        24..32,
+                    ),
+                    name: "timezone",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            values: Expr(
+                [
+                    Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            33..48,
+                        ),
+                        value: String(
+                            "Asia/Shanghai",
+                        ),
+                    },
+                ],
+            ),
+        },
+    ),
+    stmt: Query(
+        Query {
+            span: Some(
+                50..58,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..58,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    57..58,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;
+---------- Output ---------
+SETTINGS (max_thread = 1) SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+---------- AST ------------
+StatementWithSettings {
+    settings: Some(
+        Settings {
+            set_type: SettingsQuery,
+            identifiers: [
+                Identifier {
+                    span: Some(
+                        10..20,
+                    ),
+                    name: "max_thread",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            values: Expr(
+                [
+                    Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ],
+            ),
+        },
+    ),
+    stmt: Query(
+        Query {
+            span: Some(
+                24..64,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        24..64,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        31..32,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Join {
+                            span: Some(
+                                40..49,
+                            ),
+                            join: Join {
+                                op: LeftAnti,
+                                condition: On(
+                                    BinaryOp {
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                        op: Eq,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                55..56,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            55..56,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            57..58,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                61..62,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            61..62,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            63..64,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                ),
+                                left: Table {
+                                    span: Some(
+                                        38..39,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            38..39,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                                right: Table {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            50..51,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            },
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
@@ -9279,7 +9488,9 @@ Query(
                         options: SelectStageOptions {
                             files: None,
                             pattern: Some(
-                                "[.]*parquet",
+                                Literal(
+                                    "[.]*parquet",
+                                ),
                             ),
                             file_format: Some(
                                 "tsv",
@@ -9867,11 +10078,13 @@ Query(
                         pivot: None,
                         unpivot: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: Probability(
-                                    99.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    Probability(
+                                        99.0,
+                                    ),
                                 ),
+                                block_level: None,
                             },
                         ),
                     },
@@ -9894,7 +10107,7 @@ Query(
 ---------- Input ----------
 select * from t sample block (99);
 ---------- Output ---------
-SELECT * FROM t SAMPLE BLOCK (99)
+SELECT * FROM t SAMPLE BLOCK (99) 
 ---------- AST ------------
 Query(
     Query {
@@ -9943,9 +10156,9 @@ Query(
                         pivot: None,
                         unpivot: None,
                         sample: Some(
-                            Sample {
-                                sample_level: BLOCK,
-                                sample_conf: Probability(
+                            SampleConfig {
+                                row_level: None,
+                                block_level: Some(
                                     99.0,
                                 ),
                             },
@@ -10019,87 +10232,13 @@ Query(
                         pivot: None,
                         unpivot: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: RowsNum(
-                                    10.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    RowsNum(
+                                        10.0,
+                                    ),
                                 ),
-                            },
-                        ),
-                    },
-                ],
-                selection: None,
-                group_by: None,
-                having: None,
-                window_list: None,
-                qualify: None,
-            },
-        ),
-        order_by: [],
-        limit: [],
-        offset: None,
-        ignore_result: false,
-    },
-)
-
-
----------- Input ----------
-select * from t sample block (10 rows);
----------- Output ---------
-SELECT * FROM t SAMPLE BLOCK (10 ROWS)
----------- AST ------------
-Query(
-    Query {
-        span: Some(
-            0..38,
-        ),
-        with: None,
-        body: Select(
-            SelectStmt {
-                span: Some(
-                    0..38,
-                ),
-                hints: None,
-                distinct: false,
-                top_n: None,
-                select_list: [
-                    StarColumns {
-                        qualified: [
-                            Star(
-                                Some(
-                                    7..8,
-                                ),
-                            ),
-                        ],
-                        column_filter: None,
-                    },
-                ],
-                from: [
-                    Table {
-                        span: Some(
-                            14..38,
-                        ),
-                        catalog: None,
-                        database: None,
-                        table: Identifier {
-                            span: Some(
-                                14..15,
-                            ),
-                            name: "t",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        alias: None,
-                        temporal: None,
-                        with_options: None,
-                        pivot: None,
-                        unpivot: None,
-                        sample: Some(
-                            Sample {
-                                sample_level: BLOCK,
-                                sample_conf: RowsNum(
-                                    10.0,
-                                ),
+                                block_level: None,
                             },
                         ),
                     },
@@ -10177,11 +10316,13 @@ Query(
                         named_params: [],
                         alias: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: Probability(
-                                    99.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    Probability(
+                                        99.0,
+                                    ),
                                 ),
+                                block_level: None,
                             },
                         ),
                     },
@@ -10204,7 +10345,7 @@ Query(
 ---------- Input ----------
 select * from numbers(1000) sample block (99);
 ---------- Output ---------
-SELECT * FROM numbers(1000) SAMPLE BLOCK (99)
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99) 
 ---------- AST ------------
 Query(
     Query {
@@ -10259,9 +10400,9 @@ Query(
                         named_params: [],
                         alias: None,
                         sample: Some(
-                            Sample {
-                                sample_level: BLOCK,
-                                sample_conf: Probability(
+                            SampleConfig {
+                                row_level: None,
+                                block_level: Some(
                                     99.0,
                                 ),
                             },
@@ -10341,10 +10482,184 @@ Query(
                         named_params: [],
                         alias: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: RowsNum(
-                                    10.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    RowsNum(
+                                        10.0,
+                                    ),
+                                ),
+                                block_level: None,
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample block (99) row (10 rows);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10 ROWS)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..59,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..59,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..59,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            SampleConfig {
+                                row_level: Some(
+                                    RowsNum(
+                                        10.0,
+                                    ),
+                                ),
+                                block_level: Some(
+                                    99.0,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample block (99) row (10);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..54,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..54,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..54,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            SampleConfig {
+                                row_level: Some(
+                                    Probability(
+                                        10.0,
+                                    ),
+                                ),
+                                block_level: Some(
+                                    99.0,
                                 ),
                             },
                         ),
@@ -10909,7 +11224,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -10954,7 +11268,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -10999,7 +11312,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11044,7 +11356,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -13660,7 +13971,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -13737,7 +14047,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -13816,7 +14125,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -13897,7 +14205,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -13968,7 +14275,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1:9900",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14024,7 +14330,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14146,7 +14451,7 @@ COPY INTO 's3://mybucket/data.csv'
         skip_header = 1
     )
 ---------- Output ---------
-COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -14172,7 +14477,6 @@ CopyIntoLocation(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {},
@@ -14195,9 +14499,14 @@ CopyIntoLocation(
                 ),
             },
         },
-        single: false,
-        max_file_size: 0,
-        detailed_output: false,
+        options: CopyIntoLocationOptions {
+            single: false,
+            max_file_size: 0,
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+            overwrite: false,
+        },
     },
 )
 
@@ -14206,7 +14515,7 @@ CopyIntoLocation(
 COPY INTO '@my_stage/my data'
     FROM mytable;
 ---------- Output ---------
-COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -14233,9 +14542,14 @@ CopyIntoLocation(
         file_format: FileFormatOptions {
             options: {},
         },
-        single: false,
-        max_file_size: 0,
-        detailed_output: false,
+        options: CopyIntoLocationOptions {
+            single: false,
+            max_file_size: 0,
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+            overwrite: false,
+        },
     },
 )
 
@@ -14250,7 +14564,7 @@ COPY INTO @my_stage
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -14290,9 +14604,14 @@ CopyIntoLocation(
                 ),
             },
         },
-        single: false,
-        max_file_size: 0,
-        detailed_output: false,
+        options: CopyIntoLocationOptions {
+            single: false,
+            max_file_size: 0,
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+            overwrite: false,
+        },
     },
 )
 
@@ -14323,7 +14642,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14604,7 +14922,6 @@ CopyIntoTable(
                     protocol: "fs",
                     name: "",
                     path: "/path/to/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14679,7 +14996,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "databend",
                     path: "/books.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -15920,60 +16236,24 @@ Query(
 ---------- Input ----------
 SET max_threads = 10;
 ---------- Output ---------
-SET max_threads = 10
+SET SESSION max_threads = 10
 ---------- AST ------------
 SetStmt {
-    set_type: SettingsSession,
-    identifiers: [
-        Identifier {
-            span: Some(
-                4..15,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-    ],
-    values: Expr(
-        [
-            Literal {
+    settings: Settings {
+        set_type: SettingsSession,
+        identifiers: [
+            Identifier {
                 span: Some(
-                    18..20,
+                    4..15,
                 ),
-                value: UInt64(
-                    10,
-                ),
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
             },
         ],
-    ),
-}
-
-
----------- Input ----------
-SET max_threads = 10*2;
----------- Output ---------
-SET max_threads = 10 * 2
----------- AST ------------
-SetStmt {
-    set_type: SettingsSession,
-    identifiers: [
-        Identifier {
-            span: Some(
-                4..15,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-    ],
-    values: Expr(
-        [
-            BinaryOp {
-                span: Some(
-                    20..21,
-                ),
-                op: Multiply,
-                left: Literal {
+        values: Expr(
+            [
+                Literal {
                     span: Some(
                         18..20,
                     ),
@@ -15981,17 +16261,57 @@ SetStmt {
                         10,
                     ),
                 },
-                right: Literal {
-                    span: Some(
-                        21..22,
-                    ),
-                    value: UInt64(
-                        2,
-                    ),
-                },
+            ],
+        ),
+    },
+}
+
+
+---------- Input ----------
+SET max_threads = 10*2;
+---------- Output ---------
+SET SESSION max_threads = 10 * 2
+---------- AST ------------
+SetStmt {
+    settings: Settings {
+        set_type: SettingsSession,
+        identifiers: [
+            Identifier {
+                span: Some(
+                    4..15,
+                ),
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
             },
         ],
-    ),
+        values: Expr(
+            [
+                BinaryOp {
+                    span: Some(
+                        20..21,
+                    ),
+                    op: Multiply,
+                    left: Literal {
+                        span: Some(
+                            18..20,
+                        ),
+                        value: UInt64(
+                            10,
+                        ),
+                    },
+                    right: Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            2,
+                        ),
+                    },
+                },
+            ],
+        ),
+    },
 }
 
 
@@ -16001,73 +16321,75 @@ SET global (max_threads, max_memory_usage) = (10*2, 10*4);
 SET GLOBAL (max_threads, max_memory_usage) = (10 * 2, 10 * 4)
 ---------- AST ------------
 SetStmt {
-    set_type: SettingsGlobal,
-    identifiers: [
-        Identifier {
-            span: Some(
-                12..23,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-        Identifier {
-            span: Some(
-                25..41,
-            ),
-            name: "max_memory_usage",
-            quote: None,
-            ident_type: None,
-        },
-    ],
-    values: Expr(
-        [
-            BinaryOp {
+    settings: Settings {
+        set_type: SettingsGlobal,
+        identifiers: [
+            Identifier {
                 span: Some(
-                    48..49,
+                    12..23,
                 ),
-                op: Multiply,
-                left: Literal {
-                    span: Some(
-                        46..48,
-                    ),
-                    value: UInt64(
-                        10,
-                    ),
-                },
-                right: Literal {
-                    span: Some(
-                        49..50,
-                    ),
-                    value: UInt64(
-                        2,
-                    ),
-                },
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
             },
-            BinaryOp {
+            Identifier {
                 span: Some(
-                    54..55,
+                    25..41,
                 ),
-                op: Multiply,
-                left: Literal {
-                    span: Some(
-                        52..54,
-                    ),
-                    value: UInt64(
-                        10,
-                    ),
-                },
-                right: Literal {
-                    span: Some(
-                        55..56,
-                    ),
-                    value: UInt64(
-                        4,
-                    ),
-                },
+                name: "max_memory_usage",
+                quote: None,
+                ident_type: None,
             },
         ],
-    ),
+        values: Expr(
+            [
+                BinaryOp {
+                    span: Some(
+                        48..49,
+                    ),
+                    op: Multiply,
+                    left: Literal {
+                        span: Some(
+                            46..48,
+                        ),
+                        value: UInt64(
+                            10,
+                        ),
+                    },
+                    right: Literal {
+                        span: Some(
+                            49..50,
+                        ),
+                        value: UInt64(
+                            2,
+                        ),
+                    },
+                },
+                BinaryOp {
+                    span: Some(
+                        54..55,
+                    ),
+                    op: Multiply,
+                    left: Literal {
+                        span: Some(
+                            52..54,
+                        ),
+                        value: UInt64(
+                            10,
+                        ),
+                    },
+                    right: Literal {
+                        span: Some(
+                            55..56,
+                        ),
+                        value: UInt64(
+                            4,
+                        ),
+                    },
+                },
+            ],
+        ),
+    },
 }
 
 
@@ -16077,17 +16399,20 @@ UNSET max_threads;
 UNSET SESSION max_threads
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsSession,
-    identifiers: [
-        Identifier {
-            span: Some(
-                6..17,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-    ],
+    settings: Settings {
+        set_type: SettingsSession,
+        identifiers: [
+            Identifier {
+                span: Some(
+                    6..17,
+                ),
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        values: None,
+    },
 }
 
 
@@ -16097,17 +16422,20 @@ UNSET session max_threads;
 UNSET SESSION max_threads
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsSession,
-    identifiers: [
-        Identifier {
-            span: Some(
-                14..25,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-    ],
+    settings: Settings {
+        set_type: SettingsSession,
+        identifiers: [
+            Identifier {
+                span: Some(
+                    14..25,
+                ),
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        values: None,
+    },
 }
 
 
@@ -16117,25 +16445,28 @@ UNSET (max_threads, sql_dialect);
 UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsSession,
-    identifiers: [
-        Identifier {
-            span: Some(
-                7..18,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-        Identifier {
-            span: Some(
-                20..31,
-            ),
-            name: "sql_dialect",
-            quote: None,
-            ident_type: None,
-        },
-    ],
+    settings: Settings {
+        set_type: SettingsSession,
+        identifiers: [
+            Identifier {
+                span: Some(
+                    7..18,
+                ),
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    20..31,
+                ),
+                name: "sql_dialect",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        values: None,
+    },
 }
 
 
@@ -16145,25 +16476,28 @@ UNSET session (max_threads, sql_dialect);
 UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsSession,
-    identifiers: [
-        Identifier {
-            span: Some(
-                15..26,
-            ),
-            name: "max_threads",
-            quote: None,
-            ident_type: None,
-        },
-        Identifier {
-            span: Some(
-                28..39,
-            ),
-            name: "sql_dialect",
-            quote: None,
-            ident_type: None,
-        },
-    ],
+    settings: Settings {
+        set_type: SettingsSession,
+        identifiers: [
+            Identifier {
+                span: Some(
+                    15..26,
+                ),
+                name: "max_threads",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    28..39,
+                ),
+                name: "sql_dialect",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        values: None,
+    },
 }
 
 
@@ -16173,29 +16507,31 @@ SET variable a = 3
 SET VARIABLE a = 3
 ---------- AST ------------
 SetStmt {
-    set_type: Variable,
-    identifiers: [
-        Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-    ],
-    values: Expr(
-        [
-            Literal {
+    settings: Settings {
+        set_type: Variable,
+        identifiers: [
+            Identifier {
                 span: Some(
-                    17..18,
+                    13..14,
                 ),
-                value: UInt64(
-                    3,
-                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
             },
         ],
-    ),
+        values: Expr(
+            [
+                Literal {
+                    span: Some(
+                        17..18,
+                    ),
+                    value: UInt64(
+                        3,
+                    ),
+                },
+            ],
+        ),
+    },
 }
 
 
@@ -16239,58 +16575,60 @@ SET variable a = select 3
 SET VARIABLE a = SELECT 3
 ---------- AST ------------
 SetStmt {
-    set_type: Variable,
-    identifiers: [
-        Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-    ],
-    values: Query(
-        Query {
-            span: Some(
-                17..25,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        17..25,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: Literal {
-                                span: Some(
-                                    24..25,
-                                ),
-                                value: UInt64(
-                                    3,
-                                ),
+    settings: Settings {
+        set_type: Variable,
+        identifiers: [
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        values: Query(
+            Query {
+                span: Some(
+                    17..25,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            17..25,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            AliasedExpr {
+                                expr: Literal {
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                    value: UInt64(
+                                        3,
+                                    ),
+                                },
+                                alias: None,
                             },
-                            alias: None,
-                        },
-                    ],
-                    from: [],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-    ),
+                        ],
+                        from: [],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        ),
+    },
 }
 
 
@@ -16300,126 +16638,128 @@ SET variable a = (select max(number) from numbers(10))
 SET VARIABLE a = (SELECT max(number) FROM numbers(10))
 ---------- AST ------------
 SetStmt {
-    set_type: Variable,
-    identifiers: [
-        Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-    ],
-    values: Expr(
-        [
-            Subquery {
+    settings: Settings {
+        set_type: Variable,
+        identifiers: [
+            Identifier {
                 span: Some(
-                    17..54,
+                    13..14,
                 ),
-                modifier: None,
-                subquery: Query {
-                    span: Some(
-                        18..53,
-                    ),
-                    with: None,
-                    body: Select(
-                        SelectStmt {
-                            span: Some(
-                                18..53,
-                            ),
-                            hints: None,
-                            distinct: false,
-                            top_n: None,
-                            select_list: [
-                                AliasedExpr {
-                                    expr: FunctionCall {
-                                        span: Some(
-                                            25..36,
-                                        ),
-                                        func: FunctionCall {
-                                            distinct: false,
-                                            name: Identifier {
-                                                span: Some(
-                                                    25..28,
-                                                ),
-                                                name: "max",
-                                                quote: None,
-                                                ident_type: None,
-                                            },
-                                            args: [
-                                                ColumnRef {
-                                                    span: Some(
-                                                        29..35,
-                                                    ),
-                                                    column: ColumnRef {
-                                                        database: None,
-                                                        table: None,
-                                                        column: Name(
-                                                            Identifier {
-                                                                span: Some(
-                                                                    29..35,
-                                                                ),
-                                                                name: "number",
-                                                                quote: None,
-                                                                ident_type: None,
-                                                            },
-                                                        ),
-                                                    },
-                                                },
-                                            ],
-                                            params: [],
-                                            window: None,
-                                            lambda: None,
-                                        },
-                                    },
-                                    alias: None,
-                                },
-                            ],
-                            from: [
-                                TableFunction {
-                                    span: Some(
-                                        42..53,
-                                    ),
-                                    lateral: false,
-                                    name: Identifier {
-                                        span: Some(
-                                            42..49,
-                                        ),
-                                        name: "numbers",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                    params: [
-                                        Literal {
-                                            span: Some(
-                                                50..52,
-                                            ),
-                                            value: UInt64(
-                                                10,
-                                            ),
-                                        },
-                                    ],
-                                    named_params: [],
-                                    alias: None,
-                                    sample: None,
-                                },
-                            ],
-                            selection: None,
-                            group_by: None,
-                            having: None,
-                            window_list: None,
-                            qualify: None,
-                        },
-                    ),
-                    order_by: [],
-                    limit: [],
-                    offset: None,
-                    ignore_result: false,
-                },
+                name: "a",
+                quote: None,
+                ident_type: None,
             },
         ],
-    ),
+        values: Expr(
+            [
+                Subquery {
+                    span: Some(
+                        17..54,
+                    ),
+                    modifier: None,
+                    subquery: Query {
+                        span: Some(
+                            18..53,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    18..53,
+                                ),
+                                hints: None,
+                                distinct: false,
+                                top_n: None,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: FunctionCall {
+                                            span: Some(
+                                                25..36,
+                                            ),
+                                            func: FunctionCall {
+                                                distinct: false,
+                                                name: Identifier {
+                                                    span: Some(
+                                                        25..28,
+                                                    ),
+                                                    name: "max",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                args: [
+                                                    ColumnRef {
+                                                        span: Some(
+                                                            29..35,
+                                                        ),
+                                                        column: ColumnRef {
+                                                            database: None,
+                                                            table: None,
+                                                            column: Name(
+                                                                Identifier {
+                                                                    span: Some(
+                                                                        29..35,
+                                                                    ),
+                                                                    name: "number",
+                                                                    quote: None,
+                                                                    ident_type: None,
+                                                                },
+                                                            ),
+                                                        },
+                                                    },
+                                                ],
+                                                params: [],
+                                                window: None,
+                                                lambda: None,
+                                            },
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [
+                                    TableFunction {
+                                        span: Some(
+                                            42..53,
+                                        ),
+                                        lateral: false,
+                                        name: Identifier {
+                                            span: Some(
+                                                42..49,
+                                            ),
+                                            name: "numbers",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        params: [
+                                            Literal {
+                                                span: Some(
+                                                    50..52,
+                                                ),
+                                                value: UInt64(
+                                                    10,
+                                                ),
+                                            },
+                                        ],
+                                        named_params: [],
+                                        alias: None,
+                                        sample: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                                qualify: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                },
+            ],
+        ),
+    },
 }
 
 
@@ -16820,7 +17160,6 @@ Query(
                                 protocol: "s3",
                                 name: "test",
                                 path: "/bucket",
-                                part_prefix: "",
                                 connection: Connection {
                                     visited_keys: {},
                                     conns: {},
@@ -16830,7 +17169,9 @@ Query(
                         options: SelectStageOptions {
                             files: None,
                             pattern: Some(
-                                "*.parquet",
+                                Literal(
+                                    "*.parquet",
+                                ),
                             ),
                             file_format: None,
                             connection: {
@@ -19695,7 +20036,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -19717,7 +20058,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+            "COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false",
         ),
     },
 )
@@ -21919,7 +22260,6 @@ AttachTable(
             protocol: "s3",
             name: "a",
             path: "/",
-            part_prefix: "",
             connection: Connection {
                 visited_keys: {},
                 conns: {
@@ -22373,7 +22713,7 @@ DropUDF {
 
 
 ---------- Input ----------
-EXECUTE IMMEDIATE 
+EXECUTE IMMEDIATE
 $$
 BEGIN
     LOOP
@@ -22705,6 +23045,8 @@ Query(
                                                 ignore_result: false,
                                             },
                                             alias: None,
+                                            pivot: None,
+                                            unpivot: None,
                                         },
                                     ],
                                     selection: None,

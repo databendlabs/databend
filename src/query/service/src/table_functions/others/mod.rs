@@ -17,9 +17,11 @@ mod license_info;
 mod suggested_background_compaction_tasks;
 mod suggested_background_tasks;
 mod tenant_quota;
+mod udf;
 
 pub use execute_background_job::ExecuteBackgroundJobTable;
 pub use license_info::LicenseInfoTable;
 pub use suggested_background_tasks::SuggestedBackgroundTasksSource;
 pub use suggested_background_tasks::SuggestedBackgroundTasksTable;
 pub use tenant_quota::TenantQuotaTable;
+pub use udf::UdfEchoTable;

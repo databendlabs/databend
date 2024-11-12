@@ -136,6 +136,7 @@ impl Plan {
             Plan::AlterUDF(_) => Ok("AlterUDF".to_string()),
             Plan::DropUDF(_) => Ok("DropUDF".to_string()),
             Plan::AlterUser(_) => Ok("AlterUser".to_string()),
+            Plan::DescUser(_) => Ok("DescUser".to_string()),
             Plan::CreateRole(_) => Ok("CreateRole".to_string()),
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),
@@ -210,6 +211,7 @@ impl Plan {
             Plan::CreateDictionary(_) => Ok("CreateDictionary".to_string()),
             Plan::DropDictionary(_) => Ok("DropDictionary".to_string()),
             Plan::ShowCreateDictionary(_) => Ok("ShowCreateDictionary".to_string()),
+            Plan::RenameDictionary(_) => Ok("RenameDictionary".to_string()),
         }
     }
 }

@@ -23,8 +23,8 @@ use rotbl::v001::stat::RotblStat;
 use rotbl::v001::Rotbl;
 use rotbl::v001::SeqMarked;
 
+use crate::raft_types::SnapshotMeta;
 use crate::sys_data::SysData;
-use crate::SnapshotMeta;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Clone)]

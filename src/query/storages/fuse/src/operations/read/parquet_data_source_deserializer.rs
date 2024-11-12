@@ -93,10 +93,10 @@ impl DeserializeDataTransform {
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
             let mut fields = src_schema.fields().clone();
-            for virtual_column in &virtual_reader.virtual_column_infos {
+            for virtual_column_field in &virtual_reader.virtual_column_info.virtual_column_fields {
                 let field = DataField::new(
-                    &virtual_column.name,
-                    DataType::from(&*virtual_column.data_type),
+                    &virtual_column_field.name,
+                    DataType::from(&*virtual_column_field.data_type),
                 );
                 fields.push(field);
             }

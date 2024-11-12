@@ -12,10 +12,9 @@ test = true
 
 [dependencies]
 async-backtrace = { workspace = true }
-async-recursion = "1.1.1"
+async-recursion = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
@@ -29,19 +28,20 @@ databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
-databend-storages-common-cache = { workspace = true }
-databend-storages-common-index = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
-faststr = "0.2"
+faststr = { workspace = true }
 futures = { workspace = true }
-hive_metastore = "0.1.0"
+hive_metastore = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-recursive = "0.1.1"
+parquet = { workspace = true }
+recursive = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
-volo-thrift = "0.10"
+volo-thrift = { workspace = true }
 
 [lints]
 workspace = true

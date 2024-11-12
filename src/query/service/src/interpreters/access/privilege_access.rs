@@ -61,10 +61,11 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 20] = [
     "catalogs",
     "columns",
     "databases",
+    "dictionaries",
     "tables",
     "views",
     "tables_with_history",
@@ -709,7 +710,8 @@ impl AccessChecker for PrivilegeAccess {
                     Some(RewriteKind::ShowDatabases)
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
-                    | Some(RewriteKind::ShowUserFunctions) => {
+                    | Some(RewriteKind::ShowUserFunctions)
+                    | Some(RewriteKind::ShowDictionaries(_)) => {
                         return Ok(());
                     }
                     | Some(RewriteKind::ShowTableFunctions) => {
@@ -1019,7 +1021,8 @@ impl AccessChecker for PrivilegeAccess {
             // Dictionary
             Plan::ShowCreateDictionary(_)
             | Plan::CreateDictionary(_)
-            | Plan::DropDictionary(_) => {
+            | Plan::DropDictionary(_)
+            | Plan::RenameDictionary(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -1225,6 +1228,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
+            | Plan::DescUser(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task

@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRefExt;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
+use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
@@ -71,6 +72,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -175,6 +177,7 @@ pub enum Plan {
     },
     ExplainAnalyze {
         partial: bool,
+        graphical: bool,
         plan: Box<Plan>,
     },
 
@@ -271,6 +274,7 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+    DescUser(Box<DescUserPlan>),
 
     // UDF
     CreateUDF(Box<CreateUDFPlan>),
@@ -369,6 +373,7 @@ pub enum Plan {
     CreateDictionary(Box<CreateDictionaryPlan>),
     DropDictionary(Box<DropDictionaryPlan>),
     ShowCreateDictionary(Box<ShowCreateDictionaryPlan>),
+    RenameDictionary(Box<RenameDictionaryPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -388,6 +393,7 @@ pub enum RewriteKind {
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,
+    ShowDictionaries(String),
 
     ShowStreams(String),
 
@@ -484,6 +490,7 @@ impl Plan {
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
+            Plan::DescUser(plan) => plan.schema(),
 
             _ => Arc::new(DataSchema::empty()),
         }

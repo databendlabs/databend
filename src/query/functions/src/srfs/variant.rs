@@ -678,13 +678,12 @@ fn unnest_variant_obj(
         Some(vals) if !vals.is_empty() => {
             let len = vals.len();
             let mut val_builder = BinaryColumnBuilder::with_capacity(0, 0);
-            let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut key_builder = StringColumnBuilder::with_capacity(0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
             for (key, val) in vals {
-                key_builder.put_str(&String::from_utf8_lossy(&key));
-                key_builder.commit_row();
+                key_builder.put_and_commit(String::from_utf8_lossy(&key));
                 val_builder.put_slice(&val);
                 val_builder.commit_row();
             }
@@ -807,8 +806,7 @@ impl FlattenGenerator {
                     key_builder.push_null();
                 }
                 if let Some(path_builder) = path_builder {
-                    path_builder.put_str(&inner_path);
-                    path_builder.commit_row();
+                    path_builder.put_and_commit(&inner_path);
                 }
                 if let Some(index_builder) = index_builder {
                     index_builder.push(i.try_into().unwrap());
@@ -867,8 +865,7 @@ impl FlattenGenerator {
                         key_builder.push(name.as_ref());
                     }
                     if let Some(path_builder) = path_builder {
-                        path_builder.put_str(&inner_path);
-                        path_builder.commit_row();
+                        path_builder.put_and_commit(&inner_path);
                     }
                     if let Some(index_builder) = index_builder {
                         index_builder.push_null();
@@ -908,7 +905,7 @@ impl FlattenGenerator {
             None
         };
         let mut path_builder = if params.is_empty() || params.contains(&3) {
-            Some(StringColumnBuilder::with_capacity(0, 0))
+            Some(StringColumnBuilder::with_capacity(0))
         } else {
             None
         };

@@ -48,17 +48,21 @@ run-debug: build
 run-debug-management: build
 	bash ./scripts/ci/deploy/databend-query-management-mode.sh
 
+kill:
+	killall databend-query
+	killall databend-meta
+
 build:
 	bash ./scripts/build/build-debug.sh
 
 build-release:
 	bash ./scripts/build/build-release.sh
-ifeq ($(shell uname),Linux) # Macs don't have objcopy
-	# Reduce binary size by compressing binaries.
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-query
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-meta
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-metactl
-endif
+# ifeq ($(shell uname),Linux) # Macs don't have objcopy
+# 	# Reduce binary size by compressing binaries.
+# 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-query
+# 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-meta
+# 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-metactl
+# endif
 
 build-native:
 	bash ./scripts/build/build-native.sh

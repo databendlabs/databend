@@ -7,12 +7,12 @@
 <<<<
 Succeeded
 20
-71
+51
 null
 >>>> list @s1
 <<<<
->>>> select a is null, b is null, c, d from t1
-true	false	NULL	
+>>>> select a is null, b is null, c, d = '' from t1
+true	false	NULL	true
 <<<<
 >>>> drop table if exists t1
 >>>> drop stage if exists s1

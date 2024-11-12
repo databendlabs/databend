@@ -21,9 +21,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arrow_flight::flight_service_client::FlightServiceClient;
+use arrow_flight::FlightData;
 use async_channel::Receiver;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
-use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;

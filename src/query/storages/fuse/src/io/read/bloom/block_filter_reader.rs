@@ -209,7 +209,7 @@ where
     #[async_backtrace::framed]
     async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
         runtime
-            .try_spawn(self)?
+            .try_spawn(self, None)?
             .await
             .map_err(|e| ErrorCode::TokioError(format!("runtime join error. {}", e)))
     }

@@ -29,6 +29,16 @@ select length(col1), length(col2), length(col3), length(col4) from t
 ----
 4 4 1 1
 
+query II
+select array_length(col1), array_length(col2) from t
+----
+4 4
+
+query II
+select array_size(col3), array_size(col4) from t
+----
+1 1
+
 query ITT
 select get(col1, index - 7), get(col2, index - 8), get(col3, index - 9) from t
 ----
@@ -309,6 +319,11 @@ select length(col1), length(col2), length(col3), length(col4) from t
 ----
 4 4 1 1
 
+query IIII
+select array_size(col1), array_size(col2), array_length(col3), array_length(col4) from t1
+----
+3 3 3 3
+
 statement ok
 DROP TABLE IF EXISTS t2
 
@@ -362,6 +377,26 @@ select array_transform(col1, a -> a + col2), array_filter(col1, a -> a = col2), 
 [NULL,NULL] [] NULL
 NULL NULL NULL
 [12,13] [] 20
+
+## json array functions
+
+query T
+select json_array_transform(['data', 'a', 'b']::Variant, data -> CONCAT(data::String, 'bend') );
+----
+["databend","abend","bbend"]
+
+query TT
+select json_array_transform(try_cast(col1 as Variant), a -> a::Int + col2), json_array_filter(try_cast(col1 as Variant), a -> a::Int = col2) from t3;
+----
+[3,4,5] [2]
+[null,null] []
+NULL NULL
+[12,13] []
+
+query TT
+select json_array_reduce([1,2,3,4]::Variant, (x, y) -> 3 + x + y), json_array_transform(parse_json('"aa"'), data -> CONCAT(data::String, 'bend'));
+----
+19 []
 
 statement ok
 USE default

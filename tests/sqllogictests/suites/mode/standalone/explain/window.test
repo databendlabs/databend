@@ -60,7 +60,8 @@ CompoundBlockOperator(Project) × 1
               ShuffleMergePartition × 1
                 ShufflePartition × 1
                   DeserializeDataTransform × 1
-                    SyncReadParquetDataSource × 1
+                    SyncReadParquetDataTransform × 1
+                      BlockPartitionSource × 1
 
 
 # Enable sort spilling
@@ -81,7 +82,8 @@ CompoundBlockOperator(Project) × 1
                 ShuffleMergePartition × 1
                   ShufflePartition × 1
                     DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+                      SyncReadParquetDataTransform × 1
+                        BlockPartitionSource × 1
 
 
 statement ok
@@ -368,7 +370,8 @@ CompoundBlockOperator(Project) × 1
         ShuffleMergePartition × 1
           ShufflePartition × 1
             DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+              SyncReadParquetDataTransform × 1
+                BlockPartitionSource × 1
 
 # Enable sort spilling
 statement ok
@@ -385,7 +388,8 @@ CompoundBlockOperator(Project) × 1
         ShuffleMergePartition × 1
           ShufflePartition × 1
             DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+              SyncReadParquetDataTransform × 1
+                BlockPartitionSource × 1
 
 
 # Disable sort spilling
@@ -403,7 +407,8 @@ CompoundBlockOperator(Project) × 1
         ShuffleMergePartition × 1
           ShufflePartition × 1
             DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+              SyncReadParquetDataTransform × 1
+                BlockPartitionSource × 1
 
 # rows frame single window (can push down limit)
 query T
@@ -416,7 +421,8 @@ CompoundBlockOperator(Project) × 1
         ShuffleMergePartition × 1
           ShufflePartition × 1
             DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+              SyncReadParquetDataTransform × 1
+                BlockPartitionSource × 1
 
 # rows frame single window (can not push down limit)
 query T
@@ -429,7 +435,8 @@ CompoundBlockOperator(Project) × 1
         ShuffleMergePartition × 1
           ShufflePartition × 1
             DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+              SyncReadParquetDataTransform × 1
+                BlockPartitionSource × 1
 
 # rows frame multi window (can not push down limit)
 query T
@@ -448,7 +455,8 @@ CompoundBlockOperator(Project) × 1
                   ShuffleMergePartition × 1
                     ShufflePartition × 1
                       DeserializeDataTransform × 1
-                        SyncReadParquetDataSource × 1
+                        SyncReadParquetDataTransform × 1
+                          BlockPartitionSource × 1
 
 # row fetch with window function(pipeline explain)
 query T
@@ -468,7 +476,8 @@ CompoundBlockOperator(Project) × 1
                       TransformFilter × 1
                         AddInternalColumnsTransform × 1
                           DeserializeDataTransform × 1
-                            SyncReadParquetDataSource × 1
+                            SyncReadParquetDataTransform × 1
+                              BlockPartitionSource × 1
 
 # row fetch with window function(plan explain)
 query T
@@ -529,7 +538,8 @@ CompoundBlockOperator(Project) × 1
           ShuffleMergePartition × 1
             ShufflePartition × 1
               DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+                SyncReadParquetDataTransform × 1
+                  BlockPartitionSource × 1
 
 # same order multi window
 query T

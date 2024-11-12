@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::native::read::reader::infer_schema;
+use databend_common_arrow::native::read::reader::read_meta_async;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::read::NativeReadBuf;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -34,12 +34,12 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 
 // Native storage format
 
@@ -249,17 +249,23 @@ impl BlockReader {
         Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
     }
 
-    pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let meta = self.operator.blocking().stat(loc).ok()?;
-        let mut reader = self
-            .operator
-            .blocking()
-            .reader(loc)
-            .ok()?
-            .into_std_read(0..meta.content_length())
-            .ok()?;
-        let schema = infer_schema(&mut reader).ok()?;
+    #[async_backtrace::framed]
+    pub async fn async_read_native_schema(
+        operator: &Operator,
+        loc: &str,
+    ) -> Option<(Vec<ColumnMeta>, ArrowSchema)> {
+        let stat = operator.stat(loc).await.ok()?;
+        let reader = operator.reader(loc).await.ok()?;
+
+        let (native_metas, schema) =
+            read_meta_async(reader.clone(), stat.content_length() as usize)
+                .await
+                .ok()?;
+        let metas = native_metas
+            .into_iter()
+            .map(ColumnMeta::Native)
+            .collect::<Vec<ColumnMeta>>();
         let schema = DataSchema::try_from(&schema).ok()?;
-        Some(ArrowSchema::from(&schema))
+        Some((metas, ArrowSchema::from(&schema)))
     }
 }

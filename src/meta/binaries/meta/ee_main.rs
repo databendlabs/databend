@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(stmt_expr_attributes)]
 #![allow(clippy::uninlined_format_args)]
 mod entry;
 mod kvapi;

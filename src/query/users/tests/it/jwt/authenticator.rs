@@ -84,7 +84,7 @@ async fn test_jwk_key_store_retry_on_key_not_found() -> Result<()> {
         let mut keys_map = HashMap::new();
         keys_map.insert(
             "key1".to_string(),
-            PubKey::RSA256(RS256KeyPair::generate(2048).unwrap().public_key()),
+            PubKey::RSA256(RS256KeyPair::generate(2048).unwrap().public_key().into()),
         );
         func_calls_cloned.fetch_add(1, Ordering::SeqCst);
         keys_map

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -19,6 +20,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
@@ -49,6 +51,7 @@ use log::warn;
 use opendal::Operator;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
+use rand::prelude::SliceRandom;
 use rand::thread_rng;
 
 use crate::io::BloomIndexBuilder;
@@ -60,6 +63,10 @@ use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
+use crate::pruning::VirtualColumnPruner;
+use crate::FuseStorageFormat;
+
+const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
@@ -73,6 +80,7 @@ pub struct PruningContext {
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
+    pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
@@ -89,6 +97,7 @@ impl PruningContext {
         bloom_index_cols: BloomIndexColumns,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexBuilder>,
+        storage_format: FuseStorageFormat,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -153,7 +162,11 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(dal.clone(), push_down)?;
+        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
+
+        // virtual column pruner, used to read virtual column metas and ignore source columns.
+        let virtual_column_pruner =
+            VirtualColumnPruner::try_create(dal.clone(), push_down, storage_format)?;
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
@@ -182,6 +195,7 @@ impl PruningContext {
             page_pruner,
             internal_column_pruner,
             inverted_index_pruner,
+            virtual_column_pruner,
             pruning_stats,
         });
         Ok(pruning_ctx)
@@ -207,6 +221,7 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
         bloom_index_builder: Option<BloomIndexBuilder>,
+        storage_format: FuseStorageFormat,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -217,6 +232,7 @@ impl FusePruner {
             vec![],
             bloom_index_cols,
             bloom_index_builder,
+            storage_format,
         )
     }
 
@@ -230,6 +246,7 @@ impl FusePruner {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         bloom_index_builder: Option<BloomIndexBuilder>,
+        storage_format: FuseStorageFormat,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -256,6 +273,7 @@ impl FusePruner {
             bloom_index_cols,
             max_concurrency,
             bloom_index_builder,
+            storage_format,
         )?;
 
         Ok(FusePruner {
@@ -360,20 +378,44 @@ impl FusePruner {
                             );
                         }
                     } else {
-                        let sample_probability = table_sample(&push_down);
+                        let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
                             let mut block_metas =
                                 Self::extract_block_metas(&location.location.0, &info, true)?;
                             if let Some(probability) = sample_probability {
-                                let mut sample_block_metas = Vec::with_capacity(block_metas.len());
-                                let mut rng = thread_rng();
-                                let bernoulli = Bernoulli::new(probability).unwrap();
-                                for block in block_metas.iter() {
-                                    if bernoulli.sample(&mut rng) {
-                                        sample_block_metas.push(block.clone());
+                                if block_metas.len() <= SMALL_DATASET_SAMPLE_THRESHOLD {
+                                    // Deterministic sampling for small datasets
+                                    // Ensure at least one block is sampled for small datasets
+                                    let sample_size = max(
+                                        1,
+                                        (block_metas.len() as f64 * probability).round() as usize,
+                                    );
+                                    let mut rng = thread_rng();
+                                    block_metas = Arc::new(
+                                        block_metas
+                                            .choose_multiple(&mut rng, sample_size)
+                                            .cloned()
+                                            .collect(),
+                                    );
+                                } else {
+                                    // Random sampling for larger datasets
+                                    let mut sample_block_metas =
+                                        Vec::with_capacity(block_metas.len());
+                                    let mut rng = thread_rng();
+                                    let bernoulli = Bernoulli::new(probability).unwrap();
+                                    for block in block_metas.iter() {
+                                        if bernoulli.sample(&mut rng) {
+                                            sample_block_metas.push(block.clone());
+                                        }
                                     }
+                                    // Ensure at least one block is sampled for large datasets too
+                                    if sample_block_metas.is_empty() && !block_metas.is_empty() {
+                                        // Safe to unwrap, because we've checked that block_metas is not empty
+                                        sample_block_metas
+                                            .push(block_metas.choose(&mut rng).unwrap().clone());
+                                    }
+                                    block_metas = Arc::new(sample_block_metas);
                                 }
-                                block_metas = Arc::new(sample_block_metas);
                             }
                             res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
@@ -533,13 +575,21 @@ impl FusePruner {
     }
 }
 
-fn table_sample(push_down_info: &Option<PushDownInfo>) -> Option<f64> {
+fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>> {
+    let mut sample_probability = None;
     if let Some(sample) = push_down_info
         .as_ref()
         .and_then(|info| info.sample.as_ref())
     {
-        sample.sample_probability(None)
-    } else {
-        None
+        if let Some(block_sample_value) = sample.block_level {
+            if block_sample_value > 100.0 {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Sample value should be less than or equal to 100, but got {}",
+                    block_sample_value
+                )));
+            }
+            sample_probability = Some(block_sample_value / 100.0)
+        }
     }
+    Ok(sample_probability)
 }

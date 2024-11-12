@@ -12,23 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_settings::Settings;
-use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 
-use crate::sessions::QueryContext;
+use crate::spillers::MergedPartition;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
-use crate::spillers::SpilledData;
 use crate::spillers::Spiller;
-use crate::spillers::SpillerConfig;
-use crate::spillers::SpillerType;
 
 /// The `WindowPartitionBuffer` is used to control memory usage of Window operator.
 pub struct WindowPartitionBuffer {
@@ -41,24 +33,16 @@ pub struct WindowPartitionBuffer {
     can_spill: bool,
     next_to_restore_partition_id: isize,
     spilled_small_partitions: Vec<Vec<usize>>,
-    spilled_merged_partitions: Vec<(SpilledData, bool, bool)>,
+    spilled_merged_partitions: Vec<(MergedPartition, bool, bool)>,
 }
 
 impl WindowPartitionBuffer {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
         spill_settings: WindowSpillSettings,
     ) -> Result<Self> {
-        // Create an inner `Spiller` to spill data.
-        let spill_config = SpillerConfig::create(query_spill_prefix(
-            ctx.get_tenant().tenant_name(),
-            &ctx.get_id(),
-        ));
-        let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(ctx.clone(), operator, spill_config, SpillerType::Window)?;
-
         // Create a `PartitionBuffer` to store partitioned data.
         let partition_buffer = PartitionBuffer::create(num_partitions);
         let restored_partition_buffer = PartitionBuffer::create(num_partitions);
@@ -126,7 +110,7 @@ impl WindowPartitionBuffer {
                 {
                     return self
                         .spiller
-                        .spill_with_partition(partition_id, DataBlock::concat(&data_blocks)?)
+                        .spill_with_partition(partition_id, data_blocks)
                         .await;
                 }
             }
@@ -143,8 +127,7 @@ impl WindowPartitionBuffer {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &option)?
                 {
-                    let data_block = DataBlock::concat(&data_blocks)?;
-                    partitions_to_spill.push((partition_id, data_block));
+                    partitions_to_spill.push((partition_id, data_blocks));
                     accumulated_bytes += partition_memory_size;
                 }
                 if accumulated_bytes >= spill_unit_size {
@@ -153,34 +136,20 @@ impl WindowPartitionBuffer {
             }
         }
 
-        if accumulated_bytes > 0 {
-            let spilled_data = self
-                .spiller
-                .spill_with_merged_partitions(partitions_to_spill)
-                .await?;
-            if let SpilledData::MergedPartition {
-                location,
-                partitions,
-            } = spilled_data
-            {
-                let index = self.spilled_merged_partitions.len();
-                for partition in partitions.iter() {
-                    self.spilled_small_partitions[partition.0].push(index);
-                }
-                self.spilled_merged_partitions.push((
-                    SpilledData::MergedPartition {
-                        location,
-                        partitions,
-                    },
-                    false,
-                    false,
-                ));
-                return Ok(());
-            }
+        if accumulated_bytes == 0 {
+            self.can_spill = false;
+            return Ok(());
         }
 
-        self.can_spill = false;
-
+        let spilled = self
+            .spiller
+            .spill_with_merged_partitions(partitions_to_spill)
+            .await?;
+        let index = self.spilled_merged_partitions.len();
+        for (id, _) in &spilled.partitions {
+            self.spilled_small_partitions[*id].push(index);
+        }
+        self.spilled_merged_partitions.push((spilled, false, false));
         Ok(())
     }
 
@@ -202,35 +171,31 @@ impl WindowPartitionBuffer {
                 if *restored {
                     continue;
                 }
-                if let SpilledData::MergedPartition {
+                let MergedPartition {
                     location,
                     partitions,
-                } = merged_partitions
-                {
-                    if out_of_memory_limit || *partial_restored {
-                        if let Some(pos) = partitions.iter().position(|p| p.0 == partition_id) {
-                            let data_range = &partitions[pos].1;
-                            let columns_layout = &partitions[pos].2;
-                            let data_block = self
-                                .spiller
-                                .read_range(location, data_range.clone(), columns_layout)
-                                .await?;
-                            self.restored_partition_buffer
-                                .add_data_block(partition_id, data_block);
-                            partitions.remove(pos);
-                            *partial_restored = true;
-                        }
-                    } else {
-                        let partitioned_data = self
+                } = merged_partitions;
+                if out_of_memory_limit || *partial_restored {
+                    if let Some(pos) = partitions.iter().position(|(id, _)| *id == partition_id) {
+                        let data_block = self
                             .spiller
-                            .read_merged_partitions(merged_partitions)
+                            .read_chunk(location, &partitions[pos].1)
                             .await?;
-                        for (partition_id, data_block) in partitioned_data.into_iter() {
-                            self.restored_partition_buffer
-                                .add_data_block(partition_id, data_block);
-                        }
-                        *restored = true;
+                        self.restored_partition_buffer
+                            .add_data_block(partition_id, data_block);
+                        partitions.remove(pos);
+                        *partial_restored = true;
                     }
+                } else {
+                    let partitioned_data = self
+                        .spiller
+                        .read_merged_partitions(merged_partitions)
+                        .await?;
+                    for (partition_id, data_block) in partitioned_data.into_iter() {
+                        self.restored_partition_buffer
+                            .add_data_block(partition_id, data_block);
+                    }
+                    *restored = true;
                 }
             }
 
@@ -296,7 +261,7 @@ pub struct WindowSpillSettings {
 }
 
 impl WindowSpillSettings {
-    pub fn new(settings: Arc<Settings>, num_threads: usize) -> Result<Self> {
+    pub fn new(settings: &Settings, num_threads: usize) -> Result<Self> {
         let global_memory_ratio =
             std::cmp::min(settings.get_window_partition_spilling_memory_ratio()?, 100) as f64
                 / 100_f64;

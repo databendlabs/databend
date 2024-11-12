@@ -23,12 +23,12 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -124,8 +124,7 @@ impl SeparatedTextDecoder {
                 Ok(())
             }
             ColumnBuilder::String(c) => {
-                c.put_str(std::str::from_utf8(data)?);
-                c.commit_row();
+                c.put_and_commit(std::str::from_utf8(data)?);
                 Ok(())
             }
             ColumnBuilder::Boolean(c) => self.read_bool(c, data),
@@ -257,13 +256,12 @@ impl SeparatedTextDecoder {
             self.common_settings().enable_dst_hour_fix,
         )?;
         let days = uniform_date(date);
-        check_date(days as i64)?;
-        column.push(days);
+        column.push(clamp_date(days as i64));
         Ok(())
     }
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        let ts = if !data.contains(&b'-') {
+        let mut ts = if !data.contains(&b'-') {
             read_num_text_exact(data)?
         } else {
             let mut buffer_readr = Cursor::new(&data);
@@ -288,7 +286,7 @@ impl SeparatedTextDecoder {
                 _ => unreachable!(),
             }
         };
-        check_timestamp(ts)?;
+        clamp_timestamp(&mut ts);
         column.push(ts);
         Ok(())
     }

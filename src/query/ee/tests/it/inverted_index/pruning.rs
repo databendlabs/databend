@@ -40,6 +40,7 @@ use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -69,9 +70,17 @@ async fn apply_block_pruning(
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, None)?
-        .read_pruning(segment_locs)
-        .await
+    FusePruner::create(
+        &ctx,
+        dal,
+        schema,
+        push_down,
+        bloom_index_cols,
+        None,
+        FuseStorageFormat::Parquet,
+    )?
+    .read_pruning(segment_locs)
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -103,7 +112,6 @@ async fn test_block_pruner() -> Result<()> {
         engine: Engine::Fuse,
         engine_options: Default::default(),
         storage_params: None,
-        part_prefix: "".to_string(),
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
             (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "5".to_owned()),
@@ -707,7 +715,7 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
-    let _e13 = PushDownInfo {
+    let e13 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
@@ -720,7 +728,7 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
-    let _e14 = PushDownInfo {
+    let e14 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
@@ -733,7 +741,7 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
-    let _e15 = PushDownInfo {
+    let e15 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
@@ -759,9 +767,9 @@ async fn test_block_pruner() -> Result<()> {
         (Some(e10), 2, 2),
         (Some(e11), 9, 15),
         (Some(e12), 2, 2),
-        //(Some(e13), 3, 3),
-        //(Some(e14), 2, 2),
-        //(Some(e15), 2, 5),
+        (Some(e13), 3, 3),
+        (Some(e14), 2, 2),
+        (Some(e15), 2, 5),
     ];
 
     for (extra, expected_blocks, expected_rows) in extras {

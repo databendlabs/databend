@@ -18,8 +18,8 @@ use std::hash::Hash;
 use std::num::NonZeroU32;
 use std::ops::Index;
 
-use hashbrown::hash_map::RawEntryMut;
-use hashbrown::HashMap;
+use hashbrown_v0_14::hash_map::RawEntryMut;
+use hashbrown_v0_14::HashMap;
 
 /// An interned value of 32 bits.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

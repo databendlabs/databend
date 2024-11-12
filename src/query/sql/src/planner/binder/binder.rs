@@ -21,6 +21,7 @@ use std::time::Instant;
 use chrono_tz::Tz;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -52,9 +53,11 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
@@ -107,6 +110,8 @@ pub struct Binder {
     pub bind_recursive_cte: bool,
 
     pub enable_result_cache: bool,
+
+    pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl<'a> Binder {
@@ -134,7 +139,16 @@ impl<'a> Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
             enable_result_cache,
+            subquery_executor: None,
         }
+    }
+
+    pub fn with_subquery_executor(
+        mut self,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    ) -> Self {
+        self.subquery_executor = subquery_executor;
+        self
     }
 
     #[async_backtrace::framed]
@@ -193,13 +207,20 @@ impl<'a> Binder {
                 }
             }
 
+            Statement::StatementWithSettings { settings, stmt } => {
+                self.bind_statement_settings(bind_context, settings, stmt).await?
+            }
+
             Statement::Explain { query, options, kind } => {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze {partial, query } => {
+            Statement::ExplainAnalyze {partial, graphical, query } => {
+                if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref() {
+                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                }
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { partial: *partial, plan: Box::new(plan) }
+                Plan::ExplainAnalyze { partial: *partial, graphical: *graphical, plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { show_options } => {
@@ -287,7 +308,8 @@ impl<'a> Binder {
             Statement::CreateDictionary(stmt) => self.bind_create_dictionary(stmt).await?,
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
-            Statement::ShowDictionaries { show_options: _ } => todo!(),
+            Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -316,8 +338,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
+            Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
+                user: user.clone().into(),
+            })),
 
             // Roles
             Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
@@ -466,13 +491,15 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetStmt {set_type, identifiers, values } => {
+            Statement::SetStmt { settings } => {
+                let Settings { set_type, identifiers, values } = settings;
                 self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetStmt{unset_type, identifiers } => {
-                self.bind_unset(bind_context, *unset_type, identifiers)
+            Statement::UnSetStmt{settings } => {
+                let Settings { set_type, identifiers, .. } = settings;
+                self.bind_unset(bind_context, *set_type, identifiers)
                     .await?
             }
 
@@ -686,7 +713,9 @@ impl<'a> Binder {
             }
         }
 
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
+        self.ctx
+            .get_settings()
+            .set_batch_settings(&hint_settings, true)
     }
 
     // After the materialized cte was bound, add it to `m_cte_bound_ctx`

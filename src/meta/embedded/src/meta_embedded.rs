@@ -72,7 +72,7 @@ impl MetaEmbedded {
     /// Creates a kvapi::KVApi impl with a random and unique name.
     pub async fn new_temp() -> Result<MetaEmbedded, MetaStorageError> {
         let temp_dir =
-            tempfile::tempdir().map_err(|e| MetaStorageError::SledError(AnyError::new(&e)))?;
+            tempfile::tempdir().map_err(|e| MetaStorageError::Damaged(AnyError::new(&e)))?;
 
         init_temp_sled_db(temp_dir);
 

@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -37,6 +38,7 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -70,6 +72,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -124,14 +127,15 @@ pub trait SchemaApi: Send + Sync {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     async fn rename_database(
         &self,
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, KVAppError>;
 
-    /// Retrieves all databases for a specific tenant, including those marked as dropped.
+    /// Retrieves all databases for a specific tenant,
+    /// optionally including those marked as dropped.
     ///
     /// * `include_non_retainable` -
     /// If true, includes databases that are beyond the retention period.
@@ -140,7 +144,7 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListDatabaseReq,
         include_non_retainable: bool,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     // index
 
@@ -200,19 +204,26 @@ pub trait SchemaApi: Send + Sync {
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError>;
 
+    /// Get a [`TableInfo`] by `tenant, database_name, table_name`.
+    ///
+    /// This method should be deprecated,
+    /// where the database-id is already known and there is no need to re-fetch db by database-name.
+    /// In this case, use [`Self::get_table_in_db`] instead.
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
 
-    async fn get_table_meta_history(
-        &self,
-        database_name: &str,
-        table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
+    /// Get a [`TableNIV`] by `database_id, table_name`.
+    async fn get_table_in_db(&self, req: &DBIdTableName) -> Result<Option<TableNIV>, MetaError>;
 
-    async fn get_tables_history(
+    /// Retrieves the tables under the given `database-id, table-name`
+    /// that is dropped after retention boundary time, i.e., the table that can be undropped.
+    async fn get_retainable_tables(
         &self,
-        req: ListTableReq,
-        db_name: &str,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+        history_ident: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError>;
+
+    /// Get history of all tables in the specified database,
+    /// that are dropped after retention boundary time, i.e., the tables that can be undropped.
+    async fn list_retainable_tables(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
 
     /// List all tables in the database.
     ///
@@ -361,6 +372,8 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
+
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError>;
 
     /// Generic get() implementation for any kvapi::Key.
     ///

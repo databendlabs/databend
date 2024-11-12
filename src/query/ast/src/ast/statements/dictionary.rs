@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use super::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
@@ -120,6 +121,60 @@ impl Display for ShowCreateDictionaryStmt {
                 .iter()
                 .chain(&self.database)
                 .chain(Some(&self.dictionary_name)),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowDictionariesStmt {
+    pub database: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowDictionariesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW DICTIONARIES")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct RenameDictionaryStmt {
+    pub if_exists: bool,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub dictionary: Identifier,
+    pub new_catalog: Option<Identifier>,
+    pub new_database: Option<Identifier>,
+    pub new_dictionary: Identifier,
+}
+
+impl Display for RenameDictionaryStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "RENAME DICTIONARY ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.dictionary)),
+        )?;
+        write!(f, " TO ")?;
+        write_dot_separated_list(
+            f,
+            self.new_catalog
+                .iter()
+                .chain(&self.new_database)
+                .chain(Some(&self.new_dictionary)),
         )
     }
 }

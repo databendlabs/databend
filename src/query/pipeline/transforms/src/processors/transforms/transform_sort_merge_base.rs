@@ -27,7 +27,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -53,6 +52,14 @@ use super::TransformSortMergeLimit;
 
 /// The memory will be doubled during merging.
 const MERGE_RATIO: usize = 2;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
+pub struct SortSpillParams {
+    /// The number of rows of each spilled block.
+    pub batch_rows: usize,
+    /// The number of spilled blocks in each merge of the spill processor.
+    pub num_merge: usize,
+}
 
 pub trait MergeSort<R: Rows> {
     const NAME: &'static str;
@@ -102,12 +109,10 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     max_memory_usage: usize,
     spilling_bytes_threshold: usize,
     spilling_batch_bytes: usize,
-    // The following two fields will be passed to the spill processor.
-    // If these two fields are not zero, it means we need to spill.
-    /// The number of rows of each spilled block.
-    spill_batch_rows: usize,
-    /// The number of spilled blocks in each merge of the spill processor.
-    spill_num_merge: usize,
+
+    // The spill_params will be passed to the spill processor.
+    // If spill_params is Some, it means we need to spill.
+    spill_params: Option<SortSpillParams>,
 
     _r: PhantomData<R>,
 }
@@ -141,43 +146,43 @@ where
             max_memory_usage,
             spilling_bytes_threshold,
             spilling_batch_bytes,
-
-            spill_batch_rows: 0,
-            spill_num_merge: 0,
+            spill_params: None,
             may_spill,
             _r: PhantomData,
         })
     }
 
     fn prepare_spill(&mut self) -> Result<Vec<DataBlock>> {
-        let mut spill_meta = Box::new(SortSpillMeta {}) as Box<dyn BlockMetaInfo>;
-        if self.spill_batch_rows == 0 {
-            debug_assert_eq!(self.spill_num_merge, 0);
+        let mut spill_params = if self.spill_params.is_none() {
             // We use the first memory calculation to estimate the batch size and the number of merge.
-            self.spill_num_merge = self
+            let num_merge = self
                 .inner
                 .num_bytes()
                 .div_ceil(self.spilling_batch_bytes)
                 .max(2);
-            self.spill_batch_rows = self.inner.num_rows().div_ceil(self.spill_num_merge);
+            let batch_rows = self.inner.num_rows().div_ceil(num_merge);
             // The first block to spill will contain the parameters of spilling.
             // Later blocks just contain a empty struct `SortSpillMeta` to save memory.
-            spill_meta = Box::new(SortSpillMetaWithParams {
-                batch_rows: self.spill_batch_rows,
-                num_merge: self.spill_num_merge,
-            }) as Box<dyn BlockMetaInfo>;
+            let params = SortSpillParams {
+                batch_rows,
+                num_merge,
+            };
+            self.spill_params = Some(params);
+            Some(params)
         } else {
-            debug_assert!(self.spill_num_merge > 0);
-        }
+            None
+        };
 
-        let mut blocks = self.inner.prepare_spill(self.spill_batch_rows)?;
+        let mut blocks = self
+            .inner
+            .prepare_spill(self.spill_params.unwrap().batch_rows)?;
 
         // Fill the spill meta.
-        if let Some(b) = blocks.first_mut() {
-            b.replace_meta(spill_meta);
-        }
-        for b in blocks.iter_mut().skip(1) {
-            b.replace_meta(Box::new(SortSpillMeta {}));
+        for b in blocks.iter_mut() {
+            b.replace_meta(match spill_params.take() {
+                Some(params) => Box::new(SortSpillMetaWithParams(params)),
+                None => Box::new(SortSpillMeta {}),
+            });
         }
 
         debug_assert_eq!(self.inner.num_bytes(), 0);
@@ -242,7 +247,7 @@ where
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         // If the processor has started to spill blocks,
         // gather the final few data in one block.
-        self.inner.on_finish(self.spill_num_merge > 0)
+        self.inner.on_finish(self.spill_params.is_some())
     }
 }
 

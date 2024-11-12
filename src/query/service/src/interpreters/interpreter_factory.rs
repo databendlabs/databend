@@ -72,6 +72,7 @@ use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
@@ -124,12 +125,14 @@ impl InterpreterFactory {
                 kind.clone(),
                 config.clone(),
                 false,
+                false,
             )?)),
             Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Ast(formatted_string.clone()),
                 ExplainConfig::default(),
+                false,
                 false,
             )?)),
             Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
@@ -138,13 +141,19 @@ impl InterpreterFactory {
                 ExplainKind::Syntax(formatted_sql.clone()),
                 ExplainConfig::default(),
                 false,
+                false,
             )?)),
-            Plan::ExplainAnalyze { partial, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+            Plan::ExplainAnalyze {
+                graphical,
+                partial,
+                plan,
+            } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
                 ExplainConfig::default(),
                 *partial,
+                *graphical,
             )?)),
 
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
@@ -363,6 +372,10 @@ impl InterpreterFactory {
             Plan::AlterUser(alter_user) => Ok(Arc::new(AlterUserInterpreter::try_create(
                 ctx,
                 *alter_user.clone(),
+            )?)),
+            Plan::DescUser(desc_user) => Ok(Arc::new(DescUserInterpreter::try_create(
+                ctx,
+                *desc_user.clone(),
             )?)),
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
@@ -594,6 +607,9 @@ impl InterpreterFactory {
                 ctx,
                 *drop_dict.clone(),
             )?)),
+            Plan::RenameDictionary(rename_dictionary) => Ok(Arc::new(
+                RenameDictionaryInterpreter::try_create(ctx, *rename_dictionary.clone())?,
+            )),
             Plan::CreateProcedure(p) => Ok(Arc::new(CreateProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),

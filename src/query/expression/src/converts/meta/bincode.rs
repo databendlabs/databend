@@ -60,15 +60,21 @@ pub enum LegacyColumn {
     Number(NumberColumn),
     Decimal(DecimalColumn),
     Boolean(Bitmap),
-    String(BinaryColumn),
+    String(LegacyBinaryColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<LegacyArrayColumn>),
     Map(Box<LegacyArrayColumn>),
-    Bitmap(BinaryColumn),
+    Bitmap(LegacyBinaryColumn),
     Nullable(Box<LegacyNullableColumn>),
     Tuple(Vec<LegacyColumn>),
-    Variant(BinaryColumn),
+    Variant(LegacyBinaryColumn),
+}
+
+#[derive(Clone)]
+pub struct LegacyBinaryColumn {
+    pub(crate) data: Buffer<u8>,
+    pub(crate) offsets: Buffer<u64>,
 }
 
 #[derive(Clone)]
@@ -104,6 +110,24 @@ impl From<LegacyScalar> for Scalar {
     }
 }
 
+impl From<LegacyBinaryColumn> for BinaryColumn {
+    fn from(value: LegacyBinaryColumn) -> Self {
+        BinaryColumn {
+            data: value.data,
+            offsets: value.offsets,
+        }
+    }
+}
+
+impl From<BinaryColumn> for LegacyBinaryColumn {
+    fn from(value: BinaryColumn) -> Self {
+        LegacyBinaryColumn {
+            data: value.data,
+            offsets: value.offsets,
+        }
+    }
+}
+
 impl From<LegacyColumn> for Column {
     fn from(value: LegacyColumn) -> Self {
         match value {
@@ -113,7 +137,9 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::Number(num_col) => Column::Number(num_col),
             LegacyColumn::Decimal(dec_col) => Column::Decimal(dec_col),
             LegacyColumn::Boolean(bmp) => Column::Boolean(bmp),
-            LegacyColumn::String(str_col) => Column::String(str_col.try_into().unwrap()),
+            LegacyColumn::String(str_col) => {
+                Column::String(StringColumn::try_from_binary(BinaryColumn::from(str_col)).unwrap())
+            }
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),
             LegacyColumn::Array(arr_col) => Column::Array(Box::new(ArrayColumn::<AnyType> {
@@ -124,7 +150,7 @@ impl From<LegacyColumn> for Column {
                 values: map_col.values.into(),
                 offsets: map_col.offsets,
             })),
-            LegacyColumn::Bitmap(str_col) => Column::Bitmap(str_col),
+            LegacyColumn::Bitmap(str_col) => Column::Bitmap(BinaryColumn::from(str_col)),
             LegacyColumn::Nullable(nullable_col) => {
                 Column::Nullable(Box::new(NullableColumn::<AnyType> {
                     column: nullable_col.column.into(),
@@ -134,7 +160,7 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::Tuple(tuple) => {
                 Column::Tuple(tuple.into_iter().map(|c| c.into()).collect())
             }
-            LegacyColumn::Variant(variant) => Column::Variant(variant),
+            LegacyColumn::Variant(variant) => Column::Variant(BinaryColumn::from(variant)),
         }
     }
 }
@@ -171,7 +197,9 @@ impl From<Column> for LegacyColumn {
             Column::Decimal(dec_col) => LegacyColumn::Decimal(dec_col),
             Column::Boolean(bmp) => LegacyColumn::Boolean(bmp),
             Column::Binary(_) | Column::Geometry(_) | Column::Geography(_) => unreachable!(),
-            Column::String(str_col) => LegacyColumn::String(str_col.into()),
+            Column::String(str_col) => {
+                LegacyColumn::String(LegacyBinaryColumn::from(BinaryColumn::from(str_col)))
+            }
             Column::Timestamp(buf) => LegacyColumn::Timestamp(buf),
             Column::Date(buf) => LegacyColumn::Date(buf),
             Column::Array(arr_col) => LegacyColumn::Array(Box::new(LegacyArrayColumn {
@@ -182,7 +210,7 @@ impl From<Column> for LegacyColumn {
                 values: map_col.values.into(),
                 offsets: map_col.offsets,
             })),
-            Column::Bitmap(str_col) => LegacyColumn::Bitmap(str_col),
+            Column::Bitmap(str_col) => LegacyColumn::Bitmap(LegacyBinaryColumn::from(str_col)),
             Column::Nullable(nullable_col) => {
                 LegacyColumn::Nullable(Box::new(LegacyNullableColumn {
                     column: nullable_col.column.into(),
@@ -192,7 +220,7 @@ impl From<Column> for LegacyColumn {
             Column::Tuple(tuple) => {
                 LegacyColumn::Tuple(tuple.into_iter().map(|c| c.into()).collect())
             }
-            Column::Variant(variant) => LegacyColumn::Variant(variant),
+            Column::Variant(variant) => LegacyColumn::Variant(LegacyBinaryColumn::from(variant)),
         }
     }
 }

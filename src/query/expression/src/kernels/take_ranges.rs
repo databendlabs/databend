@@ -13,17 +13,16 @@
 // limitations under the License.
 
 use core::ops::Range;
-use std::sync::Arc;
 
+use binary::BinaryColumnBuilder;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::Result;
 
-use crate::copy_continuous_bits;
-use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -36,6 +35,7 @@ use crate::Value;
 
 impl DataBlock {
     // Generate a new `DataBlock` by the specified indices ranges.
+    // ranges already cover most data
     pub fn take_ranges(self, ranges: &[Range<u32>], num_rows: usize) -> Result<DataBlock> {
         debug_assert_eq!(
             ranges
@@ -159,60 +159,29 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
     }
 
     fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
-        let capacity = self.num_rows.saturating_add(7) / 8;
-        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_ptr = builder.as_mut_ptr();
-        let mut builder_idx = 0;
-        let mut unset_bits = 0;
-        let mut buf = 0;
-
-        let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
-        unsafe {
-            for range in self.ranges {
-                let mut start = range.start as usize;
-                let end = range.end as usize;
-                if builder_idx % 8 != 0 {
-                    while start < end {
-                        if bitmap.get_bit_unchecked(start) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        builder_idx += 1;
-                        start += 1;
-                        if builder_idx % 8 == 0 {
-                            store_advance_aligned(buf, &mut builder_ptr);
-                            buf = 0;
-                            break;
-                        }
-                    }
-                }
-                let remaining = end - start;
-                if remaining > 0 {
-                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
-                        &mut builder_ptr,
-                        bitmap_slice,
-                        builder_idx,
-                        start + bitmap_offset,
-                        remaining,
-                    );
-                    builder_idx += remaining;
-                    unset_bits += cur_unset_bits;
-                    buf = cur_buf;
-                }
-            }
-
-            if builder_idx % 8 != 0 {
-                store_advance_aligned(buf, &mut builder_ptr);
-            }
-
-            set_vec_len_by_ptr(&mut builder, builder_ptr);
-            let bitmap = Bitmap::from_inner(Arc::new(builder.into()), 0, self.num_rows, unset_bits)
-                .ok()
-                .unwrap();
-            self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
-            Ok(())
+        // Fast path: avoid iterating column to generate a new bitmap.
+        // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
+        // we can just slice it.
+        if self.num_rows <= bitmap.len()
+            && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+        {
+            self.result = Some(Value::Column(BooleanType::upcast_column(
+                bitmap.sliced(0, self.num_rows),
+            )));
+            return Ok(());
         }
+
+        let mut builder = MutableBitmap::with_capacity(self.num_rows);
+        let src = bitmap.values();
+        let offset = bitmap.offset();
+        self.ranges.iter().for_each(|range| {
+            let start = range.start as usize;
+            let end = range.end as usize;
+            builder.append_packed_range(start + offset..end + offset, src)
+        });
+
+        self.result = Some(Value::Column(BooleanType::upcast_column(builder.into())));
+        Ok(())
     }
 
     fn visit_binary(&mut self, col: BinaryColumn) -> Result<()> {
@@ -223,10 +192,9 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
     }
 
     fn visit_string(&mut self, column: StringColumn) -> Result<()> {
-        let column: BinaryColumn = column.into();
-        self.result = Some(Value::Column(StringType::upcast_column(unsafe {
-            StringColumn::from_binary_unchecked(self.take_binary_types(&column))
-        })));
+        self.result = Some(Value::Column(StringType::upcast_column(
+            self.take_string_types(&column),
+        )));
         Ok(())
     }
 
@@ -243,42 +211,37 @@ impl<'a> TakeRangeVisitor<'a> {
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
         let values = buffer.as_slice();
         for range in self.ranges {
-            builder.extend(&values[range.start as usize..range.end as usize]);
+            unsafe {
+                builder
+                    .extend_from_slice_unchecked(&values[range.start as usize..range.end as usize])
+            };
         }
         builder.into()
     }
 
     fn take_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        let mut offsets: Vec<u64> = Vec::with_capacity(self.num_rows + 1);
-        let mut data_size = 0;
-
-        let value_data = values.data().as_slice();
-        let values_offset = values.offsets().as_slice();
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        offsets.push(0);
+        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
         for range in self.ranges {
-            let mut offset_start = values_offset[range.start as usize];
-            for offset_end in values_offset[range.start as usize + 1..range.end as usize + 1].iter()
-            {
-                data_size += offset_end - offset_start;
-                offset_start = *offset_end;
-                offsets.push(data_size);
+            for index in range.start as usize..range.end as usize {
+                let value = unsafe { values.index_unchecked(index) };
+                builder.put_slice(value);
+                builder.commit_row();
             }
         }
+        builder.build()
+    }
 
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-
-        unsafe {
-            for range in self.ranges {
-                let col_data = &value_data[values_offset[range.start as usize] as usize
-                    ..values_offset[range.end as usize] as usize];
-                copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
-            }
-            set_vec_len_by_ptr(&mut data, data_ptr);
-        }
-
-        BinaryColumn::new(data.into(), offsets.into())
+    fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
+        let new_views = self.take_primitive_types(col.data.views().clone());
+        let new_col = unsafe {
+            Utf8ViewArray::new_unchecked_unknown_md(
+                col.data.data_type().clone(),
+                new_views,
+                col.data.data_buffers().clone(),
+                None,
+                Some(col.data.total_buffer_len()),
+            )
+        };
+        StringColumn::new(new_col)
     }
 }

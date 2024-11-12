@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 
 use databend_common_meta_raft_store::ondisk::DataVersion;
-use databend_common_meta_types::LogId;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
 
 #[derive(serde::Serialize)]
 pub struct MetaNodeStatus {

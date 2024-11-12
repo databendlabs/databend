@@ -212,6 +212,12 @@ pub enum Expr {
         interval: Box<Expr>,
         date: Box<Expr>,
     },
+    DateDiff {
+        span: Span,
+        unit: IntervalKind,
+        date_start: Box<Expr>,
+        date_end: Box<Expr>,
+    },
     DateSub {
         span: Span,
         unit: IntervalKind,
@@ -221,6 +227,21 @@ pub enum Expr {
     DateTrunc {
         span: Span,
         unit: IntervalKind,
+        date: Box<Expr>,
+    },
+    LastDay {
+        span: Span,
+        unit: IntervalKind,
+        date: Box<Expr>,
+    },
+    PreviousDay {
+        span: Span,
+        unit: Weekday,
+        date: Box<Expr>,
+    },
+    NextDay {
+        span: Span,
+        unit: Weekday,
         date: Box<Expr>,
     },
     Hole {
@@ -260,8 +281,12 @@ impl Expr {
             | Expr::Map { span, .. }
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
+            | Expr::DateDiff { span, .. }
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. }
+            | Expr::LastDay { span, .. }
+            | Expr::PreviousDay { span, .. }
+            | Expr::NextDay { span, .. }
             | Expr::Hole { span, .. } => *span,
         }
     }
@@ -388,6 +413,15 @@ impl Expr {
                 date,
                 ..
             } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
+            Expr::DateDiff {
+                span,
+                date_start,
+                date_end,
+                ..
+            } => merge_span(
+                merge_span(*span, date_start.whole_span()),
+                date_end.whole_span(),
+            ),
             Expr::DateSub {
                 span,
                 interval,
@@ -395,6 +429,9 @@ impl Expr {
                 ..
             } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
             Expr::DateTrunc { span, date, .. } => merge_span(*span, date.whole_span()),
+            Expr::LastDay { span, date, .. } => merge_span(*span, date.whole_span()),
+            Expr::PreviousDay { span, date, .. } => merge_span(*span, date.whole_span()),
+            Expr::NextDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::Hole { span, .. } => *span,
         }
     }
@@ -409,6 +446,7 @@ impl Expr {
             "SUBSTRING",
             "TRIM",
             "DATE_ADD",
+            "DATE_DIFF",
             "DATE_SUB",
             "DATE_TRUNC",
         ]
@@ -698,6 +736,14 @@ impl Display for Expr {
                 } => {
                     write!(f, "DATE_ADD({unit}, {interval}, {date})")?;
                 }
+                Expr::DateDiff {
+                    unit,
+                    date_start,
+                    date_end,
+                    ..
+                } => {
+                    write!(f, "DATE_DIFF({unit}, {date_start}, {date_end})")?;
+                }
                 Expr::DateSub {
                     unit,
                     interval,
@@ -708,6 +754,15 @@ impl Display for Expr {
                 }
                 Expr::DateTrunc { unit, date, .. } => {
                     write!(f, "DATE_TRUNC({unit}, {date})")?;
+                }
+                Expr::LastDay { unit, date, .. } => {
+                    write!(f, "LAST_DAY({date}, {unit})")?;
+                }
+                Expr::PreviousDay { unit, date, .. } => {
+                    write!(f, "PREVIOUS_DAY({date}, {unit})")?;
+                }
+                Expr::NextDay { unit, date, .. } => {
+                    write!(f, "NEXT_DAY({date}, {unit})")?;
                 }
                 Expr::Hole { name, .. } => {
                     write!(f, ":{name}")?;
@@ -722,6 +777,31 @@ impl Display for Expr {
         }
 
         write_expr(self, None, true, f)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum Weekday {
+    Sunday,
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+}
+
+impl Display for Weekday {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            Weekday::Sunday => "SUNDAY",
+            Weekday::Monday => "MONDAY",
+            Weekday::Tuesday => "TUESDAY",
+            Weekday::Wednesday => "WEDNESDAY",
+            Weekday::Thursday => "THURSDAY",
+            Weekday::Friday => "FRIDAY",
+            Weekday::Saturday => "SATURDAY",
+        })
     }
 }
 

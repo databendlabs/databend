@@ -65,6 +65,16 @@ impl<'a> Tokenizer<'a> {
             prev_token: None,
         }
     }
+
+    pub fn contains_token(query: &str, target_kind: TokenKind) -> bool {
+        let mut tokenizer = Tokenizer::new(query);
+        while let Some(Ok(token)) = tokenizer.next() {
+            if token.kind == target_kind {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
@@ -145,6 +155,9 @@ pub enum TokenKind {
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
+
+    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    IdentVariable,
 
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
@@ -478,6 +491,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_DIFF", ignore(ascii_case))]
+    DATE_DIFF,
     #[token("DATE_PART", ignore(ascii_case))]
     DATE_PART,
     #[token("DATE_SUB", ignore(ascii_case))]
@@ -622,6 +637,8 @@ pub enum TokenKind {
     FORMATS,
     #[token("FRAGMENTS", ignore(ascii_case))]
     FRAGMENTS,
+    #[token("FRIDAY", ignore(ascii_case))]
+    FRIDAY,
     #[token("FROM", ignore(ascii_case))]
     FROM,
     #[token("FULL", ignore(ascii_case))]
@@ -678,6 +695,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
+    INCLUDE_QUERY_ID,
     #[token("INCREMENTAL", ignore(ascii_case))]
     INCREMENTAL,
     #[token("INDEX", ignore(ascii_case))]
@@ -708,6 +727,8 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("PREVIOUS_DAY", ignore(ascii_case))]
+    PREVIOUS_DAY,
     #[token("PROCEDURE", ignore(ascii_case))]
     PROCEDURE,
     #[token("PROCEDURES", ignore(ascii_case))]
@@ -732,6 +753,8 @@ pub enum TokenKind {
     KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LAST_DAY", ignore(ascii_case))]
+    LAST_DAY,
     #[token("LATERAL", ignore(ascii_case))]
     LATERAL,
     #[token("LINEAR", ignore(ascii_case))]
@@ -799,6 +822,8 @@ pub enum TokenKind {
     MATERIALIZED,
     #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
     MUST_CHANGE_PASSWORD,
+    #[token("NEXT_DAY", ignore(ascii_case))]
+    NEXT_DAY,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
@@ -997,6 +1022,10 @@ pub enum TokenKind {
     RAW,
     #[token("OPTIMIZED", ignore(ascii_case))]
     OPTIMIZED,
+    #[token("DECORRELATED", ignore(ascii_case))]
+    DECORRELATED,
+    #[token("SATURDAY", ignore(ascii_case))]
+    SATURDAY,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]
@@ -1043,6 +1072,8 @@ pub enum TokenKind {
     SIZE_LIMIT,
     #[token("MAX_FILES", ignore(ascii_case))]
     MAX_FILES,
+    #[token("MONDAY", ignore(ascii_case))]
+    MONDAY,
     #[token("SKIP_HEADER", ignore(ascii_case))]
     SKIP_HEADER,
     #[token("SMALLINT", ignore(ascii_case))]
@@ -1059,6 +1090,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("USE_RAW_PATH", ignore(ascii_case))]
+    USE_RAW_PATH,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
@@ -1117,6 +1150,8 @@ pub enum TokenKind {
     TENANT,
     #[token("THEN", ignore(ascii_case))]
     THEN,
+    #[token("THURSDAY", ignore(ascii_case))]
+    THURSDAY,
     #[token("TIMESTAMP", ignore(ascii_case))]
     TIMESTAMP,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
@@ -1145,6 +1180,8 @@ pub enum TokenKind {
     TRY_CAST,
     #[token("TSV", ignore(ascii_case))]
     TSV,
+    #[token("TUESDAY", ignore(ascii_case))]
+    TUESDAY,
     #[token("TUPLE", ignore(ascii_case))]
     TUPLE,
     #[token("TYPE", ignore(ascii_case))]
@@ -1195,6 +1232,8 @@ pub enum TokenKind {
     VARIABLE,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
+    #[token("GRAPHICAL", ignore(ascii_case))]
+    GRAPHICAL,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
     #[token("VIEWS", ignore(ascii_case))]
@@ -1291,6 +1330,8 @@ pub enum TokenKind {
     ENABLED,
     #[token("WEBHOOK", ignore(ascii_case))]
     WEBHOOK,
+    #[token("WEDNESDAY", ignore(ascii_case))]
+    WEDNESDAY,
     #[token("ERROR_INTEGRATION", ignore(ascii_case))]
     ERROR_INTEGRATION,
     #[token("AUTO_INGEST", ignore(ascii_case))]
@@ -1331,6 +1372,8 @@ pub enum TokenKind {
     SOURCE,
     #[token("SQL", ignore(ascii_case))]
     SQL,
+    #[token("SUNDAY", ignore(ascii_case))]
+    SUNDAY,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1567,8 +1610,12 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATE_ADD
+            | TokenKind::DATE_DIFF
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
+            | TokenKind::LAST_DAY
+            | TokenKind::PREVIOUS_DAY
+            | TokenKind::NEXT_DAY
             | TokenKind::IGNORE_RESULT
         )
     }
@@ -1651,7 +1698,6 @@ impl TokenKind {
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
-            | TokenKind::TRANSACTION
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
             //| TokenKind::USER

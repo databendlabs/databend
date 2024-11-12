@@ -30,7 +30,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
-use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
@@ -217,9 +217,9 @@ pub struct NativeDeserializeDataTransform {
     filter_executor: Option<FilterExecutor>,
 
     // Structures for virtual columns:
-    virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    virtual_column_fields: Option<Vec<VirtualColumnField>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-    prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    prewhere_virtual_column_fields: Option<Vec<VirtualColumnField>>,
 
     // Structures for the bloom runtime filter:
     ctx: Arc<dyn TableContext>,
@@ -285,33 +285,50 @@ impl NativeDeserializeDataTransform {
         });
 
         // add virtual columns to src_schema
-        let (virtual_columns, prewhere_virtual_columns) = match &plan.push_downs {
+        let (virtual_column_fields, prewhere_virtual_column_fields) = match &plan.push_downs {
             Some(push_downs) => {
-                if let Some(virtual_columns) = &push_downs.virtual_columns {
+                if let Some(virtual_column) = &push_downs.virtual_column {
                     let mut fields = src_schema.fields().clone();
-                    for virtual_column in virtual_columns {
+                    for virtual_column_field in &virtual_column.virtual_column_fields {
                         let field = DataField::new(
-                            &virtual_column.name,
-                            DataType::from(&*virtual_column.data_type),
+                            &virtual_column_field.name,
+                            DataType::from(&*virtual_column_field.data_type),
                         );
                         fields.push(field);
                     }
                     src_schema = DataSchema::new(fields);
-                }
-                if let Some(prewhere) = &push_downs.prewhere {
-                    if let Some(virtual_columns) = &prewhere.virtual_columns {
-                        for virtual_column in virtual_columns {
-                            prewhere_columns
-                                .push(src_schema.index_of(&virtual_column.name).unwrap());
+
+                    let mut prewhere_virtual_column_fields = Vec::new();
+                    if let Some(prewhere) = &push_downs.prewhere {
+                        if let Some(prewhere_virtual_column_ids) = &prewhere.virtual_column_ids {
+                            for virtual_column_id in prewhere_virtual_column_ids {
+                                // add prewhere virtual column fields.
+                                for virtual_column_field in &virtual_column.virtual_column_fields {
+                                    if virtual_column_field.column_id == *virtual_column_id {
+                                        prewhere_columns.push(
+                                            src_schema
+                                                .index_of(&virtual_column_field.name)
+                                                .unwrap(),
+                                        );
+                                        prewhere_virtual_column_fields
+                                            .push(virtual_column_field.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                            prewhere_columns.sort();
                         }
-                        prewhere_columns.sort();
                     }
-                    (
-                        push_downs.virtual_columns.clone(),
-                        prewhere.virtual_columns.clone(),
-                    )
+                    if !prewhere_virtual_column_fields.is_empty() {
+                        (
+                            Some(virtual_column.virtual_column_fields.clone()),
+                            Some(prewhere_virtual_column_fields),
+                        )
+                    } else {
+                        (Some(virtual_column.virtual_column_fields.clone()), None)
+                    }
                 } else {
-                    (push_downs.virtual_columns.clone(), None)
+                    (None, None)
                 }
             }
             None => (None, None),
@@ -361,9 +378,9 @@ impl NativeDeserializeDataTransform {
                 remain_columns,
                 src_schema,
                 output_schema,
-                virtual_columns,
+                virtual_column_fields,
                 prewhere_filter,
-                prewhere_virtual_columns,
+                prewhere_virtual_column_fields,
                 filter_executor,
                 skipped_pages: 0,
                 top_k,
@@ -410,12 +427,15 @@ impl NativeDeserializeDataTransform {
         &self,
         chunks: &[(usize, Box<dyn Array>)],
         schema: &DataSchema,
-        virtual_columns: &Option<Vec<VirtualColumnInfo>>,
+        virtual_column_fields: &Option<Vec<VirtualColumnField>>,
         block: &mut DataBlock,
     ) -> Result<()> {
-        if let Some(virtual_columns) = virtual_columns {
-            for virtual_column in virtual_columns {
-                let src_index = self.src_schema.index_of(&virtual_column.name).unwrap();
+        if let Some(virtual_column_fields) = virtual_column_fields {
+            for virtual_column_field in virtual_column_fields {
+                let src_index = self
+                    .src_schema
+                    .index_of(&virtual_column_field.name)
+                    .unwrap();
                 if let Some(array) = chunks
                     .iter()
                     .find(|c| c.0 == src_index)
@@ -438,11 +458,11 @@ impl NativeDeserializeDataTransform {
                     }
                     continue;
                 }
-                let index = schema.index_of(&virtual_column.source_name).unwrap();
+                let index = schema.index_of(&virtual_column_field.source_name).unwrap();
                 let source = block.get_by_offset(index);
                 let src_arg = (source.value.clone(), source.data_type.clone());
                 let path_arg = (
-                    Value::Scalar(virtual_column.key_paths.clone()),
+                    Value::Scalar(virtual_column_field.key_paths.clone()),
                     DataType::String,
                 );
 
@@ -483,11 +503,13 @@ impl NativeDeserializeDataTransform {
                 .iter()
                 .all(|index| !self.read_state.array_iters.contains_key(index));
 
-            let all_virtual_defaults = match &self.prewhere_virtual_columns {
-                Some(ref prewhere_virtual_columns) => prewhere_virtual_columns.iter().all(|c| {
-                    let src_index = self.src_schema.index_of(&c.source_name).unwrap();
-                    !self.read_state.array_iters.contains_key(&src_index)
-                }),
+            let all_virtual_defaults = match &self.prewhere_virtual_column_fields {
+                Some(ref prewhere_virtual_column_fields) => {
+                    prewhere_virtual_column_fields.iter().all(|c| {
+                        let src_index = self.src_schema.index_of(&c.source_name).unwrap();
+                        !self.read_state.array_iters.contains_key(&src_index)
+                    })
+                }
                 None => true,
             };
 
@@ -502,11 +524,13 @@ impl NativeDeserializeDataTransform {
                     })
                     .collect::<Vec<_>>();
 
-                if let Some(ref prewhere_virtual_columns) = &self.prewhere_virtual_columns {
-                    for virtual_column in prewhere_virtual_columns {
+                if let Some(ref prewhere_virtual_column_fields) =
+                    &self.prewhere_virtual_column_fields
+                {
+                    for virtual_column_field in prewhere_virtual_column_fields {
                         // if the source column is default value, the virtual column is always Null.
                         let column = BlockEntry::new(
-                            DataType::from(&*virtual_column.data_type),
+                            DataType::from(&*virtual_column_field.data_type),
                             Value::Scalar(Scalar::Null),
                         );
                         columns.push(column);
@@ -556,11 +580,11 @@ impl NativeDeserializeDataTransform {
         let mut data_block = self
             .block_reader
             .build_default_values_block(fuse_part.nums_rows)?;
-        if let Some(virtual_columns) = &self.virtual_columns {
-            for virtual_column in virtual_columns {
+        if let Some(virtual_column_fields) = &self.virtual_column_fields {
+            for virtual_column_field in virtual_column_fields {
                 // if the source column is default value, the virtual column is always Null.
                 let column = BlockEntry::new(
-                    DataType::from(&*virtual_column.data_type),
+                    DataType::from(&*virtual_column_field.data_type),
                     Value::Scalar(Scalar::Null),
                 );
                 data_block.add_column(column);
@@ -611,8 +635,11 @@ impl NativeDeserializeDataTransform {
 
             // Add optional virtual columns' array_iters.
             if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                for (index, virtual_column_info) in
-                    virtual_reader.virtual_column_infos.iter().enumerate()
+                for (index, virtual_column_info) in virtual_reader
+                    .virtual_column_info
+                    .virtual_column_fields
+                    .iter()
+                    .enumerate()
                 {
                     let virtual_index = index + self.block_reader.project_column_nodes.len();
                     if let Some(readers) = chunks.remove(&virtual_index) {
@@ -704,7 +731,7 @@ impl NativeDeserializeDataTransform {
             self.add_virtual_columns(
                 &self.read_state.arrays,
                 &self.src_schema,
-                &self.virtual_columns,
+                &self.virtual_column_fields,
                 &mut block,
             )?;
 
@@ -778,7 +805,7 @@ impl NativeDeserializeDataTransform {
             self.add_virtual_columns(
                 &self.read_state.arrays,
                 &self.prewhere_schema,
-                &self.prewhere_virtual_columns,
+                &self.prewhere_virtual_column_fields,
                 &mut prewhere_block,
             )?;
 

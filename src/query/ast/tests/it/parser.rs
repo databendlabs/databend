@@ -129,11 +129,6 @@ fn test_statement() {
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
-        r#"
-            create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-                connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-                location_prefix = 'db';
-        "#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
@@ -200,6 +195,8 @@ fn test_statement() {
         r#"select * from a semi join b on a.a = b.a;"#,
         r#"select * from a left anti join b on a.a = b.a;"#,
         r#"select * from a anti join b on a.a = b.a;"#,
+        r#"SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;"#,
+        r#"SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;"#,
         r#"select * from a right semi join b on a.a = b.a;"#,
         r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
@@ -224,10 +221,11 @@ fn test_statement() {
         r#"select * from t sample row (99);"#,
         r#"select * from t sample block (99);"#,
         r#"select * from t sample row (10 rows);"#,
-        r#"select * from t sample block (10 rows);"#,
         r#"select * from numbers(1000) sample row (99);"#,
         r#"select * from numbers(1000) sample block (99);"#,
         r#"select * from numbers(1000) sample row (10 rows);"#,
+        r#"select * from numbers(1000) sample block (99) row (10 rows);"#,
+        r#"select * from numbers(1000) sample block (99) row (10);"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
@@ -788,7 +786,7 @@ fn test_statement() {
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"
-            EXECUTE IMMEDIATE 
+            EXECUTE IMMEDIATE
             $$
             BEGIN
                 LOOP
@@ -1091,7 +1089,11 @@ fn test_query() {
         r#"SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo"#,
         r#"SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from monthly_sales pivot(sum(amount) for month in (select distinct month from monthly_sales)) order by empid"#,
+        r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ((select distinct month from monthly_sales))) order by empid"#,
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
+        r#"select * from (select * from monthly_sales_1) unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
         r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
@@ -1220,6 +1222,9 @@ fn test_expr() {
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
         r#"(current_timestamp, current_timestamp(), now())"#,
         r#"ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)"#,
+        r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
+        r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
+        r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
     ];
 
     for case in cases {
@@ -1239,6 +1244,7 @@ fn test_expr_error() {
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"a.add(b)"#,
+        r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
         r#"
             G.E.B IS NOT NULL

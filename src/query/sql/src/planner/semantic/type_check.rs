@@ -38,6 +38,7 @@ use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::Weekday as ASTWeekday;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
@@ -1032,14 +1033,21 @@ impl<'a> TypeChecker<'a> {
                 interval,
                 date,
                 ..
-            } => self.resolve_date_add(*span, unit, interval, date)?,
+            } => self.resolve_date_arith(*span, unit, interval, date, false)?,
+            Expr::DateDiff {
+                span,
+                unit,
+                date_start,
+                date_end,
+                ..
+            } => self.resolve_date_arith(*span, unit, date_start, date_end, true)?,
             Expr::DateSub {
                 span,
                 unit,
                 interval,
                 date,
                 ..
-            } => self.resolve_date_add(
+            } => self.resolve_date_arith(
                 *span,
                 unit,
                 &Expr::UnaryOp {
@@ -1048,10 +1056,20 @@ impl<'a> TypeChecker<'a> {
                     expr: interval.clone(),
                 },
                 date,
+                false,
             )?,
             Expr::DateTrunc {
                 span, unit, date, ..
             } => self.resolve_date_trunc(*span, date, unit)?,
+            Expr::LastDay {
+                span, unit, date, ..
+            } => self.resolve_last_day(*span, date, unit)?,
+            Expr::PreviousDay {
+                span, unit, date, ..
+            } => self.resolve_previous_or_next_day(*span, date, unit, true)?,
+            Expr::NextDay {
+                span, unit, date, ..
+            } => self.resolve_previous_or_next_day(*span, date, unit, false)?,
             Expr::Trim {
                 span,
                 expr,
@@ -1157,13 +1175,8 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_window_function = false;
 
-        let frame = self.resolve_window_frame(
-            span,
-            &func,
-            &partitions,
-            &mut order_by,
-            spec.window_frame.clone(),
-        )?;
+        let frame =
+            self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
             span,
@@ -1311,7 +1324,6 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func: &WindowFuncType,
-        partition_by: &[ScalarExpr],
         order_by: &mut [WindowOrderBy],
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
@@ -1346,18 +1358,10 @@ impl<'a> TypeChecker<'a> {
                 });
             }
             WindowFuncType::Ntile(_) => {
-                return Ok(if partition_by.is_empty() {
-                    WindowFuncFrame {
-                        units: WindowFuncFrameUnits::Rows,
-                        start_bound: WindowFuncFrameBound::Preceding(None),
-                        end_bound: WindowFuncFrameBound::Following(None),
-                    }
-                } else {
-                    WindowFuncFrame {
-                        units: WindowFuncFrameUnits::Rows,
-                        start_bound: WindowFuncFrameBound::CurrentRow,
-                        end_bound: WindowFuncFrameBound::CurrentRow,
-                    }
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
             WindowFuncType::CumeDist => {
@@ -1805,6 +1809,7 @@ impl<'a> TypeChecker<'a> {
             DataType::Null => DataType::Null,
             DataType::Binary => DataType::Binary,
             DataType::String => DataType::String,
+            DataType::Variant => DataType::Variant,
             _ => {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "array_reduce does not support type '{:?}'",
@@ -1827,6 +1832,43 @@ impl<'a> TypeChecker<'a> {
         args: &[&Expr],
         lambda: &Lambda,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if func_name.starts_with("json_") && !args.is_empty() {
+            let target_type = if func_name.starts_with("json_array") {
+                TypeName::Array(Box::new(TypeName::Variant))
+            } else {
+                TypeName::Map {
+                    key_type: Box::new(TypeName::String),
+                    val_type: Box::new(TypeName::Variant),
+                }
+            };
+            let func_name = &func_name[5..];
+            let mut new_args: Vec<Expr> = args.iter().map(|v| (*v).to_owned()).collect();
+            new_args[0] = Expr::Cast {
+                span: new_args[0].span(),
+                expr: Box::new(new_args[0].clone()),
+                target_type,
+                pg_style: false,
+            };
+
+            let args: Vec<&Expr> = new_args.iter().collect();
+            let result = self.resolve_lambda_function(span, func_name, &args, lambda)?;
+
+            let target_type = if result.1.is_nullable() {
+                DataType::Variant.wrap_nullable()
+            } else {
+                DataType::Variant
+            };
+
+            let result_expr = ScalarExpr::CastExpr(CastExpr {
+                span: new_args[0].span(),
+                is_try: false,
+                argument: Box::new(result.0.clone()),
+                target_type: Box::new(target_type.clone()),
+            });
+
+            return Ok(Box::new((result_expr, target_type)));
+        }
+
         if matches!(
             self.bind_context.expr_context,
             ExprContext::InLambdaFunction
@@ -1842,21 +1884,7 @@ impl<'a> TypeChecker<'a> {
             .map(|param| param.name.to_lowercase())
             .collect::<Vec<_>>();
 
-        // TODO: support multiple params
-        // ARRAY_REDUCE have two params
-        if params.len() != 1 && func_name != "array_reduce" {
-            return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
-                func_name, params.len()
-            ))
-                .set_span(span));
-        } else if func_name == "array_reduce" && params.len() != 2 {
-            return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
-                func_name, params.len()
-            ))
-                .set_span(span));
-        }
+        self.check_lambda_param_count(func_name, params.len(), span)?;
 
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
@@ -1870,10 +1898,11 @@ impl<'a> TypeChecker<'a> {
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
-            DataType::Null | DataType::EmptyArray => DataType::Null,
+            DataType::Map(box inner_ty) => inner_ty.clone(),
+            DataType::Null | DataType::EmptyArray | DataType::EmptyMap => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
-                    "invalid arguments for lambda function, argument data type must be an array"
+                    "invalid arguments for lambda function, argument data type must be an array or map"
                         .to_string(),
                 )
                 .set_span(span));
@@ -1883,6 +1912,17 @@ impl<'a> TypeChecker<'a> {
         let inner_tys = if func_name == "array_reduce" {
             let max_ty = self.transform_to_max_type(&inner_ty)?;
             vec![max_ty.clone(), max_ty.clone()]
+        } else if func_name == "map_filter"
+            || func_name == "map_transform_keys"
+            || func_name == "map_transform_values"
+        {
+            match &inner_ty {
+                DataType::Null => {
+                    vec![DataType::Null, DataType::Null]
+                }
+                DataType::Tuple(t) => t.clone(),
+                _ => unreachable!(),
+            }
         } else {
             vec![inner_ty.clone()]
         };
@@ -1900,12 +1940,12 @@ impl<'a> TypeChecker<'a> {
             &lambda.expr,
         )?;
 
-        let return_type = if func_name == "array_filter" {
+        let return_type = if func_name == "array_filter" || func_name == "map_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
                 arg_type.clone()
             } else {
                 return Err(ErrorCode::SemanticError(
-                    "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
+                    format!("invalid lambda function for `{}`, the result data type of lambda function must be boolean", func_name)
                 )
                 .set_span(span));
             }
@@ -1931,6 +1971,30 @@ impl<'a> TypeChecker<'a> {
                 });
             }
             max_ty.wrap_nullable()
+        } else if func_name == "map_transform_keys" {
+            if arg_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
+                    lambda_type.clone(),
+                    inner_tys[1].clone(),
+                ])))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    lambda_type.clone(),
+                    inner_tys[1].clone(),
+                ])))
+            }
+        } else if func_name == "map_transform_values" {
+            if arg_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
+                    inner_tys[0].clone(),
+                    lambda_type.clone(),
+                ])))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    inner_tys[0].clone(),
+                    lambda_type.clone(),
+                ])))
+            }
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
@@ -1954,6 +2018,14 @@ impl<'a> TypeChecker<'a> {
                 }
                 .into(),
                 DataType::EmptyArray,
+            ),
+            DataType::EmptyMap => (
+                ConstantExpr {
+                    span,
+                    value: Scalar::EmptyMap,
+                }
+                .into(),
+                DataType::EmptyMap,
             ),
             _ => {
                 struct LambdaVisitor<'a> {
@@ -2027,6 +2099,33 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok(Box::new((lambda_func, data_type)))
+    }
+
+    fn check_lambda_param_count(
+        &mut self,
+        func_name: &str,
+        param_count: usize,
+        span: Span,
+    ) -> Result<()> {
+        // json lambda functions are casted to array or map, ignored here.
+        let expected_count = if func_name == "array_reduce" {
+            2
+        } else if func_name.starts_with("array") {
+            1
+        } else if func_name.starts_with("map") {
+            2
+        } else {
+            unreachable!()
+        };
+
+        if param_count != expected_count {
+            return Err(ErrorCode::SemanticError(format!(
+                "incorrect number of parameters in lambda function, {} expects {} parameter(s), but got {}",
+                func_name, expected_count, param_count
+            ))
+            .set_span(span));
+        }
+        Ok(())
     }
 
     fn resolve_score_search_function(
@@ -2804,26 +2903,30 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub fn resolve_date_add(
+    pub fn resolve_date_arith(
         &mut self,
         span: Span,
         interval_kind: &ASTIntervalKind,
-        interval: &Expr,
-        date: &Expr,
+        date_rhs: &Expr,
+        date_lhs: &Expr,
+        is_diff: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let func_name = format!("add_{}s", interval_kind.to_string().to_lowercase());
-
+        let func_name = if is_diff {
+            format!("diff_{}s", interval_kind.to_string().to_lowercase())
+        } else {
+            format!("add_{}s", interval_kind.to_string().to_lowercase())
+        };
         let mut args = vec![];
         let mut arg_types = vec![];
 
-        let (date, date_type) = *self.resolve(date)?;
-        args.push(date);
-        arg_types.push(date_type);
+        let (date_lhs, date_lhs_type) = *self.resolve(date_lhs)?;
+        args.push(date_lhs);
+        arg_types.push(date_lhs_type);
 
-        let (interval, interval_type) = *self.resolve(interval)?;
+        let (date_rhs, date_rhs_type) = *self.resolve(date_rhs)?;
 
-        args.push(interval);
-        arg_types.push(interval_type);
+        args.push(date_rhs);
+        arg_types.push(date_rhs_type);
 
         self.resolve_scalar_function_call(span, &func_name, vec![], args)
     }
@@ -2886,6 +2989,59 @@ impl<'a> TypeChecker<'a> {
             }
             _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second]".to_string()).set_span(span)),
         }
+    }
+
+    pub fn resolve_last_day(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        kind: &ASTIntervalKind,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        match kind {
+            ASTIntervalKind::Year => {
+                self.resolve_function(span, "to_last_of_year", vec![], &[date])
+            }
+            ASTIntervalKind::Quarter => {
+                self.resolve_function(span, "to_last_of_quarter", vec![], &[date])
+            }
+            ASTIntervalKind::Month => {
+                self.resolve_function(span, "to_last_of_month", vec![], &[date])
+            }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_last_of_week", vec![], &[date])
+            }
+            _ => Err(ErrorCode::SemanticError(
+                "Only these interval types are currently supported: [year, quarter, month, week]"
+                    .to_string(),
+            )
+            .set_span(span)),
+        }
+    }
+
+    pub fn resolve_previous_or_next_day(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        weekday: &ASTWeekday,
+        is_previous: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let prefix = if is_previous {
+            "to_previous_"
+        } else {
+            "to_next_"
+        };
+
+        let func_name = match weekday {
+            ASTWeekday::Monday => format!("{}monday", prefix),
+            ASTWeekday::Tuesday => format!("{}tuesday", prefix),
+            ASTWeekday::Wednesday => format!("{}wednesday", prefix),
+            ASTWeekday::Thursday => format!("{}thursday", prefix),
+            ASTWeekday::Friday => format!("{}friday", prefix),
+            ASTWeekday::Saturday => format!("{}saturday", prefix),
+            ASTWeekday::Sunday => format!("{}sunday", prefix),
+        };
+
+        self.resolve_function(span, &func_name, vec![], &[date])
     }
 
     pub fn resolve_subquery(
@@ -3612,11 +3768,7 @@ impl<'a> TypeChecker<'a> {
         let file_location = match udf_definition.code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
             None => {
-                let uri = UriLocation::from_uri(
-                    udf_definition.code.clone(),
-                    "".to_string(),
-                    BTreeMap::default(),
-                );
+                let uri = UriLocation::from_uri(udf_definition.code.clone(), BTreeMap::default());
 
                 match uri {
                     Ok(uri) => FileLocation::Uri(uri),

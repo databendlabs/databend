@@ -124,37 +124,35 @@ impl SubqueryRewriter {
                     Arc::new(scan),
                 );
             }
-            if self.ctx.get_cluster().is_empty() {
-                // Wrap logical get with distinct to eliminate duplicates rows.
-                let mut group_items = Vec::with_capacity(self.derived_columns.len());
-                for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
-                    group_items.push(ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ColumnBindingBuilder::new(
-                                "".to_string(),
-                                column_index,
-                                Box::new(data_types[index].clone()),
-                                Visibility::Visible,
-                            )
-                            .table_index(Some(table_index))
-                            .build(),
-                        }),
-                        index: column_index,
-                    });
-                }
-                scan = SExpr::create_unary(
-                    Arc::new(
-                        Aggregate {
-                            mode: AggregateMode::Initial,
-                            group_items,
-                            ..Default::default()
-                        }
-                        .into(),
-                    ),
-                    Arc::new(scan),
-                );
+            // Wrap logical get with distinct to eliminate duplicates rows.
+            let mut group_items = Vec::with_capacity(self.derived_columns.len());
+            for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
+                group_items.push(ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBindingBuilder::new(
+                            "".to_string(),
+                            column_index,
+                            Box::new(data_types[index].clone()),
+                            Visibility::Visible,
+                        )
+                        .table_index(Some(table_index))
+                        .build(),
+                    }),
+                    index: column_index,
+                });
             }
+            scan = SExpr::create_unary(
+                Arc::new(
+                    Aggregate {
+                        mode: AggregateMode::Initial,
+                        group_items,
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                Arc::new(scan),
+            );
 
             let cross_join = Join {
                 equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),

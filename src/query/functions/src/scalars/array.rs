@@ -98,7 +98,7 @@ const ARRAY_SORT_FUNCTIONS: &[(&str, (bool, bool)); 4] = &[
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("contains", &["array_contains"]);
     registry.register_aliases("get", &["array_get"]);
-    registry.register_aliases("length", &["array_length"]);
+    registry.register_aliases("length", &["array_length", "array_size"]);
     registry.register_aliases("slice", &["array_slice"]);
 
     register_array_aggr(registry);
@@ -868,7 +868,6 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     offset: 0,
                     asc: sort_desc.0,
                     nulls_first: sort_desc.1,
-                    is_nullable: false,  // This information is not needed here.
                 }];
                 let columns = vec![BlockEntry{
                     data_type: arr.data_type(),

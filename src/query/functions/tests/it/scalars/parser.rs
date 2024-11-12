@@ -20,6 +20,7 @@ use databend_common_ast::ast::IntervalKind;
 use databend_common_ast::ast::Literal as ASTLiteral;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::ast::Weekday;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -48,8 +49,20 @@ macro_rules! with_interval_mapped_name {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
-              Year => "year", Quarter => "quarter", Month => "month", Day => "day",
+              Year => "year", Quarter => "quarter", Month => "month", Week => "week", Day => "day",
               Hour => "hour", Minute => "minute", Second => "second",
+            ],
+            $($tail)*
+        }
+    }
+}
+
+macro_rules! with_weekday_mapped_name {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+              Monday => "monday", Tuesday => "tuesday", Wednesday => "wednesday", Thursday => "thursday", Friday => "friday",
+              Saturday => "saturday", Sunday => "sunday",
             ],
             $($tail)*
         }
@@ -418,6 +431,27 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
             })
         }
+        AExpr::DateDiff {
+            span,
+            unit,
+            date_start,
+            date_end,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("diff_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date_end, columns),
+                        transform_expr(*date_start, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
         AExpr::DateSub {
             span,
             unit,
@@ -450,6 +484,39 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 kind => {
                     unimplemented!("{kind:?} is not supported")
                 }
+            })
+        }
+        AExpr::LastDay { span, unit, date } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("to_last_of_", INTERVAL).to_string(),
+                    params: vec![],
+                    args: vec![transform_expr(*date, columns),],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
+        AExpr::PreviousDay { span, unit, date } => {
+            with_weekday_mapped_name!(|WEEKDAY| match unit {
+                Weekday::WEEKDAY => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("to_previous_", WEEKDAY).to_string(),
+                    params: vec![],
+                    args: vec![transform_expr(*date, columns),],
+                },
+            })
+        }
+        AExpr::NextDay { span, unit, date } => {
+            with_weekday_mapped_name!(|WEEKDAY| match unit {
+                Weekday::WEEKDAY => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("to_next_", WEEKDAY).to_string(),
+                    params: vec![],
+                    args: vec![transform_expr(*date, columns),],
+                },
             })
         }
         AExpr::InList {

@@ -86,7 +86,7 @@ impl AggIndexReader {
         match self.reader.operator.stat(loc).await {
             Ok(meta) => {
                 let reader = self.reader.operator.reader(loc).await.ok()?;
-                let metadata =
+                let (metadata, _) =
                     nread::reader::read_meta_async(reader, meta.content_length() as usize)
                         .await
                         .inspect_err(|e| {

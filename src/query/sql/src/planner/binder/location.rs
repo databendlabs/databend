@@ -594,11 +594,7 @@ pub async fn get_storage_params_from_options(
 
     let mut location = if let Some(connection) = connection {
         let connection = ctx.get_connection(connection).await?;
-        let location = UriLocation::from_uri(
-            location.to_string(),
-            "".to_string(),
-            connection.storage_params,
-        )?;
+        let location = UriLocation::from_uri(location.to_string(), connection.storage_params)?;
         if location.protocol.to_lowercase() != connection.storage_type {
             return Err(ErrorCode::BadArguments(format!(
                 "Incorrect CREATE query: protocol in location {:?} is not equal to connection {:?}",
@@ -607,7 +603,7 @@ pub async fn get_storage_params_from_options(
         };
         location
     } else {
-        UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
+        UriLocation::from_uri(location.to_string(), BTreeMap::new())?
     };
     let sp = parse_storage_params_from_uri(
         &mut location,

@@ -23,6 +23,7 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
+use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
 use crate::parser::common::comma_separated_list0;
@@ -109,9 +110,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
                 src,
                 dst,
                 file_format: Default::default(),
-                single: Default::default(),
-                max_file_size: Default::default(),
-                detailed_output: false,
+                options: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -138,6 +137,13 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
     )(i)
 }
 
+pub fn literal_string_or_variable(i: Input) -> IResult<LiteralStringOrVariable> {
+    alt((
+        map(literal_string, LiteralStringOrVariable::Literal),
+        map(variable_ident, LiteralStringOrVariable::Variable),
+    ))(i)
+}
+
 fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
     alt((
         map(
@@ -145,7 +151,7 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             |(_, _, _, files, _)| CopyIntoTableOption::Files(files),
         ),
         map(
-            rule! { PATTERN ~ "=" ~ #literal_string },
+            rule! { PATTERN ~ ^"=" ~ ^#literal_string_or_variable },
             |(_, _, pattern)| CopyIntoTableOption::Pattern(pattern),
         ),
         map(rule! { #file_format_clause }, |options| {
@@ -201,6 +207,18 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
         map(
             rule! { DETAILED_OUTPUT ~ "=" ~ #literal_bool },
             |(_, _, detailed_output)| CopyIntoLocationOption::DetailedOutput(detailed_output),
+        ),
+        map(
+            rule! { USE_RAW_PATH ~ "=" ~ #literal_bool },
+            |(_, _, use_raw_path)| CopyIntoLocationOption::UseRawPath(use_raw_path),
+        ),
+        map(
+            rule! {  INCLUDE_QUERY_ID ~ "=" ~ #literal_bool },
+            |(_, _, include_query_id)| CopyIntoLocationOption::IncludeQueryID(include_query_id),
+        ),
+        map(
+            rule! {  OVERWRITE ~ "=" ~ #literal_bool },
+            |(_, _, include_query_id)| CopyIntoLocationOption::OverWrite(include_query_id),
         ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)

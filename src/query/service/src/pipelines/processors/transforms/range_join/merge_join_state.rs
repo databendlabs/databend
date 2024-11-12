@@ -141,31 +141,17 @@ impl RangeJoinState {
     }
 
     // Used by merge join
-    fn sort_descriptions(&self, left: bool) -> Vec<SortColumnDescription> {
+    fn sort_descriptions(&self, _: bool) -> Vec<SortColumnDescription> {
         let op = &self.conditions[0].operator;
         let asc = match op.as_str() {
             "gt" | "gte" => false,
             "lt" | "lte" => true,
             _ => unreachable!(),
         };
-        let is_nullable = if left {
-            self.conditions[0]
-                .left_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type()
-                .is_nullable()
-        } else {
-            self.conditions[0]
-                .right_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type()
-                .is_nullable()
-        };
         vec![SortColumnDescription {
             offset: 0,
             asc,
             nulls_first: true,
-            is_nullable,
         }]
     }
 }

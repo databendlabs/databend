@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 
 use crate::types::DataType;
@@ -24,19 +22,11 @@ use crate::Scalar;
 use crate::SortCompare;
 use crate::Value;
 
-pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
-
-pub trait CheckAbort {
-    fn is_aborting(&self) -> bool;
-    fn try_check_aborting(&self) -> Result<()>;
-}
-
 #[derive(Clone)]
 pub struct SortColumnDescription {
     pub offset: usize,
     pub asc: bool,
     pub nulls_first: bool,
-    pub is_nullable: bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -115,7 +105,7 @@ impl DataBlock {
         }
 
         let permutations = sort_compare.take_permutation();
-        DataBlock::take(block, &permutations, &mut None)
+        DataBlock::take(block, &permutations)
     }
 }
 
@@ -140,11 +130,10 @@ pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Resul
     let descriptions = order_columns
         .iter()
         .enumerate()
-        .map(|(idx, array)| SortColumnDescription {
+        .map(|(idx, _)| SortColumnDescription {
             offset: idx,
             asc: true,
             nulls_first: false,
-            is_nullable: array.data_type().is_nullable(),
         })
         .collect::<Vec<_>>();
 

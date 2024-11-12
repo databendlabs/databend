@@ -236,7 +236,7 @@ pub(crate) fn pretty_copy_into_location(copy_stmt: CopyIntoLocationStmt) -> RcDo
         .append(
             RcDoc::line()
                 .append(RcDoc::text("SINGLE = "))
-                .append(RcDoc::text(copy_stmt.single.to_string())),
+                .append(RcDoc::text(copy_stmt.options.single.to_string())),
         )
 }
 

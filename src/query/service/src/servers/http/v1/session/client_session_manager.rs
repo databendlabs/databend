@@ -15,6 +15,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
@@ -23,7 +24,6 @@ use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
@@ -38,6 +38,8 @@ use tokio::time::Instant;
 
 use crate::servers::http::v1::session::consts::REFRESH_TOKEN_TTL;
 use crate::servers::http::v1::session::consts::SESSION_TOKEN_TTL;
+use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_MEMORY;
+use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_META;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
@@ -108,6 +110,10 @@ impl ClientSessionManager {
         GlobalInstance::get()
     }
 
+    pub fn state_key(client_session_id: &str, user_name: &str) -> String {
+        format!("{client_session_id}:{user_name}")
+    }
+
     #[async_backtrace::framed]
     pub async fn init(_cfg: &InnerConfig) -> Result<()> {
         let mgr = Arc::new(Self {
@@ -154,8 +160,8 @@ impl ClientSessionManager {
         client_session_api
             .upsert_client_session_id(
                 client_session_id,
-                ClientSession { user_name },
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+                &user_name,
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + STATE_REFRESH_INTERVAL_META,
             )
             .await?;
         Ok(())
@@ -167,6 +173,7 @@ impl ClientSessionManager {
     pub async fn new_token_pair(
         &self,
         session: &Arc<Session>,
+        client_session_id: String,
         old_refresh_token: Option<String>,
         old_session_token: Option<String>,
     ) -> Result<(String, TokenPair)> {
@@ -175,22 +182,12 @@ impl ClientSessionManager {
         let tenant_name = tenant.tenant_name().to_string();
         let user = session.get_current_user()?.name;
         let auth_role = session.privilege_mgr().get_auth_role();
-        let client_session_id = if let Some(old) = &old_refresh_token {
-            let (claim, _) = SessionClaim::decode(old)?;
-            assert_eq!(tenant_name, claim.tenant);
-            assert_eq!(user, claim.user);
-            assert_eq!(auth_role, claim.auth_role);
-            claim.session_id
-        } else {
-            uuid::Uuid::new_v4().to_string()
-        };
-
         let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
 
         // new refresh token
         let now = unix_ts();
         let mut claim = SessionClaim::new(
-            None,
+            client_session_id.clone(),
             &tenant_name,
             &user,
             &auth_role,
@@ -214,7 +211,6 @@ impl ClientSessionManager {
             client_session_api
                 .upsert_token(&old, token_info, TOMBSTONE_TTL, true)
                 .await?;
-            self.refresh_in_memory_states(&client_session_id);
         };
         self.refresh_tokens
             .write()
@@ -251,9 +247,7 @@ impl ClientSessionManager {
         client_session_api
             .upsert_client_session_id(
                 &client_session_id,
-                ClientSession {
-                    user_name: claim.user.clone(),
-                },
+                &claim.user,
                 REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -304,7 +298,27 @@ impl ClientSessionManager {
         };
         Ok(claim)
     }
-    pub async fn drop_client_session(self: &Arc<Self>, session_token: &str) -> Result<()> {
+
+    pub async fn drop_client_session_state(
+        self: &Arc<Self>,
+        tenant: &Tenant,
+        user_name: &str,
+        session_id: &str,
+    ) -> Result<()> {
+        let client_session_api = UserApiProvider::instance().client_session_api(tenant);
+        client_session_api
+            .drop_client_session_id(session_id, user_name)
+            .await
+            .ok();
+        let state_key = Self::state_key(session_id, user_name);
+        let state = self.session_state.lock().remove(&state_key);
+        if let Some(state) = state {
+            drop_all_temp_tables(session_id, state.temp_tbl_mgr).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn drop_client_session_token(self: &Arc<Self>, session_token: &str) -> Result<()> {
         let (claim, _) = SessionClaim::decode(session_token)?;
         let now = unix_ts().as_secs();
 
@@ -331,30 +345,24 @@ impl ClientSessionManager {
                 .drop_token(&session_token_hash)
                 .await
                 .ok();
-            client_session_api
-                .drop_client_session_id(&claim.session_id)
-                .await
-                .ok();
-            let state = self.session_state.lock().remove(&claim.session_id);
-            if let Some(state) = state {
-                drop_all_temp_tables(&claim.session_id, state.temp_tbl_mgr).await?;
-            }
         };
         Ok(())
     }
 
-    pub fn refresh_in_memory_states(&self, client_session_id: &str) {
+    fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) {
+        let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        guard.entry(client_session_id.to_string()).and_modify(|e| {
-            e.query_state = QueryState::InUse;
+        guard.entry(key).and_modify(|e| {
+            e.query_state = QueryState::Idle(Instant::now());
         });
     }
 
-    pub fn on_query_start(&self, client_session_id: &str, session: &Arc<Session>) {
+    pub fn on_query_start(&self, client_session_id: &str, user_name: &str, session: &Arc<Session>) {
+        let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        guard.entry(client_session_id.to_string()).and_modify(|e| {
+        guard.entry(key).and_modify(|e| {
             if matches!(e.query_state, QueryState::Idle(_)) {
-                e.query_state = QueryState::Idle(Instant::now());
+                e.query_state = QueryState::InUse;
                 session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
             }
         });
@@ -362,13 +370,15 @@ impl ClientSessionManager {
     pub fn on_query_finish(
         &self,
         client_session_id: &str,
+        user_name: &str,
         temp_tbl_mgr: TempTblMgrRef,
         is_empty: bool,
         just_changed: bool,
     ) {
+        let key = Self::state_key(client_session_id, user_name);
         if !is_empty || just_changed {
             let mut guard = self.session_state.lock();
-            match guard.entry(client_session_id.to_string()) {
+            match guard.entry(key) {
                 Entry::Vacant(e) => {
                     if !is_empty {
                         e.insert(SessionState {
@@ -386,5 +396,24 @@ impl ClientSessionManager {
                 }
             }
         }
+    }
+
+    pub async fn refresh_state(
+        &self,
+        tenant: Tenant,
+        client_session_id: &str,
+        user_name: &str,
+        last_access_time: u64,
+    ) -> Result<()> {
+        let last_access_time = Duration::from_secs(last_access_time);
+        let elapsed = unix_ts() - last_access_time;
+        if elapsed > STATE_REFRESH_INTERVAL_MEMORY {
+            self.refresh_in_memory_states(client_session_id, user_name);
+        }
+        if elapsed > STATE_REFRESH_INTERVAL_META {
+            self.refresh_session_handle(tenant, user_name.to_string(), client_session_id)
+                .await?
+        }
+        Ok(())
     }
 }

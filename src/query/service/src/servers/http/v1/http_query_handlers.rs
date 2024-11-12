@@ -30,7 +30,9 @@ use log::warn;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
+use poem::middleware::CookieJarManager;
 use poem::post;
+use poem::put;
 use poem::web::Json;
 use poem::web::Path;
 use poem::EndpointExt;
@@ -48,8 +50,15 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::v1::discovery_nodes;
+use crate::servers::http::v1::list_suggestions;
+use crate::servers::http::v1::login_handler;
+use crate::servers::http::v1::logout_handler;
 use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
+use crate::servers::http::v1::refresh_handler;
+use crate::servers::http::v1::upload_to_stage;
+use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -404,34 +413,79 @@ pub(crate) async fn query_handler(
         .await
 }
 
-pub fn query_route(http_handler_kind: HttpHandlerKind) -> Route {
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn heartbeat_handler() -> poem::error::Result<impl IntoResponse> {
+    // work is already done in session manager
+    Ok(())
+}
+
+pub fn query_route() -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
-        ("/", post(query_handler)),
-        ("/:id", get(query_state_handler)),
-        ("/:id/page/:page_no", get(query_page_handler)),
+        ("/query", post(query_handler), EndpointKind::StartQuery),
         (
-            "/:id/kill",
-            get(query_cancel_handler).post(query_cancel_handler),
+            "/query/:id",
+            get(query_state_handler),
+            EndpointKind::PollQuery,
         ),
         (
-            "/:id/final",
+            "/query/:id/page/:page_no",
+            get(query_page_handler),
+            EndpointKind::PollQuery,
+        ),
+        (
+            "/query/:id/kill",
+            get(query_cancel_handler).post(query_cancel_handler),
+            EndpointKind::PollQuery,
+        ),
+        (
+            "/query/:id/final",
             get(query_final_handler).post(query_final_handler),
+            EndpointKind::PollQuery,
+        ),
+        ("/session/login", post(login_handler), EndpointKind::Login),
+        (
+            "/session/logout",
+            post(logout_handler),
+            EndpointKind::Logout,
+        ),
+        (
+            "/session/refresh",
+            post(refresh_handler),
+            EndpointKind::Refresh,
+        ),
+        (
+            "/session/heartbeat",
+            post(heartbeat_handler),
+            EndpointKind::HeartBeat,
+        ),
+        ("/verify", post(verify_handler), EndpointKind::Verify),
+        (
+            "/upload_to_stage",
+            put(upload_to_stage),
+            EndpointKind::UploadToStage,
+        ),
+        (
+            "/suggested_background_tasks",
+            get(list_suggestions),
+            EndpointKind::SystemInfo,
+        ),
+        (
+            "/discovery_nodes",
+            get(discovery_nodes),
+            EndpointKind::SystemInfo,
         ),
     ];
 
     let mut route = Route::new();
-    for (path, endpoint) in rules.into_iter() {
-        let kind = if path == "/" {
-            EndpointKind::StartQuery
-        } else {
-            EndpointKind::PollQuery
-        };
+    for (path, endpoint, kind) in rules.into_iter() {
         route = route.at(
             path,
             endpoint
                 .with(MetricsMiddleware::new(path))
-                .with(HTTPSessionMiddleware::create(http_handler_kind, kind)),
+                .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind))
+                .with(CookieJarManager::new()),
         );
     }
     route

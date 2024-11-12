@@ -404,6 +404,20 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(RcDoc::space())
             .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
+        Expr::DateDiff {
+            unit,
+            date_start,
+            date_end,
+            ..
+        } => RcDoc::text("DATE_DIFF(")
+            .append(RcDoc::text(unit.to_string()))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(pretty_expr(*date_start))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(pretty_expr(*date_end))
+            .append(RcDoc::text(")")),
         Expr::DateSub {
             unit,
             interval,
@@ -425,6 +439,24 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(pretty_expr(*date))
+            .append(RcDoc::text(")")),
+        Expr::LastDay { unit, date, .. } => RcDoc::text("LAST_DAY(")
+            .append(pretty_expr(*date))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(RcDoc::text(unit.to_string()))
+            .append(RcDoc::text(")")),
+        Expr::PreviousDay { unit, date, .. } => RcDoc::text("PREVIOUS_DAY(")
+            .append(pretty_expr(*date))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(RcDoc::text(unit.to_string()))
+            .append(RcDoc::text(")")),
+        Expr::NextDay { unit, date, .. } => RcDoc::text("NEXT_DAY(")
+            .append(pretty_expr(*date))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(")")),
         Expr::Hole { name, .. } => RcDoc::text(":").append(RcDoc::text(name.to_string())),
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -40,6 +41,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
@@ -48,6 +50,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
@@ -367,13 +370,15 @@ impl CreateTableInterpreter {
         };
         let schema = TableSchemaRefExt::create(fields);
         let mut options = self.plan.options.clone();
+        if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
+            FuseStorageFormat::from_str(storage_format)?;
+        }
         let comment = options.remove(OPT_KEY_COMMENT);
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
-            part_prefix: self.plan.part_prefix.clone(),
             options,
             engine_options: self.plan.engine_options.clone(),
             default_cluster_key: None,

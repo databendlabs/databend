@@ -84,60 +84,55 @@ parquet-default = [
 ]
 
 [dependencies]
-ahash = "0.8"
+ahash = { workspace = true }
 arrow-array = { workspace = true, optional = true }
 arrow-buffer = { workspace = true, optional = true }
 arrow-data = { workspace = true, optional = true }
 arrow-format = { workspace = true }
 arrow-schema = { workspace = true, optional = true }
-async-stream = { version = "0.3.2", optional = true }
-base64 = { version = "0.21.0", optional = true }
-bitpacking = "0.8.0"
-bytemuck = { version = "1", features = ["derive"] }
+async-stream = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+bitpacking = { workspace = true }
+bytemuck = { workspace = true }
 byteorder = { workspace = true }
-bytes = "^1"
+bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true, optional = true }
-dyn-clone = "1"
-either = "1.9"
+dyn-clone = { workspace = true }
+either = { workspace = true }
 ethnum = { workspace = true }
-fallible-streaming-iterator = { version = "0.1", optional = true }
-foreign_vec = "0.1.0"
-futures = { version = "0.3", optional = true }
-hashbrown = { version = "0.14.3", default-features = false, features = ["ahash"] }
-indexmap = "2.2.3"
+fallible-streaming-iterator = { workspace = true, optional = true }
+foreign_vec = { workspace = true }
+futures = { workspace = true, optional = true }
+hashbrown_v0_14 = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true, optional = true }
-lexical-core = { version = "0.8", optional = true }
+lexical-core = { workspace = true, optional = true }
 log = { workspace = true }
-lz4 = { version = "1.24" }
-num = { version = "0.4", default-features = false, features = ["std"] }
-num-traits = "0.2"
+lz4 = { workspace = true }
+num = { workspace = true, features = ["std"] }
+num-traits = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default-features = false, features = [
-    "serde_types",
-    "async",
-] }
+parquet2 = { workspace = true }
 rand = { workspace = true }
-ringbuffer = "0.14.2"
-roaring = "0.10.1"
-serde = { version = "^1.0", features = ["rc"], optional = true }
-serde_derive = { version = "^1.0", optional = true }
-simdutf8 = "0.1.4"
-snap = { version = "1.1.0" }
-streaming-iterator = { version = "0.1", optional = true }
-zstd = { version = "0.12" }
+ringbuffer = { workspace = true }
+roaring = { workspace = true }
+serde = { workspace = true, features = ["rc"], optional = true }
+serde_derive = { workspace = true, optional = true }
+simdutf8 = { workspace = true }
+snap = { workspace = true }
+streaming-iterator = { workspace = true, optional = true }
+zstd = { workspace = true }
 
 [dev-dependencies]
 # used to test async readers
-tokio = { version = "1", features = ["macros", "rt", "fs", "io-util"] }
-tokio-util = { version = "0.7", features = ["compat"] }
-# used to run formal property testing
-async-std = "1.12"
-env_logger = "0.10"
-flate2 = "1.0.28"
-proptest = { version = "1", default-features = false, features = ["std"] }
-quanta = "0.11.1"
+env_logger = { workspace = true }
+flate2 = { workspace = true }
+proptest = { workspace = true, default-features = false, features = ["std"] }
+quanta = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { workspace = true, features = ["compat"] }
 
 [lints]
 workspace = true

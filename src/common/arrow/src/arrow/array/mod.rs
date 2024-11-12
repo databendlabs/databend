@@ -31,7 +31,7 @@
 //! to a concrete struct based on [`PhysicalType`](crate::arrow::datatypes::PhysicalType) available from [`Array::data_type`].
 //! All immutable arrays are backed by [`Buffer`](crate::arrow::buffer::Buffer) and thus cloning and slicing them is `O(1)`.
 //!
-//! Most arrays contain a [`MutableArray`] counterpart that is neither clonable nor sliceable, but
+//! Most arrays contain a [`MutableArray`] counterpart that is neither cloneable nor sliceable, but
 //! can be operated in-place.
 use std::any::Any;
 use std::sync::Arc;
@@ -496,7 +496,8 @@ pub fn to_data(array: &dyn Array) -> arrow_data::ArrayData {
             })
         }
         Map => to_data_dyn!(array, MapArray),
-        BinaryView | Utf8View => unimplemented!(),
+        BinaryView => to_data_dyn!(array, BinaryViewArray),
+        Utf8View => to_data_dyn!(array, Utf8ViewArray),
     }
 }
 
@@ -527,7 +528,8 @@ pub fn from_data(data: &arrow_data::ArrayData) -> Box<dyn Array> {
             })
         }
         Map => Box::new(MapArray::from_data(data)),
-        BinaryView | Utf8View => unimplemented!(),
+        BinaryView => Box::new(BinaryViewArray::from_data(data)),
+        Utf8View => Box::new(Utf8ViewArray::from_data(data)),
     }
 }
 

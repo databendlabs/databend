@@ -357,7 +357,7 @@ impl OptimizeExprTask {
         let should_enforce = {
             let mut should_enforce = true;
 
-            if optimizer.enforce_distribution
+            if optimizer.enforce_distribution()
                 && physical_prop.distribution == Distribution::Serial
                 && !matches!(
                     self.required_prop.distribution,
@@ -367,7 +367,7 @@ impl OptimizeExprTask {
                 should_enforce = false;
             }
 
-            if optimizer.enforce_distribution
+            if optimizer.enforce_distribution()
                 && children_best_props
                     .iter()
                     .any(|prop| prop.distribution == Distribution::Serial)

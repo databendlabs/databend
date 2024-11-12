@@ -20,7 +20,7 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -62,7 +62,7 @@ pub struct ParquetFileWriter {
     unload_output: UnloadOutput,
     unload_output_blocks: Option<VecDeque<DataBlock>>,
 
-    uuid: String,
+    query_id: String,
     group_id: usize,
     batch_id: usize,
 
@@ -84,7 +84,7 @@ fn create_writer(
         .set_dictionary_enabled(false)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
-        .set_created_by(format!("Databend {}", *QUERY_SEMVER))
+        .set_created_by(format!("Databend {}", *DATABEND_SEMVER))
         .build();
     let buf_size = match targe_file_size {
         Some(n) if n < MAX_BUFFER_SIZE => n,
@@ -100,12 +100,12 @@ impl ParquetFileWriter {
         output: Arc<OutputPort>,
         table_info: StageTableInfo,
         data_accessor: Operator,
-        uuid: String,
+        query_id: String,
         group_id: usize,
         targe_file_size: Option<usize>,
     ) -> Result<ProcessorPtr> {
         let unload_output =
-            UnloadOutput::create(table_info.stage_info.copy_options.detailed_output);
+            UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
 
         let arrow_schema = Arc::new(table_schema_to_arrow_schema(&table_info.schema));
         let writer = create_writer(arrow_schema.clone(), targe_file_size)?;
@@ -122,7 +122,7 @@ impl ParquetFileWriter {
             input_bytes: 0,
             file_to_write: None,
             data_accessor,
-            uuid,
+            query_id,
             group_id,
             batch_id: 0,
             targe_file_size,
@@ -242,7 +242,7 @@ impl Processor for ParquetFileWriter {
         assert!(self.file_to_write.is_some());
         let path = unload_path(
             &self.table_info,
-            &self.uuid,
+            &self.query_id,
             self.group_id,
             self.batch_id,
             None,

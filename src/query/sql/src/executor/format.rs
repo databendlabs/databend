@@ -752,8 +752,25 @@ fn table_scan_to_format_tree(
         });
 
     let virtual_columns = plan.source.push_downs.as_ref().and_then(|extras| {
-        extras.virtual_columns.as_ref().map(|columns| {
-            let mut names = columns.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+        extras.virtual_column.as_ref().map(|virtual_column| {
+            let mut names = virtual_column
+                .virtual_column_fields
+                .iter()
+                .filter(|c| c.is_created)
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
+            names.sort();
+            names.iter().join(", ")
+        })
+    });
+    let not_created_virtual_columns = plan.source.push_downs.as_ref().and_then(|extras| {
+        extras.virtual_column.as_ref().map(|virtual_column| {
+            let mut names = virtual_column
+                .virtual_column_fields
+                .iter()
+                .filter(|c| !c.is_created)
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
             names.sort();
             names.iter().join(", ")
         })
@@ -776,17 +793,24 @@ fn table_scan_to_format_tree(
     // Part stats.
     children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
     // Push downs.
-    let push_downs = match virtual_columns {
-        Some(virtual_columns) => {
-            format!(
-                "push downs: [filters: [{filters}], limit: {limit}, virtual_columns: [{virtual_columns}]]"
-            )
-        }
-        None => {
-            format!("push downs: [filters: [{filters}], limit: {limit}]")
-        }
-    };
+    let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
     children.push(FormatTreeNode::new(push_downs));
+
+    // Virtual columns.
+    if let Some(virtual_columns) = virtual_columns {
+        if !virtual_columns.is_empty() {
+            let virtual_columns = format!("virtual columns: [{virtual_columns}]");
+            children.push(FormatTreeNode::new(virtual_columns));
+        }
+    }
+    if let Some(not_created_virtual_columns) = not_created_virtual_columns {
+        if !not_created_virtual_columns.is_empty() {
+            let not_created_virtual_columns =
+                format!("not created virtual columns: [{not_created_virtual_columns}]");
+            children.push(FormatTreeNode::new(not_created_virtual_columns));
+        }
+    }
+
     // Aggregating index
     if let Some(agg_index) = agg_index {
         let (_, agg_index_sql, _) = metadata

@@ -19,6 +19,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::task;
+use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 
@@ -28,10 +29,9 @@ use databend_common_base::runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use hickory_resolver::TokioAsyncResolver;
-use hyper::client::connect::dns::Name;
-use hyper::client::HttpConnector;
-use hyper::service::Service;
 use hyper::Uri;
+use hyper_util::client::legacy::connect::dns::Name;
+use hyper_util::client::legacy::connect::HttpConnector;
 use log::info;
 use serde::Deserialize;
 use serde::Serialize;
@@ -83,14 +83,14 @@ impl DNSResolver {
 }
 
 #[derive(Clone)]
-struct DNSService;
+pub struct DNSService;
 
-impl Service<Name> for DNSService {
+impl tower_service::Service<Name> for DNSService {
     type Response = DNSServiceAddrs;
     type Error = ErrorCode;
     type Future = DNSServiceFuture;
 
-    fn poll_ready(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<()>> {
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<std::result::Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -109,11 +109,11 @@ impl Service<Name> for DNSService {
     }
 }
 
-struct DNSServiceFuture {
+pub struct DNSServiceFuture {
     inner: JoinHandle<Result<DNSServiceAddrs>>,
 }
 
-struct DNSServiceAddrs {
+pub struct DNSServiceAddrs {
     inner: std::vec::IntoIter<IpAddr>,
 }
 

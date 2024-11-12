@@ -68,6 +68,8 @@ type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
 pub struct QueryContextShared {
+    // Query level
+    pub(crate) query_settings: Arc<Settings>,
     /// total_scan_values for scan stats
     pub(in crate::sessions) total_scan_values: Arc<Progress>,
     /// scan_progress for scan metrics of datablocks (uncompressed)
@@ -151,6 +153,7 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
+            query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache,

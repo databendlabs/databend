@@ -1,0 +1,4 @@
+>>>> create or replace database test_fuse_time_travel_size
+>>>> create table test_fuse_time_travel_size.t(c int) 'fs:///tmp/test_fuse_time_travel_size/'
+>>>> insert into test_fuse_time_travel_size.t values (1),(2)
+Size difference is less than 10 bytes

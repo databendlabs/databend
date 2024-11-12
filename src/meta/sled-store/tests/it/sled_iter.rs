@@ -14,10 +14,10 @@
 
 use databend_common_meta_sled_store::SledItem;
 use databend_common_meta_sled_store::SledTree;
-use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
 use log::info;

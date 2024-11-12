@@ -149,14 +149,14 @@ impl InvertedIndexWriter {
         let termdict_file = segment.open_read(SegmentComponent::Terms)?;
         extract_fsts(termdict_file, &mut fields, &mut values)?;
 
+        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
+        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
+
         let posting_file = segment.open_read(SegmentComponent::Postings)?;
         extract_component_fields("idx", posting_file, &mut fields, &mut values)?;
 
         let position_file = segment.open_read(SegmentComponent::Positions)?;
         extract_component_fields("pos", position_file, &mut fields, &mut values)?;
-
-        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
-        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
 
         let inverted_index_schema = TableSchema::new(fields);
 
@@ -204,6 +204,7 @@ pub(crate) fn block_to_inverted_index(
     let arrow_schema = Arc::new(table_schema_to_arrow_schema(table_schema));
     let generator = IpcDataGenerator {};
     let write_options = IpcWriteOptions::default();
+    #[allow(deprecated)]
     let encoded = generator.schema_to_bytes(&arrow_schema, &write_options);
     let mut schema_buf = Vec::new();
     let (schema_len, _) = write_message(&mut schema_buf, encoded, &write_options)?;
