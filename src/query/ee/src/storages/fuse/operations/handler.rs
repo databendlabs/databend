@@ -49,8 +49,9 @@ impl VacuumHandler for RealVacuumHandler {
         &self,
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
+        respect_flash_back: bool,
     ) -> Result<Vec<String>> {
-        do_vacuum2(fuse_table, ctx).await
+        do_vacuum2(fuse_table, ctx, respect_flash_back).await
     }
 
     async fn do_vacuum_drop_tables(

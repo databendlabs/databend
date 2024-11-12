@@ -30,8 +30,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_storages_fuse::table_functions::bool_literal;
+use databend_common_storages_fuse::table_functions::bool_value;
 use databend_common_storages_fuse::table_functions::parse_db_tb_args;
 use databend_common_storages_fuse::table_functions::string_literal;
+use databend_common_storages_fuse::table_functions::string_value;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
@@ -43,6 +46,7 @@ enum Vacuum2TableArgs {
     SingleTable {
         arg_database_name: String,
         arg_table_name: String,
+        respect_flash_back: Option<bool>,
     },
     All,
 }
@@ -53,9 +57,11 @@ impl From<&Vacuum2TableArgs> for TableArgs {
             Vacuum2TableArgs::SingleTable {
                 arg_database_name,
                 arg_table_name,
+                respect_flash_back,
             } => TableArgs::new_positioned(vec![
                 string_literal(arg_database_name.as_str()),
                 string_literal(arg_table_name.as_str()),
+                bool_literal(respect_flash_back.unwrap_or_default()),
             ]),
             Vacuum2TableArgs::All => TableArgs::new_positioned(vec![]),
         }
@@ -89,9 +95,16 @@ impl SimpleTableFunc for FuseVacuum2Table {
             Vacuum2TableArgs::SingleTable {
                 arg_database_name,
                 arg_table_name,
+                respect_flash_back,
             } => {
-                self.apply_single_table(ctx, catalog.as_ref(), arg_database_name, arg_table_name)
-                    .await?
+                self.apply_single_table(
+                    ctx,
+                    catalog.as_ref(),
+                    arg_database_name,
+                    arg_table_name,
+                    respect_flash_back.unwrap_or_default(),
+                )
+                .await?
             }
             Vacuum2TableArgs::All => self.apply_all_tables(ctx, catalog.as_ref()).await?,
         };
@@ -109,6 +122,19 @@ impl SimpleTableFunc for FuseVacuum2Table {
                 Vacuum2TableArgs::SingleTable {
                     arg_database_name,
                     arg_table_name,
+                    respect_flash_back: None,
+                }
+            }
+            3 => {
+                let args = table_args.expect_all_positioned(func_name, None)?;
+
+                let arg_database_name = string_value(&args[0])?;
+                let arg_table_name = string_value(&args[1])?;
+                let arg_respect_flash_back = bool_value(&args[2])?;
+                Vacuum2TableArgs::SingleTable {
+                    arg_database_name,
+                    arg_table_name,
+                    respect_flash_back: Some(arg_respect_flash_back),
                 }
             }
             _ => {
@@ -131,6 +157,7 @@ impl FuseVacuum2Table {
         catalog: &dyn Catalog,
         database_name: &str,
         table_name: &str,
+        respect_flash_back: bool,
     ) -> Result<Vec<String>> {
         let tbl = catalog
             .get_table(&ctx.get_tenant(), database_name, table_name)
@@ -142,7 +169,9 @@ impl FuseVacuum2Table {
 
         tbl.check_mutable()?;
 
-        self.handler.do_vacuum2(tbl, ctx.clone()).await
+        self.handler
+            .do_vacuum2(tbl, ctx.clone(), respect_flash_back)
+            .await
     }
 
     async fn apply_all_tables(
@@ -166,7 +195,7 @@ impl FuseVacuum2Table {
                     continue;
                 }
 
-                let _ = self.handler.do_vacuum2(tbl, ctx.clone()).await?;
+                let _ = self.handler.do_vacuum2(tbl, ctx.clone(), false).await?;
             }
         }
 

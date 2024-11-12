@@ -20,6 +20,7 @@ use chrono::Days;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
@@ -39,7 +40,11 @@ use futures_util::TryStreamExt;
 use log::info;
 use uuid::Version;
 #[async_backtrace::framed]
-pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<Vec<String>> {
+pub async fn do_vacuum2(
+    fuse_table: &FuseTable,
+    ctx: Arc<dyn TableContext>,
+    respect_flash_back: bool,
+) -> Result<Vec<String>> {
     let start = std::time::Instant::now();
     let retention_period_in_days = ctx.get_settings().get_data_retention_time_in_days()?;
     let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period_in_days).await? else {
@@ -75,8 +80,15 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
 
     let start = std::time::Instant::now();
     let is_vacuum_all = retention_period_in_days == 0;
-    let Some((gc_root, snapshots_to_gc)) =
-        select_gc_root(fuse_table, &snapshots_before_lvt, is_vacuum_all).await?
+    let Some((gc_root, snapshots_to_gc)) = select_gc_root(
+        fuse_table,
+        &snapshots_before_lvt,
+        is_vacuum_all,
+        respect_flash_back,
+        ctx.clone().get_abort_checker(),
+        lvt,
+    )
+    .await?
     else {
         return Ok(vec![]);
     };
@@ -345,10 +357,27 @@ async fn select_gc_root<'a>(
     fuse_table: &FuseTable,
     snapshots_before_lvt: &'a [String],
     is_vacuum_all: bool,
+    respect_flash_back: bool,
+    abort_checker: AbortChecker,
+    lvt: DateTime<Utc>,
 ) -> Result<Option<(Arc<TableSnapshot>, &'a [String])>> {
     let gc_root_path = if is_vacuum_all {
         // safe to unwrap, or we should have stopped vacuuming in set_lvt()
         fuse_table.snapshot_loc().await?.unwrap()
+    } else if respect_flash_back {
+        let latest_location = fuse_table.snapshot_loc().await?.unwrap();
+        let gc_root = fuse_table
+            .find(latest_location, abort_checker, |snapshot| {
+                snapshot.timestamp.is_some_and(|ts| ts <= lvt)
+            })
+            .await?
+            .snapshot_loc()
+            .await?;
+        let Some(gc_root) = gc_root else {
+            info!("no gc_root found, stop vacuuming");
+            return Ok(None);
+        };
+        gc_root
     } else {
         if snapshots_before_lvt.is_empty() {
             info!("no snapshots before lvt, stop vacuuming");

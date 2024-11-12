@@ -1,0 +1,2 @@
+>>>> create or replace table test_vacuum2_respect_time_travel(a int);
+>>>> insert into test_vacuum2_respect_time_travel values(1);
