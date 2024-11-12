@@ -15,7 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
@@ -125,17 +129,15 @@ fn extract_top_n(column: usize, predicate: ScalarExpr) -> Option<usize> {
 
     let func_name = &call.func_name;
     if func_name == ComparisonOp::Equal.to_func_name() {
-        match (&call.arguments[0], &call.arguments[1]) {
-            (ScalarExpr::BoundColumnRef(col), ScalarExpr::ConstantExpr(cnst))
-            | (ScalarExpr::ConstantExpr(cnst), ScalarExpr::BoundColumnRef(col)) => {
-                return if col.column.index != column {
-                    None
-                } else {
-                    extract_i64(cnst).map(|n| n.max(0) as usize)
-                };
+        return match (&call.arguments[0], &call.arguments[1]) {
+            (ScalarExpr::BoundColumnRef(col), number)
+            | (number, ScalarExpr::BoundColumnRef(col))
+                if col.column.index == column =>
+            {
+                extract_i32(number).map(|n| n.max(0) as usize)
             }
-            _ => return None,
-        }
+            _ => None,
+        };
     }
 
     let (left, right) = match (
@@ -149,39 +151,27 @@ fn extract_top_n(column: usize, predicate: ScalarExpr) -> Option<usize> {
         _ => return None,
     };
 
+    let ScalarExpr::BoundColumnRef(col) = left else {
+        return None;
+    };
+    if col.column.index != column {
+        return None;
+    }
+
     let eq = func_name == ComparisonOp::GTE.to_func_name()
         || func_name == ComparisonOp::LTE.to_func_name();
 
-    match (left, right) {
-        (ScalarExpr::BoundColumnRef(col), ScalarExpr::ConstantExpr(cnst)) => {
-            if col.column.index != column {
-                None
-            } else {
-                extract_i64(cnst).map(|n| {
-                    if eq {
-                        n.max(0) as usize
-                    } else {
-                        n.max(1) as usize - 1
-                    }
-                })
-            }
+    extract_i32(right).map(|n| {
+        if eq {
+            n.max(0) as usize
+        } else {
+            n.max(1) as usize - 1
         }
-        _ => None,
-    }
+    })
 }
 
-fn extract_i64(expr: &ConstantExpr) -> Option<i64> {
-    expr.value.as_number().and_then(|&n| match n {
-        NumberScalar::UInt8(n) => Some(n as i64),
-        NumberScalar::UInt16(n) => Some(n as i64),
-        NumberScalar::UInt32(n) => Some(n as i64),
-        NumberScalar::UInt64(n) if n <= i64::MAX as u64 => Some(n as i64),
-        NumberScalar::Int8(n) => Some(n as i64),
-        NumberScalar::Int16(n) => Some(n as i64),
-        NumberScalar::Int32(n) => Some(n as i64),
-        NumberScalar::Int64(n) => Some(n),
-        _ => None,
-    })
+fn extract_i32(expr: &ScalarExpr) -> Option<i32> {
+    check_number(None, &FunctionContext::default(), expr, &BUILTIN_FUNCTIONS)?
 }
 
 fn is_ranking_function(func: &WindowFuncType) -> bool {

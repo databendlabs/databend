@@ -25,12 +25,13 @@ use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::DecimalScalar;
 use crate::types::DecimalType;
 use crate::types::GeographyType;
 use crate::types::GeometryType;
-use crate::types::Number;
+use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
@@ -39,6 +40,7 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::visitor::ValueVisitor;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
@@ -223,8 +225,13 @@ where I: Index
         Ok(())
     }
 
-    fn visit_number<T: Number>(&mut self, buffer: Buffer<T>) -> Result<()> {
-        self.visit_indices(|i| T::upcast_scalar(buffer[i.to_usize()]).agg_hash())
+    fn visit_any_number(&mut self, column: crate::types::NumberColumn) -> Result<()> {
+        with_number_type!(|NUM_TYPE| match column {
+            NumberColumn::NUM_TYPE(buffer) => {
+                let buffer = buffer.as_ref();
+                self.visit_indices(|i| buffer[i.to_usize()].agg_hash())
+            }
+        })
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
@@ -235,12 +242,13 @@ where I: Index
         self.visit_number(buffer)
     }
 
-    fn visit_decimal<T: crate::types::Decimal>(
-        &mut self,
-        buffer: Buffer<T>,
-        size: crate::types::DecimalSize,
-    ) -> Result<()> {
-        self.visit_indices(|i| T::to_scalar(buffer[i.to_usize()], size).agg_hash())
+    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
+        with_decimal_type!(|DECIMAL_TYPE| match column {
+            DecimalColumn::DECIMAL_TYPE(buffer, _) => {
+                let buffer = buffer.as_ref();
+                self.visit_indices(|i| buffer[i.to_usize()].agg_hash())
+            }
+        })
     }
 
     fn visit_binary(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
@@ -453,32 +461,6 @@ impl AggHash for ScalarRef<'_> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
         self.to_string().as_bytes().agg_hash()
-    }
-}
-
-impl AggHash for NumberScalar {
-    fn agg_hash(&self) -> u64 {
-        match self {
-            NumberScalar::UInt8(n) => n.agg_hash(),
-            NumberScalar::UInt16(n) => n.agg_hash(),
-            NumberScalar::UInt32(n) => n.agg_hash(),
-            NumberScalar::UInt64(n) => n.agg_hash(),
-            NumberScalar::Int8(n) => n.agg_hash(),
-            NumberScalar::Int16(n) => n.agg_hash(),
-            NumberScalar::Int32(n) => n.agg_hash(),
-            NumberScalar::Int64(n) => n.agg_hash(),
-            NumberScalar::Float32(n) => n.agg_hash(),
-            NumberScalar::Float64(n) => n.agg_hash(),
-        }
-    }
-}
-
-impl AggHash for DecimalScalar {
-    fn agg_hash(&self) -> u64 {
-        match self {
-            DecimalScalar::Decimal128(n, _) => n.agg_hash(),
-            DecimalScalar::Decimal256(n, _) => n.agg_hash(),
-        }
     }
 }
 

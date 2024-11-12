@@ -19,7 +19,7 @@ use databend_common_expression::group_hash_value_spread;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::SortCompareEquality;
+use databend_common_expression::SortCompare;
 use databend_common_pipeline_core::processors::Exchange;
 
 use super::WindowPartitionMeta;
@@ -90,7 +90,7 @@ impl Exchange for WindowPartitionTopNExchange {
 impl WindowPartitionTopNExchange {
     fn partition_permutation(&self, block: &DataBlock) -> Vec<Vec<u32>> {
         let rows = block.num_rows();
-        let mut sort_compare = SortCompareEquality::new(self.sort_desc.to_vec(), rows);
+        let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.to_vec(), rows);
 
         for &offset in &self.partition_indices {
             let array = block.get_by_offset(offset).value.clone();
