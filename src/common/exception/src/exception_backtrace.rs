@@ -77,6 +77,7 @@ pub struct ResolvedStackFrame {
     pub column: Option<u32>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct PhysicalAddr {
     pub physical_addr: usize,
     pub library_build_id: Option<Arc<Vec<u8>>>,
