@@ -296,7 +296,7 @@ impl From<&ErrorCode> for SerializedError {
             name: e.name(),
             message: e.message(),
             span: e.span(),
-            backtrace: e.backtrace.clone(),
+            backtrace: e.backtrace.to_physical(),
             stacks: e.stacks().iter().map(|f| f.into()).collect(),
         }
     }

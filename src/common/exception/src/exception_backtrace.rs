@@ -178,7 +178,13 @@ impl StackTrace {
         }
     }
 
-    // #[cfg(not(target_os = "linux"))]
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn to_physical(&self) -> StackTrace {
+        self.clone()
+    }
+
+    #[cfg(target_os = "linux")]
     pub fn to_physical(&self) -> StackTrace {
         let frames = crate::elf::LibraryManager::instance().to_physical_frames(&self.frames);
 
