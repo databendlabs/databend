@@ -345,7 +345,10 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             input.set_need_data();
         }
 
-        if all_inputs_finished {
+        if all_inputs_finished
+            && (!matches!(T::STRATEGY, MultiwayStrategy::Custom)
+                || self.inputs_data.iter().all(Option::is_none))
+        {
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -356,6 +359,11 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             if let Some(block) = self.inputs_data[pick_index].take() {
                 self.output.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
+            }
+
+            if all_inputs_finished && self.inputs_data.iter().all(Option::is_none) {
+                self.output.finish();
+                return Ok(Event::Finished);
             }
         }
 

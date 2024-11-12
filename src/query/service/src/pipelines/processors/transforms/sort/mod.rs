@@ -12,5 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod reservoir_sampling;
-mod simpler;
+mod sort_exchange;
+mod sort_merge;
+mod sort_simple;
+mod sort_wait;
+
+pub use sort_merge::*;
+pub use sort_simple::*;
