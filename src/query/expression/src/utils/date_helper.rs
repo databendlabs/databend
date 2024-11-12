@@ -555,12 +555,11 @@ impl EvalTimesImpl {
 }
 
 #[inline]
-pub fn today_date(now: DateTime<Utc>, tz: TzLUT) -> i32 {
-    let now = now.with_timezone(&tz.tz);
-    NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
+pub fn today_date(now: &Zoned, tz: &JiffTimeZone) -> i32 {
+    let now = now.with_time_zone(tz.clone());
+    now.date().since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
         .unwrap()
-        .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
-        .num_days() as i32
+        .get_days()
 }
 
 pub trait ToNumber<N> {
