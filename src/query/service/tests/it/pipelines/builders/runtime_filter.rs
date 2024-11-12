@@ -127,9 +127,7 @@ async fn test_generate_runtime_filter() -> Result<()> {
     )
     .await?;
     let join = find_join(&plan)?;
-    assert!(join.enable_bloom_runtime_filter);
     let join_build_state = join_build_state(&fixture.new_query_ctx().await?, &join).await?;
-    assert!(join_build_state.get_enable_bloom_runtime_filter());
-    assert!(join_build_state.get_enable_min_max_runtime_filter());
+    assert!(join_build_state.support_runtime_filter());
     Ok(())
 }

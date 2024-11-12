@@ -328,16 +328,17 @@ pub trait TableContext: Send + Sync {
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
-    fn set_runtime_filter_columns(
+    fn set_runtime_filter_columns(&self, table_index: usize, columns: Vec<(usize, String)>);
+
+    fn get_runtime_filter_columns(&self, table_index: usize) -> Vec<(usize, String)>;
+
+    fn set_hash_join_probe_statistics(
         &self,
-        table_index: usize,
-        columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+        join_id: usize,
+        statistics: Arc<HashJoinProbeStatistics>,
     );
 
-    fn get_runtime_filter_columns(
-        &self,
-        table_index: usize,
-    ) -> Vec<(String, Arc<HashJoinProbeStatistics>)>;
+    fn get_hash_join_probe_statistics(&self, join_id: usize) -> Arc<HashJoinProbeStatistics>;
 
     fn clear_runtime_filter(&self);
 

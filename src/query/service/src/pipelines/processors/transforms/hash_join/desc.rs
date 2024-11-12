@@ -48,8 +48,8 @@ pub struct HashJoinDesc {
     pub(crate) runtime_filter_exprs: Vec<Option<(Expr<String>, IndexType)>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
-    // If enable bloom runtime filter
-    pub enable_bloom_runtime_filter: bool,
+    // If support runtime filter.
+    pub support_runtime_filter: bool,
 }
 
 impl HashJoinDesc {
@@ -91,7 +91,7 @@ impl HashJoinDesc {
             runtime_filter_exprs,
             broadcast: join.broadcast,
             single_to_inner: join.single_to_inner.clone(),
-            enable_bloom_runtime_filter: join.enable_bloom_runtime_filter,
+            support_runtime_filter: join.support_runtime_filter,
         })
     }
 

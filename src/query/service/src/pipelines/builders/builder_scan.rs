@@ -41,16 +41,7 @@ impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         if let Some(table_index) = scan.table_index {
-            let runtime_filter_columns = self
-                .runtime_filter_columns
-                .get(&table_index)
-                .cloned()
-                .unwrap_or_else(Vec::new);
-            let mut seen = std::collections::HashSet::new();
-            let runtime_filter_columns = runtime_filter_columns
-                .into_iter()
-                .filter(|(column_name, _)| seen.insert(column_name.clone()))
-                .collect();
+            let runtime_filter_columns = scan.runtime_filter_columns.clone();
             self.ctx
                 .set_runtime_filter_columns(table_index, runtime_filter_columns);
         }

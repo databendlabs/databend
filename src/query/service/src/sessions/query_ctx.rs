@@ -637,7 +637,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_fragment_id(&self) -> usize {
-        self.fragment_id.fetch_add(1, Ordering::Release)
+        self.fragment_id.fetch_add(1, Ordering::AcqRel)
     }
 
     #[async_backtrace::framed]
@@ -1171,11 +1171,7 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn set_runtime_filter_columns(
-        &self,
-        table_index: usize,
-        columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
-    ) {
+    fn set_runtime_filter_columns(&self, table_index: usize, columns: Vec<(usize, String)>) {
         let mut runtime_filter_columns = self.shared.runtime_filter_columns.write();
         match runtime_filter_columns.entry(table_index) {
             Entry::Vacant(v) => {
@@ -1187,15 +1183,32 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_runtime_filter_columns(
-        &self,
-        table_index: usize,
-    ) -> Vec<(String, Arc<HashJoinProbeStatistics>)> {
+    fn get_runtime_filter_columns(&self, table_index: usize) -> Vec<(usize, String)> {
         let runtime_filter_columns = self.shared.runtime_filter_columns.read();
         match runtime_filter_columns.get(&table_index) {
             Some(v) => v.clone(),
             None => vec![],
         }
+    }
+
+    fn set_hash_join_probe_statistics(
+        &self,
+        join_id: usize,
+        statistics: Arc<HashJoinProbeStatistics>,
+    ) {
+        self.shared
+            .hash_join_probe_statistics
+            .write()
+            .insert(join_id, statistics);
+    }
+
+    fn get_hash_join_probe_statistics(&self, join_id: usize) -> Arc<HashJoinProbeStatistics> {
+        self.shared
+            .hash_join_probe_statistics
+            .read()
+            .get(&join_id)
+            .cloned()
+            .unwrap()
     }
 
     fn get_merge_into_join(&self) -> MergeIntoJoin {

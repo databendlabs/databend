@@ -290,10 +290,6 @@ impl Settings {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
     }
 
-    pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
-    }
-
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
     }

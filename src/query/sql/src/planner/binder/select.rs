@@ -382,8 +382,14 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        let s_expr =
-            self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
+        let s_expr = self.bind_join_with_type(
+            join_type,
+            join_conditions,
+            left_expr,
+            right_expr,
+            None,
+            false,
+        )?;
         Ok((s_expr, left_context))
     }
 

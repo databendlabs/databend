@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 
@@ -23,6 +24,7 @@ pub struct BuildState {
     pub(crate) outer_scan_map: Vec<Vec<bool>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Vec<Vec<u8>>,
+    pub(crate) runtime_filter_columns: Vec<Column>,
 }
 
 impl BuildState {
@@ -31,6 +33,7 @@ impl BuildState {
             generation_state: BuildBlockGenerationState::new(),
             outer_scan_map: Vec::new(),
             mark_scan_map: Vec::new(),
+            runtime_filter_columns: Vec::new(),
         }
     }
 }

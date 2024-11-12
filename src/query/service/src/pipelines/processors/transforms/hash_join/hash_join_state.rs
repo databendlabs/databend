@@ -28,6 +28,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
@@ -132,6 +133,12 @@ pub struct HashJoinState {
     // The index of the next cache block to be read.
     pub(crate) next_cache_block_index: AtomicUsize,
 
+    /// Runtime filter
+    pub(crate) runtime_filter_source_fields: Vec<DataField>,
+    /// Sender message to notify the runtime filter source processor.
+    pub(crate) build_runtime_filter_watcher: Sender<Option<bool>>,
+    pub(crate) _build_runtime_filter_receiver: Receiver<Option<bool>>,
+    pub(crate) is_runtime_filter_data_ready: AtomicBool,
     /// Statistics
     pub(crate) probe_statistics: Arc<HashJoinProbeStatistics>,
 }
@@ -146,6 +153,7 @@ impl HashJoinState {
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
         build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
+        runtime_filter_source_fields: Vec<DataField>,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -155,6 +163,7 @@ impl HashJoinState {
         };
         let (build_watcher, _build_done_dummy_receiver) = watch::channel(HashTableType::UnFinished);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
+        let (build_runtime_filter_watcher, _build_runtime_filter_receiver) = watch::channel(None);
 
         let settings = ctx.get_settings();
         let enable_spill = settings.get_join_spilling_memory_ratio()? != 0;
@@ -193,6 +202,10 @@ impl HashJoinState {
             },
             column_map,
             next_cache_block_index: AtomicUsize::new(0),
+            runtime_filter_source_fields,
+            build_runtime_filter_watcher,
+            _build_runtime_filter_receiver,
+            is_runtime_filter_data_ready: AtomicBool::new(false),
             probe_statistics: Arc::new(HashJoinProbeStatistics::default()),
         }))
     }

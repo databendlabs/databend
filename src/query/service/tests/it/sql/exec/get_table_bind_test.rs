@@ -932,18 +932,23 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_runtime_filter_columns(
+    fn set_runtime_filter_columns(&self, _table_index: usize, _columns: Vec<(usize, String)>) {
+        todo!()
+    }
+
+    fn get_runtime_filter_columns(&self, _table_index: usize) -> Vec<(usize, String)> {
+        todo!()
+    }
+
+    fn set_hash_join_probe_statistics(
         &self,
-        _table_index: usize,
-        _columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+        _join_id: usize,
+        _statistics: Arc<HashJoinProbeStatistics>,
     ) {
         todo!()
     }
 
-    fn get_runtime_filter_columns(
-        &self,
-        _table_index: usize,
-    ) -> Vec<(String, Arc<HashJoinProbeStatistics>)> {
+    fn get_hash_join_probe_statistics(&self, _join_id: usize) -> Arc<HashJoinProbeStatistics> {
         todo!()
     }
 

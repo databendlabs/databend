@@ -238,9 +238,8 @@ impl FuseTable {
         };
 
         let runtime_filter_columns = ctx.get_runtime_filter_columns(plan.table_index);
-
         let mut enable_partition_scan = !runtime_filter_columns.is_empty();
-        for (column_name, _) in runtime_filter_columns.iter() {
+        for (_, column_name) in runtime_filter_columns.iter() {
             if schema.index_of(column_name).is_err() {
                 enable_partition_scan = false;
             }

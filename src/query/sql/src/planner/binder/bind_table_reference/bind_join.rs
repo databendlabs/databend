@@ -120,6 +120,7 @@ impl Binder {
             left_child,
             right_child,
             build_side_cache_info,
+            false,
         )?;
 
         let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
@@ -163,6 +164,7 @@ impl Binder {
             left_child,
             right_child,
             None,
+            true,
         )?;
         let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
 
@@ -217,6 +219,7 @@ impl Binder {
         mut left_child: SExpr,
         mut right_child: SExpr,
         build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+        is_merge_into_join: bool,
     ) -> Result<SExpr> {
         let mut left_conditions = join_conditions.left_conditions;
         let mut right_conditions = join_conditions.right_conditions;
@@ -292,7 +295,7 @@ impl Binder {
                     right_conditions,
                 )
             };
-        let logical_join = Join {
+        let join = Join {
             equi_conditions: JoinEquiCondition::new_conditions(
                 left_conditions,
                 right_conditions,
@@ -306,9 +309,10 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
+            is_merge_into_join,
         };
         Ok(SExpr::create_binary(
-            Arc::new(logical_join.into()),
+            Arc::new(join.into()),
             Arc::new(left_child),
             Arc::new(right_child),
         ))

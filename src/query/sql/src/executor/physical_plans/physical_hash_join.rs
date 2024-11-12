@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,10 +24,10 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::Datum;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -37,7 +36,6 @@ use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnEntry;
@@ -57,12 +55,13 @@ pub struct HashJoin {
     pub probe_projections: ColumnSet,
     pub build_projections: ColumnSet,
 
+    pub hash_join_id: usize,
     pub build: Box<PhysicalPlan>,
     pub probe: Box<PhysicalPlan>,
+    pub runtime_filter: Option<Box<PhysicalPlan>>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
     pub is_null_equal: Vec<bool>,
-    pub build_key_range_info: Vec<Option<(Datum, Datum)>>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
@@ -80,8 +79,9 @@ pub struct HashJoin {
 
     // probe keys for runtime filter, and record the index of table that used in probe keys.
     pub runtime_filter_exprs: Vec<Option<(RemoteExpr<String>, IndexType)>>,
-    // If enable bloom runtime filter
-    pub enable_bloom_runtime_filter: bool,
+    pub runtime_filter_source_fields: Vec<DataField>,
+    // If support runtime filter.
+    pub support_runtime_filter: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
     // When left/right single join converted to inner join, record the original join type
@@ -108,9 +108,13 @@ impl PhysicalPlanBuilder {
         mut others_required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
-        stat_info: Option<Arc<StatInfo>>,
         plan_stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let hash_join_id = self.next_hash_join_id();
+        let runtime_filter_exprs = self.runtime_filter_exprs(join)?;
+        self.runtime_filter_columns
+            .insert(hash_join_id, runtime_filter_columns(&runtime_filter_exprs));
+
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
 
@@ -121,16 +125,17 @@ impl PhysicalPlanBuilder {
         others_required = others_required.union(&retained_columns).cloned().collect();
         let mut pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
 
-        let mut is_broadcast = false;
-        // Check if join is broadcast join
+        // Check whether it is a distributed hash join.
+        let mut is_broadcast_join = false;
         if let PhysicalPlan::Exchange(Exchange {
             kind: FragmentKind::Expansive,
             ..
         }) = build_side.as_ref()
         {
-            is_broadcast = true;
+            // Broadcast join.
+            is_broadcast_join = true;
         }
-        // Unify the data types of the left and right exchange keys.
+        let mut is_shuffle_join = false;
         if let (
             PhysicalPlan::Exchange(Exchange {
                 keys: probe_keys, ..
@@ -140,133 +145,40 @@ impl PhysicalPlanBuilder {
             }),
         ) = (probe_side.as_mut(), build_side.as_mut())
         {
-            for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
-                let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
-                let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
-                let common_ty = common_super_type(
-                    probe_expr.data_type().clone(),
-                    build_expr.data_type().clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for probe key {:?} and build key {:?}",
-                        &probe_expr, &build_expr
-                    ))
-                })?;
-                *probe_key = check_cast(
-                    probe_expr.span(),
-                    false,
-                    probe_expr,
-                    &common_ty,
-                    &BUILTIN_FUNCTIONS,
-                )?
-                .as_remote_expr();
-                *build_key = check_cast(
-                    build_expr.span(),
-                    false,
-                    build_expr,
-                    &common_ty,
-                    &BUILTIN_FUNCTIONS,
-                )?
-                .as_remote_expr();
-            }
+            // Shuffle join, unify the data types of the left and right exchange keys.
+            is_shuffle_join = true;
+            self.unify_keys_data_type(probe_keys, build_keys)?;
         }
 
-        let build_schema = match join.join_type {
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
-                let build_schema = build_side.output_schema()?;
-                // Wrap nullable type for columns in build side.
-                let build_schema = DataSchemaRefExt::create(
-                    build_schema
-                        .fields()
-                        .iter()
-                        .map(|field| {
-                            DataField::new(field.name(), field.data_type().wrap_nullable())
-                        })
-                        .collect::<Vec<_>>(),
-                );
-                build_schema
-            }
-            _ => build_side.output_schema()?,
-        };
+        // The output schema of build and probe side.
+        let (build_schema, probe_schema) =
+            self.build_and_probe_output_schema(join, &build_side, &probe_side)?;
 
-        let probe_schema = match join.join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
-                let probe_schema = probe_side.output_schema()?;
-                // Wrap nullable type for columns in probe side.
-                let probe_schema = DataSchemaRefExt::create(
-                    probe_schema
-                        .fields()
-                        .iter()
-                        .map(|field| {
-                            DataField::new(field.name(), field.data_type().wrap_nullable())
-                        })
-                        .collect::<Vec<_>>(),
-                );
-                probe_schema
-            }
-            _ => probe_side.output_schema()?,
-        };
-
-        let mut left_join_conditions = Vec::new();
-        let mut right_join_conditions = Vec::new();
-        let mut build_key_range_info = Vec::new();
+        let mut probe_keys = Vec::new();
+        let mut build_keys = Vec::new();
         let mut is_null_equal = Vec::new();
-        let mut runtime_filter_exprs = Vec::new();
         let mut probe_to_build_index = Vec::new();
+        let mut runtime_filter_source_fields = Vec::new();
         for condition in join.equi_conditions.iter() {
-            let left_condition = &condition.left;
-            let right_condition = &condition.right;
-            let right_expr = right_condition
+            let build_condition = &condition.right;
+            let probe_condition = &condition.left;
+            let build_expr = build_condition
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
-            let left_expr = left_condition
+            let probe_expr = probe_condition
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
-            let runtime_filter_expr = if left_condition.used_columns().iter().all(|idx| {
-                // Runtime filter only support column in base table. It's possible to use a wrong derived column with
-                // the same name as a base table column, so we need to check if the column is a base table column.
-                matches!(
-                    self.metadata.read().column(*idx),
-                    ColumnEntry::BaseTableColumn(_)
-                )
-            }) {
-                if let Some(column_index) = left_condition.used_columns().iter().next() {
-                    if let Some(stat_info) = &stat_info
-                        && let Some(column_stat) =
-                            stat_info.statistics.column_stats.get(column_index)
-                    {
-                        build_key_range_info
-                            .push(Some((column_stat.min.clone(), column_stat.max.clone())));
-                    } else {
-                        build_key_range_info.push(None);
-                    }
-                    // Safe to unwrap because we have checked the column is a base table column.
-                    let table_index = self
-                        .metadata
-                        .read()
-                        .column(*column_index)
-                        .table_index()
-                        .unwrap();
-                    Some((
-                        left_condition
-                            .as_raw_expr()
-                            .type_check(&*self.metadata.read())?
-                            .project_column_ref(|col| col.column_name.clone()),
-                        table_index,
-                    ))
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            if let Some((_, build_index)) =
+                self.support_runtime_filter(probe_condition, build_condition)?
+            {
+                let build_index = build_schema.index_of(&build_index.to_string())?;
+                runtime_filter_source_fields.push(build_schema.field(build_index).clone());
+            }
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
-                    (left_condition, right_condition)
+                    (probe_condition, build_condition)
                 {
                     if column_projections.contains(&right.column.index) {
                         if let (Ok(probe_index), Ok(build_index)) = (
@@ -291,67 +203,71 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            // Unify the data types of the left and right expressions.
-            let left_type = left_expr.data_type();
-            let right_type = right_expr.data_type();
+
+            // Unify the data types of the probe and right expressions.
+            let probe_type = probe_expr.data_type();
+            let build_type = build_expr.data_type();
             let common_ty = common_super_type(
-                left_type.clone(),
-                right_type.clone(),
+                probe_type.clone(),
+                build_type.clone(),
                 &BUILTIN_FUNCTIONS.default_cast_rules,
             )
             .ok_or_else(|| {
                 ErrorCode::IllegalDataType(format!(
                     "Cannot find common type for {:?} and {:?}",
-                    left_type, right_type
+                    probe_type, build_type
                 ))
             })?;
-            let left_expr = check_cast(
-                left_expr.span(),
+            let probe_expr = check_cast(
+                probe_expr.span(),
                 false,
-                left_expr,
+                probe_expr,
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
             )?;
-            let right_expr = check_cast(
-                right_expr.span(),
+            let build_expr = check_cast(
+                build_expr.span(),
                 false,
-                right_expr,
+                build_expr,
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            let runtime_filter_expr = runtime_filter_expr
-                .map(|(expr, idx)| {
-                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
-                        .map(|casted_expr| (casted_expr, idx))
-                })
-                .transpose()?;
+            let (probe_expr, _) =
+                ConstantFolder::fold(&probe_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (build_expr, _) =
+                ConstantFolder::fold(&build_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let (left_expr, _) =
-                ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let (right_expr, _) =
-                ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-            let runtime_filter_expr = runtime_filter_expr.map(|(expr, table_index)| {
-                (
-                    ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
-                    table_index,
-                )
-            });
-
-            left_join_conditions.push(left_expr.as_remote_expr());
-            right_join_conditions.push(right_expr.as_remote_expr());
+            probe_keys.push(probe_expr.as_remote_expr());
+            build_keys.push(build_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
-            runtime_filter_exprs
-                .push(runtime_filter_expr.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
         }
 
+        // For shuffle join, we need to build global runtime filter.
+        let support_runtime_filter = supported_runtime_filter_join_type(&join.join_type);
+        let runtime_filter_plan = if support_runtime_filter
+            && !self.ctx.get_cluster().is_empty()
+            && is_shuffle_join
+            && !runtime_filter_source_fields.is_empty()
+        {
+            runtime_filter_source_fields.push(DataField::new("node_id", DataType::String));
+            runtime_filter_source_fields.push(DataField::new("need_to_build", DataType::Boolean));
+            Some(self.build_runtime_filter_plan(
+                hash_join_id,
+                DataSchemaRefExt::create(runtime_filter_source_fields.clone()),
+            )?)
+        } else {
+            None
+        };
+
+        // Cache scan info.
         let mut cache_column_map = HashMap::new();
         let cached_column = if let Some(cache_info) = &join.build_side_cache_info {
             cache_info.columns.clone().into_iter().collect()
         } else {
             HashSet::new()
         };
+
         pre_column_projections.extend(cached_column.iter());
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
@@ -373,12 +289,6 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-
-        // for distributed merge into, there is a field called "_row_number", but
-        // it's not an internal row_number, we need to add it here
-        if let Some((index, _)) = build_schema.column_with_name(ROW_NUMBER_COL_NAME) {
-            build_projections.insert(index);
-        }
 
         let mut merged_fields =
             Vec::with_capacity(probe_projections.len() + build_projections.len());
@@ -520,14 +430,16 @@ impl PhysicalPlanBuilder {
             projections,
             build_projections,
             probe_projections,
+            hash_join_id,
             build: build_side,
             probe: probe_side,
+            runtime_filter: runtime_filter_plan,
             join_type: join.join_type.clone(),
-            build_keys: right_join_conditions,
-            probe_keys: left_join_conditions,
+            build_keys,
+            probe_keys,
             is_null_equal,
-            build_key_range_info,
             runtime_filter_exprs,
+            runtime_filter_source_fields,
             non_equi_conditions: join
                 .non_equi_conditions
                 .iter()
@@ -547,10 +459,251 @@ impl PhysicalPlanBuilder {
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(plan_stat_info),
-            broadcast: is_broadcast,
+            broadcast: is_broadcast_join,
             single_to_inner: join.single_to_inner.clone(),
-            enable_bloom_runtime_filter: true,
+            support_runtime_filter,
             build_side_cache_info,
         }))
     }
+
+    fn unify_keys_data_type(
+        &self,
+        probe_keys: &mut [RemoteExpr],
+        build_keys: &mut [RemoteExpr],
+    ) -> Result<()> {
+        for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
+            let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+            let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
+            let common_ty = common_super_type(
+                probe_expr.data_type().clone(),
+                build_expr.data_type().clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!(
+                    "Cannot find common type for probe key {:?} and build key {:?}",
+                    &probe_expr, &build_expr
+                ))
+            })?;
+            *probe_key = check_cast(
+                probe_expr.span(),
+                false,
+                probe_expr,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?
+            .as_remote_expr();
+            *build_key = check_cast(
+                build_expr.span(),
+                false,
+                build_expr,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?
+            .as_remote_expr();
+        }
+
+        Ok(())
+    }
+
+    fn build_and_probe_output_schema(
+        &self,
+        join: &Join,
+        build: &PhysicalPlan,
+        probe: &PhysicalPlan,
+    ) -> Result<(DataSchemaRef, DataSchemaRef)> {
+        let build_schema = match join.join_type {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
+                // Wrap nullable type for columns in build side.
+                DataSchemaRefExt::create(
+                    build
+                        .output_schema()?
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            }
+            _ => build.output_schema()?,
+        };
+
+        let probe_schema = match join.join_type {
+            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+                // Wrap nullable type for columns in probe side.
+                DataSchemaRefExt::create(
+                    probe
+                        .output_schema()?
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            }
+            _ => probe.output_schema()?,
+        };
+
+        Ok((build_schema, probe_schema))
+    }
+
+    fn build_runtime_filter_plan(
+        &mut self,
+        hash_join_id: usize,
+        runtime_filter_source_output_schema: DataSchemaRef,
+    ) -> Result<Box<PhysicalPlan>> {
+        let runtime_filter_source =
+            self.build_runtime_filter_source(hash_join_id, runtime_filter_source_output_schema)?;
+        Ok(Box::new(self.build_runtime_filter_sink(
+            hash_join_id,
+            Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(runtime_filter_source),
+                kind: FragmentKind::Expansive,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            })),
+        )?))
+    }
+
+    pub fn support_runtime_filter(
+        &self,
+        probe_condition: &ScalarExpr,
+        build_condition: &ScalarExpr,
+    ) -> Result<Option<(IndexType, IndexType)>> {
+        // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+        // the same name as a base table column, so we need to check if the column is a base table column.
+        if let (ScalarExpr::BoundColumnRef(probe_column), ScalarExpr::BoundColumnRef(build_column)) =
+            (probe_condition, build_condition)
+            && matches!(
+                self.metadata.read().column(probe_column.column.index),
+                ColumnEntry::BaseTableColumn(_)
+            )
+            && matches!(
+                self.metadata.read().column(build_column.column.index),
+                ColumnEntry::BaseTableColumn(_)
+            )
+            && supported_runtime_filter_data_type(&probe_condition.data_type()?)
+        {
+            Ok(Some((probe_column.column.index, build_column.column.index)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn runtime_filter_exprs(
+        &self,
+        join: &Join,
+    ) -> Result<Vec<Option<(RemoteExpr<String>, IndexType)>>> {
+        let mut runtime_filter_exprs = Vec::with_capacity(join.equi_conditions.len());
+        for condition in join.equi_conditions.iter() {
+            let build_condition = &condition.right;
+            let probe_condition = &condition.left;
+            // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+            // the same name as a base table column, so we need to check if the column is a base table column.
+            let runtime_filter_expr = if let Some((probe_index, _)) =
+                self.support_runtime_filter(probe_condition, build_condition)?
+            {
+                // Safe to unwrap because we have checked the column is a base table column.
+                let table_index = self
+                    .metadata
+                    .read()
+                    .column(probe_index)
+                    .table_index()
+                    .unwrap();
+                Some((
+                    probe_condition
+                        .as_raw_expr()
+                        .type_check(&*self.metadata.read())?
+                        .project_column_ref(|col| col.column_name.clone()),
+                    table_index,
+                ))
+            } else {
+                None
+            };
+
+            let probe_data_type = probe_condition.data_type()?;
+            let build_data_type = build_condition.data_type()?;
+            let common_data_type = common_super_type(
+                probe_data_type.clone(),
+                build_data_type.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!(
+                    "Cannot find common type for {:?} and {:?}",
+                    probe_data_type, build_data_type
+                ))
+            })?;
+            let runtime_filter_expr = runtime_filter_expr
+                .map(|(expr, idx)| {
+                    check_cast(
+                        expr.span(),
+                        false,
+                        expr,
+                        &common_data_type,
+                        &BUILTIN_FUNCTIONS,
+                    )
+                    .map(|casted_expr| (casted_expr, idx))
+                })
+                .transpose()?;
+
+            let runtime_filter_expr = runtime_filter_expr.map(|(expr, table_index)| {
+                (
+                    ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
+                    table_index,
+                )
+            });
+
+            runtime_filter_exprs
+                .push(runtime_filter_expr.map(|(expr, index)| (expr.as_remote_expr(), index)));
+        }
+        Ok(runtime_filter_exprs)
+    }
+}
+
+pub fn runtime_filter_columns(
+    runtime_filter_exprs: &[Option<(RemoteExpr<String>, IndexType)>],
+) -> Vec<(usize, String)> {
+    let runtime_filter_exprs: Vec<Option<(Expr<String>, IndexType)>> = runtime_filter_exprs
+        .iter()
+        .map(|runtime_filter_expr| {
+            runtime_filter_expr
+                .as_ref()
+                .map(|(expr, table_index)| (expr.as_expr(&BUILTIN_FUNCTIONS), *table_index))
+        })
+        .collect();
+    let mut columns = Vec::new();
+    for (probe_key, table_index) in runtime_filter_exprs
+        .iter()
+        .filter_map(|runtime_filter_expr| {
+            runtime_filter_expr
+                .as_ref()
+                .map(|(probe_key, table_index)| (probe_key, table_index))
+        })
+    {
+        if let Some(column_name) = Expr::<String>::column_id(probe_key) {
+            columns.push((*table_index, column_name));
+        }
+    }
+    columns
+}
+
+pub fn supported_runtime_filter_data_type(data_type: &DataType) -> bool {
+    let data_type = data_type.remove_nullable();
+    data_type.is_numeric()
+        || data_type.is_string()
+        || data_type.is_date()
+        || data_type.is_timestamp()
+}
+
+pub fn supported_runtime_filter_join_type(join_type: &JoinType) -> bool {
+    matches!(
+        join_type,
+        JoinType::Inner | JoinType::Right | JoinType::RightSemi | JoinType::LeftMark
+    )
 }

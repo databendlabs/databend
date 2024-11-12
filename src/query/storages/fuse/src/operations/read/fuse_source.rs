@@ -20,7 +20,6 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
-use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
@@ -236,7 +235,7 @@ pub fn build_partition_source_pipeline(
     table_schema: Arc<TableSchema>,
     max_threads: usize,
     max_io_requests: usize,
-    bloom_filter_columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+    bloom_filter_columns: Vec<(usize, String)>,
     column_indices: Vec<usize>,
     operator: Operator,
     put_cache: bool,

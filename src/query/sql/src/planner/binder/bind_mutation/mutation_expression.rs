@@ -384,6 +384,7 @@ impl MutationExpression {
             RelOperator::Scan(scan) => {
                 let mut scan = scan.clone();
                 scan.is_lazy_table = is_lazy_table;
+                scan.is_merge_into_target = true;
                 scan.set_update_stream_columns(update_stream_columns);
                 Ok(SExpr::create_leaf(Arc::new(scan.into())))
             }

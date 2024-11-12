@@ -142,6 +142,7 @@ impl CopyIntoTableInterpreter {
                     table_index: None,
                     internal_column: None,
                     source: Box::new(data_source_plan),
+                    runtime_filter_columns: vec![],
                 }))),
                 None,
             )

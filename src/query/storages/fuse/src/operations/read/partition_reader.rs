@@ -98,7 +98,9 @@ pub struct PartitionReader {
 
     // Block reader related variables.
     operator: Operator,
-    bloom_filter_columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+    bloom_filter_columns: Vec<(usize, String)>,
+    bloom_filter_statistics: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+    is_bloom_filter_statistics_fetched: bool,
     column_indices: Vec<usize>,
     query_internal_columns: bool,
     update_stream_columns: bool,
@@ -119,7 +121,7 @@ impl PartitionReader {
         schema: Arc<TableSchema>,
         read_settings: ReadSettings,
         stealable_partitions: StealablePartitions,
-        bloom_filter_columns: Vec<(String, Arc<HashJoinProbeStatistics>)>,
+        bloom_filter_columns: Vec<(usize, String)>,
         column_indices: Vec<usize>,
         partition_scan_state: Arc<PartitionScanState>,
         read_tasks: Receiver<Arc<DataBlock>>,
@@ -154,6 +156,8 @@ impl PartitionReader {
             read_task: None,
             stealable_partitions,
             bloom_filter_columns,
+            bloom_filter_statistics: vec![],
+            is_bloom_filter_statistics_fetched: false,
             column_indices,
             partition_scan_state,
             read_tasks,
@@ -325,19 +329,19 @@ impl PartitionReader {
         let mut bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
         bloom_filters.sort_by(|a, b| {
             let a_pos = self
-                .bloom_filter_columns
+                .bloom_filter_statistics
                 .iter()
                 .position(|(name, _)| name == &a.0)
                 .unwrap_or(usize::MAX);
             let b_pos = self
-                .bloom_filter_columns
+                .bloom_filter_statistics
                 .iter()
                 .position(|(name, _)| name == &b.0)
                 .unwrap_or(usize::MAX);
             a_pos.cmp(&b_pos)
         });
 
-        self.bloom_filter_columns
+        self.bloom_filter_statistics
             .iter()
             .map(|(name, _)| {
                 bloom_filters
@@ -356,7 +360,7 @@ impl PartitionReader {
         let block_reader = self.create_block_reader(Projection::Columns(column_indices.clone()))?;
 
         for ((column_name, hash_join_probe_statistics), bloom_filter) in self
-            .bloom_filter_columns
+            .bloom_filter_statistics
             .iter()
             .zip(bloom_filters.into_iter())
         {
@@ -478,6 +482,15 @@ impl PartitionReader {
         }
         indices
     }
+
+    fn fetche_bloom_filter_statistics(&mut self) {
+        for (hash_join_id, column_name) in self.bloom_filter_columns.iter() {
+            let statistics = self.ctx.get_hash_join_probe_statistics(*hash_join_id);
+            self.bloom_filter_statistics
+                .push((column_name.clone(), statistics))
+        }
+        self.is_bloom_filter_statistics_fetched = true;
+    }
 }
 
 #[async_trait::async_trait]
@@ -493,6 +506,9 @@ impl Processor for PartitionReader {
     fn event(&mut self) -> Result<Event> {
         if self.is_finished {
             return self.next_step(Step::Finish);
+        }
+        if !self.is_bloom_filter_statistics_fetched {
+            self.fetche_bloom_filter_statistics();
         }
         match self.step {
             Step::Sync(step) => match step {

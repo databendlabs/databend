@@ -107,6 +107,8 @@ pub struct Scan {
     // Lazy row fetch.
     pub is_lazy_table: bool,
     pub sample: Option<Sample>,
+    // Merge into target table
+    pub is_merge_into_target: bool,
 
     pub statistics: Arc<Statistics>,
 }
@@ -146,6 +148,7 @@ impl Scan {
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
             is_lazy_table: self.is_lazy_table,
+            is_merge_into_target: self.is_merge_into_target,
             sample: self.sample.clone(),
         }
     }

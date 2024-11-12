@@ -237,25 +237,6 @@ impl Datum {
                 Some(Datum::Float(F64::from(x.into_inner() - y.into_inner())))
             }
             _ => None,
-            // (Datum::Bytes(x), Datum::Bytes(y)) => {
-            //     // There are 128 characters in ASCII code and 128^4 = 268435456 < 2^32 < 128^5.
-            //     if x.is_empty() || y.is_empty() || x.len() > 4 || y.len() > 4 {
-            //         return None;
-            //     }
-            //     let mut min_value: u32 = 0;
-            //     let mut max_value: u32 = 0;
-            //     while x.len() != y.len() {
-            //         if y.len() < x.len() {
-            //             y.push(0);
-            //         } else {
-            //             x.push(0);
-            //         }
-            //     }
-            //     for idx in 0..min.len() {
-            //         min_value = min_value * 128 + y[idx] as u32;
-            //         max_value = max_value * 128 + x[idx] as u32;
-            //     }
-            // }
         }
     }
 

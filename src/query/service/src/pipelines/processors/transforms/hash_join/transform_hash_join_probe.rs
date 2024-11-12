@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -51,6 +52,8 @@ pub enum SyncStep {
     Probe,
     // Final scan for right-related join or merge into.
     FinalScan,
+    // Build runtime filter.
+    BuildRuntimeFilter,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -111,6 +114,12 @@ pub struct TransformHashJoinProbe {
     // The next partition id to restore.
     partition_id_to_restore: usize,
 
+    // Bloom filter related states.
+    support_runtime_filter: bool,
+    is_bloom_filter_built: bool,
+    is_build_bloom_filter_processor: bool,
+    need_to_check_bloom_filter_data: bool,
+
     step: Step,
     step_logs: Vec<Step>,
 }
@@ -158,6 +167,10 @@ impl TransformHashJoinProbe {
             other_predicate,
         );
 
+        let support_runtime_filter = join_probe_state
+            .hash_join_state
+            .hash_join_desc
+            .support_runtime_filter;
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -179,6 +192,10 @@ impl TransformHashJoinProbe {
             partition_id_to_restore: 0,
             step: Step::Async(AsyncStep::WaitBuild),
             step_logs: vec![Step::Async(AsyncStep::WaitBuild)],
+            support_runtime_filter,
+            is_bloom_filter_built: false,
+            is_build_bloom_filter_processor: false,
+            need_to_check_bloom_filter_data: true,
         }))
     }
 
@@ -189,6 +206,11 @@ impl TransformHashJoinProbe {
             Step::Finish => {
                 self.input_port.finish();
                 self.output_port.finish();
+                self.join_probe_state
+                    .hash_join_state
+                    .build_runtime_filter_watcher
+                    .send(Some(false))
+                    .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
                 self.finish_build()?;
                 Event::Finished
             }
@@ -196,6 +218,65 @@ impl TransformHashJoinProbe {
         self.step = step.clone();
         self.step_logs.push(step);
         Ok(event)
+    }
+
+    fn need_build_runtime_filter(&mut self) -> Result<bool> {
+        if !self.support_runtime_filter {
+            return Ok(false);
+        }
+        if self.is_build_bloom_filter_processor() {
+            self.is_build_bloom_filter_processor = false;
+            if self.join_probe_state.ctx.get_cluster().is_empty() {
+                self.need_to_check_bloom_filter_data = false;
+                return Ok(true);
+            } else {
+                self.join_probe_state
+                    .hash_join_state
+                    .build_runtime_filter_watcher
+                    .send(Some(true))
+                    .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
+            }
+        } else if self.need_to_check_bloom_filter_data
+            && self
+                .join_probe_state
+                .hash_join_state
+                .is_runtime_filter_data_ready
+                .load(Ordering::Acquire)
+        {
+            self.need_to_check_bloom_filter_data = false;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    fn is_build_bloom_filter_processor(&mut self) -> bool {
+        dbg!(
+            "self.worker: {:?}",
+            self.join_probe_state
+                .build_runtime_filter_worker
+                .load(Ordering::SeqCst)
+        );
+        if self.is_build_bloom_filter_processor {
+            return true;
+        }
+        if self.is_bloom_filter_built || self.is_spill_happened {
+            return false;
+        }
+        if !self
+            .join_probe_state
+            .hash_join_state
+            .probe_statistics
+            .prefer_runtime_filter()
+        {
+            return false;
+        }
+        self.is_bloom_filter_built = true;
+        self.is_build_bloom_filter_processor = self
+            .join_probe_state
+            .build_runtime_filter_worker
+            .fetch_sub(1, Ordering::AcqRel)
+            == 1;
+        self.is_build_bloom_filter_processor
     }
 
     fn probe(&mut self) -> Result<Event> {
@@ -219,6 +300,10 @@ impl TransformHashJoinProbe {
 
         if !self.data_blocks_need_to_spill.is_empty() {
             return self.next_step(Step::Async(AsyncStep::Spill));
+        }
+
+        if self.need_build_runtime_filter()? {
+            return self.next_step(Step::Sync(SyncStep::BuildRuntimeFilter));
         }
 
         if self.input_port.has_data() {
@@ -317,7 +402,7 @@ impl Processor for TransformHashJoinProbe {
     fn event(&mut self) -> Result<Event> {
         match &self.step {
             Step::Sync(step) => match step {
-                SyncStep::Probe => self.probe(),
+                SyncStep::Probe | SyncStep::BuildRuntimeFilter => self.probe(),
                 SyncStep::FinalScan => self.final_scan(),
             },
             Step::Async(step) => match step {
@@ -387,6 +472,7 @@ impl Processor for TransformHashJoinProbe {
                 self.is_final_scan_finished = true;
                 Ok(())
             }
+            Step::Sync(SyncStep::BuildRuntimeFilter) => self.join_probe_state.build_bloom_filter(),
             _ => unreachable!(),
         }
     }
