@@ -567,7 +567,7 @@ debug = 1
 lto = "thin"
 overflow-checks = false
 opt-level = "s"         ## defaults to be 3
-incremental = false
+incremental = true
 
 # [profile.release.package]
 # databend-common-arrow = { codegen-units = 16 }
@@ -581,8 +581,8 @@ overflow-checks = false
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
-# wait until https://github.com/rust-lang/rust/issues/100142 fixed
-incremental = false
+# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
+incremental = true
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }
