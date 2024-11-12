@@ -12,5 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod reservoir_sampling;
-mod simpler;
+use databend_common_expression::BlockMetaInfo;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SortShuffle;
+
+#[typetag::serde(name = "sort_shuffle")]
+impl BlockMetaInfo for SortShuffle {}

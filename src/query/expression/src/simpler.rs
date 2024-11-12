@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod reservoir_sampling;
+
 use std::collections::HashSet;
 
 use rand::Rng;
+use reservoir_sampling::AlgoL;
 
-use super::reservoir_sampling::AlgoL;
 use crate::BlockRowIndex;
 use crate::DataBlock;
 
 pub struct Simpler<R: Rng> {
     columns: Vec<usize>,
     k: usize,
+    block_size: usize,
 
     blocks: Vec<DataBlock>,
     indices: Vec<BlockRowIndex>,
@@ -32,19 +35,20 @@ pub struct Simpler<R: Rng> {
 }
 
 impl<R: Rng> Simpler<R> {
-    pub fn new(columns: Vec<usize>, k: usize, rng: R) -> Self {
+    pub fn new(columns: Vec<usize>, block_size: usize, k: usize, rng: R) -> Self {
         let core = AlgoL::new(k.try_into().unwrap(), rng);
         Self {
             columns,
             blocks: Vec::new(),
             indices: Vec::with_capacity(k),
             k,
+            block_size,
             core,
             s: usize::MAX,
         }
     }
 
-    pub fn add_block(&mut self, data: DataBlock) {
+    pub fn add_block(&mut self, data: DataBlock) -> bool {
         let rows = data.num_rows();
         assert!(rows > 0);
         let block_idx = self.blocks.len() as u32;
@@ -57,7 +61,11 @@ impl<R: Rng> Simpler<R> {
                 .collect::<Vec<_>>();
 
             self.blocks.push(DataBlock::new(columns, rows));
+            if self.blocks.len() > self.k {
+                self.compact_blocks()
+            }
         }
+        change
     }
 
     fn add_indices(&mut self, rows: usize, block_idx: u32) -> bool {
@@ -123,19 +131,34 @@ impl<R: Rng> Simpler<R> {
     }
 
     pub fn compact_blocks(&mut self) {
-        let rows = self.indices.len();
-        let block = DataBlock::take_blocks(&self.blocks, &self.indices, rows);
-        self.blocks.clear();
-        self.blocks.push(block);
+        self.blocks = self
+            .indices
+            .chunks_mut(self.block_size)
+            .enumerate()
+            .map(|(i, indices)| {
+                let rows = indices.len();
+                let block = DataBlock::take_blocks(&self.blocks, indices, rows);
 
-        for (i, (b, r, _)) in self.indices.iter_mut().enumerate() {
-            *b = 0;
-            *r = i as u32;
-        }
+                for (j, (b, r, _)) in indices.iter_mut().enumerate() {
+                    *b = i as u32;
+                    *r = j as u32;
+                }
+
+                block
+            })
+            .collect::<Vec<_>>();
     }
 
     pub fn memory_size(self) -> usize {
         self.blocks.iter().map(|b| b.memory_size()).sum()
+    }
+
+    pub fn take_blocks(&mut self) -> Vec<DataBlock> {
+        std::mem::take(&mut self.blocks)
+    }
+
+    pub fn k(&self) -> usize {
+        self.k
     }
 }
 
@@ -153,9 +176,10 @@ mod tests {
         let core = AlgoL::new(k.try_into().unwrap(), rng);
         let mut simpler = Simpler {
             columns: vec![0],
+            k,
+            block_size: 65536,
             blocks: Vec::new(),
             indices: Vec::new(),
-            k,
             core,
             s: usize::MAX,
         };
