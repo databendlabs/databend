@@ -217,6 +217,12 @@ impl CteContext {
         }
         s_expr
     }
+
+    pub fn set_cte_context(&mut self, cte_context: CteContext) {
+        self.cte_map = cte_context.cte_map;
+        self.m_cte_bound_s_expr = cte_context.m_cte_bound_s_expr;
+        self.m_cte_materialized_indexes = cte_context.m_cte_materialized_indexes;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -632,10 +638,6 @@ impl BindContext {
 
     pub fn set_expr_context(&mut self, expr_context: ExprContext) {
         self.expr_context = expr_context;
-    }
-
-    pub fn set_cte_context(&mut self, cte_context: CteContext) {
-        self.cte_context = cte_context;
     }
 }
 

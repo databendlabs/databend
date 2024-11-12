@@ -389,7 +389,9 @@ impl Binder {
         };
         let s_expr =
             self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
-        left_context.set_cte_context(right_context.cte_context);
+        left_context
+            .cte_context
+            .set_cte_context(right_context.cte_context);
         Ok((s_expr, left_context))
     }
 
@@ -410,7 +412,9 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::with_parent(Box::new(left_bind_context.clone()));
-        new_bind_context.set_cte_context(right_bind_context.cte_context);
+        new_bind_context
+            .cte_context
+            .set_cte_context(right_bind_context.cte_context);
 
         for (idx, (left_col, right_col)) in left_bind_context
             .columns

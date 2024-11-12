@@ -129,7 +129,9 @@ impl Binder {
             right_context.clone(),
         );
 
-        bind_context.set_cte_context(right_context.cte_context);
+        bind_context
+            .cte_context
+            .set_cte_context(right_context.cte_context);
         Ok((s_expr, bind_context))
     }
 

@@ -2984,6 +2984,7 @@ impl<'a> TypeChecker<'a> {
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
         self.bind_context
+            .cte_context
             .set_cte_context(output_context.cte_context);
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
