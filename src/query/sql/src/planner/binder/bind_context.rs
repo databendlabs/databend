@@ -176,12 +176,15 @@ impl CteContext {
         self.m_cte_materialized_indexes.insert(cte_idx, index);
     }
 
+    pub fn has_bound(&self, cte_idx: IndexType) -> bool {
+        self.m_cte_bound_s_expr.contains_key(&cte_idx)
+    }
+
     pub fn merge(&mut self, other: CteContext) {
         let mut merged_cte_map = IndexMap::new();
         for (left_key, left_value) in self.cte_map.iter() {
             if let Some(right_value) = other.cte_map.get(left_key) {
                 let mut merged_value = left_value.clone();
-                merged_value.used_count += right_value.used_count;
                 if left_value.columns.is_empty() {
                     merged_value.columns = right_value.columns.clone()
                 }
@@ -196,20 +199,21 @@ impl CteContext {
 
     pub fn wrap_m_cte(&self, mut s_expr: SExpr) -> SExpr {
         for (_, cte_info) in self.cte_map.iter().rev() {
-            if !cte_info.materialized || cte_info.used_count == 0 {
+            if !cte_info.materialized {
                 continue;
             }
-            let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-            let materialized_output_columns = cte_info.columns.clone();
-            s_expr = SExpr::create_binary(
-                Arc::new(RelOperator::MaterializedCte(MaterializedCte {
-                    cte_idx: cte_info.cte_idx,
-                    materialized_output_columns,
-                    materialized_indexes: self.m_cte_materialized_indexes.clone(),
-                })),
-                Arc::new(s_expr),
-                Arc::new(cte_s_expr.clone()),
-            );
+            if let Some(cte_s_expr) = self.m_cte_bound_s_expr.get(&cte_info.cte_idx) {
+                let materialized_output_columns = cte_info.columns.clone();
+                s_expr = SExpr::create_binary(
+                    Arc::new(RelOperator::MaterializedCte(MaterializedCte {
+                        cte_idx: cte_info.cte_idx,
+                        materialized_output_columns,
+                        materialized_indexes: self.m_cte_materialized_indexes.clone(),
+                    })),
+                    Arc::new(s_expr),
+                    Arc::new(cte_s_expr.clone()),
+                );
+            }
         }
         s_expr
     }
@@ -222,8 +226,6 @@ pub struct CteInfo {
     pub materialized: bool,
     pub recursive: bool,
     pub cte_idx: IndexType,
-    // Record how many times this cte is used
-    pub used_count: usize,
     // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
 }

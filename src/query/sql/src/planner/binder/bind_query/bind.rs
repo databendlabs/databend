@@ -87,7 +87,6 @@ impl Binder {
                 materialized: cte.materialized,
                 recursive: with.recursive,
                 cte_idx: idx,
-                used_count: 0,
                 columns: vec![],
             };
             bind_context

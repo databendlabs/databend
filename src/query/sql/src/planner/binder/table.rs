@@ -154,8 +154,9 @@ impl Binder {
         mut bind_context: BindContext,
     ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
+        let cte_distinct_number = self.ctx.get_materialized_ctes().read().len() + 1;
         self.ctx
-            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
+            .set_materialized_cte((cte_info.cte_idx, cte_distinct_number), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
         let mut offsets = vec![];
@@ -180,7 +181,7 @@ impl Binder {
         }
         let cte_scan = SExpr::create_leaf(Arc::new(
             CteScan {
-                cte_idx: (cte_info.cte_idx, cte_info.used_count),
+                cte_idx: (cte_info.cte_idx, cte_distinct_number),
                 fields,
                 materialized_indexes,
                 offsets,
@@ -275,7 +276,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         span: &Span,
     ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = if cte_info.used_count == 0 {
+        let new_bind_context = if !bind_context.cte_context.has_bound(cte_info.cte_idx) {
             let (cte_s_expr, mut cte_bind_ctx) =
                 self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
             cte_bind_ctx
@@ -283,7 +284,6 @@ impl Binder {
                 .cte_map
                 .entry(table_name.clone())
                 .and_modify(|cte_info| {
-                    cte_info.used_count += 1;
                     cte_info.columns = cte_bind_ctx.columns.clone();
                 });
             cte_bind_ctx
@@ -303,13 +303,6 @@ impl Binder {
                 column.table_name = Some(alias_table_name.clone());
                 bound_ctx.columns.push(column);
             }
-            bound_ctx
-                .cte_context
-                .cte_map
-                .entry(table_name.clone())
-                .and_modify(|cte_info| {
-                    cte_info.used_count += 1;
-                });
             bound_ctx
         };
         let cte_info = new_bind_context

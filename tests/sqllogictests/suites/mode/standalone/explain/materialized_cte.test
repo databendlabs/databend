@@ -54,7 +54,7 @@ MaterializedCTE
         ├── filters: []
         ├── estimated rows: 100.00
         ├── CTEScan(Build)
-        │   ├── CTE index: 1, sub index: 1
+        │   ├── CTE index: 1, sub index: 3
         │   └── estimated rows: 10.00
         └── CTEScan(Probe)
             ├── CTE index: 0, sub index: 1
