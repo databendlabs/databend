@@ -341,8 +341,7 @@ impl HashJoinBuildState {
             };
 
             // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
-            if self.support_runtime_filter()
-            {
+            if self.support_runtime_filter() {
                 self.build_runtime_filter(&build_chunks, build_num_rows)?;
             }
 
@@ -906,7 +905,7 @@ impl HashJoinBuildState {
         };
         let bloom_filter_columns = &mut build_state.runtime_filter_columns;
 
-        for (probe_key, build_key) in self
+        for (_, build_key) in self
             .hash_join_state
             .hash_join_desc
             .build_keys
@@ -918,7 +917,9 @@ impl HashJoinBuildState {
                     .iter(),
             )
             .filter_map(|(build_key, runtime_filter_expr)| {
-                runtime_filter_expr.as_ref().map(|(probe_key, _)| (probe_key, build_key))
+                runtime_filter_expr
+                    .as_ref()
+                    .map(|(probe_key, _)| (probe_key, build_key))
             })
             .filter(|(probe_key, _)| Expr::<String>::column_id(probe_key).is_some())
         {
@@ -1046,6 +1047,7 @@ impl HashJoinBuildState {
     }
 
     pub fn support_runtime_filter(&self) -> bool {
-        self.hash_join_state.hash_join_desc.support_runtime_filter && self.hash_join_state.spilled_partitions.read().is_empty()
+        self.hash_join_state.hash_join_desc.support_runtime_filter
+            && self.hash_join_state.spilled_partitions.read().is_empty()
     }
 }

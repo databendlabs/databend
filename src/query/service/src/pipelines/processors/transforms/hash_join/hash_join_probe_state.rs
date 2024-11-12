@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -401,7 +401,7 @@ impl HashJoinProbeState {
             column
         };
         let key_columns = &[column];
-        hash_by_method(&method, key_columns.into(), num_rows, &mut column_hashes)?;        
+        hash_by_method(&method, key_columns.into(), num_rows, &mut column_hashes)?;
         let mut hashes = Vec::with_capacity(column_hashes.len());
         column_hashes.into_iter().for_each(|hash| {
             hashes.push(hash);

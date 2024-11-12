@@ -250,12 +250,6 @@ impl TransformHashJoinProbe {
     }
 
     fn is_build_bloom_filter_processor(&mut self) -> bool {
-        dbg!(
-            "self.worker: {:?}",
-            self.join_probe_state
-                .build_runtime_filter_worker
-                .load(Ordering::SeqCst)
-        );
         if self.is_build_bloom_filter_processor {
             return true;
         }
