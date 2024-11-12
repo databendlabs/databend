@@ -50,8 +50,7 @@ pub struct AsyncTransformer<T: AsyncTransform + 'static> {
     called_on_start: bool,
     called_on_finish: bool,
 
-    batch_size: usize,
-    max_block_size: usize,
+    batch_size: Option<usize>,
     num_input_rows: usize,
     input_data_blocks: Vec<DataBlock>,
     output_data_blocks: VecDeque<DataBlock>,
@@ -63,8 +62,7 @@ impl<T: AsyncTransform + 'static> AsyncTransformer<T> {
             input,
             output,
             transform: inner,
-            batch_size: 1,
-            max_block_size: 65536,
+            batch_size: None,
             num_input_rows: 0,
             input_data_blocks: Vec::new(),
             output_data_blocks: VecDeque::new(),
@@ -83,8 +81,7 @@ impl<T: AsyncTransform + 'static> AsyncTransformer<T> {
             input,
             output,
             transform: inner,
-            batch_size,
-            max_block_size: 65536,
+            batch_size: Some(batch_size * 65536),
             num_input_rows: 0,
             input_data_blocks: Vec::new(),
             output_data_blocks: VecDeque::new(),
@@ -117,7 +114,11 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
                     self.output.push_data(Ok(data));
                 }
 
-                if self.num_input_rows >= self.batch_size * self.max_block_size {
+                if let Some(batch_size) = self.batch_size {
+                    if self.num_input_rows >= batch_size {
+                        return Ok(Event::Async);
+                    }
+                } else if !self.input_data_blocks.is_empty() {
                     return Ok(Event::Async);
                 }
 
@@ -136,14 +137,17 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
 
         if !self.input_data_blocks.is_empty() {
             let input_data_blocks = std::mem::take(&mut self.input_data_blocks);
-            let data_block = self
-                .transform
-                .transform(DataBlock::concat(&input_data_blocks)?)
-                .await?;
-            let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
-            self.output_data_blocks.extend(sub_blocks);
-            if let Some(remain) = remain_block {
-                self.output_data_blocks.push_back(remain);
+            if self.batch_size.is_some() {
+                let data_block = self
+                    .transform
+                    .transform(DataBlock::concat(&input_data_blocks)?)
+                    .await?;
+                self.output_data_blocks.push_back(data_block);
+            } else {
+                for data_block in input_data_blocks {
+                    let data_block = self.transform.transform(data_block).await?;
+                    self.output_data_blocks.push_back(data_block);
+                }
             }
             self.num_input_rows = 0;
             return Ok(());
@@ -164,7 +168,11 @@ impl<T: AsyncTransform> AsyncTransformer<T> {
             let input_data = self.input.pull_data().unwrap()?;
             self.num_input_rows += input_data.num_rows();
             self.input_data_blocks.push(input_data);
-            if self.num_input_rows >= self.batch_size * self.max_block_size {
+            if let Some(batch_size) = self.batch_size {
+                if self.num_input_rows >= batch_size {
+                    return Ok(Event::Async);
+                }
+            } else {
                 return Ok(Event::Async);
             }
         }
