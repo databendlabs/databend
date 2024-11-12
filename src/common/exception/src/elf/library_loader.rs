@@ -215,7 +215,7 @@ impl LibraryLoader {
         unsafe {
             let library_name = OsString::from("/proc/self/exe");
             let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
-            let mut binary_library = self.mmap_library(binary_path.clone())?;
+            let binary_library = self.mmap_library(binary_path.clone())?;
             Ok(binary_library.build_id().map(|x| x.to_vec()))
         }
     }

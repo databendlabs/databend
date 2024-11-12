@@ -118,7 +118,6 @@ impl Hash for StackFrame {
             match &self {
                 StackFrame::Ip(addr) => addr.hash(state),
                 StackFrame::PhysicalAddr(addr) => addr.hash(state),
-                _ => {}
             };
         }
 
