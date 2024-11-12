@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -221,19 +222,52 @@ impl FuseTable {
         };
 
         let runtime_filter_columns = ctx.get_runtime_filter_columns(plan.table_index);
-        let mut enable_partition_scan = !runtime_filter_columns.is_empty();
+        let mut partition_scan = !runtime_filter_columns.is_empty();
         for (_, column_name) in runtime_filter_columns.iter() {
             if schema.index_of(column_name).is_err() {
-                enable_partition_scan = false;
+                partition_scan = false;
             }
         }
 
-        if enable_partition_scan
+        if partition_scan
             && let Some(column_indices) = projection_column_indices
             && index_reader.is_none()
             && virtual_reader.is_none()
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
         {
+            if !lazy_init_segments.is_empty() {
+                let table = self.clone();
+                let table_schema = self.schema_with_stream();
+                let push_downs = plan.push_downs.clone();
+                let query_ctx = ctx.clone();
+
+                let lazy_init_segments = lazy_init_segments.clone();
+                pipeline.set_on_init(move || {
+                    let table = table.clone();
+                    let table_schema = table_schema.clone();
+                    let ctx = query_ctx.clone();
+                    let push_downs = push_downs.clone();
+
+                    let partitions =
+                        Runtime::with_worker_threads(2, None)?.block_on(async move {
+                            let (_statistics, partitions) = table
+                                .prune_snapshot_blocks(
+                                    ctx,
+                                    push_downs,
+                                    table_schema,
+                                    lazy_init_segments,
+                                    0,
+                                )
+                                .await?;
+
+                            Result::<_>::Ok(partitions)
+                        })?;
+
+                    query_ctx.set_partitions(partitions)?;
+                    Ok(())
+                });
+            }
+
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
             let table_schema = self.schema_with_stream();
             build_partition_source_pipeline(
@@ -249,6 +283,7 @@ impl FuseTable {
                 put_cache,
             )?;
         } else {
+            partition_scan = false;
             self.build_fuse_source_pipeline(
                 ctx.clone(),
                 pipeline,
@@ -266,40 +301,42 @@ impl FuseTable {
         // replace the column which has data mask if needed
         self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
 
-        if let Some(sender) = tx {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            pipeline.set_on_init(move || {
-                ctx.get_runtime()?.try_spawn(
-                    async move {
-                        match table
-                            .prune_snapshot_blocks(
-                                ctx,
-                                push_downs,
-                                table_schema,
-                                lazy_init_segments,
-                                0,
-                            )
-                            .await
-                        {
-                            Ok((_, partitions)) => {
-                                for part in partitions.partitions {
-                                    // ignore the error, the sql may be killed or early stop
-                                    let _ = sender.send(Ok(part)).await;
+        if !partition_scan {
+            if let Some(sender) = tx {
+                let table = self.clone();
+                let table_schema = self.schema_with_stream();
+                let push_downs = plan.push_downs.clone();
+                pipeline.set_on_init(move || {
+                    ctx.get_runtime()?.try_spawn(
+                        async move {
+                            match table
+                                .prune_snapshot_blocks(
+                                    ctx,
+                                    push_downs,
+                                    table_schema,
+                                    lazy_init_segments,
+                                    0,
+                                )
+                                .await
+                            {
+                                Ok((_, partitions)) => {
+                                    for part in partitions.partitions {
+                                        // ignore the error, the sql may be killed or early stop
+                                        let _ = sender.send(Ok(part)).await;
+                                    }
+                                }
+                                Err(err) => {
+                                    let _ = sender.send(Err(err)).await;
                                 }
                             }
-                            Err(err) => {
-                                let _ = sender.send(Err(err)).await;
-                            }
-                        }
-                        Ok::<_, ErrorCode>(())
-                    },
-                    None,
-                )?;
+                            Ok::<_, ErrorCode>(())
+                        },
+                        None,
+                    )?;
 
-                Ok(())
-            });
+                    Ok(())
+                });
+            }
         }
 
         Ok(())

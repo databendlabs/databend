@@ -238,13 +238,19 @@ impl PartitionReader {
         let _guard = self.partition_scan_state.mutex.lock().unwrap();
         let mut partitions = Vec::with_capacity(self.batch_size);
         while partitions.len() < self.batch_size {
-            let parts = self
+            let parts = if let Some(parts) = self
                 .stealable_partitions
-                .steal(self.id, self.batch_size - partitions.len());
-
-            let Some(parts) = parts else {
-                self.partition_scan_state.set_stealable_partitions_empty();
-                break;
+                .steal(self.id, self.batch_size - partitions.len())
+            {
+                parts
+            } else {
+                let parts = self.ctx.get_partitions(self.batch_size - partitions.len());
+                if !parts.is_empty() {
+                    parts
+                } else {
+                    self.partition_scan_state.set_stealable_partitions_empty();
+                    break;
+                }
             };
 
             for part in parts.into_iter() {
