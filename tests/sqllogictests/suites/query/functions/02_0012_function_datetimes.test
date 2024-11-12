@@ -1170,6 +1170,116 @@ select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20'
 ----
 1
 
+query T
+select last_day(to_date('2024-10-22'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-10-27'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-02-01'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_date('2024-02-01'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_date('2024-02-01'), year);
+----
+2024-12-31
+
+query T
+select last_day(to_timestamp('2024-10-24 09:38:18.165575'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-27 09:38:18.165575'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-02-11 09:38:18.165575'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_timestamp('2024-02-11 09:38:18.165575'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_timestamp('2024-02-11 09:38:18.165575'), year);
+----
+2024-12-31
+
+query T
+select previous_day(to_date('2024-10-25'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_date('2024-10-25'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_date('2024-10-25'), saturday);
+----
+2024-10-19
+
+query T
+select previous_day(to_timestamp('2024-10-25 09:38:18.165575'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_timestamp('2024-10-25 09:38:18.165575'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_timestamp('2024-10-25 09:38:18.165575'), sunday);
+----
+2024-10-20
+
+query T
+select next_day(to_date('2024-10-25'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_date('2024-10-25'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_date('2024-10-25'), saturday);
+----
+2024-10-26
+
+query T
+select next_day(to_timestamp('2024-10-25 09:38:18.165575'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_timestamp('2024-10-25 09:38:18.165575'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_timestamp('2024-10-25 09:38:18.165575'), sunday);
+----
+2024-10-27
+
 statement ok
 drop table if exists ts
 

@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::extract::Matcher;
@@ -27,7 +25,6 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::ComparisonOp;
-use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -171,7 +168,13 @@ fn extract_top_n(column: usize, predicate: ScalarExpr) -> Option<usize> {
 }
 
 fn extract_i32(expr: &ScalarExpr) -> Option<i32> {
-    check_number(None, &FunctionContext::default(), expr, &BUILTIN_FUNCTIONS)?
+    check_number(
+        None,
+        &FunctionContext::default(),
+        &expr.as_expr().ok()?,
+        &BUILTIN_FUNCTIONS,
+    )
+    .ok()
 }
 
 fn is_ranking_function(func: &WindowFuncType) -> bool {

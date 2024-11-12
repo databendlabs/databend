@@ -18,7 +18,7 @@ use std::io;
 use std::io::BufWriter;
 use std::io::Write;
 
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_sled_store::openraft::error::Fatal;
 use databend_common_meta_sled_store::openraft::ErrorSubject;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
@@ -100,7 +100,7 @@ impl ReceiverV1 {
 
 pub(crate) async fn receive_snapshot_v1(
     receiver: &mut Option<ReceiverV1>,
-    ss_store: &SnapshotStoreV003,
+    ss_store: &SnapshotStoreV004,
     req: InstallSnapshotRequest,
 ) -> Result<Option<String>, RaftError<InstallSnapshotError>> {
     let snapshot_id = req.meta.snapshot_id.clone();

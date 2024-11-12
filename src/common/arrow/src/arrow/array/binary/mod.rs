@@ -29,7 +29,6 @@ use crate::arrow::offset::Offsets;
 use crate::arrow::offset::OffsetsBuffer;
 use crate::arrow::trusted_len::TrustedLen;
 
-mod ffi;
 pub(super) mod fmt;
 mod iterator;
 pub use iterator::*;

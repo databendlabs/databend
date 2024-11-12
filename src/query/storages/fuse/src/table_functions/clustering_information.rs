@@ -296,7 +296,14 @@ impl<'a> ClusteringInformation<'a> {
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let cluster_key_types = exprs
             .into_iter()
-            .map(|v| v.data_type().clone())
+            .map(|v| {
+                let data_type = v.data_type();
+                if matches!(*data_type, DataType::String) {
+                    data_type.wrap_nullable()
+                } else {
+                    data_type.clone()
+                }
+            })
             .collect::<Vec<_>>();
         let indices = compare_scalars(keys, &cluster_key_types)?;
         for idx in indices.into_iter() {

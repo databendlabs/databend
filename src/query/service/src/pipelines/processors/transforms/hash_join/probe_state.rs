@@ -85,7 +85,6 @@ impl ProbeState {
         max_block_size: usize,
         join_type: &JoinType,
         with_conjunction: bool,
-        has_string_column: bool,
         func_ctx: FunctionContext,
         other_predicate: Option<Expr>,
     ) -> Self {
@@ -134,7 +133,7 @@ impl ProbeState {
             process_state: None,
             max_block_size,
             mutable_indexes: MutableIndexes::new(max_block_size),
-            generation_state: ProbeBlockGenerationState::new(max_block_size, has_string_column),
+            generation_state: ProbeBlockGenerationState::new(max_block_size),
             selection: vec![0; max_block_size],
             hashes: vec![0; max_block_size],
             selection_count: 0,
@@ -185,20 +184,13 @@ pub struct ProbeBlockGenerationState {
     pub(crate) is_probe_projected: bool,
     // When we need a bitmap that is all true, we can directly slice it to reduce memory usage.
     pub(crate) true_validity: Bitmap,
-    // The string_items_buf is used as a buffer to reduce memory allocation when taking [u8] Columns.
-    pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
 }
 
 impl ProbeBlockGenerationState {
-    fn new(size: usize, has_string_column: bool) -> Self {
+    fn new(size: usize) -> Self {
         Self {
             is_probe_projected: false,
             true_validity: Bitmap::new_constant(true, size),
-            string_items_buf: if has_string_column {
-                Some(vec![(0, 0); size])
-            } else {
-                None
-            },
         }
     }
 }

@@ -37,7 +37,7 @@ pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
 
 pub struct RealLicenseManager {
     tenant: String,
-    public_key: String,
+    public_keys: Vec<String>,
 
     // cache available settings to get avoid of unneeded license parsing time.
     pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
@@ -45,10 +45,24 @@ pub struct RealLicenseManager {
 
 impl LicenseManager for RealLicenseManager {
     fn init(tenant: String) -> Result<()> {
+        let public_key_str = embedded_public_keys()?;
+
+        let mut public_keys = Vec::new();
+        let mut remain_str = public_key_str.as_str();
+
+        let len = "-----END PUBLIC KEY-----".len();
+        while let Some(r_pos) = remain_str.find("-----END PUBLIC KEY-----") {
+            let key_str = &remain_str[..r_pos + len];
+            public_keys.push(key_str.to_string());
+            remain_str = remain_str[r_pos + len..].trim();
+        }
+
+        public_keys.push(LICENSE_PUBLIC_KEY.to_string());
+
         let rm = RealLicenseManager {
             tenant,
+            public_keys,
             cache: DashMap::new(),
-            public_key: LICENSE_PUBLIC_KEY.to_string(),
         };
 
         GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
@@ -85,17 +99,25 @@ impl LicenseManager for RealLicenseManager {
     }
 
     fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
-        let public_key = ES256PublicKey::from_pem(self.public_key.as_str())
-            .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
-        match public_key.verify_token::<LicenseInfo>(raw, None) {
-            Ok(v) => Ok(v),
-            Err(cause) => match cause.downcast_ref::<JWTError>() {
-                Some(JWTError::TokenHasExpired) => {
-                    Err(ErrorCode::LicenseKeyExpired("license key is expired."))
-                }
-                _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
-            },
+        for public_key in &self.public_keys {
+            let public_key = ES256PublicKey::from_pem(public_key)
+                .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
+
+            return match public_key.verify_token::<LicenseInfo>(raw, None) {
+                Ok(v) => Ok(v),
+                Err(cause) => match cause.downcast_ref::<JWTError>() {
+                    Some(JWTError::TokenHasExpired) => {
+                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+                    }
+                    Some(JWTError::InvalidSignature) => {
+                        continue;
+                    }
+                    _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
+                },
+            };
         }
+
+        Err(ErrorCode::LicenseKeyParseError("wt claim decode failed"))
     }
 
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
@@ -136,9 +158,8 @@ impl RealLicenseManager {
     pub fn new(tenant: String, public_key: String) -> Self {
         RealLicenseManager {
             tenant,
-            public_key,
-
             cache: DashMap::new(),
+            public_keys: vec![public_key],
         }
     }
 
@@ -182,5 +203,32 @@ impl RealLicenseManager {
                 self.tenant
             ))
         )
+    }
+}
+
+fn embedded_public_keys() -> Result<String> {
+    let pub_key = env!("DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY").to_string();
+
+    if pub_key.is_empty() {
+        return Ok(pub_key);
+    }
+
+    let decode_res = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        pub_key.as_bytes(),
+    );
+
+    match decode_res {
+        Err(e) => Err(ErrorCode::Internal(format!(
+            "Cannot parse embedded public key {:?}",
+            e
+        ))),
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Err(e) => Err(ErrorCode::Internal(format!(
+                "Cannot parse embedded public key {:?}",
+                e
+            ))),
+            Ok(keys) => Ok(keys),
+        },
     }
 }

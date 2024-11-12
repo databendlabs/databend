@@ -21,8 +21,11 @@ mod boolean;
 pub use boolean::*;
 mod binary;
 pub use binary::*;
+
+mod view;
+pub use view::*;
+
 mod null;
-pub use null::*;
 mod struct_;
 pub use struct_::*;
 mod list;

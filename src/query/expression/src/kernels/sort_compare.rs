@@ -23,6 +23,7 @@ use memchr::memchr;
 use crate::types::AnyType;
 use crate::types::NullableColumn;
 use crate::types::Number;
+use crate::types::StringColumn;
 use crate::types::ValueType;
 use crate::visitor::ValueVisitor;
 use crate::LimitType;
@@ -267,6 +268,11 @@ impl SortCompare {
             }
         }
     }
+
+    pub fn equality_index(&self) -> &[u8] {
+        debug_assert!(self.force_equality);
+        &self.equality_index
+    }
 }
 
 impl ValueVisitor for SortCompare {
@@ -290,11 +296,21 @@ impl ValueVisitor for SortCompare {
         self.visit_number(buffer)
     }
 
+    fn visit_string(&mut self, column: StringColumn) -> Result<()> {
+        assert!(column.len() == self.rows);
+        self.generic_sort(
+            &column,
+            |col, idx| (col, idx as usize),
+            |(col1, idx1), (col2, idx2)| StringColumn::compare(col1, idx1, col2, idx2),
+        );
+        Ok(())
+    }
+
     fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
         assert!(T::column_len(&col) == self.rows);
         self.generic_sort(
             &col,
-            |c, idx| -> T::ScalarRef<'_> { unsafe { T::index_column_unchecked(c, idx as _) } },
+            |c, idx| unsafe { T::index_column_unchecked(c, idx as _) },
             |a, b| T::compare(a, b),
         );
         Ok(())
