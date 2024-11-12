@@ -29,6 +29,7 @@ use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use jiff::civil::date;
+use jiff::civil::datetime;
 use jiff::civil::Date;
 use jiff::civil::Weekday;
 use jiff::tz::TimeZone as JiffTimeZone;
@@ -557,7 +558,8 @@ impl EvalTimesImpl {
 #[inline]
 pub fn today_date(now: &Zoned, tz: &JiffTimeZone) -> i32 {
     let now = now.with_time_zone(tz.clone());
-    now.date().since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+    now.date()
+        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
         .unwrap()
         .get_days()
 }
@@ -692,6 +694,93 @@ pub enum Round {
     TimeSlot,
     Hour,
     Day,
+}
+
+pub fn round_timestamp(ts: i64, tz: &JiffTimeZone, round: Round) -> i64 {
+    let dtz = ts.to_timestamp_jiff(tz.clone());
+    let res = match round {
+        Round::Second => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                dtz.minute(),
+                dtz.second(),
+                0,
+            ))
+            .unwrap(),
+        Round::Minute => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                dtz.minute(),
+                0,
+                0,
+            ))
+            .unwrap(),
+        Round::FiveMinutes => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                dtz.minute() / 5 * 5,
+                0,
+                0,
+            ))
+            .unwrap(),
+        Round::TenMinutes => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                dtz.minute() / 10 * 10,
+                0,
+                0,
+            ))
+            .unwrap(),
+        Round::FifteenMinutes => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                dtz.minute() / 15 * 15,
+                0,
+                0,
+            ))
+            .unwrap(),
+        Round::TimeSlot => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                dtz.minute() / 30 * 30,
+                0,
+                0,
+            ))
+            .unwrap(),
+        Round::Hour => tz
+            .to_zoned(datetime(
+                dtz.year(),
+                dtz.month(),
+                dtz.day(),
+                dtz.hour(),
+                0,
+                0,
+                0,
+            ))
+            .unwrap(),
+        Round::Day => tz
+            .to_zoned(datetime(dtz.year(), dtz.month(), dtz.day(), 0, 0, 0, 0))
+            .unwrap(),
+    };
+    res.timestamp().as_microsecond()
 }
 
 pub struct DateRounder;
