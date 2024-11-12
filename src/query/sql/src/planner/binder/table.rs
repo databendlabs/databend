@@ -154,7 +154,13 @@ impl Binder {
         mut bind_context: BindContext,
     ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
-        let cte_distinct_number = self.ctx.get_materialized_ctes().read().len() + 1;
+        let cte_distinct_number = 1 + self
+            .ctx
+            .get_materialized_ctes()
+            .read()
+            .iter()
+            .filter(|((idx, _), _)| idx == &cte_info.cte_idx)
+            .count();
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_distinct_number), blocks)?;
         // Get the fields in the cte
