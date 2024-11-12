@@ -30,6 +30,12 @@ create view v as select * from t;
 statement ok
 drop view v;
 
+# the dropped view vacuum_view_test.v should be there
+query I
+select count() from system.tables_with_history where database = 'vacuum_view_test' and name = 'v';
+----
+1
+
 statement ok
 set data_retention_time_in_days = 0;
 
