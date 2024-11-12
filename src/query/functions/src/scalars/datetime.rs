@@ -1724,56 +1724,56 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         "to_start_of_second",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::Second)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::Second)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "to_start_of_minute",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::Minute)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::Minute)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "to_start_of_five_minutes",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::FiveMinutes)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::FiveMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "to_start_of_ten_minutes",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::TenMinutes)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::TenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "to_start_of_fifteen_minutes",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::FifteenMinutes)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::FifteenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "to_start_of_hour",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::Hour)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::Hour)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "to_start_of_day",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::Day)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::Day)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
         "time_slot",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.func_ctx.tz.round_us(val, Round::TimeSlot)
+            round_timestamp(val, &ctx.func_ctx.jiff_tz, Round::TimeSlot)
         }),
     );
 
