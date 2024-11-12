@@ -50,8 +50,6 @@ ethnum = { workspace = true }
 foreign_vec = { workspace = true }
 hashbrown_v0_14 = { workspace = true }
 indexmap = { workspace = true }
-itertools = { workspace = true, optional = true }
-lexical-core = { workspace = true, optional = true }
 log = { workspace = true }
 lz4 = { workspace = true }
 num = { workspace = true, features = ["std"] }

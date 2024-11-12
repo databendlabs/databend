@@ -3027,8 +3027,6 @@ dependencies = [
  "foreign_vec",
  "hashbrown 0.14.5",
  "indexmap 2.6.0",
- "itertools 0.13.0",
- "lexical-core",
  "log",
  "lz4",
  "num",
