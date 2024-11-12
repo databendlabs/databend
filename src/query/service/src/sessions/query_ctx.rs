@@ -28,7 +28,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -114,7 +113,7 @@ use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use jiff::tz;
+use jiff::{tz, Zoned};
 use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
@@ -789,7 +788,7 @@ impl TableContext for QueryContext {
                 valid_tz, path, er, e
             ))
         })?;
-        let now = Utc::now();
+        let now = Zoned::now().with_time_zone(TimeZone::UTC);
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
