@@ -16,7 +16,7 @@ use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;

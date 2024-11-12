@@ -17,7 +17,6 @@ use std::sync::Arc;
 use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
 use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 use string::StringColumnBuilder;
@@ -48,6 +47,8 @@ use crate::Value;
 
 // Block idx, row idx in the block, repeat times
 pub type BlockRowIndex = (u32, u32, usize);
+
+pub type MergeSlice = (usize, usize, usize);
 
 impl DataBlock {
     pub fn take_blocks(

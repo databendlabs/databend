@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::mem::size_of;
 
 use crate::arrow::buffer::Buffer;
@@ -34,6 +35,46 @@ fn array_from_slice<const N: usize>(bs: &[u8]) -> Result<[u8; N]> {
             N,
             bs.len()
         )),
+    }
+}
+
+/// Sets bit at position `i` in `byte`
+#[inline]
+pub fn set(byte: u8, i: usize) -> u8 {
+    byte | BIT_MASK[i]
+}
+
+/// Writes an iterator of bools into writer, with LSB first.
+pub fn encode_bool<W: Write, I: Iterator<Item = bool>>(
+    writer: &mut W,
+    mut iterator: I,
+) -> std::io::Result<()> {
+    // the length of the iterator.
+    let length = iterator.size_hint().1.unwrap();
+
+    let chunks = length / 8;
+    let reminder = length % 8;
+
+    (0..chunks).try_for_each(|_| {
+        let mut byte = 0u8;
+        (0..8).for_each(|i| {
+            if iterator.next().unwrap() {
+                byte = set(byte, i)
+            }
+        });
+        writer.write_all(&[byte])
+    })?;
+
+    if reminder != 0 {
+        let mut last = 0u8;
+        iterator.enumerate().for_each(|(i, value)| {
+            if value {
+                last = set(last, i)
+            }
+        });
+        writer.write_all(&[last])
+    } else {
+        Ok(())
     }
 }
 

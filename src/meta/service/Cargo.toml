@@ -23,6 +23,7 @@ io-uring = [
 [dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+arrow-flight = { workspace = true }
 async-trait = { workspace = true }
 backon = { workspace = true }
 clap = { workspace = true }

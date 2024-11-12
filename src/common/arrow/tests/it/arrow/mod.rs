@@ -23,7 +23,7 @@ mod arrow_data;
 mod bitmap;
 mod buffer;
 mod compute;
-mod ffi;
+
 mod scalar;
 mod temporal_conversions;
 mod types;
