@@ -77,12 +77,17 @@ pub struct ResolvedStackFrame {
     pub column: Option<u32>,
 }
 
+pub struct PhysicalAddr {
+    pub physical_addr: usize,
+    pub library_build_id: Option<Arc<Vec<u8>>>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum StackFrame {
     #[cfg(target_os = "linux")]
     Ip(usize),
     #[cfg(target_os = "linux")]
-    PhysicalAddr(usize),
+    PhysicalAddr(PhysicalAddr),
     #[cfg(not(target_os = "linux"))]
     Backtrace(backtrace::BacktraceFrame),
 }
@@ -96,7 +101,7 @@ impl PartialEq for StackFrame {
             match (&self, &other) {
                 (StackFrame::Ip(addr), StackFrame::Ip(other_addr)) => addr == other_addr,
                 (StackFrame::PhysicalAddr(addr), StackFrame::PhysicalAddr(other_addr)) => {
-                    addr == other_addr
+                    addr.physical_addr == other_addr.physical_addr
                 }
                 _ => false,
             }
@@ -117,7 +122,7 @@ impl Hash for StackFrame {
         {
             match &self {
                 StackFrame::Ip(addr) => addr.hash(state),
-                StackFrame::PhysicalAddr(addr) => addr.hash(state),
+                StackFrame::PhysicalAddr(addr) => addr.physical_addr.hash(state),
             };
         }
 
@@ -161,25 +166,35 @@ impl StackTrace {
         Self::capture_frames(&mut frames);
         StackTrace {
             frames,
-            build_id: Self::build_id(),
+            build_id: Self::executable_build_id(),
         }
     }
 
     pub fn no_capture() -> StackTrace {
         StackTrace {
             frames: vec![],
-            build_id: Self::build_id(),
+            build_id: Self::executable_build_id(),
+        }
+    }
+
+    // #[cfg(not(target_os = "linux"))]
+    pub fn to_physical(&self) -> StackTrace {
+        let frames = crate::elf::LibraryManager::instance().to_physical_frames(&self.frames);
+
+        StackTrace {
+            frames,
+            build_id: Self::executable_build_id(),
         }
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn build_id() -> Option<Arc<Vec<u8>>> {
+    fn executable_build_id() -> Option<Arc<Vec<u8>>> {
         None
     }
 
     #[cfg(target_os = "linux")]
-    fn build_id() -> Option<Arc<Vec<u8>>> {
-        crate::elf::LibraryManager::instance().build_id()
+    fn executable_build_id() -> Option<Arc<Vec<u8>>> {
+        crate::elf::LibraryManager::instance().executable_build_id()
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -225,7 +240,7 @@ impl StackTrace {
     #[cfg(target_os = "linux")]
     fn fmt_frames(&self, f: &mut String, mut address: bool) -> std::fmt::Result {
         if !address {
-            let binary_id = crate::elf::LibraryManager::instance().build_id();
+            let binary_id = crate::elf::LibraryManager::instance().executable_build_id();
             address = match (&binary_id, &self.build_id) {
                 (Some(binary_id), Some(build_id)) => binary_id != build_id,
                 _ => true,

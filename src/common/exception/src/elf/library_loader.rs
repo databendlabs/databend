@@ -211,7 +211,7 @@ impl LibraryLoader {
         }
     }
 
-    fn build_id(&mut self) -> std::io::Result<Option<Vec<u8>>> {
+    fn executable_build_id(&mut self) -> std::io::Result<Option<Vec<u8>>> {
         unsafe {
             let library_name = OsString::from("/proc/self/exe");
             let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
@@ -225,7 +225,7 @@ impl LibraryLoader {
         self.libraries.sort_by(Library::sort_begin_address);
         self.symbols.dedup_by(Symbol::same_address);
 
-        match self.build_id() {
+        match self.executable_build_id() {
             Err(_) => (self.libraries, self.symbols, None),
             Ok(build_id) => (self.libraries, self.symbols, build_id),
         }
