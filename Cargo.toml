@@ -15,6 +15,7 @@ members = [
     "src/common/building",
     "src/common/cache",
     "src/common/cloud_control",
+    "src/common/column",
     "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
@@ -103,6 +104,7 @@ members = [
 # Workspace dependencies
 [workspace.dependencies]
 databend-common-arrow = { path = "src/common/arrow" }
+databend-common-column = { path = "src/common/column" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-auth = { path = "src/common/auth" }

@@ -3222,6 +3222,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-column"
+version = "0.1.0"
+dependencies = [
+ "arrow-buffer",
+ "arrow-data",
+ "bytemuck",
+ "either",
+ "ethnum",
+ "foreign_vec",
+ "num-traits",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "simdutf8",
+]
+
+[[package]]
 name = "databend-common-compress"
 version = "0.1.0"
 dependencies = [

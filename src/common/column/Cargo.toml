@@ -1,0 +1,38 @@
+[package]
+name = "databend-common-column"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+
+[features]
+default = ["column-default"]
+serde_types = ["serde", "serde_derive"]
+simd = []
+
+column-default = [
+    "serde_types",
+    "simd",
+]
+
+[dependencies]
+serde = { workspace = true, features = ["rc"], optional = true }
+serde_derive = { workspace = true, optional = true }
+foreign_vec = { workspace = true }
+bytemuck = { workspace = true }
+num-traits = { workspace = true }
+arrow-buffer = { workspace = true }
+arrow-data = { workspace = true }
+ethnum =  { workspace = true }
+simdutf8 = { workspace = true }
+either = { workspace = true }
+serde_json  = { workspace = true }
+
+
+[dev-dependencies]
+
+
+[lints]
+workspace = true
