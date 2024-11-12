@@ -270,7 +270,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::query"), LevelFilter::Trace),
                 ))
-                .append(query_log_file);
+                .append(query_log_file.with_layout(get_layout("identical")));
             logger = logger.dispatch(dispatch);
         }
         if let Some(endpoint) = &cfg.query.otlp {
@@ -312,7 +312,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::profile"), LevelFilter::Trace),
                 ))
-                .append(profile_log_file);
+                .append(profile_log_file.with_layout(get_layout("identical")));
             logger = logger.dispatch(dispatch);
         }
         if let Some(endpoint) = &cfg.profile.otlp {
