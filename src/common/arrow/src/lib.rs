@@ -26,7 +26,4 @@ pub mod arrow;
 pub mod native;
 pub mod schema_projection;
 
-pub use arrow_format;
-pub use parquet2 as parquet;
-
 pub type ArrayRef = Box<dyn crate::arrow::array::Array>;

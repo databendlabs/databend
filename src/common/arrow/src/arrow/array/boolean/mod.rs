@@ -27,7 +27,7 @@ use crate::arrow::trusted_len::TrustedLen;
 
 #[cfg(feature = "arrow")]
 mod data;
-mod ffi;
+
 pub(super) mod fmt;
 mod from;
 mod iterator;

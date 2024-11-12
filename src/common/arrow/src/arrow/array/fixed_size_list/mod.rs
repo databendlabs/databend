@@ -23,7 +23,7 @@ use crate::arrow::error::Error;
 
 #[cfg(feature = "arrow")]
 mod data;
-mod ffi;
+
 pub(super) mod fmt;
 mod iterator;
 mod mutable;

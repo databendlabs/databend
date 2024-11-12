@@ -17,8 +17,8 @@ use std::net::TcpListener;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::Empty;
-use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use arrow_flight::flight_service_client::FlightServiceClient;
+use arrow_flight::Empty;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

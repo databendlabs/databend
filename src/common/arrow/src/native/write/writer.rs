@@ -14,19 +14,16 @@
 
 use std::io::Write;
 
-use super::super::ARROW_MAGIC;
-use super::common::write_continuation;
+use super::common::write_eof;
 use super::common::WriteOptions;
 use crate::arrow::array::Array;
 use crate::arrow::chunk::Chunk;
 use crate::arrow::datatypes::Schema;
 use crate::arrow::error::Error;
 use crate::arrow::error::Result;
-use crate::arrow::io::ipc::write::default_ipc_fields;
-use crate::arrow::io::ipc::write::schema_to_bytes;
-use crate::arrow::io::parquet::write::to_parquet_schema;
 use crate::native::ColumnMeta;
-use crate::native::SchemaDescriptor;
+use crate::native::STRAWBOAT_MAGIC;
+use crate::native::STRAWBOAT_VERSION;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
@@ -44,7 +41,6 @@ pub struct NativeWriter<W: Write> {
     pub(crate) options: WriteOptions,
     /// A reference to the schema, used in validating record batches
     pub(crate) schema: Schema,
-    pub(crate) schema_descriptor: SchemaDescriptor,
 
     /// Record blocks that will be written as part of the strawboat footer
     pub metas: Vec<ColumnMeta>,
@@ -66,7 +62,6 @@ impl<W: Write> NativeWriter<W> {
     /// Creates a new [`NativeWriter`].
     pub fn new(writer: W, schema: Schema, options: WriteOptions) -> Result<Self> {
         let num_cols = schema.fields.len();
-        let schema_descriptor = to_parquet_schema(&schema)?;
         Ok(Self {
             writer: OffsetWriter {
                 w: writer,
@@ -74,7 +69,6 @@ impl<W: Write> NativeWriter<W> {
             },
             options,
             schema,
-            schema_descriptor,
             metas: Vec::with_capacity(num_cols),
             scratch: Vec::with_capacity(0),
             state: State::None,
@@ -95,10 +89,10 @@ impl<W: Write> NativeWriter<W> {
                 "The strawboat file can only be started once".to_string(),
             ));
         }
-        // write magic to header
-        self.writer.write_all(&ARROW_MAGIC[..])?;
-        // create an 8-byte boundary after the header
-        self.writer.write_all(&[0, 0])?;
+        // write magic to header, 2 + 2 + 4 = 8 bytes
+        self.writer.write_all(&STRAWBOAT_MAGIC[..])?;
+        self.writer.write_all(&STRAWBOAT_VERSION.to_le_bytes())?;
+        self.writer.write_all(&[0, 0, 0, 0])?;
 
         self.state = State::Started;
         Ok(())
@@ -133,7 +127,7 @@ impl<W: Write> NativeWriter<W> {
         // write footer
         // footer = schema(variable bytes) + column_meta(variable bytes)
         // + schema size(4 bytes) + column_meta size(4bytes) + EOS(8 bytes)
-        let schema_bytes = schema_to_bytes(&self.schema, &default_ipc_fields(&self.schema.fields));
+        let schema_bytes = serde_json::to_vec(&self.schema)?;
         // write the schema, set the written bytes to the schema
         self.writer.write_all(&schema_bytes)?;
 
@@ -159,7 +153,7 @@ impl<W: Write> NativeWriter<W> {
         self.writer
             .write_all(&((meta_end - meta_start) as u32).to_le_bytes())?;
         // write EOS
-        write_continuation(&mut self.writer, 0)?;
+        write_eof(&mut self.writer, 0)?;
         self.writer.flush()?;
         self.state = State::Finished;
         Ok(())

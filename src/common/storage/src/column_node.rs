@@ -18,7 +18,7 @@
 use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
 use databend_common_arrow::arrow::datatypes::Field as ArrowField;
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::parquet::read::InitNested;
+use databend_common_arrow::native::nested::InitNested;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -68,6 +68,7 @@ impl ColumnNodes {
                 for inner_field in inner_fields {
                     let mut inner_init = init.clone();
                     inner_init.push(InitNested::Struct(field.is_nullable));
+
                     let child_column_node =
                         Self::traverse_fields_dfs(inner_field, true, inner_init, leaf_id);
                     child_leaf_ids.extend(child_column_node.leaf_indices.clone());
@@ -86,6 +87,7 @@ impl ColumnNodes {
             | ArrowType::FixedSizeList(inner_field, _) => {
                 let mut inner_init = init.clone();
                 inner_init.push(InitNested::List(field.is_nullable));
+
                 let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
                 let child_column_node =
@@ -103,6 +105,7 @@ impl ColumnNodes {
             ArrowType::Map(inner_field, _) => {
                 let mut inner_init = init.clone();
                 inner_init.push(InitNested::List(field.is_nullable));
+
                 let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
                 let child_column_node =

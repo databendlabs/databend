@@ -288,12 +288,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
 
 [[package]]
-name = "array-init-cursor"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf7d0a018de4f6aa429b9d33d69edf69072b1c5b1cb8d3e4a5f7ef898fc3eb76"
-
-[[package]]
 name = "arrayref"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -452,18 +446,6 @@ dependencies = [
  "prost",
  "prost-types",
  "tokio",
- "tonic",
-]
-
-[[package]]
-name = "arrow-format"
-version = "0.8.1"
-source = "git+https://github.com/Xuanwo/arrow-format?rev=5502823a#5502823aba94e0e3256691210432864b57006578"
-dependencies = [
- "planus",
- "prost",
- "prost-derive",
- "serde",
  "tonic",
 ]
 
@@ -3030,29 +3012,21 @@ dependencies = [
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
- "arrow-format",
  "arrow-schema",
- "async-stream",
- "base64 0.22.1",
  "bitpacking 0.8.4",
  "bytemuck",
  "byteorder",
  "bytes",
  "chrono",
  "chrono-tz 0.8.6",
- "databend-common-parquet2",
  "dyn-clone",
  "either",
  "env_logger 0.11.5",
  "ethnum",
- "fallible-streaming-iterator",
  "flate2",
  "foreign_vec",
- "futures",
  "hashbrown 0.14.5",
  "indexmap 2.6.0",
- "itertools 0.13.0",
- "lexical-core",
  "log",
  "lz4",
  "num",
@@ -3066,9 +3040,9 @@ dependencies = [
  "roaring",
  "serde",
  "serde_derive",
+ "serde_json",
  "simdutf8",
  "snap",
- "streaming-iterator",
  "tokio",
  "tokio-util",
  "zstd 0.12.4",
@@ -3674,8 +3648,8 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "arrow-flight",
  "async-backtrace",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
@@ -3901,29 +3875,6 @@ dependencies = [
  "databend-common-metrics",
  "log",
  "openai_api_rust",
-]
-
-[[package]]
-name = "databend-common-parquet2"
-version = "0.1.0"
-dependencies = [
- "async-stream",
- "brotli 3.5.0",
- "bytes",
- "criterion",
- "flate2",
- "futures",
- "lz4",
- "opendal",
- "parquet-format-safe",
- "rand",
- "seq-macro",
- "serde",
- "snap",
- "streaming-decompression",
- "tokio",
- "xxhash-rust",
- "zstd 0.12.4",
 ]
 
 [[package]]
@@ -4969,6 +4920,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "arrow-flight",
  "async-trait",
  "backon",
  "clap",
@@ -6440,7 +6392,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f211bbe8e69bbd0cfdea405084f128ae8b4aaa6b0b522fc8f2b009084797920"
 dependencies = [
  "crc32fast",
- "libz-ng-sys",
  "libz-sys",
  "miniz_oxide",
 ]
@@ -9394,16 +9345,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libz-ng-sys"
-version = "1.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6409efc61b12687963e602df8ecf70e8ddacf95bc6576bcf16e3ac6328083c5"
-dependencies = [
- "cmake",
- "libc",
-]
-
-[[package]]
 name = "libz-sys"
 version = "1.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10975,16 +10916,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parquet-format-safe"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1131c54b167dd4e4799ce762e1ab01549ebb94d5bdd13e6ec1b467491c378e1f"
-dependencies = [
- "async-trait",
- "futures",
-]
-
-[[package]]
 name = "parse-zoneinfo"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11212,16 +11143,6 @@ name = "pkg-config"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
-
-[[package]]
-name = "planus"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8ed29d35a76575bb7aeff0222dc0fa7435a990a73810e405574ea81bd848af4"
-dependencies = [
- "array-init-cursor",
- "hashbrown 0.13.2",
-]
 
 [[package]]
 name = "plotters"
@@ -13975,21 +13896,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "streaming-decompression"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6cc3b19bfb128a8ad11026086e31d3ce9ad23f8ea37354b31383a187c44cf3"
-dependencies = [
- "fallible-streaming-iterator",
-]
-
-[[package]]
-name = "streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
-
-[[package]]
 name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16567,12 +16473,6 @@ source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#
 dependencies = [
  "cbordata",
 ]
-
-[[package]]
-name = "xxhash-rust"
-version = "0.8.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a5cbf750400958819fb6178eaa83bee5cd9c29a26a40cc241df8c70fdd46984"
 
 [[package]]
 name = "xz2"

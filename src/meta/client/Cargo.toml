@@ -15,8 +15,8 @@ test = true
 
 [dependencies]
 anyerror = { workspace = true }
+arrow-flight = { workspace = true }
 async-backtrace = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
