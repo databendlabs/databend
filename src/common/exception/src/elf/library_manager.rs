@@ -42,10 +42,12 @@ impl Library {
     pub fn create(name: String, data: *const u8, size: usize) -> Library {
         let build_id = unsafe {
             let data = std::slice::from_raw_parts(data, size);
-            let elf_file = ElfFile::parse(data).ok()?;
-            match elf_file.build_id() {
-                Ok(None) | Err(_) => None,
-                Ok(Some(build)) => Some(Arc::new(build.to_vec())),
+            match ElfFile::parse(data) {
+                Err(_) => None,
+                Ok(elf_file) => match elf_file.build_id() {
+                    Ok(None) | Err(_) => None,
+                    Ok(Some(build)) => Some(Arc::new(build.to_vec())),
+                }
             }
         };
 
@@ -110,7 +112,7 @@ impl LibraryManager {
     fn find_library_by_build_id(&self, build_id: &Arc<Vec<u8>>) -> Option<&Library> {
         for library in &self.libraries {
             if let Some(v) = &library.build_id {
-                if v == &build_id {
+                if v == build_id {
                     return Some(library);
                 }
             }
@@ -218,13 +220,13 @@ impl LibraryManager {
                 };
 
                 if let Some(dwarf) = dwarf {
-                    let adjusted_addr = (physical_address - 1) as u64;
+                    let adjusted_addr = (addr - 1) as u64;
 
                     if let Ok(locations) = dwarf.find_frames(adjusted_addr) {
                         for location in locations {
                             f(ResolvedStackFrame {
                                 virtual_address: 0,
-                                physical_address,
+                                physical_address: addr,
                                 symbol: location.symbol.unwrap_or("<unknown>".to_string()),
                                 inlined: location.is_inlined,
                                 file: location.file,
@@ -239,8 +241,8 @@ impl LibraryManager {
             }
 
             f(ResolvedStackFrame {
-                physical_address,
-                virtual_address: *addr,
+                physical_address: addr,
+                virtual_address: 0,
                 inlined: false,
                 symbol: String::from("<unknown>"),
                 file: None,
