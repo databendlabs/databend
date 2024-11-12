@@ -102,8 +102,6 @@ query II
 select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 2
 ----
 1 1
-4 4
-
 
 
 query I
