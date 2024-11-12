@@ -80,6 +80,7 @@ impl Debug for Library {
 pub struct LibraryManager {
     symbols: Vec<Symbol>,
     libraries: Vec<Library>,
+    build_id: Option<Arc<Vec<u8>>>,
 }
 
 impl Debug for LibraryManager {
@@ -107,36 +108,39 @@ impl LibraryManager {
         let mut dwarf_cache = HashMap::with_capacity(self.libraries.len());
 
         for frame in frames {
-            let StackFrame::Ip(addr) = frame;
+            let physical_address = match frame {
+                StackFrame::PhysicalAddr(addr) => *addr,
+                StackFrame::Ip(addr) => {
+                    let mut resolved_frame = ResolvedStackFrame {
+                        virtual_address: addr,
+                        physical_address: addr,
+                        symbol: String::from("<unknown>"),
+                        inlined: false,
+                        file: None,
+                        line: None,
+                        column: None,
+                    };
 
-            let mut resolved_frame = ResolvedStackFrame {
-                virtual_address: *addr,
-                physical_address: *addr,
-                symbol: String::from("<unknown>"),
-                inlined: false,
-                file: None,
-                line: None,
-                column: None,
+                    if let Some(library) = self.find_library(*addr) {
+                        resolved_frame.physical_address = *addr - library.address_begin;
+                    }
+                    let Some(library) = self.find_library(*addr) else {
+                        f(ResolvedStackFrame {
+                            virtual_address: *addr,
+                            physical_address: *addr,
+                            symbol: String::from("<unknown>"),
+                            inlined: false,
+                            file: None,
+                            line: None,
+                            column: None,
+                        })?;
+
+                        continue;
+                    };
+
+                    *addr - library.address_begin
+                }
             };
-
-            if let Some(library) = self.find_library(*addr) {
-                resolved_frame.physical_address = *addr - library.address_begin;
-            }
-            let Some(library) = self.find_library(*addr) else {
-                f(ResolvedStackFrame {
-                    virtual_address: *addr,
-                    physical_address: *addr,
-                    symbol: String::from("<unknown>"),
-                    inlined: false,
-                    file: None,
-                    line: None,
-                    column: None,
-                })?;
-
-                continue;
-            };
-
-            let physical_address = *addr - library.address_begin;
 
             if !only_address {
                 let dwarf = match library.elf.as_ref() {
@@ -185,10 +189,19 @@ impl LibraryManager {
         Ok(())
     }
 
+    pub fn build_id(&self) -> Option<Arc<Vec<u8>>> {
+        self.build_id.clone()
+    }
+
     pub fn create() -> Arc<LibraryManager> {
         let loader = LibraryLoader::load();
-        let (libraries, symbols) = loader.finalize();
-        Arc::new(LibraryManager { symbols, libraries })
+        let (libraries, symbols, build_id) = loader.finalize();
+        let build_id = build_id.map(|x| Arc::new(x));
+        Arc::new(LibraryManager {
+            symbols,
+            libraries,
+            build_id,
+        })
     }
 
     pub fn instance() -> Arc<LibraryManager> {

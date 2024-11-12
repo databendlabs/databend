@@ -211,12 +211,19 @@ impl LibraryLoader {
         }
     }
 
-    pub fn finalize(mut self) -> (Vec<Library>, Vec<Symbol>) {
+    pub fn finalize(mut self) -> (Vec<Library>, Vec<Symbol>, Option<Vec<u8>>) {
         self.symbols.sort_by(Symbol::sort_begin_address);
         self.libraries.sort_by(Library::sort_begin_address);
         self.symbols.dedup_by(Symbol::same_address);
 
-        (self.libraries, self.symbols)
+        let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
+        let mut binary_library = self.mmap_library(binary_path.clone())?;
+
+        (
+            self.libraries,
+            self.symbols,
+            binary_library.build_id().map(|x| x.to_vec()),
+        )
     }
 }
 

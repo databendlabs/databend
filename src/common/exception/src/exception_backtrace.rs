@@ -81,6 +81,8 @@ pub struct ResolvedStackFrame {
 pub enum StackFrame {
     #[cfg(target_os = "linux")]
     Ip(usize),
+    #[cfg(target_os = "linux")]
+    PhysicalAddr(usize),
     #[cfg(not(target_os = "linux"))]
     Backtrace(backtrace::BacktraceFrame),
 }
@@ -91,9 +93,13 @@ impl PartialEq for StackFrame {
     fn eq(&self, other: &Self) -> bool {
         #[cfg(target_os = "linux")]
         {
-            let StackFrame::Ip(addr) = &self;
-            let StackFrame::Ip(other_addr) = &other;
-            addr == other_addr
+            match (&self, &other) {
+                (StackFrame::Ip(addr), StackFrame::Ip(other_addr)) => addr == other_addr,
+                (StackFrame::PhysicalAddr(addr), StackFrame::PhysicalAddr(other_addr)) => {
+                    addr == other_addr
+                }
+                _ => false,
+            };
         }
 
         #[cfg(not(target_os = "linux"))]
@@ -109,8 +115,11 @@ impl Hash for StackFrame {
     fn hash<H: Hasher>(&self, state: &mut H) {
         #[cfg(target_os = "linux")]
         {
-            let StackFrame::Ip(addr) = &self;
-            addr.hash(state);
+            match &self {
+                StackFrame::Ip(addr) => addr.hash(state),
+                StackFrame::PhysicalAddr(addr) => addr.hash(state),
+                _ => false,
+            };
         }
 
         #[cfg(not(target_os = "linux"))]
@@ -136,6 +145,7 @@ impl Hash for StackFrame {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct StackTrace {
     pub(crate) frames: Vec<StackFrame>,
+    pub(crate) build_id: Option<Arc<Vec<u8>>>,
 }
 
 impl Eq for StackTrace {}
@@ -150,11 +160,27 @@ impl StackTrace {
     pub fn capture() -> StackTrace {
         let mut frames = Vec::with_capacity(50);
         Self::capture_frames(&mut frames);
-        StackTrace { frames }
+        StackTrace {
+            frames,
+            build_id: Self::build_id(),
+        }
     }
 
     pub fn no_capture() -> StackTrace {
-        StackTrace { frames: vec![] }
+        StackTrace {
+            frames: vec![],
+            build_id: Self::build_id(),
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn build_id() -> Option<Arc<Vec<u8>>> {
+        None
+    }
+
+    #[cfg(target_os = "linux")]
+    fn build_id() -> Option<Arc<Vec<u8>>> {
+        crate::elf::LibraryManager::instance().build_id()
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -182,7 +208,7 @@ impl StackTrace {
 
     #[cfg(not(target_os = "linux"))]
     fn fmt_frames(&self, display_text: &mut String, address: bool) -> std::fmt::Result {
-        let mut frames = std::vec::Vec::with_capacity(self.frames.len());
+        let mut frames = Vec::with_capacity(self.frames.len());
         for frame in &self.frames {
             let StackFrame::Backtrace(frame) = frame;
             frames.push(frame.clone());
@@ -198,7 +224,15 @@ impl StackTrace {
     }
 
     #[cfg(target_os = "linux")]
-    fn fmt_frames(&self, f: &mut String, address: bool) -> std::fmt::Result {
+    fn fmt_frames(&self, f: &mut String, mut address: bool) -> std::fmt::Result {
+        if !address {
+            let binary_id = crate::elf::LibraryManager::instance().build_id();
+            address = match (binary_id, self.build_id) {
+                (Some(binary_id), Some(build_id)) => binary_id != build_id,
+                _ => true,
+            };
+        }
+
         let mut idx = 0;
         crate::elf::LibraryManager::instance().resolve_frames(&self.frames, address, |frame| {
             write!(f, "{:4}: {}", idx, frame.symbol)?;

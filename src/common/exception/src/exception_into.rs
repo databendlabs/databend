@@ -290,11 +290,14 @@ impl Display for SerializedError {
 
 impl From<&ErrorCode> for SerializedError {
     fn from(e: &ErrorCode) -> Self {
+        // databend_common_base::
+        // let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();
         SerializedError {
             code: e.code(),
             name: e.name(),
             message: e.message(),
             span: e.span(),
+            // version: VERSION,
             backtrace: e.backtrace.clone(),
             stacks: e.stacks().iter().map(|f| f.into()).collect(),
         }
