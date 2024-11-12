@@ -18,7 +18,6 @@ use super::boolean::write_bitmap;
 use super::primitive::write_primitive;
 use super::WriteOptions;
 use crate::arrow::array::*;
-use crate::arrow::bitmap::Bitmap;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Result;
@@ -95,25 +94,6 @@ pub fn write<W: Write>(
         _ => todo!(),
     }
 
-    Ok(())
-}
-
-fn write_validity<W: Write>(
-    w: &mut W,
-    validity: Option<&Bitmap>,
-    _scratch: &mut Vec<u8>,
-) -> Result<()> {
-    if let Some(bitmap) = validity {
-        w.write_all(&[1u8])?;
-        let (s, offset, _) = bitmap.as_slice();
-        if offset == 0 {
-            w.write_all(s)?;
-        } else {
-            encode_bool(w, bitmap.iter())?;
-        }
-    } else {
-        w.write_all(&[0u8])?;
-    }
     Ok(())
 }
 

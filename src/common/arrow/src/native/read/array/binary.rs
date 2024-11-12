@@ -134,12 +134,10 @@ pub fn read_nested_binary<O: Offset, R: NativeReadBuf>(
     for page_meta in page_metas {
         let num_values = page_meta.num_values as usize;
         let (nested, validity) = read_nested(reader, &init, num_values)?;
-        let length = num_values as usize;
-
-        let mut offsets: Vec<O> = Vec::with_capacity(length + 1);
+        let mut offsets: Vec<O> = Vec::with_capacity(num_values + 1);
         let mut values = Vec::with_capacity(0);
 
-        decompress_binary(reader, length, &mut offsets, &mut values, &mut scratch)?;
+        decompress_binary(reader, num_values, &mut offsets, &mut values, &mut scratch)?;
 
         let array = try_new_binary_array(
             data_type.clone(),

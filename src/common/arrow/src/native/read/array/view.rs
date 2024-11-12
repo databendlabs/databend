@@ -106,9 +106,7 @@ pub fn read_nested_view_array<R: NativeReadBuf>(
     for page_meta in page_metas {
         let num_values = page_meta.num_values as usize;
         let (nested, validity) = read_nested(reader, &init, num_values)?;
-        let length = num_values as usize;
-
-        let array = read_view_array(reader, length, data_type.clone(), validity)?;
+        let array = read_view_array(reader, num_values, data_type.clone(), validity)?;
         results.push((nested, array));
     }
     Ok(results)

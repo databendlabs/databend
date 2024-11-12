@@ -109,10 +109,9 @@ pub fn read_nested_boolean<R: NativeReadBuf>(
     for page_meta in page_metas {
         let num_values = page_meta.num_values as usize;
         let (nested, validity) = read_nested(reader, &init, num_values)?;
-        let length = num_values as usize;
-        let mut bitmap_builder = MutableBitmap::with_capacity(length);
+        let mut bitmap_builder = MutableBitmap::with_capacity(num_values);
 
-        decompress_boolean(reader, length, &mut bitmap_builder, &mut scratch)?;
+        decompress_boolean(reader, num_values, &mut bitmap_builder, &mut scratch)?;
 
         let values = std::mem::take(&mut bitmap_builder).into();
         let array = BooleanArray::try_new(data_type.clone(), values, validity)?;

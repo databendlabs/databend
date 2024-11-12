@@ -15,6 +15,7 @@ test = true
 
 [dependencies]
 anyerror = { workspace = true }
+arrow-flight = { workspace = true }
 async-backtrace = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
@@ -26,7 +27,6 @@ databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
 fastrace = { workspace = true }
-arrow-flight = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }

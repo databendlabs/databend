@@ -3013,8 +3013,6 @@ dependencies = [
  "arrow-buffer",
  "arrow-data",
  "arrow-schema",
- "async-stream",
- "base64 0.22.1",
  "bitpacking 0.8.4",
  "bytemuck",
  "byteorder",
@@ -3025,10 +3023,8 @@ dependencies = [
  "either",
  "env_logger 0.11.5",
  "ethnum",
- "fallible-streaming-iterator",
  "flate2",
  "foreign_vec",
- "futures",
  "hashbrown 0.14.5",
  "indexmap 2.6.0",
  "itertools 0.13.0",
@@ -3049,7 +3045,6 @@ dependencies = [
  "serde_json",
  "simdutf8",
  "snap",
- "streaming-iterator",
  "tokio",
  "tokio-util",
  "zstd 0.12.4",
@@ -13900,12 +13895,6 @@ dependencies = [
  "futures",
  "pin-project-lite",
 ]
-
-[[package]]
-name = "streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 
 [[package]]
 name = "strength_reduce"

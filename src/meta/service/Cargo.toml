@@ -23,11 +23,11 @@ io-uring = [
 [dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+arrow-flight = { workspace = true }
 async-trait = { workspace = true }
 backon = { workspace = true }
 clap = { workspace = true }
 databend-common-arrow = { workspace = true }
-arrow-flight = { workspace = true}
 databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-http = { workspace = true }

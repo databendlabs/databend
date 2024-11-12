@@ -123,10 +123,9 @@ pub fn read_nested_primitive<T: DoubleType, R: NativeReadBuf>(
     for page_meta in page_metas {
         let num_values = page_meta.num_values as usize;
         let (nested, validity) = read_nested(reader, &init, num_values)?;
-        let length = num_values as usize;
 
-        let mut values = Vec::with_capacity(length);
-        decompress_double(reader, length, &mut values, &mut scratch)?;
+        let mut values = Vec::with_capacity(num_values);
+        decompress_double(reader, num_values, &mut values, &mut scratch)?;
 
         let array = PrimitiveArray::<T>::try_new(data_type.clone(), values.into(), validity)?;
         results.push((nested, Box::new(array) as Box<dyn Array>));

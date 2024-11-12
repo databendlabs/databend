@@ -42,15 +42,12 @@ arrow-default = [
     "simd",
 ]
 
-
 [dependencies]
 ahash = { workspace = true }
 arrow-array = { workspace = true, optional = true }
 arrow-buffer = { workspace = true, optional = true }
 arrow-data = { workspace = true, optional = true }
 arrow-schema = { workspace = true, optional = true }
-async-stream = { workspace = true, optional = true }
-base64 = { workspace = true, optional = true }
 bitpacking = { workspace = true }
 bytemuck = { workspace = true }
 byteorder = { workspace = true }
@@ -60,9 +57,7 @@ chrono-tz = { workspace = true, optional = true }
 dyn-clone = { workspace = true }
 either = { workspace = true }
 ethnum = { workspace = true }
-fallible-streaming-iterator = { workspace = true, optional = true }
 foreign_vec = { workspace = true }
-futures = { workspace = true, optional = true }
 hashbrown_v0_14 = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true, optional = true }
@@ -71,7 +66,6 @@ log = { workspace = true }
 lz4 = { workspace = true }
 num = { workspace = true, features = ["std"] }
 num-traits = { workspace = true }
-serde_json = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 rand = { workspace = true }
@@ -79,9 +73,9 @@ ringbuffer = { workspace = true }
 roaring = { workspace = true }
 serde = { workspace = true, features = ["rc"], optional = true }
 serde_derive = { workspace = true, optional = true }
+serde_json = { workspace = true }
 simdutf8 = { workspace = true }
 snap = { workspace = true }
-streaming-iterator = { workspace = true, optional = true }
 zstd = { workspace = true }
 
 [dev-dependencies]
