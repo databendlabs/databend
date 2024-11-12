@@ -23,9 +23,12 @@ use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 use fs_extra::dir::CopyOptions;
+use log::debug;
+use openraft::LogIdOptionExt;
 use raft_log::codeq::error_context_ext::ErrorContextExt;
 use tokio::io;
 
+use crate::key_spaces::LogMeta;
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::DataVersion;
 use crate::ondisk::OnDisk;
@@ -33,6 +36,7 @@ use crate::raft_log_v004::importer;
 use crate::raft_log_v004::RaftLogV004;
 use crate::sm_v003::SnapshotStoreV003;
 use crate::sm_v003::SnapshotStoreV004;
+use crate::state_machine::LogMetaKey;
 
 impl OnDisk {
     /// Upgrade the on-disk data form [`DataVersion::V003`] to [`DataVersion::V004`].
@@ -57,14 +61,69 @@ impl OnDisk {
 
         let db = init_get_sled_db(self.config.raft_dir.clone(), self.config.sled_cache_size());
 
-        let tree_names = ["raft_state", "raft_log"];
+        // Read the purged index
+        let first_log_index = {
+            let tree = SledTree::open(&db, "raft_log", self.config.is_sync())?;
+            let ks = tree.key_space::<LogMeta>();
+            let purged = ks.get(&LogMetaKey::LastPurged).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "{}; when(get last purged index from sled db for upgrading V003 to V004)",
+                        e
+                    ),
+                )
+            })?;
 
-        for tree_name in tree_names.iter() {
-            let tree = SledTree::open(&db, tree_name, self.config.is_sync())?;
+            purged.map(|v| v.log_id()).next_index()
+        };
+
+        // import logs
+        {
+            let tree = SledTree::open(&db, "raft_log", self.config.is_sync())?;
+            let it = tree.tree.iter();
+
+            for (i, rkv) in it.enumerate() {
+                let (k, v) = rkv.map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "{}; when(iterating raft log in sled db for upgrading V003 to V004)",
+                            e
+                        ),
+                    )
+                })?;
+
+                let ent = RaftStoreEntry::deserialize(&k, &v)?;
+                let upgraded = ent.upgrade();
+                if let RaftStoreEntry::LogEntry(entry) = &upgraded {
+                    if entry.log_id.index < first_log_index {
+                        debug!(
+                            "skip already purged log: {} when:(import V003 log to V004)",
+                            entry.log_id
+                        );
+                        continue;
+                    }
+                }
+
+                debug!("import upgraded V003 entry: {:?}", upgraded);
+                importer.import_raft_store_entry(upgraded)?;
+
+                if i % 5000 == 0 {
+                    self.progress(format_args!("        Imported {} logs", i));
+                }
+            }
+        }
+
+        // import raft_state
+        {
+            let tree = SledTree::open(&db, "raft_state", self.config.is_sync())?;
             let kvs = tree.export()?;
             for kv in kvs {
                 let ent = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
-                importer.import_raft_store_entry(ent.upgrade())?;
+                debug!("import V003 entry: {:?}", ent);
+                let upgraded = ent.upgrade();
+                importer.import_raft_store_entry(upgraded)?;
             }
         }
 
