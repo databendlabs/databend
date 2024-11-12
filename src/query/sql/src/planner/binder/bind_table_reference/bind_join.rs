@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -26,10 +24,7 @@ use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use indexmap::IndexMap;
-use itertools::Itertools;
 
-use crate::binder::CteInfo;
 use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -52,7 +47,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct JoinConditions {
@@ -88,7 +82,7 @@ impl Binder {
             )?;
             return Ok((result_expr, bind_context));
         }
-        let (right_child, mut right_context) = if join.right.is_lateral_subquery() {
+        let (right_child, right_context) = if join.right.is_lateral_subquery() {
             self.bind_table_reference(&mut left_context, &join.right)?
         } else {
             // Merge cte info from left context to `bind_context`
@@ -176,7 +170,7 @@ impl Binder {
             right_child,
             None,
         )?;
-        let mut bind_context = join_bind_context(
+        let bind_context = join_bind_context(
             &join_type,
             bind_context,
             left_context.clone(),

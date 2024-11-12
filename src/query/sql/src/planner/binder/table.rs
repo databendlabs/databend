@@ -275,7 +275,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         span: &Span,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_context = if cte_info.used_count == 0 {
+        let new_bind_context = if cte_info.used_count == 0 {
             let (cte_s_expr, mut cte_bind_ctx) =
                 self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
             cte_bind_ctx
@@ -431,9 +431,7 @@ impl Binder {
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 } else {
-                    for (index, column_name) in cte_info.columns_alias
-                        .iter().enumerate()
-                    {
+                    for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
                         new_bind_ctx.columns[index].column_name = column_name.clone();
                     }
                 }

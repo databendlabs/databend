@@ -389,8 +389,7 @@ impl Binder {
         };
         let s_expr =
             self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
-        left_context
-            .set_cte_context(right_context.cte_context);
+        left_context.set_cte_context(right_context.cte_context);
         Ok((s_expr, left_context))
     }
 

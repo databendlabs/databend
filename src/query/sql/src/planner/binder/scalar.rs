@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -26,15 +25,12 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use indexmap::IndexMap;
 
 use crate::binder::wrap_cast;
-use crate::binder::CteInfo;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
-use crate::IndexType;
 use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.

@@ -39,7 +39,6 @@ use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
-use crate::plans::MaterializedCte;
 use crate::plans::MutationSource;
 use crate::plans::RelOperator;
 use crate::plans::SubqueryExpr;

@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
+
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
@@ -42,7 +43,9 @@ use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::{MaterializedCte, RelOperator, ScalarExpr};
+use crate::plans::MaterializedCte;
+use crate::plans::RelOperator;
+use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;

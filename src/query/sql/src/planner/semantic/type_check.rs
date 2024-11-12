@@ -101,7 +101,6 @@ use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
@@ -113,7 +112,6 @@ use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
-use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
@@ -160,7 +158,6 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::MetadataRef;
 
 /// A helper for type checking.
