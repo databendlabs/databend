@@ -118,12 +118,6 @@ impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
     }
 }
 
-impl From<databend_common_arrow::parquet::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::parquet::error::Error) -> Self {
-        ErrorCode::from_std_error(error)
-    }
-}
-
 impl From<arrow_schema::ArrowError> for ErrorCode {
     fn from(error: arrow_schema::ArrowError) -> Self {
         match error {
