@@ -211,11 +211,13 @@ impl LibraryLoader {
         }
     }
 
-    fn build_id(&self) -> std::io::Result<Option<Vec<u8>>> {
-        let library_name = OsString::from("/proc/self/exe");
-        let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
-        let mut binary_library = self.mmap_library(binary_path.clone())?;
-        Ok(binary_library.build_id().map(|x| x.to_vec()))
+    fn build_id(&mut self) -> std::io::Result<Option<Vec<u8>>> {
+        unsafe {
+            let library_name = OsString::from("/proc/self/exe");
+            let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
+            let mut binary_library = self.mmap_library(binary_path.clone())?;
+            Ok(binary_library.build_id().map(|x| x.to_vec()))
+        }
     }
 
     pub fn finalize(mut self) -> (Vec<Library>, Vec<Symbol>, Option<Vec<u8>>) {

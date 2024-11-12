@@ -108,22 +108,19 @@ impl LibraryManager {
         let mut dwarf_cache = HashMap::with_capacity(self.libraries.len());
 
         for frame in frames {
-            let physical_address = match frame {
-                StackFrame::PhysicalAddr(addr) => *addr,
-                StackFrame::Ip(addr) => {
-                    let mut resolved_frame = ResolvedStackFrame {
-                        virtual_address: *addr,
+            match frame {
+                StackFrame::PhysicalAddr(addr) => {
+                    f(ResolvedStackFrame {
                         physical_address: *addr,
-                        symbol: String::from("<unknown>"),
+                        virtual_address: 0,
                         inlined: false,
+                        symbol: String::from("<unknown>"),
                         file: None,
                         line: None,
                         column: None,
-                    };
-
-                    if let Some(library) = self.find_library(*addr) {
-                        resolved_frame.physical_address = *addr - library.address_begin;
-                    }
+                    })?;
+                }
+                StackFrame::Ip(addr) => {
                     let Some(library) = self.find_library(*addr) else {
                         f(ResolvedStackFrame {
                             virtual_address: *addr,
@@ -138,52 +135,52 @@ impl LibraryManager {
                         continue;
                     };
 
-                    *addr - library.address_begin
+                    let physical_address = *addr - library.address_begin;
+
+                    if !only_address {
+                        let dwarf = match library.elf.as_ref() {
+                            None => &None,
+                            Some(elf) => match dwarf_cache.get(&library.name) {
+                                Some(v) => v,
+                                None => {
+                                    dwarf_cache.insert(library.name.clone(), Dwarf::create(elf.clone()));
+                                    dwarf_cache.get(&library.name).unwrap()
+                                }
+                            },
+                        };
+
+                        if let Some(dwarf) = dwarf {
+                            let adjusted_addr = (physical_address - 1) as u64;
+
+                            if let Ok(locations) = dwarf.find_frames(adjusted_addr) {
+                                for location in locations {
+                                    f(ResolvedStackFrame {
+                                        virtual_address: 0,
+                                        physical_address,
+                                        symbol: location.symbol.unwrap_or("<unknown>".to_string()),
+                                        inlined: location.is_inlined,
+                                        file: location.file,
+                                        line: location.line,
+                                        column: location.column,
+                                    })?;
+                                }
+
+                                continue;
+                            }
+                        }
+                    }
+
+                    f(ResolvedStackFrame {
+                        physical_address,
+                        virtual_address: addr,
+                        inlined: false,
+                        symbol: String::from("<unknown>"),
+                        file: None,
+                        line: None,
+                        column: None,
+                    })?;
                 }
             };
-
-            if !only_address {
-                let dwarf = match library.elf.as_ref() {
-                    None => &None,
-                    Some(elf) => match dwarf_cache.get(&library.name) {
-                        Some(v) => v,
-                        None => {
-                            dwarf_cache.insert(library.name.clone(), Dwarf::create(elf.clone()));
-                            dwarf_cache.get(&library.name).unwrap()
-                        }
-                    },
-                };
-
-                if let Some(dwarf) = dwarf {
-                    let adjusted_addr = (physical_address - 1) as u64;
-
-                    if let Ok(locations) = dwarf.find_frames(adjusted_addr) {
-                        for location in locations {
-                            f(ResolvedStackFrame {
-                                virtual_address: 0,
-                                physical_address,
-                                symbol: location.symbol.unwrap_or("<unknown>".to_string()),
-                                inlined: location.is_inlined,
-                                file: location.file,
-                                line: location.line,
-                                column: location.column,
-                            })?;
-                        }
-
-                        continue;
-                    }
-                }
-            }
-
-            f(ResolvedStackFrame {
-                physical_address,
-                virtual_address: *addr,
-                inlined: false,
-                symbol: String::from("<unknown>"),
-                file: None,
-                line: None,
-                column: None,
-            })?;
         }
 
         Ok(())
