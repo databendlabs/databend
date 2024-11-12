@@ -133,7 +133,7 @@ impl TryFrom<u8> for MetaEncoding {
 pub fn encode<T: Serialize>(encoding: &MetaEncoding, data: &T) -> Result<Vec<u8>> {
     match encoding {
         MetaEncoding::Bincode => {
-            Ok(bincode::serialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
+            Ok(bincode_v1::serialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
         MetaEncoding::MessagePack => {
             // using to_vec_named to keep the format backward compatible
@@ -148,7 +148,7 @@ pub fn encode<T: Serialize>(encoding: &MetaEncoding, data: &T) -> Result<Vec<u8>
 pub fn decode<'a, T: Deserialize<'a>>(encoding: &MetaEncoding, data: &'a [u8]) -> Result<T> {
     match encoding {
         MetaEncoding::Bincode => {
-            Ok(bincode::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
+            Ok(bincode_v1::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
         MetaEncoding::MessagePack => {
             Ok(rmp_serde::from_slice(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)

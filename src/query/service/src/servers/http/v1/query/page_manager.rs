@@ -163,6 +163,7 @@ impl PageManager {
                     remain_size -= size;
                     remain_rows -= 1;
                 } else {
+                    self.row_buffer.push_front(row);
                     remain_size = 0;
                 }
             } else {

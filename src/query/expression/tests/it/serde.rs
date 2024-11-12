@@ -79,12 +79,37 @@ fn test_serde_bin_column() -> Result<()> {
         StringType::from_data(vec!["SM CASE", "axx", "bxx", "xxe", "eef", "fg"]),
     ];
 
-    for col in columns {
-        let data = serialize_column(&col);
+    for col in &columns {
+        let data = serialize_column(col);
         let t = deserialize_column(&data).unwrap();
-        assert_eq!(col, t);
+        assert_eq!(col, &t);
+    }
+
+    for col in &columns {
+        let data = serialize_column_old(col);
+        let t = deserialize_column(&data).unwrap();
+        assert_eq!(col, &t);
     }
     Ok(())
+}
+
+fn serialize_column_old(col: &Column) -> Vec<u8> {
+    use databend_common_arrow::arrow::chunk::Chunk;
+    use databend_common_arrow::arrow::datatypes::Schema;
+    use databend_common_arrow::arrow::io::ipc::write::FileWriter;
+    use databend_common_arrow::arrow::io::ipc::write::WriteOptions;
+
+    let mut buffer = Vec::new();
+
+    let schema = Schema::from(vec![col.arrow_field()]);
+    let mut writer = FileWriter::new(&mut buffer, schema, None, WriteOptions::default());
+    writer.start().unwrap();
+    writer
+        .write(&Chunk::new(vec![col.as_arrow()]), None)
+        .unwrap();
+    writer.finish().unwrap();
+
+    buffer
 }
 
 #[test]

@@ -19,9 +19,9 @@ use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_types::anyerror::AnyError;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::Vote;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::Vote;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -56,6 +56,29 @@ pub enum RaftStateValue {
     StateMachineId((u64, u64)),
 
     Committed(Option<LogId>),
+}
+
+impl RaftStateValue {
+    pub fn node_id(&self) -> NodeId {
+        match self {
+            RaftStateValue::NodeId(x) => *x,
+            _ => panic!("expect NodeId"),
+        }
+    }
+
+    pub fn vote(&self) -> Vote {
+        match self {
+            RaftStateValue::HardState(x) => *x,
+            _ => panic!("expect HardState"),
+        }
+    }
+
+    pub fn committed(&self) -> Option<LogId> {
+        match self {
+            RaftStateValue::Committed(x) => *x,
+            _ => panic!("expect Committed"),
+        }
+    }
 }
 
 impl fmt::Display for RaftStateKey {

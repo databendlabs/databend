@@ -38,16 +38,19 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::raft_types::CommittedLeaderId;
+use databend_common_meta_types::raft_types::ForwardToLeader;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::MembershipNode;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::RaftMetrics;
+use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::CommittedLeaderId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
-use databend_common_meta_types::ForwardToLeader;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaManagementError;
@@ -55,9 +58,6 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::RaftMetrics;
-use databend_common_meta_types::TypeConfig;
 use fastrace::func_name;
 use fastrace::prelude::*;
 use futures::channel::oneshot;
@@ -111,6 +111,16 @@ pub struct MetaNode {
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
     pub joined_tasks: AtomicI32,
+}
+
+impl Drop for MetaNode {
+    fn drop(&mut self) {
+        info!(
+            "MetaNode(id={}, raft={}) is dropping",
+            self.sto.id,
+            self.sto.config.raft_api_advertise_host_string()
+        );
+    }
 }
 
 impl Opened for MetaNode {
@@ -287,7 +297,7 @@ impl MetaNode {
             srv.serve_with_shutdown(socket_addr, async move {
                 let _ = running_rx.changed().await;
                 info!(
-                    "signal received, shutting down: id={} {} ",
+                    "running_rx for Raft server received, shutting down: id={} {} ",
                     node_id, ip_port
                 );
             })
@@ -305,18 +315,9 @@ impl MetaNode {
     }
 
     /// Open or create a meta node.
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
     #[fastrace::trace]
-    pub async fn open_create(
-        config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}",
-            config, open, create
-        );
+    pub async fn open(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
+        info!("MetaNode::open, config: {:?}", config);
 
         let mut config = config.clone();
 
@@ -329,7 +330,7 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = RaftStore::open_create(&config, open, create).await?;
+        let sto = RaftStore::open(&config).await?;
 
         // config.id only used for the first time
         let self_node_id = if sto.is_opened() { sto.id } else { config.id };
@@ -346,17 +347,15 @@ impl MetaNode {
     }
 
     /// Open or create a metasrv node.
+    ///
     /// Optionally boot a single node cluster.
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
+    /// If `initialize_cluster` is `Some`, initialize the cluster as a single-node cluster.
     #[fastrace::trace]
-    pub async fn open_create_boot(
+    pub async fn open_boot(
         config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
         initialize_cluster: Option<Node>,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open_create(config, open, create).await?;
+        let mn = Self::open(config).await?;
 
         if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
@@ -422,7 +421,10 @@ impl MetaNode {
 
                 if let Err(changed_err) = changed {
                     // Shutting down.
-                    error!("{} when watching metrics_rx", changed_err);
+                    info!(
+                        "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
+                        changed_err
+                    );
                     break;
                 }
 
@@ -445,7 +447,7 @@ impl MetaNode {
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
                 // metrics about server storage
-                server_metrics::set_db_size(meta_node.get_db_size().unwrap_or_default());
+                server_metrics::set_db_size(meta_node.get_db_size().await);
                 server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
 
                 last_leader = mm.current_leader;
@@ -737,20 +739,12 @@ impl MetaNode {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
-            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
+            let mn = MetaNode::open(raft_conf).await?;
             mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
-        if !raft_conf.join.is_empty() {
-            // Bring up a new node, join it into a cluster
-
-            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
-            return Ok(mn);
-        }
-        // open mode
-
-        let mn = MetaNode::open_create(raft_conf, Some(()), None).await?;
+        let mn = MetaNode::open(raft_conf).await?;
         Ok(mn)
     }
 
@@ -758,7 +752,7 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[fastrace::trace]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
+        let mn = Self::open(&config.raft_config).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)
     }
@@ -823,11 +817,8 @@ impl MetaNode {
         nodes
     }
 
-    fn get_db_size(&self) -> Result<u64, MetaError> {
-        self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::StorageError(se)
-        })
+    async fn get_db_size(&self) -> u64 {
+        self.sto.log.read().await.on_disk_size()
     }
 
     async fn get_key_num(&self) -> u64 {
@@ -850,7 +841,7 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let db_size = self.get_db_size()?;
+        let db_size = self.get_db_size().await;
         let key_num = self.get_key_num().await;
 
         let metrics = self.raft.metrics().borrow().clone();

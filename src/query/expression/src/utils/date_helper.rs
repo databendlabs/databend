@@ -26,14 +26,15 @@ use chrono::Offset;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
+use chrono::Weekday;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::cursor_ext::unwrap_local_time;
 use num_traits::AsPrimitive;
 
-use crate::types::date::check_date;
-use crate::types::timestamp::check_timestamp;
+use crate::types::date::clamp_date;
+use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::MICROS_PER_SEC;
 
 #[derive(Debug, Clone, Copy)]
@@ -341,11 +342,11 @@ macro_rules! impl_interval_year_month {
             ) -> std::result::Result<i32, String> {
                 let date = date.to_date(tz.tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
-                check_date(
+                Ok(clamp_date(
                     new_date
                         .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
                         .num_days(),
-                )
+                ))
             }
 
             pub fn eval_timestamp(
@@ -355,11 +356,12 @@ macro_rules! impl_interval_year_month {
             ) -> std::result::Result<i64, String> {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
-                check_timestamp(
-                    NaiveDateTime::new(new_ts, ts.time())
-                        .and_utc()
-                        .timestamp_micros(),
-                )
+                let mut ts = NaiveDateTime::new(new_ts, ts.time())
+                    .and_local_timezone(tz.tz)
+                    .unwrap()
+                    .timestamp_micros();
+                clamp_timestamp(&mut ts);
+                Ok(ts)
             }
         }
     };
@@ -485,19 +487,18 @@ impl EvalWeeksImpl {
 pub struct EvalDaysImpl;
 
 impl EvalDaysImpl {
-    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> std::result::Result<i32, String> {
-        check_date((date as i64).wrapping_add(delta.as_()))
+    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> i32 {
+        clamp_date((date as i64).wrapping_add(delta.as_()))
     }
 
     pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
         date_end - date_start
     }
 
-    pub fn eval_timestamp(
-        date: i64,
-        delta: impl AsPrimitive<i64>,
-    ) -> std::result::Result<i64, String> {
-        check_timestamp(date.wrapping_add(delta.as_() * MICROSECS_PER_DAY))
+    pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> i64 {
+        let mut value = date.wrapping_add(delta.as_() * MICROSECS_PER_DAY);
+        clamp_timestamp(&mut value);
+        value
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64) -> i64 {
@@ -511,22 +512,16 @@ impl EvalDaysImpl {
 pub struct EvalTimesImpl;
 
 impl EvalTimesImpl {
-    pub fn eval_date(
-        date: i32,
-        delta: impl AsPrimitive<i64>,
-        factor: i64,
-    ) -> std::result::Result<i32, String> {
-        check_date(
+    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> i32 {
+        clamp_date(
             (date as i64 * MICROSECS_PER_DAY).wrapping_add(delta.as_() * factor * MICROS_PER_SEC),
         )
     }
 
-    pub fn eval_timestamp(
-        us: i64,
-        delta: impl AsPrimitive<i64>,
-        factor: i64,
-    ) -> std::result::Result<i64, String> {
-        check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_PER_SEC))
+    pub fn eval_timestamp(us: i64, delta: impl AsPrimitive<i64>, factor: i64) -> i64 {
+        let mut ts = us.wrapping_add(delta.as_() * factor * MICROS_PER_SEC);
+        clamp_timestamp(&mut ts);
+        ts
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, factor: i64) -> i64 {
@@ -717,6 +712,24 @@ pub struct ToStartOfMonth;
 pub struct ToStartOfQuarter;
 pub struct ToStartOfYear;
 pub struct ToStartOfISOYear;
+pub struct ToLastOfWeek;
+pub struct ToLastOfMonth;
+pub struct ToLastOfQuarter;
+pub struct ToLastOfYear;
+pub struct ToPreviousMonday;
+pub struct ToPreviousTuesday;
+pub struct ToPreviousWednesday;
+pub struct ToPreviousThursday;
+pub struct ToPreviousFriday;
+pub struct ToPreviousSaturday;
+pub struct ToPreviousSunday;
+pub struct ToNextMonday;
+pub struct ToNextTuesday;
+pub struct ToNextWednesday;
+pub struct ToNextThursday;
+pub struct ToNextFriday;
+pub struct ToNextSaturday;
+pub struct ToNextSunday;
 
 impl ToNumber<i32> for ToLastMonday {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
@@ -766,4 +779,131 @@ impl ToNumber<i32> for ToStartOfISOYear {
             .unwrap();
         datetime_to_date_inner_number(&iso_dt)
     }
+}
+
+impl ToNumber<i32> for ToLastOfWeek {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_monday() as i32
+            + 6
+    }
+}
+
+impl ToNumber<i32> for ToLastOfMonth {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let day = last_day_of_year_month(dt.year(), dt.month());
+        datetime_to_date_inner_number(&dt.with_day(day).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToLastOfQuarter {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let new_month = dt.month0() / 3 * 3 + 3;
+        let day = last_day_of_year_month(dt.year(), new_month);
+        datetime_to_date_inner_number(&dt.with_month(new_month).unwrap().with_day(day).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToLastOfYear {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let day = last_day_of_year_month(dt.year(), 12);
+        datetime_to_date_inner_number(&dt.with_month(12).unwrap().with_day(day).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToPreviousMonday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Mon, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousTuesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Tue, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousWednesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Wed, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousThursday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Thu, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousFriday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Fri, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousSaturday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sat, true)
+    }
+}
+
+impl ToNumber<i32> for ToPreviousSunday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sun, true)
+    }
+}
+
+impl ToNumber<i32> for ToNextMonday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Mon, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextTuesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Tue, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextWednesday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Wed, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextThursday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Thu, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextFriday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Fri, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextSaturday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sat, false)
+    }
+}
+
+impl ToNumber<i32> for ToNextSunday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        previous_or_next_day(dt, Weekday::Sun, false)
+    }
+}
+
+pub fn previous_or_next_day(dt: &DateTime<Tz>, target: Weekday, is_previous: bool) -> i32 {
+    let dir = if is_previous { -1 } else { 1 };
+
+    let mut days_diff = (dir
+        * (target.num_days_from_monday() as i32
+            - dt.date_naive().weekday().num_days_from_monday() as i32)
+        + 7)
+        % 7;
+
+    days_diff = if days_diff == 0 { 7 } else { days_diff };
+
+    datetime_to_date_inner_number(dt) + dir * days_diff
 }

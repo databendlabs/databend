@@ -12,11 +12,10 @@ doctest = false
 test = true
 
 [features]
-default = ["simd", "memory-profiling"]
+default = ["simd"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 simd = ["databend-common-arrow/simd"]
 io-uring = [
-    "sled/io_uring",
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
 ]
@@ -25,7 +24,7 @@ io-uring = [
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-backon = "0.4"
+backon = { workspace = true }
 clap = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
@@ -50,28 +49,28 @@ http = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
-maplit = "1.0.2"
+maplit = { workspace = true }
 poem = { workspace = true }
-prometheus-client = "0.22"
+prometheus-client = { workspace = true }
 prost = { workspace = true }
+raft-log = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
-sled = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 
 [dev-dependencies]
-env_logger = "0.10.0"
-maplit = "1.0.2"
-pretty_assertions = "1.3.0"
+env_logger = { workspace = true }
+maplit = { workspace = true }
+pretty_assertions = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-temp-env = "0.3.0"
-tempfile = "3.4.0"
-test-harness = "0.1.1"
+temp-env = { workspace = true }
+tempfile = { workspace = true }
+test-harness = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }

@@ -15,16 +15,5 @@
 use databend_common_expression::types::DataType;
 
 pub trait Index {
-    fn supported_type(data_type: &DataType) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
-        let inner_type = data_type.remove_nullable();
-        matches!(
-            inner_type,
-            DataType::Number(_)
-                | DataType::Date
-                | DataType::Timestamp
-                | DataType::String
-                | DataType::Decimal(_)
-        )
-    }
+    fn supported_type(data_type: &DataType) -> bool;
 }

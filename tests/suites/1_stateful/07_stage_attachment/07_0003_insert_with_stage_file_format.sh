@@ -15,7 +15,7 @@ curl -s -u root: -XPOST "http://localhost:8000/v1/query" --header 'Content-Type:
 
 query "list @s1"
 
-query "select a is null, b is null, c, d from t1"
+query "select a is null, b is null, c, d = '' from t1"
 
 stmt "drop table if exists t1"
 stmt "drop stage if exists s1"

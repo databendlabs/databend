@@ -20,17 +20,19 @@ use databend_common_meta_sled_store::SledKeySpace;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::LogIndex;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::LogIndex;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
 use databend_common_meta_types::SeqNum;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ondisk::Header;
+use crate::ondisk::OnDisk;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 use crate::state_machine::ClientLastRespValue;
@@ -240,9 +242,43 @@ pub enum RaftStoreEntry {
     Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences        as SledKeySpace>::V, },
     ClientLastResps  { key: <ClientLastResps  as SledKeySpace>::K, value: <ClientLastResps  as SledKeySpace>::V, },
     LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: <LogMeta          as SledKeySpace>::V, },
+
+    // V004 log:
+    LogEntry(Entry),
+    NodeId(Option<NodeId>),
+    Vote(Option<Vote>),
+    Committed(Option<LogId>),
+    Purged(Option<LogId>),
 }
 
 impl RaftStoreEntry {
+    /// Upgrade V003 to V004
+    pub fn upgrade(self) -> Self {
+        match self.clone() {
+            Self::Logs { key: _, value } => Self::LogEntry(value),
+            Self::RaftStateKV { key: _, value } => match value {
+                RaftStateValue::NodeId(node_id) => Self::NodeId(Some(node_id)),
+                RaftStateValue::HardState(vote) => Self::Vote(Some(vote)),
+                RaftStateValue::Committed(committed) => Self::Committed(committed),
+                RaftStateValue::StateMachineId(_) => self,
+            },
+            Self::LogMeta { key: _, value } => Self::Purged(Some(value.log_id())),
+
+            RaftStoreEntry::DataHeader { .. }
+            | RaftStoreEntry::Nodes { .. }
+            | RaftStoreEntry::StateMachineMeta { .. }
+            | RaftStoreEntry::Expire { .. }
+            | RaftStoreEntry::GenericKV { .. }
+            | RaftStoreEntry::Sequences { .. }
+            | RaftStoreEntry::ClientLastResps { .. }
+            | RaftStoreEntry::LogEntry(_)
+            | RaftStoreEntry::NodeId(_)
+            | RaftStoreEntry::Vote(_)
+            | RaftStoreEntry::Committed(_)
+            | RaftStoreEntry::Purged(_) => self,
+        }
+    }
+
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
     #[rustfmt::skip]
     pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
@@ -258,6 +294,14 @@ impl RaftStoreEntry {
             Self::Sequences        { key, value } => serialize_for_sled!(Sequences,        key, value),
             Self::ClientLastResps  { key, value } => serialize_for_sled!(ClientLastResps,  key, value),
             Self::LogMeta          { key, value } => serialize_for_sled!(LogMeta,          key, value),
+
+            RaftStoreEntry::LogEntry(_) |
+            RaftStoreEntry::NodeId(_)|
+            RaftStoreEntry::Vote(_) |
+            RaftStoreEntry::Committed(_)|
+            RaftStoreEntry::Purged(_) => {
+                unreachable!("V004 entries should not be serialized for sled")
+            }
         }
     }
 
@@ -288,6 +332,13 @@ impl RaftStoreEntry {
 
         unreachable!("unknown prefix: {}", prefix);
     }
+
+    pub fn new_header(header: Header) -> Self {
+        RaftStoreEntry::DataHeader {
+            key: OnDisk::KEY_HEADER.to_string(),
+            value: header,
+        }
+    }
 }
 
 impl TryInto<SMEntry> for RaftStoreEntry {
@@ -307,6 +358,14 @@ impl TryInto<SMEntry> for RaftStoreEntry {
             Self::RaftStateKV      { .. } => {Err("SMEntry does not contain RaftStateKV".to_string())}
             Self::ClientLastResps  { .. } => {Err("SMEntry does not contain ClientLastResps".to_string())}
             Self::LogMeta          { .. } => {Err("SMEntry does not contain LogMeta".to_string())}
+
+
+            Self::LogEntry        (_) => {Err("SMEntry does not contain LogEntry".to_string())}
+            Self::Vote            (_) => {Err("SMEntry does not contain Vote".to_string())}
+            Self::NodeId          (_) => {Err("SMEntry does not contain NodeId".to_string())}
+            Self::Committed       (_) => {Err("SMEntry does not contain Committed".to_string())}
+            Self::Purged          (_) => {Err("SMEntry does not contain Purged".to_string())}
+
         }
     }
 }

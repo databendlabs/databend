@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod global;
+#[cfg(feature = "jemalloc")]
 mod jemalloc;
 mod mmap;
 mod std_;
 
 pub use default::DefaultAllocator;
 pub use global::GlobalAllocator;
+#[cfg(feature = "jemalloc")]
 pub use jemalloc::JEAllocator;
 pub use mmap::MmapAllocator;
 pub use std_::StdAllocator;

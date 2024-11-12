@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
-use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::AsKeySpace;
 use databend_common_meta_sled_store::SledKeySpace;
@@ -28,6 +28,11 @@ use databend_common_meta_sled_store::Store;
 use databend_common_meta_sled_store::TransactionSledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition;
@@ -38,17 +43,12 @@ use databend_common_meta_types::Change;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::Interval;
-use databend_common_meta_types::LogId;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -140,7 +140,7 @@ impl StateMachine {
 
     #[fastrace::trace]
     pub async fn open(config: &RaftConfig, sm_id: u64) -> Result<StateMachine, MetaStorageError> {
-        let db = get_sled_db();
+        let db = init_get_sled_db(config.raft_dir.clone(), config.sled_cache_size());
 
         let tree_name = StateMachine::tree_name(config, sm_id);
         debug!("opening tree: {}", &tree_name);

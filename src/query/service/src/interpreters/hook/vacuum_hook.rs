@@ -44,14 +44,20 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     {
         let handler = get_vacuum_handler();
 
+        let abort_checker = query_ctx.clone().get_abort_checker();
         let _ = GlobalIORuntime::instance().block_on(async move {
             let removed_files = handler
                 .do_vacuum_temporary_files(
+                    abort_checker,
                     spill_prefix.clone(),
                     Some(Duration::from_secs(0)),
                     vacuum_limit as usize,
                 )
                 .await;
+
+            if let Err(cause) = &removed_files {
+                log::warn!("Vacuum temporary files has error: {:?}", cause);
+            }
 
             if vacuum_limit != 0 && matches!(removed_files, Ok(res) if res == vacuum_limit as usize)
             {

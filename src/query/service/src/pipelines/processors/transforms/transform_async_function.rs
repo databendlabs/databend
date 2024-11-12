@@ -40,7 +40,7 @@ pub struct TransformAsyncFunction {
 }
 
 impl TransformAsyncFunction {
-    pub fn new(
+    pub(crate) fn new(
         ctx: Arc<QueryContext>,
         async_func_descs: Vec<AsyncFunctionDesc>,
         operators: BTreeMap<usize, Arc<DictionaryOperator>>,

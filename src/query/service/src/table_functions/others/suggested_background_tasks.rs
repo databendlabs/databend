@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
 use chrono::DateTime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -24,7 +23,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
@@ -155,14 +153,10 @@ impl SuggestedBackgroundTasksSource {
     }
 
     #[async_backtrace::framed]
-    pub async fn do_execute_sql(
-        ctx: Arc<QueryContext>,
-        sql: String,
-    ) -> Result<Option<RecordBatch>> {
+    pub async fn do_execute_sql(ctx: Arc<QueryContext>, sql: String) -> Result<Option<DataBlock>> {
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _) = interpreter_plan_sql(ctx.clone(), sql.as_str()).await?;
+        let (plan, _, _) = interpreter_plan_sql(ctx.clone(), sql.as_str(), false).await?;
 
-        let data_schema = plan.schema();
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
@@ -182,10 +176,6 @@ impl SuggestedBackgroundTasksSource {
             return Ok(None);
         }
         let record = DataBlock::concat(&result)?;
-        let record = record
-            .to_record_batch_with_dataschema(data_schema.as_ref())
-            .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
-
         Ok(Some(record))
     }
 

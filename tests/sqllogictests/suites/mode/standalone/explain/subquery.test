@@ -293,7 +293,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [and_filters(and_filters(numbers.number (#1) = 0, numbers.number (#1) < 10), numbers.number (#1) = 0)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(numbers.number (#1) = 0, numbers.number (#1) < 10)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]
@@ -552,6 +552,73 @@ EvalScalar
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
+
+query T
+explain optimized select i, exists(select * from t where i > 10) from t;
+----
+EvalScalar
+├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
+└── Join(Cross)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
+        └── Aggregate(Final)
+            ├── group items: []
+            ├── aggregate functions: [count(*) (#3)]
+            └── Aggregate(Partial)
+                ├── group items: []
+                ├── aggregate functions: [count(*) (#3)]
+                └── Limit
+                    ├── limit: [1]
+                    ├── offset: [0]
+                    └── Filter
+                        ├── filters: [gt(t.i (#1), 10)]
+                        └── Scan
+                            ├── table: default.t
+                            ├── filters: [gt(t.i (#1), 10)]
+                            ├── order by: []
+                            └── limit: NONE
+
+
+query T
+explain decorrelated select i, exists(select * from t where i > 10) from t;
+----
+EvalScalar
+├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
+└── Join(Cross)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: []
+            ├── aggregate functions: [count(*) (#3)]
+            └── Limit
+                ├── limit: [1]
+                ├── offset: [0]
+                └── EvalScalar
+                    ├── scalars: [t.i (#1) AS (#1)]
+                    └── Filter
+                        ├── filters: [gt(t.i (#1), 10)]
+                        └── Scan
+                            ├── table: default.t
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
 
 statement ok
 drop table if exists t;

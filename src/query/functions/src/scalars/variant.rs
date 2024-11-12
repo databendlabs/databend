@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::iter::once;
 use std::sync::Arc;
@@ -1008,8 +1009,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             let json_str = cast_to_string(val);
-            output.put_str(&json_str);
-            output.commit_row();
+            output.put_and_commit(json_str);
         }),
     );
 
@@ -1679,6 +1679,72 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.register_function_factory("json_object_pick", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
+        for arg_type in args_type.iter().skip(1) {
+            if arg_type.remove_nullable() != DataType::String && *arg_type != DataType::Null {
+                return None;
+            }
+        }
+        let is_nullable = args_type[0].is_nullable_or_null();
+        let return_type = if is_nullable {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_object_pick".to_string(),
+                args_type: args_type.to_vec(),
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(move |args, ctx| {
+                    json_object_pick_or_delete_fn(args, ctx, true, is_nullable)
+                }),
+            },
+        }))
+    });
+
+    registry.register_function_factory("json_object_delete", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
+        for arg_type in args_type.iter().skip(1) {
+            if arg_type.remove_nullable() != DataType::String && *arg_type != DataType::Null {
+                return None;
+            }
+        }
+        let is_nullable = args_type[0].is_nullable_or_null();
+        let return_type = if is_nullable {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_object_delete".to_string(),
+                args_type: args_type.to_vec(),
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(move |args, ctx| {
+                    json_object_pick_or_delete_fn(args, ctx, false, is_nullable)
+                }),
+            },
+        }))
+    });
 }
 
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -1886,7 +1952,7 @@ fn get_by_keypath_fn(
     let len = len_opt.unwrap_or(1);
 
     let mut builder = if string_res {
-        ColumnBuilder::String(StringColumnBuilder::with_capacity(len, len * 50))
+        ColumnBuilder::String(StringColumnBuilder::with_capacity(len))
     } else {
         ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(len, len * 50))
     };
@@ -2118,6 +2184,84 @@ fn json_object_insert_fn(
                 cast_scalar_to_variant(new_val.clone(), ctx.func_ctx.tz, &mut new_val_buf);
                 jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
             }
+        };
+        if let Err(err) = res {
+            validity.push(false);
+            ctx.set_error(builder.len(), err.to_string());
+        } else {
+            validity.push(true);
+        }
+        builder.commit_row();
+    }
+    if is_nullable {
+        let validity: Bitmap = validity.into();
+        match len_opt {
+            Some(_) => {
+                Value::Column(Column::Variant(builder.build())).wrap_nullable(Some(validity))
+            }
+            None => {
+                if !validity.get_bit(0) {
+                    Value::Scalar(Scalar::Null)
+                } else {
+                    Value::Scalar(Scalar::Variant(builder.build_scalar()))
+                }
+            }
+        }
+    } else {
+        match len_opt {
+            Some(_) => Value::Column(Column::Variant(builder.build())),
+            None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
+        }
+    }
+}
+
+fn json_object_pick_or_delete_fn(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    is_pick: bool,
+    is_nullable: bool,
+) -> Value<AnyType> {
+    let len_opt = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let len = len_opt.unwrap_or(1);
+    let mut keys = BTreeSet::new();
+    let mut validity = MutableBitmap::with_capacity(len);
+    let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
+    for idx in 0..len {
+        let value = match &args[0] {
+            ValueRef::Scalar(scalar) => scalar.clone(),
+            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+        };
+        if value == ScalarRef::Null {
+            builder.commit_row();
+            validity.push(false);
+            continue;
+        }
+        let value = value.as_variant().unwrap();
+        if !is_object(value) {
+            ctx.set_error(builder.len(), "Invalid json object");
+            builder.commit_row();
+            validity.push(false);
+            continue;
+        }
+        keys.clear();
+        for arg in args.iter().skip(1) {
+            let key = match &arg {
+                ValueRef::Scalar(scalar) => scalar.clone(),
+                ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+            };
+            if key == ScalarRef::Null {
+                continue;
+            }
+            let key = key.as_string().unwrap();
+            keys.insert(*key);
+        }
+        let res = if is_pick {
+            jsonb::object_pick(value, &keys, &mut builder.data)
+        } else {
+            jsonb::object_delete(value, &keys, &mut builder.data)
         };
         if let Err(err) = res {
             validity.push(false);

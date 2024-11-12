@@ -22,7 +22,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
+use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003_or_v004;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_sled_store::openraft::MessageSummary;
@@ -35,20 +35,20 @@ use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::protobuf::SnapshotResponseV003;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::raft_types::AppendEntriesRequest;
+use databend_common_meta_types::raft_types::InstallSnapshotError;
+use databend_common_meta_types::raft_types::InstallSnapshotRequest;
+use databend_common_meta_types::raft_types::InstallSnapshotResponse;
+use databend_common_meta_types::raft_types::RaftError;
+use databend_common_meta_types::raft_types::Snapshot;
+use databend_common_meta_types::raft_types::SnapshotMeta;
+use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::TransferLeaderRequest;
+use databend_common_meta_types::raft_types::Vote;
+use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::snapshot_db::DB;
-use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::InstallSnapshotError;
-use databend_common_meta_types::InstallSnapshotRequest;
-use databend_common_meta_types::InstallSnapshotResponse;
-use databend_common_meta_types::RaftError;
-use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotData;
-use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::StorageError;
-use databend_common_meta_types::Vote;
-use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -159,7 +159,7 @@ impl RaftServiceImpl {
             let snapshot_data_v1 =
                 SnapshotData::open_temp(temp_path).map_err(io_err_to_read_snap_err)?;
 
-            let db = upgrade_snapshot_data_v002_to_v003(
+            let db = upgrade_snapshot_data_v002_to_v003_or_v004(
                 &ss_store,
                 Box::new(snapshot_data_v1),
                 snapshot_id,

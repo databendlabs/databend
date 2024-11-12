@@ -22,9 +22,10 @@ use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
 use log::Metadata;
+use logforth::filter::env::EnvFilterBuilder;
 use logforth::filter::CustomFilter;
+use logforth::filter::EnvFilter;
 use logforth::filter::FilterResult;
-use logforth::filter::TargetFilter;
 use logforth::Dispatch;
 use logforth::Logger;
 use opentelemetry_otlp::WithExportConfig;
@@ -179,43 +180,31 @@ pub fn init_logging(
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
-            .filter(TargetFilter::level_for(
-                "databend::log::query",
-                LevelFilter::Off,
+            .filter(EnvFilter::new(
+                EnvFilterBuilder::new()
+                    .filter(Some("databend::log::query"), LevelFilter::Off)
+                    .filter(Some("databend::log::profile"), LevelFilter::Off)
+                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
+                    .parse(&cfg.file.level),
             ))
-            .filter(TargetFilter::level_for(
-                "databend::log::profile",
-                LevelFilter::Off,
-            ))
-            .filter(TargetFilter::level_for(
-                "databend::log::structlog",
-                LevelFilter::Off,
-            ))
-            .filter(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
             .filter(make_log_filter(&cfg.file.prefix_filter))
-            .layout(get_layout(&cfg.file.format))
-            .append(normal_log_file);
+            .append(normal_log_file.with_layout(get_layout(&cfg.file.format)));
         logger = logger.dispatch(dispatch);
     }
 
     // console logger
     if cfg.stderr.on {
         let dispatch = Dispatch::new()
-            .filter(TargetFilter::level_for(
-                "databend::log::query",
-                LevelFilter::Off,
+            .filter(EnvFilter::new(
+                EnvFilterBuilder::new()
+                    .filter(Some("databend::log::query"), LevelFilter::Off)
+                    .filter(Some("databend::log::profile"), LevelFilter::Off)
+                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
+                    .parse(&cfg.stderr.level),
             ))
-            .filter(TargetFilter::level_for(
-                "databend::log::profile",
-                LevelFilter::Off,
-            ))
-            .filter(TargetFilter::level_for(
-                "databend::log::structlog",
-                LevelFilter::Off,
-            ))
-            .filter(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
-            .layout(get_layout(&cfg.stderr.format))
-            .append(logforth::append::Stderr);
+            .append(
+                logforth::append::Stderr::default().with_layout(get_layout(&cfg.stderr.format)),
+            );
         logger = logger.dispatch(dispatch);
     }
 
@@ -230,28 +219,21 @@ pub fn init_logging(
             log_name,
             format!("{}/v1/logs", &cfg.otlp.endpoint.endpoint),
         )
-        .with_protocol(cfg.otlp.endpoint.protocol.into());
+        .protocol(cfg.otlp.endpoint.protocol.into());
         for (k, v) in labels {
-            otel_builder = otel_builder.add_label(k, v);
+            otel_builder = otel_builder.label(k, v);
         }
         let otel = otel_builder
             .build()
             .expect("initialize opentelemetry logger");
         let dispatch = Dispatch::new()
-            .filter(TargetFilter::level_for(
-                "databend::log::query",
-                LevelFilter::Off,
+            .filter(EnvFilter::new(
+                EnvFilterBuilder::new()
+                    .filter(Some("databend::log::query"), LevelFilter::Off)
+                    .filter(Some("databend::log::profile"), LevelFilter::Off)
+                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
+                    .parse(&cfg.otlp.level),
             ))
-            .filter(TargetFilter::level_for(
-                "databend::log::profile",
-                LevelFilter::Off,
-            ))
-            .filter(TargetFilter::level_for(
-                "databend::log::structlog",
-                LevelFilter::Off,
-            ))
-            .filter(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
-            .layout(get_layout("json"))
             .append(otel);
         logger = logger.dispatch(dispatch);
     }
@@ -265,20 +247,14 @@ pub fn init_logging(
             .ok()
             .unwrap_or(LevelFilter::Info);
         let dispatch = Dispatch::new()
-            .filter(TargetFilter::level_for(
-                "databend::log::query",
-                LevelFilter::Off,
-            ))
-            .filter(TargetFilter::level_for(
-                "databend::log::profile",
-                LevelFilter::Off,
-            ))
-            .filter(TargetFilter::level_for(
-                "databend::log::structlog",
-                LevelFilter::Off,
+            .filter(EnvFilter::new(
+                EnvFilterBuilder::new()
+                    .filter(Some("databend::log::query"), LevelFilter::Off)
+                    .filter(Some("databend::log::profile"), LevelFilter::Off)
+                    .filter(Some("databend::log::structlog"), LevelFilter::Off),
             ))
             .filter(level)
-            .append(logforth::append::FastraceEvent);
+            .append(logforth::append::FastraceEvent::default());
         logger = logger.dispatch(dispatch);
     }
 
@@ -290,9 +266,9 @@ pub fn init_logging(
             _drop_guards.push(flush_guard);
 
             let dispatch = Dispatch::new()
-                .filter(TargetFilter::level_for_not(
-                    "databend::log::query",
-                    LevelFilter::Off,
+                .filter(EnvFilter::new(
+                    EnvFilterBuilder::new()
+                        .filter(Some("databend::log::query"), LevelFilter::Trace),
                 ))
                 .append(query_log_file);
             logger = logger.dispatch(dispatch);
@@ -307,17 +283,17 @@ pub fn init_logging(
                 log_name,
                 format!("{}/v1/logs", &endpoint.endpoint),
             )
-            .with_protocol(endpoint.protocol.into());
+            .protocol(endpoint.protocol.into());
             for (k, v) in labels {
-                otel_builder = otel_builder.add_label(k, v);
+                otel_builder = otel_builder.label(k, v);
             }
             let otel = otel_builder
                 .build()
                 .expect("initialize opentelemetry logger");
             let dispatch = Dispatch::new()
-                .filter(TargetFilter::level_for_not(
-                    "databend::log::query",
-                    LevelFilter::Off,
+                .filter(EnvFilter::new(
+                    EnvFilterBuilder::new()
+                        .filter(Some("databend::log::query"), LevelFilter::Trace),
                 ))
                 .append(otel);
             logger = logger.dispatch(dispatch);
@@ -332,9 +308,9 @@ pub fn init_logging(
             _drop_guards.push(flush_guard);
 
             let dispatch = Dispatch::new()
-                .filter(TargetFilter::level_for_not(
-                    "databend::log::profile",
-                    LevelFilter::Off,
+                .filter(EnvFilter::new(
+                    EnvFilterBuilder::new()
+                        .filter(Some("databend::log::profile"), LevelFilter::Trace),
                 ))
                 .append(profile_log_file);
             logger = logger.dispatch(dispatch);
@@ -349,17 +325,17 @@ pub fn init_logging(
                 log_name,
                 format!("{}/v1/logs", &endpoint.endpoint),
             )
-            .with_protocol(endpoint.protocol.into());
+            .protocol(endpoint.protocol.into());
             for (k, v) in labels {
-                otel_builder = otel_builder.add_label(k, v);
+                otel_builder = otel_builder.label(k, v);
             }
             let otel = otel_builder
                 .build()
                 .expect("initialize opentelemetry logger");
             let dispatch = Dispatch::new()
-                .filter(TargetFilter::level_for_not(
-                    "databend::log::profile",
-                    LevelFilter::Off,
+                .filter(EnvFilter::new(
+                    EnvFilterBuilder::new()
+                        .filter(Some("databend::log::profile"), LevelFilter::Trace),
                 ))
                 .append(otel);
             logger = logger.dispatch(dispatch);
@@ -373,9 +349,9 @@ pub fn init_logging(
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
-            .filter(TargetFilter::level_for_not(
-                "databend::log::structlog",
-                LevelFilter::Off,
+            .filter(EnvFilter::new(
+                EnvFilterBuilder::new()
+                    .filter(Some("databend::log::structlog"), LevelFilter::Trace),
             ))
             .append(structlog_log_file);
         logger = logger.dispatch(dispatch);

@@ -30,6 +30,7 @@ use log::warn;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
+use poem::middleware::CookieJarManager;
 use poem::post;
 use poem::put;
 use poem::web::Json;
@@ -57,6 +58,7 @@ use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
 use crate::servers::http::v1::upload_to_stage;
+use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -411,6 +413,13 @@ pub(crate) async fn query_handler(
         .await
 }
 
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn heartbeat_handler() -> poem::error::Result<impl IntoResponse> {
+    // work is already done in session manager
+    Ok(())
+}
+
 pub fn query_route() -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
@@ -446,7 +455,12 @@ pub fn query_route() -> Route {
             post(refresh_handler),
             EndpointKind::Refresh,
         ),
-        ("/auth/verify", post(refresh_handler), EndpointKind::Verify),
+        (
+            "/session/heartbeat",
+            post(heartbeat_handler),
+            EndpointKind::HeartBeat,
+        ),
+        ("/verify", post(verify_handler), EndpointKind::Verify),
         (
             "/upload_to_stage",
             put(upload_to_stage),
@@ -470,7 +484,8 @@ pub fn query_route() -> Route {
             path,
             endpoint
                 .with(MetricsMiddleware::new(path))
-                .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind)),
+                .with(HTTPSessionMiddleware::create(HttpHandlerKind::Query, kind))
+                .with(CookieJarManager::new()),
         );
     }
     route

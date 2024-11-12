@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
@@ -20,6 +22,7 @@ use databend_common_expression::types::number::F32;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
@@ -39,6 +42,18 @@ pub struct BlockMetaIndex {
     pub snapshot_location: Option<String>,
     // The search matched rows and optional scores in the block.
     pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    // The optional meta of virtual columns.
+    pub virtual_block_meta: Option<VirtualBlockMetaIndex>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct VirtualBlockMetaIndex {
+    pub virtual_block_location: String,
+    // Key is virtual column id, value is the column meta.
+    pub virtual_column_metas: BTreeMap<u32, ColumnMeta>,
+    // If all the virtual columns are generated,
+    // we can reduce IO by ignoring the source column.
+    pub ignored_source_column_ids: HashSet<u32>,
 }
 
 #[typetag::serde(name = "block_meta_index")]

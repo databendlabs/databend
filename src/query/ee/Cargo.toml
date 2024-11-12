@@ -12,7 +12,6 @@ doctest = false
 test = true
 
 [dependencies]
-arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
@@ -31,6 +30,11 @@ databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sinks = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
@@ -59,11 +63,11 @@ futures-util = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-tempfile = "3.4.0"
+tempfile = { workspace = true }
 
 # aws sdk
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.17.0"
+aws-config = { workspace = true, features = ["behavior-version-latest"] }
+aws-sdk-s3 = { workspace = true }
 
 [dev-dependencies]
 jsonb = { workspace = true }

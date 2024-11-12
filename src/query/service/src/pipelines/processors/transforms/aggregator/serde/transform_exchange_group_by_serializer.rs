@@ -17,11 +17,8 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::flight::default_ipc_fields;
-use databend_common_arrow::arrow::io::flight::WriteOptions;
-use databend_common_arrow::arrow::io::ipc::write::Compression;
-use databend_common_arrow::arrow::io::ipc::IpcField;
+use arrow_ipc::writer::IpcWriteOptions;
+use arrow_ipc::CompressionType;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -29,6 +26,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Int64Type;
@@ -74,8 +72,7 @@ pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
     ctx: Arc<QueryContext>,
     method: Method,
     local_pos: usize,
-    options: WriteOptions,
-    ipc_fields: Vec<IpcField>,
+    options: IpcWriteOptions,
 
     operator: Operator,
     location_prefix: String,
@@ -90,17 +87,15 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
         method: Method,
         operator: Operator,
         location_prefix: String,
-        schema: DataSchemaRef,
+        _schema: DataSchemaRef,
         local_pos: usize,
         compression: Option<FlightCompression>,
     ) -> Box<dyn Processor> {
-        let arrow_schema = ArrowSchema::from(schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,
             Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(Compression::LZ4),
-                FlightCompression::Zstd => Some(Compression::ZSTD),
+                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
+                FlightCompression::Zstd => Some(CompressionType::ZSTD),
             },
         };
 
@@ -112,9 +107,10 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
                 method,
                 operator,
                 local_pos,
-                ipc_fields,
                 location_prefix,
-                options: WriteOptions { compression },
+                options: IpcWriteOptions::default()
+                    .try_with_compression(compression)
+                    .unwrap(),
             },
         )
     }
@@ -145,30 +141,10 @@ impl Debug for FlightSerializedMeta {
     }
 }
 
-impl serde::Serialize for FlightSerializedMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize FlightSerializedMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for FlightSerializedMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize FlightSerializedMeta")
-    }
-}
+local_block_meta_serde!(FlightSerializedMeta);
 
 #[typetag::serde(name = "exchange_shuffle")]
-impl BlockMetaInfo for FlightSerializedMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals FlightSerializedMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone FlightSerializedMeta")
-    }
-}
+impl BlockMetaInfo for FlightSerializedMeta {}
 
 impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     for TransformExchangeGroupBySerializer<Method>
@@ -219,7 +195,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                                 &self.location_prefix,
                                 payload,
                             )?,
-                            false => agg_spilling_group_by_payload::<Method>(
+                            false => agg_spilling_group_by_payload(
                                 self.ctx.clone(),
                                 self.operator.clone(),
                                 &self.location_prefix,
@@ -252,7 +228,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        let c = serialize_block(bucket, c, &self.options)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -280,7 +256,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        let c = serialize_block(bucket, c, &self.options)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -297,7 +273,7 @@ fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
     data_block.columns().to_vec()
 }
 
-fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
+fn agg_spilling_group_by_payload(
     ctx: Arc<QueryContext>,
     operator: Operator,
     location_prefix: &str,
@@ -410,9 +386,8 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
                 partition_count,
             )))?;
 
-            let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options);
+            return serialize_block(-1, data_block, &write_options);
         }
 
         Ok(DataBlock::empty())
@@ -531,9 +506,8 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
                 vec![],
             )))?;
 
-            let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options);
+            return serialize_block(-1, data_block, &write_options);
         }
 
         Ok(DataBlock::empty())

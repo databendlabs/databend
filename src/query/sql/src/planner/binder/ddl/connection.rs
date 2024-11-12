@@ -31,7 +31,6 @@ impl Binder {
             stmt.storage_type.clone(),
             "".to_string(),
             "/".to_string(),
-            "".to_string(),
             stmt.storage_params.clone(),
         );
         parse_storage_params_from_uri(&mut location, None, "when CREATE CONNECTION").await?;

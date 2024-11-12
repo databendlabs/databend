@@ -83,17 +83,17 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         TableDataType::Null => ArrowDataType::Null,
         TableDataType::EmptyArray => ArrowDataType::Extension(
             ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
-            Box::new(ArrowDataType::Null),
+            Box::new(ArrowDataType::Boolean),
             None,
         ),
         TableDataType::EmptyMap => ArrowDataType::Extension(
             ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
-            Box::new(ArrowDataType::Null),
+            Box::new(ArrowDataType::Boolean),
             None,
         ),
         TableDataType::Boolean => ArrowDataType::Boolean,
         TableDataType::Binary => ArrowDataType::LargeBinary,
-        TableDataType::String => ArrowDataType::LargeUtf8,
+        TableDataType::String => ArrowDataType::Utf8View,
         TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
             NumberDataType::TYPE => ArrowDataType::TYPE,
         }),
@@ -149,7 +149,8 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
                     ArrowField::new(
                         name.as_str(),
                         table_type_to_arrow_type(ty),
-                        ty.is_nullable(),
+                        // null in tuple must be nullable
+                        ty.is_nullable_or_null(),
                     )
                 })
                 .collect();
@@ -185,10 +186,20 @@ impl Column {
                 databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
             ),
             Column::EmptyArray { len } => Box::new(
-                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    Bitmap::new_constant(true, *len),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::EmptyMap { len } => Box::new(
-                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    Bitmap::new_constant(true, *len),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::UInt8(col)) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
@@ -304,32 +315,7 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Binary(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
-            Column::String(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
+            Column::String(col) => Box::new(col.clone().into_inner()),
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
@@ -398,7 +384,9 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Bitmap(col)
+
+            Column::Binary(col)
+            | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col)
             | Column::Geography(GeographyColumn(col)) => {

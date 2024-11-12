@@ -528,6 +528,7 @@ unsafe fn read_bytes(ptr: *const u8, len: usize) -> &'static str {
 }
 
 unsafe fn metadata_from_bytes(data: *const ::std::os::raw::c_char) -> (Metadata, Extension) {
+    #[allow(clippy::unnecessary_cast)]
     let mut data = data as *const u8; // u8 = i8
     if data.is_null() {
         return (Metadata::default(), None);

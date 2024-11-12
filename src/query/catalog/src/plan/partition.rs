@@ -301,37 +301,10 @@ impl StealablePartitions {
         self.disable_steal = true;
     }
 
-    pub fn steal_one(&self, idx: usize) -> Option<PartInfoPtr> {
+    pub fn steal(&self, idx: usize, max_size: usize) -> Option<Vec<PartInfoPtr>> {
         let mut partitions = self.partitions.write();
         if partitions.is_empty() {
-            return self.ctx.get_partition();
-        }
-
-        let idx = if idx >= partitions.len() {
-            idx % partitions.len()
-        } else {
-            idx
-        };
-
-        for step in 0..partitions.len() {
-            let index = (idx + step) % partitions.len();
-            if !partitions[index].is_empty() {
-                return partitions[index].pop_front();
-            }
-
-            if self.disable_steal {
-                break;
-            }
-        }
-
-        drop(partitions);
-        self.ctx.get_partition()
-    }
-
-    pub fn steal(&self, idx: usize, max_size: usize) -> Vec<PartInfoPtr> {
-        let mut partitions = self.partitions.write();
-        if partitions.is_empty() {
-            return self.ctx.get_partitions(max_size);
+            return None;
         }
 
         let idx = if idx >= partitions.len() {
@@ -346,7 +319,7 @@ impl StealablePartitions {
             if !partitions[index].is_empty() {
                 let ps = &mut partitions[index];
                 let size = ps.len().min(max_size);
-                return ps.drain(..size).collect();
+                return Some(ps.drain(..size).collect());
             }
 
             if self.disable_steal {
@@ -355,7 +328,8 @@ impl StealablePartitions {
         }
 
         drop(partitions);
-        self.ctx.get_partitions(max_size)
+
+        None
     }
 }
 

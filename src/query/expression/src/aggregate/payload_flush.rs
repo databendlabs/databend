@@ -26,6 +26,7 @@ use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -36,7 +37,6 @@ use crate::types::NumberType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
-use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
@@ -133,7 +133,7 @@ impl Payload {
             let mut state_builders: Vec<BinaryColumnBuilder> = self
                 .aggrs
                 .iter()
-                .map(|agg| state_serializer(agg, row_count))
+                .map(|_| BinaryColumnBuilder::with_capacity(row_count, row_count * 4))
                 .collect();
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
@@ -322,7 +322,21 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> StringColumn {
-        unsafe { StringColumn::from_binary_unchecked(self.flush_binary_column(col_offset, state)) }
+        let len = state.probe_state.row_count;
+        let mut binary_builder = StringColumnBuilder::with_capacity(len);
+
+        unsafe {
+            for idx in 0..len {
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
+
+                let scalar = std::slice::from_raw_parts(data_address, str_len);
+
+                binary_builder.put_and_commit(std::str::from_utf8(scalar).unwrap());
+            }
+        }
+        binary_builder.build()
     }
 
     fn flush_generic_column(
@@ -348,9 +362,4 @@ impl Payload {
         }
         builder.build()
     }
-}
-
-fn state_serializer(func: &AggregateFunctionRef, row: usize) -> BinaryColumnBuilder {
-    let size = func.serialize_size_per_row().unwrap_or(4);
-    BinaryColumnBuilder::with_capacity(row, row * size)
 }

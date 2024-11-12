@@ -29,14 +29,14 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
@@ -270,7 +270,7 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.data, positions)?;
+        self.read_string_inner(reader, &mut column.row_buffer, positions)?;
         column.commit_row();
         Ok(())
     }
@@ -289,8 +289,7 @@ impl FastFieldDecoderValues {
             self.common_settings().enable_dst_hour_fix,
         )?;
         let days = uniform_date(date);
-        check_date(days as i64)?;
-        column.push(days);
+        column.push(clamp_date(days as i64));
         Ok(())
     }
 
@@ -319,8 +318,8 @@ impl FastFieldDecoderValues {
                     );
                     return Err(ErrorCode::BadBytes(msg));
                 }
-                let micros = ts.timestamp_micros();
-                check_timestamp(micros)?;
+                let mut micros = ts.timestamp_micros();
+                clamp_timestamp(&mut micros);
                 column.push(micros.as_());
             }
             _ => unreachable!(),

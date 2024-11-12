@@ -19,5 +19,5 @@ mod window_function;
 
 pub use frame_bound::FrameBound;
 pub use partition::*;
-pub use transform_window::TransformWindow;
+pub use transform_window::*;
 pub use window_function::WindowFunctionInfo;

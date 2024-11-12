@@ -159,30 +159,13 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
 
             // values
             let (_, compressed_size, uncompressed_size) = read_compress_header(reader, scratch)?;
-            use_inner = false;
-            reader.fill_buf()?;
-            let input = if reader.buffer_bytes().len() >= compressed_size {
-                use_inner = true;
-                reader.buffer_bytes()
-            } else {
-                scratch.resize(compressed_size, 0);
-                reader.read_exact(scratch.as_mut_slice())?;
-                scratch.as_slice()
-            };
-
-            values.reserve(uncompressed_size);
-            let out_slice = unsafe {
-                core::slice::from_raw_parts_mut(
-                    values.as_mut_ptr().add(values.len()),
-                    uncompressed_size,
-                )
-            };
-            c.decompress(&input[..compressed_size], out_slice)?;
-            unsafe { values.set_len(values.len() + uncompressed_size) };
-
-            if use_inner {
-                reader.consume(compressed_size);
-            }
+            c.decompress_common_binary(
+                reader,
+                uncompressed_size,
+                compressed_size,
+                values,
+                scratch,
+            )?;
         }
         BinaryCompressor::Extend(c) => {
             c.decompress(input, length, offsets, values)?;

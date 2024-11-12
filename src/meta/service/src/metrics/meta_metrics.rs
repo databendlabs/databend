@@ -33,7 +33,7 @@ use prometheus_client::encoding::text::encode as prometheus_encode;
 pub mod server_metrics {
     use std::sync::LazyLock;
 
-    use databend_common_meta_types::NodeId;
+    use databend_common_meta_types::raft_types::NodeId;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::family::Family;
     use prometheus_client::metrics::gauge::Gauge;
@@ -239,7 +239,7 @@ pub mod raft_metrics {
     pub mod network {
         use std::sync::LazyLock;
 
-        use databend_common_meta_types::NodeId;
+        use databend_common_meta_types::raft_types::NodeId;
         use prometheus_client;
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;

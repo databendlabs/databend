@@ -100,7 +100,8 @@ History versions that are not included in the above chart:
 |:--------------------|:-------------------------|
 | [0.9.41,   1.2.212) | [0.9.41,  1.2.212)       |
 | [1.2.212,  1.2.479) | [0.9.41,  1.2.479)       |
-| [1.2.479, +∞)       | [1.2.288, +∞)            |
+| [1.2.479,  1.2.655) | [1.2.288, 1.2.655)       |
+| [1.2.655, +∞)       | [1.2.288, +∞)            |
 
 
 - `1.2.53` Incompatible, rolling upgrade is allowed without snapshot transmitting.
@@ -123,6 +124,9 @@ History versions that are not included in the above chart:
 
 - `1.2.552` 2024-07-02 Introduce on-disk `V003`, using `rotbl` format snapshot,
   which is compatible with `V002`. The oldest compatible version is `1.2.288`(`1.2.212~1.2.287` are removed).
+
+- `1.2.655` 2024-11-11 Introduce on-disk `V004`, using WAL based Raft log storage,
+  which is compatible with `V002`. The oldest compatible version is `1.2.288`(`1.2.212~1.2.287` are removed).
     
 
 ## Compatibility of databend-meta on-disk data
@@ -131,6 +135,8 @@ The on-disk data of Databend-meta evolves over time while maintaining backward c
 
 | DataVersion | Databend-version | Min Compatible with |
 |:------------|:-----------------|:--------------------|
+| V004        | 1.2.655          | V002                | 
+| V003        | 1.2.547          | V002                | 
 | V002        | 1.2.53           | V001                | 
 | V001        | 1.1.40           | V0                  |
 

@@ -31,6 +31,8 @@ use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
+use crate::types::StringColumn;
+use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
@@ -302,22 +304,19 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
+        Column::String(v) => row_match_string_column(
+            v,
+            validity,
+            address,
+            select_vector,
+            temp_vector,
+            count,
+            validity_offset,
+            col_offset,
+            no_match,
+            no_match_count,
+        ),
         Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
-            row_match_binary_column(
-                v,
-                validity,
-                address,
-                select_vector,
-                temp_vector,
-                count,
-                validity_offset,
-                col_offset,
-                no_match,
-                no_match_count,
-            )
-        }
-        Column::String(v) => {
-            let v = &BinaryColumn::from(v.clone());
             row_match_binary_column(
                 v,
                 validity,
@@ -409,6 +408,87 @@ unsafe fn row_match_binary_column(
                 let scalar = std::slice::from_raw_parts(data_address, len);
 
                 equal = databend_common_hashtable::fast_memcmp(scalar, value);
+            }
+
+            if equal {
+                temp_vector[match_count] = idx;
+                match_count += 1;
+            } else {
+                no_match[*no_match_count] = idx;
+                *no_match_count += 1;
+            }
+        }
+    }
+
+    select_vector.clone_from_slice(temp_vector);
+
+    *count = match_count;
+}
+
+unsafe fn row_match_string_column(
+    col: &StringColumn,
+    validity: Option<&Bitmap>,
+    address: &[*const u8],
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
+    count: &mut usize,
+    validity_offset: usize,
+    col_offset: usize,
+    no_match: &mut SelectVector,
+    no_match_count: &mut usize,
+) {
+    let mut match_count = 0;
+    let mut equal: bool;
+
+    if let Some(validity) = validity {
+        let is_all_set = validity.unset_bits() == 0;
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
+            let validity_address = address[idx].add(validity_offset);
+            let is_set2 = read::<u8>(validity_address as _) != 0;
+            let is_set = is_all_set || validity.get_bit_unchecked(idx);
+
+            if is_set && is_set2 {
+                let len_address = address[idx].add(col_offset);
+                let address = address[idx].add(col_offset + 4);
+                let len = read::<u32>(len_address as _) as usize;
+
+                let value = StringType::index_column_unchecked(col, idx);
+                if len != value.len() {
+                    equal = false;
+                } else {
+                    let data_address = read::<u64>(address as _) as usize as *const u8;
+                    let scalar = std::slice::from_raw_parts(data_address, len);
+                    equal = databend_common_hashtable::fast_memcmp(scalar, value.as_bytes());
+                }
+            } else {
+                equal = is_set == is_set2;
+            }
+
+            if equal {
+                temp_vector[match_count] = idx;
+                match_count += 1;
+            } else {
+                no_match[*no_match_count] = idx;
+                *no_match_count += 1;
+            }
+        }
+    } else {
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
+            let len_address = address[idx].add(col_offset);
+            let address = address[idx].add(col_offset + 4);
+
+            let len = read::<u32>(len_address as _) as usize;
+
+            let value = StringType::index_column_unchecked(col, idx);
+            if len != value.len() {
+                equal = false;
+            } else {
+                let data_address = read::<u64>(address as _) as usize as *const u8;
+                let scalar = std::slice::from_raw_parts(data_address, len);
+
+                equal = databend_common_hashtable::fast_memcmp(scalar, value.as_bytes());
             }
 
             if equal {
