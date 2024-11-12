@@ -24,7 +24,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 
 use crate::operations::read::ReaderState;
 use crate::operations::read::SourceReader;
-use crate::MergeIOReadResult;
+use crate::BlockReadResult;
 
 #[derive(Clone)]
 pub struct PartitionScanMeta {
@@ -34,7 +34,7 @@ pub struct PartitionScanMeta {
     pub num_rows: Vec<usize>,
     pub bitmaps: Vec<Option<Bitmap>>,
     pub columns: Vec<Vec<BlockEntry>>,
-    pub io_results: VecDeque<MergeIOReadResult>,
+    pub io_results: VecDeque<BlockReadResult>,
 }
 
 impl PartitionScanMeta {

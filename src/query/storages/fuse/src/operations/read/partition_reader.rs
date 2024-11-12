@@ -47,13 +47,13 @@ use databend_common_sql::field_default_value;
 use databend_common_sql::IndexType;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
+use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
 use xorf::BinaryFuse16;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::read::inner_project_field_default_values;
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 use crate::operations::read::PartitionScanMeta;
 use crate::operations::read::SourceBlockReader;
@@ -242,10 +242,10 @@ impl PartitionReader {
                 .stealable_partitions
                 .steal(self.id, self.batch_size - partitions.len());
 
-            if parts.is_empty() {
+            let Some(parts) = parts else {
                 self.partition_scan_state.set_stealable_partitions_empty();
                 break;
-            }
+            };
 
             for part in parts.into_iter() {
                 let mut filters = self
@@ -296,12 +296,12 @@ impl PartitionReader {
     ) -> Result<DataBlock> {
         let data_block = match source_block_reader {
             SourceBlockReader::Parquet { block_reader, .. } => {
-                let mut merge_io_read_results = Vec::with_capacity(meta.partitions.len());
+                let mut block_read_results = Vec::with_capacity(meta.partitions.len());
                 for partition in meta.partitions.iter() {
                     let reader = block_reader.clone();
                     let settings = ReadSettings::from_ctx(&self.stealable_partitions.ctx)?;
                     let partition = partition.clone();
-                    merge_io_read_results.push(async move {
+                    block_read_results.push(async move {
                         databend_common_base::runtime::spawn(async move {
                             let part = FuseBlockPartInfo::from_part(&partition)?;
                             reader
@@ -317,8 +317,9 @@ impl PartitionReader {
                         .unwrap()
                     });
                 }
+
                 meta.io_results
-                    .extend(futures::future::try_join_all(merge_io_read_results).await?);
+                    .extend(futures::future::try_join_all(block_read_results).await?);
                 DataBlock::empty_with_meta(Box::new(meta))
             }
         };

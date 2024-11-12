@@ -39,7 +39,6 @@ pub use fuse_source::build_fuse_parquet_source_pipeline;
 pub use fuse_source::build_partition_source_pipeline;
 pub use native_data_source_deserializer::NativeDeserializeDataTransform;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
-pub use parquet_data_source_reader::ReadParquetDataSource;
 pub use partition_deserializer::PartitionDeserializer;
 pub use partition_reader::PartitionReader;
 pub use partition_reader::PartitionScanState;

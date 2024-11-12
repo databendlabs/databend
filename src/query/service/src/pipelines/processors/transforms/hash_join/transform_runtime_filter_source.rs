@@ -63,7 +63,7 @@ impl TransformRuntimeFilterSource {
             .hash_join_state
             .build_runtime_filter_watcher
             .subscribe();
-        if *rx.borrow() != None {
+        if (*rx.borrow()).is_some() {
             return Ok((*rx.borrow()).unwrap());
         }
         rx.changed()
@@ -128,8 +128,11 @@ impl Processor for TransformRuntimeFilterSource {
         } else {
             let runtime_filter_source_fields = &self.hash_join_state.runtime_filter_source_fields;
             let mut block_entries = Vec::with_capacity(runtime_filter_source_fields.len());
-            for i in 0..runtime_filter_source_fields.len() - 2 {
-                let data_type = runtime_filter_source_fields[i].data_type().clone();
+            for field in runtime_filter_source_fields
+                .iter()
+                .take(runtime_filter_source_fields.len() - 2)
+            {
+                let data_type = field.data_type().clone();
                 let column = Value::Column(Column::random(&data_type, 1, None));
                 block_entries.push(BlockEntry::new(data_type, column));
             }

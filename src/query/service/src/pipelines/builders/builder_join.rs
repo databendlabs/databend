@@ -360,12 +360,12 @@ impl PipelineBuilder {
 
         let hash_join_state = self.runtime_filter_hash_join_state.clone().unwrap();
         let create_sink_processor = |input| {
-            Ok(TransformRuntimeFilterSink::create(
+            TransformRuntimeFilterSink::create(
                 input,
                 hash_join_state.clone(),
                 num_cluster_nodes,
                 is_collected.clone(),
-            )?)
+            )
         };
 
         self.main_pipeline.add_sink(create_sink_processor)

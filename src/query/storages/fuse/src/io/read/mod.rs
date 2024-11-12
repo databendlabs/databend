@@ -22,9 +22,8 @@ mod utils;
 mod virtual_column;
 
 pub use agg_index::AggIndexReader;
-pub use block::BlockReadResult;
-pub use block::BlockReader;
 pub use block::inner_project_field_default_values;
+pub use block::BlockReadResult;
 pub use block::BlockReader;
 pub use block::DataItem;
 pub use block::NativeReaderExt;

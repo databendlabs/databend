@@ -25,7 +25,6 @@ use databend_common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::processors::HashJoinBuildState;
 use databend_query::pipelines::processors::HashJoinDesc;
-use databend_query::pipelines::processors::HashJoinProbeStatistics;
 use databend_query::pipelines::processors::HashJoinState;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -93,6 +92,7 @@ async fn join_build_state(
         false,
         true,
         None,
+        vec![],
     )?;
     let build_state = HashJoinBuildState::try_create(
         ctx.clone(),

@@ -65,6 +65,7 @@ use crate::sessions::Session;
 use crate::storages::Table;
 
 type DatabaseAndTable = (String, String, String);
+type HashJoinRuntimeFilterColumn = HashMap<IndexType, Vec<(usize, String)>>;
 
 /// Data that needs to be shared in a query context.
 pub struct QueryContextShared {
@@ -133,8 +134,7 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
 
-    pub(in crate::sessions) runtime_filter_columns:
-        Arc<RwLock<HashMap<IndexType, Vec<(usize, String)>>>>,
+    pub(in crate::sessions) runtime_filter_columns: Arc<RwLock<HashJoinRuntimeFilterColumn>>,
 
     pub(in crate::sessions) hash_join_probe_statistics:
         Arc<RwLock<HashMap<usize, Arc<HashJoinProbeStatistics>>>>,
