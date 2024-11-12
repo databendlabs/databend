@@ -67,6 +67,8 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::RuntimeFilterSink;
+use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -101,6 +103,10 @@ pub enum PhysicalPlan {
     CacheScan(CacheScan),
     Udf(Udf),
     RecursiveCteScan(RecursiveCteScan),
+
+    /// Runtime filter.
+    RuntimeFilterSource(RuntimeFilterSource),
+    RuntimeFilterSink(RuntimeFilterSink),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -226,6 +232,18 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.probe.adjust_plan_id(next_id);
                 plan.build.adjust_plan_id(next_id);
+                if let Some(plan) = plan.runtime_filter.as_mut() {
+                    plan.adjust_plan_id(next_id);
+                }
+            }
+            PhysicalPlan::RuntimeFilterSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::RuntimeFilterSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::RangeJoin(plan) => {
                 plan.plan_id = *next_id;
@@ -425,6 +443,8 @@ impl PhysicalPlan {
             PhysicalPlan::Limit(v) => v.plan_id,
             PhysicalPlan::RowFetch(v) => v.plan_id,
             PhysicalPlan::HashJoin(v) => v.plan_id,
+            PhysicalPlan::RuntimeFilterSource(v) => v.plan_id,
+            PhysicalPlan::RuntimeFilterSink(v) => v.plan_id,
             PhysicalPlan::RangeJoin(v) => v.plan_id,
             PhysicalPlan::Exchange(v) => v.plan_id,
             PhysicalPlan::UnionAll(v) => v.plan_id,
@@ -480,6 +500,7 @@ impl PhysicalPlan {
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::RowFetch(plan) => plan.output_schema(),
             PhysicalPlan::HashJoin(plan) => plan.output_schema(),
+            PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
             PhysicalPlan::Exchange(plan) => plan.output_schema(),
             PhysicalPlan::ExchangeSource(plan) => plan.output_schema(),
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
@@ -508,6 +529,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
+            | PhysicalPlan::RuntimeFilterSink(_)
             | PhysicalPlan::Recluster(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
@@ -542,6 +564,8 @@ impl PhysicalPlan {
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::RowFetch(_) => "RowFetch".to_string(),
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
+            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::RuntimeFilterSink(_) => "RuntimeFilterSink".to_string(),
             PhysicalPlan::Exchange(_) => "Exchange".to_string(),
             PhysicalPlan::UnionAll(_) => "UnionAll".to_string(),
             PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
@@ -607,6 +631,8 @@ impl PhysicalPlan {
             PhysicalPlan::HashJoin(plan) => Box::new(
                 std::iter::once(plan.probe.as_ref()).chain(std::iter::once(plan.build.as_ref())),
             ),
+            PhysicalPlan::RuntimeFilterSource(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::RuntimeFilterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ExpressionScan(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Exchange(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ExchangeSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -679,6 +705,8 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
+            | PhysicalPlan::RuntimeFilterSource(_)
+            | PhysicalPlan::RuntimeFilterSink(_)
             | PhysicalPlan::RangeJoin(_)
             | PhysicalPlan::MaterializedCte(_)
             | PhysicalPlan::AggregateExpand(_)
@@ -713,6 +741,12 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkMerge(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
+    }
+
+    pub fn contain_runtime_filter_source(&self) -> bool {
+        self.children()
+            .any(|child| child.contain_runtime_filter_source())
+            || matches!(self, Self::RuntimeFilterSource(_))
     }
 
     pub fn is_distributed_plan(&self) -> bool {

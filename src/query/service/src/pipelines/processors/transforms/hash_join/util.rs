@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
@@ -31,6 +32,9 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
+use databend_common_sql::plans::JoinType;
+
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(build_schema.fields().len());
@@ -52,6 +56,23 @@ pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSc
         ));
     }
     DataSchemaRefExt::create(nullable_field)
+}
+
+pub fn build_key_data_block(join_type: &JoinType, data_block: &DataBlock) -> DataBlock {
+    if matches!(
+        join_type,
+        JoinType::Left | JoinType::LeftSingle | JoinType::Full
+    ) {
+        let validity = Bitmap::new_constant(true, data_block.num_rows());
+        let nullable_columns = data_block
+            .columns()
+            .iter()
+            .map(|c| wrap_true_validity(c, data_block.num_rows(), &validity))
+            .collect::<Vec<_>>();
+        DataBlock::new(nullable_columns, data_block.num_rows())
+    } else {
+        data_block.clone()
+    }
 }
 
 // Construct inlist runtime filter
@@ -97,7 +118,6 @@ pub(crate) fn inlist_filter(
 pub(crate) fn dedup_build_key_column(
     func_ctx: &FunctionContext,
     column: Column,
-    build_key: &Expr,
 ) -> Result<Value<AnyType>> {
     // Deduplicate build key column.
     let mut list = Vec::with_capacity(column.len());

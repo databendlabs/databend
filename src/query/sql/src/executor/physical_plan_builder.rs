@@ -45,6 +45,8 @@ pub struct PhysicalPlanBuilder {
     pub(crate) cet_used_column_offsets: HashMap<IndexType, HashSet<usize>>,
     // DataMutation info, used to build MergeInto physical plan
     pub(crate) mutation_build_info: Option<MutationBuildInfo>,
+    // Runtime filter.
+    pub(crate) runtime_filter_columns: HashMap<usize, Vec<(usize, String)>>,
 }
 
 impl PhysicalPlanBuilder {
@@ -58,6 +60,7 @@ impl PhysicalPlanBuilder {
             cte_output_columns: Default::default(),
             cet_used_column_offsets: Default::default(),
             mutation_build_info: None,
+            runtime_filter_columns: HashMap::new(),
         }
     }
 

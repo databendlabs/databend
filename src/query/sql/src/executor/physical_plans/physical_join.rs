@@ -153,7 +153,6 @@ impl PhysicalPlanBuilder {
         let physical_join = physical_join(join, s_expr)?;
         match physical_join {
             PhysicalJoinType::Hash => {
-                let stat_info = s_expr.stat_info();
                 self.build_hash_join(
                     join,
                     s_expr,
@@ -161,7 +160,6 @@ impl PhysicalPlanBuilder {
                     others_required,
                     left_required,
                     right_required,
-                    stat_info,
                     plan_stat_info,
                 )
                 .await

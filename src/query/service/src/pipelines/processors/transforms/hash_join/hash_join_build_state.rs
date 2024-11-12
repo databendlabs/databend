@@ -54,19 +54,17 @@ use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
-use databend_common_storage::Datum;
 use ethnum::U256;
 use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use xorf::BinaryFuse16;
 
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
+use crate::pipelines::processors::transforms::hash_join::util::build_key_data_block;
 use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
-use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
 use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTable;
@@ -77,8 +75,6 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
 pub(crate) const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 1024;
-
-pub struct RangeFilter {}
 
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
@@ -117,15 +113,6 @@ pub struct HashJoinBuildState {
     pub(crate) global_memory_threshold: usize,
     /// Max memory usage threshold for each processor.
     pub(crate) processor_memory_threshold: usize,
-
-    /// Runtime filter related states
-    pub(crate) enable_inlist_runtime_filter: bool,
-    pub(crate) enable_min_max_runtime_filter: bool,
-    /// Need to open runtime filter setting.
-    pub(crate) enable_bloom_runtime_filter: bool,
-    /// The data range of build keys.
-    pub(crate) build_key_range_info: Vec<Option<(Datum, Datum)>>,
-    pub(crate) build_key_types: Vec<DataType>,
 }
 
 impl HashJoinBuildState {
@@ -134,7 +121,6 @@ impl HashJoinBuildState {
         ctx: Arc<QueryContext>,
         func_ctx: FunctionContext,
         build_keys: &[RemoteExpr],
-        build_key_range_info: Vec<Option<(Datum, Datum)>>,
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
@@ -149,20 +135,6 @@ impl HashJoinBuildState {
             })
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
-        let mut enable_bloom_runtime_filter = false;
-        let mut enable_inlist_runtime_filter = false;
-        let mut enable_min_max_runtime_filter = false;
-        if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type) {
-            let is_cluster = !ctx.get_cluster().is_empty();
-            // For cluster, only support runtime filter for broadcast join.
-            let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
-            if !is_cluster || is_broadcast_join {
-                enable_inlist_runtime_filter = true;
-                enable_min_max_runtime_filter = true;
-                enable_bloom_runtime_filter =
-                    hash_join_state.hash_join_desc.enable_bloom_runtime_filter;
-            }
-        }
 
         let settings = ctx.get_settings();
         let chunk_size_limit = settings.get_max_block_size()? as usize * 16;
@@ -187,11 +159,6 @@ impl HashJoinBuildState {
             mutex: Default::default(),
             global_memory_threshold,
             processor_memory_threshold,
-            enable_bloom_runtime_filter,
-            enable_inlist_runtime_filter,
-            enable_min_max_runtime_filter,
-            build_key_range_info,
-            build_key_types: hash_key_types,
         }))
     }
 
@@ -374,7 +341,8 @@ impl HashJoinBuildState {
             };
 
             // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
-            if self.hash_join_state.spilled_partitions.read().is_empty() {
+            if self.support_runtime_filter()
+            {
                 self.build_runtime_filter(&build_chunks, build_num_rows)?;
             }
 
@@ -864,23 +832,6 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    fn build_key_data_block(&self, data_block: &DataBlock) -> DataBlock {
-        if matches!(
-            self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
-        ) {
-            let validity = Bitmap::new_constant(true, data_block.num_rows());
-            let nullable_columns = data_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, data_block.num_rows(), &validity))
-                .collect::<Vec<_>>();
-            DataBlock::new(nullable_columns, data_block.num_rows())
-        } else {
-            data_block.clone()
-        }
-    }
-
     fn build_runtime_filter(&self, data_blocks: &[DataBlock], build_num_rows: usize) -> Result<()> {
         if build_num_rows == 0 {
             return Ok(());
@@ -902,11 +853,6 @@ impl HashJoinBuildState {
                     .map(|(probe_key, table_index)| (build_key, probe_key, table_index))
             })
         {
-            if !Self::runtime_filter_supported_types(&build_key.data_type().remove_nullable()) {
-                // Unsupported data type.
-                continue;
-            }
-
             let Some(probe_key_column_id) = Expr::<String>::column_id(probe_key) else {
                 // Unsupported expression.
                 continue;
@@ -915,7 +861,10 @@ impl HashJoinBuildState {
             // Collect build key columns.
             let mut build_key_columns = Vec::with_capacity(data_blocks.len());
             for data_block in data_blocks.iter() {
-                let data_block = self.build_key_data_block(data_block);
+                let data_block = build_key_data_block(
+                    &self.hash_join_state.hash_join_desc.join_type,
+                    data_block,
+                );
                 let column = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS)
                     .run(build_key)?
                     .convert_to_full_column(build_key.data_type(), data_block.num_rows());
@@ -925,23 +874,10 @@ impl HashJoinBuildState {
 
             // Build runtime filter.
             let mut runtime_filter = RuntimeFilterInfo::default();
-            self.build_inlist_runtime_filter(
-                &mut runtime_filter,
-                column.clone(),
-                build_key,
-                probe_key,
-            )?;
-            self.build_bloom_runtime_filter(
-                &mut runtime_filter,
-                column.clone(),
-                build_key,
-                probe_key,
-                &probe_key_column_id,
-            )?;
+            self.build_inlist_runtime_filter(&mut runtime_filter, column.clone(), probe_key)?;
             self.build_min_max_runtime_filter(
                 &mut runtime_filter,
                 column,
-                build_key,
                 probe_key,
                 &probe_key_column_id,
             )?;
@@ -949,64 +885,57 @@ impl HashJoinBuildState {
                 self.ctx.set_runtime_filter((*table_index, runtime_filter));
             }
         }
+
+        self.prepare_bloom_filter_data()?;
+
         Ok(())
     }
 
-    fn construct_binary_fuse(
-        &self,
-        column: Column,
-        validity: Option<Bitmap>,
-        data_type: DataType,
-    ) -> Result<BinaryFuse16> {
-        let num_rows = column.len();
-        let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
-        let mut column_hashes = Vec::with_capacity(num_rows);
-        let build_column = &[column];
-        hash_by_method(&method, build_column.into(), num_rows, &mut column_hashes)?;
-
-        let mut hashes = if let Some(validity) = validity {
-            let mut hashes = Vec::with_capacity(num_rows - validity.unset_bits());
-            for (index, hash) in column_hashes.into_iter().enumerate() {
-                if validity.get_bit(index) {
-                    hashes.push(hash);
-                }
-            }
-            hashes
-        } else {
-            column_hashes
-        };
-
-        hashes.sort_unstable();
-        hashes.dedup();
-        Ok(BinaryFuse16::try_from(&hashes)?)
-    }
-
-    fn build_bloom_runtime_filter(
-        &self,
-        runtime_filter: &mut RuntimeFilterInfo,
-        column: Column,
-        build_key: &Expr,
-        probe_key: &Expr<String>,
-        probe_key_column_id: &String,
-    ) -> Result<()> {
-        if !self.enable_bloom_runtime_filter {
+    pub fn prepare_bloom_filter_data(&self) -> Result<()> {
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let num_rows = build_state.generation_state.build_num_rows;
+        if num_rows == 0 {
             return Ok(());
         }
 
-        let (column, validity) = if let Column::Nullable(inner_column) = column {
-            if inner_column.validity.unset_bits() == 0 {
-                (inner_column.column, None)
-            } else {
-                (inner_column.column, Some(inner_column.validity))
-            }
-        } else {
-            (column, None)
+        let data_blocks = unsafe {
+            (*self.hash_join_state.build_state.get())
+                .generation_state
+                .chunks
+                .clone()
         };
+        let bloom_filter_columns = &mut build_state.runtime_filter_columns;
 
-        // Construct bloom filter.
-        let data_type = build_key.data_type().remove_nullable();
-        let bloom_filter = self.construct_binary_fuse(column, validity, data_type)?;
-        runtime_filter.add_bloom((probe_key_column_id.to_string(), Arc::new(bloom_filter)));
+        for (probe_key, build_key) in self
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .zip(
+                self.hash_join_state
+                    .hash_join_desc
+                    .runtime_filter_exprs
+                    .iter(),
+            )
+            .filter_map(|(build_key, runtime_filter_expr)| {
+                runtime_filter_expr.as_ref().map(|(probe_key, _)| (probe_key, build_key))
+            })
+            .filter(|(probe_key, _)| Expr::<String>::column_id(probe_key).is_some())
+        {
+            // Collect build key columns.
+            let mut columns = Vec::new();
+            for data_block in data_blocks.iter() {
+                let data_block = build_key_data_block(
+                    &self.hash_join_state.hash_join_desc.join_type,
+                    data_block,
+                );
+                let column = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS)
+                    .run(build_key)?
+                    .convert_to_full_column(build_key.data_type(), data_block.num_rows());
+                columns.push(column);
+            }
+            bloom_filter_columns.push(Column::concat_columns(columns.into_iter())?);
+        }
 
         Ok(())
     }
@@ -1015,14 +944,13 @@ impl HashJoinBuildState {
         &self,
         runtime_filter: &mut RuntimeFilterInfo,
         column: Column,
-        build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !self.enable_inlist_runtime_filter || column.len() > INLIST_RUNTIME_FILTER_THRESHOLD {
+        if column.len() > INLIST_RUNTIME_FILTER_THRESHOLD {
             return Ok(());
         }
 
-        let column = dedup_build_key_column(&self.func_ctx, column, build_key)?;
+        let column = dedup_build_key_column(&self.func_ctx, column)?;
         if let Some(filter) = inlist_filter(probe_key, column)? {
             info!("inlist_filter: {:?}", filter.1.sql_display());
             runtime_filter.add_inlist(filter);
@@ -1035,14 +963,9 @@ impl HashJoinBuildState {
         &self,
         runtime_filter: &mut RuntimeFilterInfo,
         column: Column,
-        build_key: &Expr,
         probe_key: &Expr<String>,
         probe_key_column_id: &String,
     ) -> Result<()> {
-        if !self.enable_min_max_runtime_filter {
-            return Ok(());
-        }
-
         // Generate min max filter using build column
         let min_max = column.remove_nullable().domain();
         let min_max_filter = match min_max {
@@ -1118,34 +1041,11 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    pub fn runtime_filter_supported_types(data_type: &DataType) -> bool {
-        let data_type = data_type.remove_nullable();
-        data_type.is_numeric()
-            || data_type.is_string()
-            || data_type.is_date()
-            || data_type.is_timestamp()
-    }
-
     pub(crate) fn join_type(&self) -> JoinType {
         self.hash_join_state.hash_join_desc.join_type.clone()
     }
 
-    pub fn get_enable_bloom_runtime_filter(&self) -> bool {
-        self.enable_bloom_runtime_filter
+    pub fn support_runtime_filter(&self) -> bool {
+        self.hash_join_state.hash_join_desc.support_runtime_filter && self.hash_join_state.spilled_partitions.read().is_empty()
     }
-
-    pub fn get_enable_min_max_runtime_filter(&self) -> bool {
-        self.enable_min_max_runtime_filter
-    }
-}
-
-pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
-    matches!(
-        join_type,
-        JoinType::Inner
-            | JoinType::Right
-            | JoinType::RightSemi
-            | JoinType::RightAnti
-            | JoinType::LeftMark
-    )
 }

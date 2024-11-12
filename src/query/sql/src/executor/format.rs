@@ -25,8 +25,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
-use super::physical_plans::AddStreamColumn;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregateFunctionDesc;
@@ -59,6 +59,8 @@ use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::RuntimeFilterSink;
+use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -358,6 +360,12 @@ fn to_format_tree(
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, profs),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::RuntimeFilterSource(plan) => {
+            runtime_filter_source_to_format_tree(plan, metadata, profs)
+        }
+        PhysicalPlan::RuntimeFilterSink(plan) => {
+            runtime_filter_sink_to_format_tree(plan, metadata, profs)
+        }
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata, profs),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan, metadata),
@@ -1477,6 +1485,25 @@ fn hash_join_to_format_tree(
         "HashJoin".to_string(),
         children,
     ))
+}
+
+fn runtime_filter_source_to_format_tree(
+    _plan: &RuntimeFilterSource,
+    _metadata: &Metadata,
+    _profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::with_children(
+        "RuntimeFilterSource".to_string(),
+        vec![],
+    ))
+}
+
+fn runtime_filter_sink_to_format_tree(
+    plan: &RuntimeFilterSink,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn exchange_to_format_tree(
