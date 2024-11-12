@@ -3145,6 +3145,7 @@ name = "databend-common-building"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "cargo-license",
  "cargo_metadata",
  "gix",
@@ -4797,6 +4798,7 @@ dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-s3",
+ "base64 0.22.1",
  "chrono",
  "chrono-tz 0.8.6",
  "dashmap 6.1.0",

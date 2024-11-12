@@ -961,12 +961,22 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             TRIM
             ~ "("
-            ~ #subexpr(0)
+            ~ #subexpr(0) ~ ("," ~ #subexpr(0))?
             ~ ^")"
         },
-        |(_, _, expr, _)| ExprElement::Trim {
-            expr: Box::new(expr),
-            trim_where: None,
+        |(_, _, expr, trim_str, _)| {
+            if let Some(trim_str) = trim_str {
+                let trim_str = trim_str.1;
+                ExprElement::Trim {
+                    expr: Box::new(expr),
+                    trim_where: Some((TrimWhere::Both, Box::new(trim_str))),
+                }
+            } else {
+                ExprElement::Trim {
+                    expr: Box::new(expr),
+                    trim_where: None,
+                }
+            }
         },
     );
     let trim_from = map(

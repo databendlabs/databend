@@ -2761,13 +2761,16 @@ impl<'a> TypeChecker<'a> {
             params: params.clone(),
             args: arguments,
         };
+
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
         // the implicitly casted literal values, e.g. `timestamp > '2001-01-01'`
         // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
-        let folded_args = match &expr {
+        // Note: check function may reorder the args
+
+        let mut folded_args = match &expr {
             databend_common_expression::Expr::FunctionCall {
                 args: checked_args, ..
             } => {
@@ -2793,6 +2796,15 @@ impl<'a> TypeChecker<'a> {
 
         if let Some(constant) = self.try_fold_constant(&expr) {
             return Ok(constant);
+        }
+
+        // reorder
+        if func_name == "eq"
+            && folded_args.len() == 2
+            && matches!(folded_args[0], ScalarExpr::ConstantExpr(_))
+            && !matches!(folded_args[1], ScalarExpr::ConstantExpr(_))
+        {
+            folded_args.swap(0, 1);
         }
 
         Ok(Box::new((

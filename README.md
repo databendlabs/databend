@@ -66,6 +66,8 @@
 
 - **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
 
+- **Real-Time CDC**: Supports real-time incremental data updates to keep data current and accurate. 👉 [Stream](https://docs.databend.com/guides/load-data/continuous-data-pipelines/stream)
+
 - **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, GEO, and more.
 
 - **ACID Transactions**: Ensures data integrity with atomic, consistent, isolated, and durable operations.
