@@ -77,7 +77,7 @@ pub fn try_add_multi_sort_merge(
             }
             let output_port = OutputPort::create();
 
-            let processor = ProcessorPtr::create(create_processor(
+            let processor = ProcessorPtr::create(create_multi_sort_merge_processor(
                 inputs_port.clone(),
                 output_port.clone(),
                 schema,
@@ -98,7 +98,7 @@ pub fn try_add_multi_sort_merge(
     }
 }
 
-fn create_processor(
+pub fn create_multi_sort_merge_processor(
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
