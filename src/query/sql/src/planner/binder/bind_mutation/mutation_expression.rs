@@ -97,7 +97,6 @@ impl MutationExpression {
                     binder.bind_table_reference(bind_context, source)?;
 
                 // Bind target table reference.
-                bind_context.set_cte_context(source_context.cte_context.clone());
                 let (mut target_s_expr, mut target_context) =
                     binder.bind_table_reference(bind_context, target)?;
 
@@ -120,6 +119,9 @@ impl MutationExpression {
                 for column_index in source_context.column_set().iter() {
                     required_columns.insert(*column_index);
                 }
+
+                // Wrap `LogicalMaterializedCte` to `source_expr`.
+                source_s_expr = source_context.cte_context.wrap_m_cte(source_s_expr);
 
                 // When there is "update *" or "insert *", prepare all source columns.
                 let all_source_columns = Self::all_source_columns(

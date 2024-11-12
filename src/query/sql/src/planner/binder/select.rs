@@ -143,7 +143,10 @@ impl Binder {
                 mut_cte_info.columns.push(col);
             }
         }
-        bind_context.set_cte_context(left_bind_context.cte_context.clone());
+        // Merge cte info from left context to `bind_context`
+        bind_context
+            .cte_context
+            .merge(left_bind_context.cte_context.clone());
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None)?;
 
@@ -258,7 +261,6 @@ impl Binder {
             right_context.clone(),
             coercion_types,
         )?;
-        new_bind_context.set_cte_context(right_context.cte_context.clone());
         if let Some(cte_name) = &cte_name {
             for (col, cte_col) in new_bind_context.columns.iter_mut().zip(
                 new_bind_context
@@ -387,7 +389,8 @@ impl Binder {
         };
         let s_expr =
             self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
-        left_context.set_cte_context(right_context.cte_context.clone());
+        left_context
+            .set_cte_context(right_context.cte_context);
         Ok((s_expr, left_context))
     }
 
@@ -408,6 +411,8 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::with_parent(Box::new(left_bind_context.clone()));
+        new_bind_context.set_cte_context(right_bind_context.cte_context);
+
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()

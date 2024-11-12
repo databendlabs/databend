@@ -94,7 +94,7 @@ impl Binder {
             // Merge cte info from left context to `bind_context`
             bind_context
                 .cte_context
-                .merge(left_context.cte_context.clone(), false);
+                .merge(left_context.cte_context.clone());
             self.bind_table_reference(bind_context, &join.right)?
         };
 
@@ -135,9 +135,6 @@ impl Binder {
             right_context.clone(),
         );
 
-        right_context
-            .cte_context
-            .merge(bind_context.cte_context.clone(), true);
         bind_context.set_cte_context(right_context.cte_context);
         Ok((s_expr, bind_context))
     }
@@ -185,7 +182,6 @@ impl Binder {
             left_context.clone(),
             right_context,
         );
-        bind_context.set_cte_context(left_context.cte_context);
         Ok((s_expr, bind_context))
     }
 

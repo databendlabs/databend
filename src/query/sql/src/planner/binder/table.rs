@@ -430,6 +430,12 @@ impl Binder {
                 self.set_bind_recursive_cte(false);
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                } else {
+                    for (index, column_name) in cte_info.columns_alias
+                        .iter().enumerate()
+                    {
+                        new_bind_ctx.columns[index].column_name = column_name.clone();
+                    }
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }

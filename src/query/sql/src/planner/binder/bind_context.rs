@@ -16,7 +16,7 @@ use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
-
+use std::sync::Arc;
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
@@ -40,10 +40,9 @@ use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
-use crate::executor::physical_plans::LagLeadDefault::Index;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::ScalarExpr;
+use crate::plans::{MaterializedCte, RelOperator, ScalarExpr};
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -174,7 +173,7 @@ impl CteContext {
         self.m_cte_materialized_indexes.insert(cte_idx, index);
     }
 
-    pub fn merge(&mut self, other: CteContext, all: bool) {
+    pub fn merge(&mut self, other: CteContext) {
         let mut merged_cte_map = IndexMap::new();
         for (left_key, left_value) in self.cte_map.iter() {
             if let Some(right_value) = other.cte_map.get(left_key) {
@@ -184,14 +183,32 @@ impl CteContext {
                     merged_value.columns = right_value.columns.clone()
                 }
                 merged_cte_map.insert(left_key.clone(), merged_value);
-            } else if all {
-                merged_cte_map.insert(left_key.clone(), left_value.clone());
             }
         }
         self.cte_map = Box::new(merged_cte_map);
         self.m_cte_bound_s_expr.extend(other.m_cte_bound_s_expr);
         self.m_cte_materialized_indexes
             .extend(other.m_cte_materialized_indexes);
+    }
+
+    pub fn wrap_m_cte(&self, mut s_expr: SExpr) -> SExpr {
+        for (_, cte_info) in self.cte_map.iter().rev() {
+            if !cte_info.materialized || cte_info.used_count == 0 {
+                continue;
+            }
+            let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+            let materialized_output_columns = cte_info.columns.clone();
+            s_expr = SExpr::create_binary(
+                Arc::new(RelOperator::MaterializedCte(MaterializedCte {
+                    cte_idx: cte_info.cte_idx,
+                    materialized_output_columns,
+                    materialized_indexes: self.m_cte_materialized_indexes.clone(),
+                })),
+                Arc::new(s_expr),
+                Arc::new(cte_s_expr.clone()),
+            );
+        }
+        s_expr
     }
 }
 
