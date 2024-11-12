@@ -4101,7 +4101,6 @@ dependencies = [
  "serde",
  "sha2",
  "simsearch",
- "time",
  "tokio",
  "url",
 ]
@@ -5183,7 +5182,6 @@ dependencies = [
  "sysinfo",
  "temp-env",
  "tempfile",
- "time",
  "tokio",
  "tokio-stream",
  "toml 0.8.19",
@@ -5264,7 +5262,6 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
- "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",
