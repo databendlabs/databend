@@ -35,7 +35,13 @@ impl Binder {
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
             self.bind_query(&mut new_bind_context, subquery)?
         } else {
-            let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            let mut new_bind_context = BindContext::with_parent(
+                bind_context
+                    .parent
+                    .clone()
+                    .unwrap_or_else(|| Box::new(BindContext::new())),
+            );
+            new_bind_context.set_cte_context(bind_context.cte_context.clone());
             self.bind_query(&mut new_bind_context, subquery)?
         };
 
