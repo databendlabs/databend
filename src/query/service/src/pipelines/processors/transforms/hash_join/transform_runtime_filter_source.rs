@@ -108,9 +108,6 @@ impl Processor for TransformRuntimeFilterSource {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let need_to_build_runtime_filter = self.wait_runtime_filter_notify().await?;
-        if need_to_build_runtime_filter {
-            println!("TransformRuntimeFilterSource: need to build runtime filter");
-        }
 
         let data_block = if need_to_build_runtime_filter {
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };

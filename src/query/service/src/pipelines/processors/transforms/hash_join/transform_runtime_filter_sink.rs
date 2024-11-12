@@ -52,6 +52,24 @@ impl TransformRuntimeFilterSink {
             data_blocks: Vec::new(),
         })))
     }
+
+    pub fn get_meta(data_block: &DataBlock) -> (String, bool) {
+        let num_columns = data_block.num_columns();
+        let node_id_value = data_block.get_by_offset(num_columns - 2).value.clone();
+        let need_to_build_value = data_block.get_by_offset(num_columns - 1).value.clone();
+        let node_id = node_id_value
+            .index(0)
+            .unwrap()
+            .into_string()
+            .unwrap()
+            .to_string();
+        let need_to_build = need_to_build_value
+            .index(0)
+            .unwrap()
+            .into_boolean()
+            .unwrap();
+        (node_id, need_to_build)
+    }
 }
 
 #[async_trait::async_trait]
@@ -70,24 +88,17 @@ impl Processor for TransformRuntimeFilterSink {
             return Ok(Event::Finished);
         } else if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
-            let num_columns = data_block.num_columns();
-            let node_id_value = data_block.get_by_offset(num_columns - 2).value.clone();
-            let need_to_build_value = data_block.get_by_offset(num_columns - 1).value.clone();
-            let node_id = node_id_value.index(0).unwrap().into_string().unwrap();
-            let need_to_build = need_to_build_value
-                .index(0)
-                .unwrap()
-                .into_boolean()
-                .unwrap();
+            let (node_id, need_to_build) = Self::get_meta(&data_block);
             if need_to_build {
-                if let Some(is_collected) = self.is_collected.get_mut(node_id) {
+                let num_columns = data_block.num_columns() - 2;
+                self.data_blocks.push(data_block);
+                if let Some(is_collected) = self.is_collected.get_mut(&node_id) {
                     if !*is_collected {
                         self.num_collected_nodes += 1;
                         *is_collected = true;
                     }
                 }
-                let num_columns = data_block.num_columns() - 2;
-                self.data_blocks.push(data_block);
+
                 if self.num_collected_nodes == self.num_cluster_nodes {
                     let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
                     let bloom_filter_columns = &mut build_state.runtime_filter_columns;
@@ -103,10 +114,16 @@ impl Processor for TransformRuntimeFilterSink {
                     self.hash_join_state
                         .is_runtime_filter_data_ready
                         .store(true, Ordering::Release);
+                    self.hash_join_state
+                        .need_to_check_runtime_filter_data
+                        .store(true, Ordering::Release);
                 }
             } else {
                 self.hash_join_state
                     .is_runtime_filter_data_ready
+                    .store(false, Ordering::Release);
+                self.hash_join_state
+                    .need_to_check_runtime_filter_data
                     .store(true, Ordering::Release);
             }
         }

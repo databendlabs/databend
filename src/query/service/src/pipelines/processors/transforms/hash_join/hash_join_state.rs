@@ -139,6 +139,7 @@ pub struct HashJoinState {
     pub(crate) build_runtime_filter_watcher: Sender<Option<bool>>,
     pub(crate) _build_runtime_filter_receiver: Receiver<Option<bool>>,
     pub(crate) is_runtime_filter_data_ready: AtomicBool,
+    pub(crate) need_to_check_runtime_filter_data: AtomicBool,
     /// Statistics
     pub(crate) probe_statistics: Arc<HashJoinProbeStatistics>,
 }
@@ -206,6 +207,7 @@ impl HashJoinState {
             build_runtime_filter_watcher,
             _build_runtime_filter_receiver,
             is_runtime_filter_data_ready: AtomicBool::new(false),
+            need_to_check_runtime_filter_data: AtomicBool::new(true),
             probe_statistics: Arc::new(HashJoinProbeStatistics::default()),
         }))
     }

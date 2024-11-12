@@ -116,9 +116,9 @@ pub struct TransformHashJoinProbe {
 
     // Bloom filter related states.
     support_runtime_filter: bool,
-    is_bloom_filter_built: bool,
-    is_build_bloom_filter_processor: bool,
-    need_to_check_bloom_filter_data: bool,
+    need_to_check_is_build_processor: bool,
+    is_build_runtime_filter_processor: bool,
+    need_to_notify_runtime_filter_source: bool,
 
     step: Step,
     step_logs: Vec<Step>,
@@ -191,9 +191,9 @@ impl TransformHashJoinProbe {
             step: Step::Async(AsyncStep::WaitBuild),
             step_logs: vec![Step::Async(AsyncStep::WaitBuild)],
             support_runtime_filter,
-            is_bloom_filter_built: false,
-            is_build_bloom_filter_processor: false,
-            need_to_check_bloom_filter_data: true,
+            need_to_check_is_build_processor: true,
+            is_build_runtime_filter_processor: true,
+            need_to_notify_runtime_filter_source: true,
         }))
     }
 
@@ -219,56 +219,71 @@ impl TransformHashJoinProbe {
     }
 
     fn need_build_runtime_filter(&mut self) -> Result<bool> {
-        if !self.support_runtime_filter {
+        if !self.support_runtime_filter
+            || !self.is_build_runtime_filter_processor
+            || self.is_spill_happened
+        {
             return Ok(false);
         }
-        if self.is_build_bloom_filter_processor() {
-            self.is_build_bloom_filter_processor = false;
+
+        if self.is_build_runtime_filter_processor() {
+            if !self.prefer_runtime_filter() {
+                return Ok(false);
+            }
+
             if self.join_probe_state.ctx.get_cluster().is_empty() {
-                self.need_to_check_bloom_filter_data = false;
+                self.is_build_runtime_filter_processor = false;
                 return Ok(true);
-            } else {
+            }
+
+            if self.need_to_notify_runtime_filter_source {
                 self.join_probe_state
                     .hash_join_state
                     .build_runtime_filter_watcher
                     .send(Some(true))
                     .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
+                self.need_to_notify_runtime_filter_source = false;
+                return Ok(false);
             }
-        } else if self.need_to_check_bloom_filter_data
-            && self
+
+            if self
                 .join_probe_state
                 .hash_join_state
-                .is_runtime_filter_data_ready
+                .need_to_check_runtime_filter_data
                 .load(Ordering::Acquire)
-        {
-            self.need_to_check_bloom_filter_data = false;
-            return Ok(true);
+            {
+                self.is_build_runtime_filter_processor = false;
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .is_runtime_filter_data_ready
+                    .load(Ordering::Acquire)
+                {
+                    return Ok(true);
+                }
+            }
         }
         Ok(false)
     }
 
-    fn is_build_bloom_filter_processor(&mut self) -> bool {
-        if self.is_build_bloom_filter_processor {
-            return true;
+    fn is_build_runtime_filter_processor(&mut self) -> bool {
+        if !self.need_to_check_is_build_processor {
+            return self.is_build_runtime_filter_processor;
         }
-        if self.is_bloom_filter_built || self.is_spill_happened {
-            return false;
-        }
-        if !self
-            .join_probe_state
-            .hash_join_state
-            .probe_statistics
-            .prefer_runtime_filter()
-        {
-            return false;
-        }
-        self.is_bloom_filter_built = true;
-        self.is_build_bloom_filter_processor = self
+        self.need_to_check_is_build_processor = false;
+        self.is_build_runtime_filter_processor = self
             .join_probe_state
             .build_runtime_filter_worker
             .fetch_sub(1, Ordering::AcqRel)
             == 1;
-        self.is_build_bloom_filter_processor
+        self.is_build_runtime_filter_processor
+    }
+
+    fn prefer_runtime_filter(&self) -> bool {
+        self.join_probe_state
+            .hash_join_state
+            .probe_statistics
+            .prefer_runtime_filter()
     }
 
     fn probe(&mut self) -> Result<Event> {
