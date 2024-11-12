@@ -274,29 +274,11 @@ impl FuseTable {
             ));
         }
 
-        let location = files[0].clone();
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let load_params = LoadParams {
-            location,
-            len_hint: None,
-            ver,
-            put_cache: false,
+        let Some(location) = self.snapshot_loc().await? else {
+            return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
         };
-        let snapshot = reader.read(&load_params).await?;
-        // Take the prev snapshot as base snapshot to avoid get orphan snapshot.
-        let prev = snapshot.prev_snapshot_id;
-        match prev {
-            Some((id, v)) => {
-                let new_loc = self
-                    .meta_location_generator()
-                    .snapshot_location_from_uuid(&id, v)?;
-                Ok((new_loc, files))
-            }
-            None => Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            )),
-        }
+
+        Ok((location, files))
     }
 
     #[async_backtrace::framed]
