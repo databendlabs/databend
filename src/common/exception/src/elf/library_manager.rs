@@ -143,7 +143,8 @@ impl LibraryManager {
                             Some(elf) => match dwarf_cache.get(&library.name) {
                                 Some(v) => v,
                                 None => {
-                                    dwarf_cache.insert(library.name.clone(), Dwarf::create(elf.clone()));
+                                    dwarf_cache
+                                        .insert(library.name.clone(), Dwarf::create(elf.clone()));
                                     dwarf_cache.get(&library.name).unwrap()
                                 }
                             },
@@ -172,7 +173,7 @@ impl LibraryManager {
 
                     f(ResolvedStackFrame {
                         physical_address,
-                        virtual_address: addr,
+                        virtual_address: *addr,
                         inlined: false,
                         symbol: String::from("<unknown>"),
                         file: None,
