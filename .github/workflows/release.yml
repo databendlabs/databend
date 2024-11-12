@@ -117,6 +117,7 @@ jobs:
         uses: ./.github/actions/build_linux
         env:
           DATABEND_RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
+          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
@@ -149,6 +150,7 @@ jobs:
         uses: ./.github/actions/build_linux
         env:
           DATABEND_RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
+          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
@@ -173,6 +175,7 @@ jobs:
         uses: ./.github/actions/build_linux
         env:
           DATABEND_RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
+          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}

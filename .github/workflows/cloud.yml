@@ -59,6 +59,8 @@ jobs:
       - name: Build Release
         uses: ./.github/actions/build_linux
         timeout-minutes: 60
+        env:
+          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
