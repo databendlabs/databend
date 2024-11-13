@@ -283,3 +283,10 @@ impl WindowFuncType {
         }
     }
 }
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct WindowPartition {
+    pub partition_by: Vec<ScalarItem>,
+    pub top: Option<usize>,
+    pub func: WindowFuncType,
+}
