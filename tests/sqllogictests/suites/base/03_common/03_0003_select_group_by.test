@@ -249,6 +249,18 @@ test a1
 test a2
 test a3
 
+query T
+SELECT max(unnest(split(t.col2, ','))) FROM t_str AS t;
+----
+a3
+
+query T
+SELECT unnest(split(max(t.col2), ',')) FROM t_str AS t;
+----
+a1
+a2
+a3
+
 statement ok
 DROP TABLE t_str
 
