@@ -181,7 +181,7 @@ impl StackTrace {
     #[cfg(not(target_os = "linux"))]
     pub fn pre_load_symbol() {
         static INIT_GUARD: LazyLock<backtrace::Backtrace> =
-            LazyLock::new(|| backtrace::Backtrace::new());
+            LazyLock::new(backtrace::Backtrace::new);
         let _frames = INIT_GUARD.frames();
     }
 
@@ -224,6 +224,7 @@ impl StackTrace {
 
         StackTrace {
             frames: stack_frames,
+            build_id: Self::executable_build_id(),
         }
     }
 
