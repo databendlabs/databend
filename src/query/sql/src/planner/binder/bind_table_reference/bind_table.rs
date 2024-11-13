@@ -182,6 +182,9 @@ impl Binder {
                 unreachable!()
             };
             let (s_expr, mut new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
+            bind_context
+                .cte_context
+                .set_cte_context(new_bind_context.cte_context.clone());
 
             let cols = table_meta
                 .schema()
