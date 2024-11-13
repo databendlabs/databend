@@ -195,7 +195,7 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
                     .srfs_map
                     .get(&column_ref.column.column_name)
                 {
-                    // If the srf has been rewrited as a column,
+                    // If the srf has been rewrote as a column,
                     // check whether the srf arguments are group item.
                     let srf_item = &self.bind_context.srf_info.srfs[*index];
                     if let ScalarExpr::FunctionCall(func) = &srf_item.scalar {

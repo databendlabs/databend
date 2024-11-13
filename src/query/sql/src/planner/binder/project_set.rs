@@ -42,7 +42,7 @@ use crate::Visibility;
 pub struct SetReturningInfo {
     /// Set-returning functions.
     pub srfs: Vec<ScalarItem>,
-    /// Mapping: (Set-returing function display name) -> (index of Set-returning function in `srfs`)
+    /// Mapping: (Set-returning function display name) -> (index of Set-returning function in `srfs`)
     /// This is used to find a Set-returning function in current context.
     pub srfs_map: HashMap<String, usize>,
     /// The lazy index of Set-returning functions in `srfs`.
