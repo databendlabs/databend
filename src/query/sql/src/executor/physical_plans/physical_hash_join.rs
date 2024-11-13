@@ -136,7 +136,7 @@ impl PhysicalPlanBuilder {
             is_broadcast_join = true;
         }
         let mut is_shuffle_join = false;
-        let conmon_data_types = if let (
+        if let (
             PhysicalPlan::Exchange(Exchange {
                 keys: probe_keys, ..
             }),
@@ -147,11 +147,8 @@ impl PhysicalPlanBuilder {
         {
             // Shuffle join, unify the data types of the left and right exchange keys.
             is_shuffle_join = true;
-            let conmon_data_types = self.unify_keys_data_type(probe_keys, build_keys)?;
-            Some(conmon_data_types)
-        } else {
-            None
-        };
+            self.unify_keys_data_type(probe_keys, build_keys)?;
+        }
 
         // The output schema of build and probe side.
         let (build_schema, probe_schema) =
@@ -162,7 +159,7 @@ impl PhysicalPlanBuilder {
         let mut is_null_equal = Vec::new();
         let mut probe_to_build_index = Vec::new();
         let mut runtime_filter_source_fields = Vec::new();
-        for (index, condition) in join.equi_conditions.iter().enumerate() {
+        for condition in join.equi_conditions.iter() {
             let build_condition = &condition.right;
             let probe_condition = &condition.left;
             let build_expr = build_condition
@@ -172,18 +169,28 @@ impl PhysicalPlanBuilder {
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
+            // Unify the data types of the probe and right expressions.
+            let probe_type = probe_expr.data_type();
+            let build_type = build_expr.data_type();
+            let common_data_type = common_super_type(
+                probe_type.clone(),
+                build_type.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!(
+                    "Cannot find common type for {:?} and {:?}",
+                    probe_type, build_type
+                ))
+            })?;
+
             if let Some((_, build_index)) =
                 self.support_runtime_filter(probe_condition, build_condition)?
             {
                 let build_index = build_schema.index_of(&build_index.to_string())?;
                 let build_field = build_schema.field(build_index);
-                if let Some(conmon_data_types) = &conmon_data_types {
-                    let data_type = conmon_data_types[index].clone();
-                    runtime_filter_source_fields
-                        .push(DataField::new(build_field.name(), data_type));
-                } else {
-                    runtime_filter_source_fields.push(build_field.clone());
-                }
+                runtime_filter_source_fields
+                    .push(DataField::new(build_field.name(), common_data_type.clone()));
             }
 
             if join.join_type == JoinType::Inner {
@@ -214,32 +221,18 @@ impl PhysicalPlanBuilder {
                 }
             }
 
-            // Unify the data types of the probe and right expressions.
-            let probe_type = probe_expr.data_type();
-            let build_type = build_expr.data_type();
-            let common_ty = common_super_type(
-                probe_type.clone(),
-                build_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::IllegalDataType(format!(
-                    "Cannot find common type for {:?} and {:?}",
-                    probe_type, build_type
-                ))
-            })?;
             let probe_expr = check_cast(
                 probe_expr.span(),
                 false,
                 probe_expr,
-                &common_ty,
+                &common_data_type,
                 &BUILTIN_FUNCTIONS,
             )?;
             let build_expr = check_cast(
                 build_expr.span(),
                 false,
                 build_expr,
-                &common_ty,
+                &common_data_type,
                 &BUILTIN_FUNCTIONS,
             )?;
 
@@ -480,8 +473,7 @@ impl PhysicalPlanBuilder {
         &self,
         probe_keys: &mut [RemoteExpr],
         build_keys: &mut [RemoteExpr],
-    ) -> Result<Vec<DataType>> {
-        let mut common_data_types = Vec::with_capacity(probe_keys.len());
+    ) -> Result<()> {
         for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
             let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
             let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
@@ -512,10 +504,9 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?
             .as_remote_expr();
-            common_data_types.push(common_ty);
         }
 
-        Ok(common_data_types)
+        Ok(())
     }
 
     fn build_and_probe_output_schema(
