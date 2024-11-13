@@ -447,8 +447,8 @@ impl MetaNode {
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
                 // metrics about server storage
-                server_metrics::set_db_size(meta_node.get_db_size().await);
-                server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
+                server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
+                server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
 
                 last_leader = mm.current_leader;
             }
@@ -817,13 +817,14 @@ impl MetaNode {
         nodes
     }
 
-    async fn get_db_size(&self) -> u64 {
+    /// Get the size in bytes of the on disk files of the raft log storage.
+    async fn get_raft_log_size(&self) -> u64 {
         self.sto.log.read().await.on_disk_size()
     }
 
-    async fn get_key_num(&self) -> u64 {
+    async fn get_snapshot_key_count(&self) -> u64 {
         self.sto
-            .try_get_snapshot_key_num()
+            .try_get_snapshot_key_count()
             .await
             .unwrap_or_default()
     }
@@ -841,8 +842,8 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let db_size = self.get_db_size().await;
-        let key_num = self.get_key_num().await;
+        let raft_log_size = self.get_raft_log_size().await;
+        let key_count = self.get_snapshot_key_count().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -859,8 +860,8 @@ impl MetaNode {
             binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
-            db_size,
-            key_num,
+            raft_log_size,
+            snapshot_key_count: key_count,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,

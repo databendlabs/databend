@@ -153,6 +153,11 @@ impl Catalog for SessionCatalog {
         self.inner.get_database(tenant, db_name).await
     }
 
+    // List all the databases history.
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        self.inner.list_databases_history(tenant).await
+    }
+
     // Get all the databases.
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         self.inner.list_databases(tenant).await

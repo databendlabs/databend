@@ -47,25 +47,25 @@ statement ok
 drop table if exists t;
 
 statement ok
-set max_block_size = 65536;
+unset max_block_size;
 
 statement ok
-set join_spilling_memory_ratio = 60;
+unset join_spilling_memory_ratio;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
+unset join_spilling_bytes_threshold_per_proc;
 
 statement ok
-set join_spilling_buffer_threshold_per_proc_mb = 512;
+unset join_spilling_buffer_threshold_per_proc_mb;
 
 statement ok
-set sort_spilling_memory_ratio = 60;
+unset sort_spilling_memory_ratio;
 
 statement ok
-set sort_spilling_bytes_threshold_per_proc = 0;
+unset sort_spilling_bytes_threshold_per_proc;
 
 statement ok
-set window_partition_spilling_memory_ratio = 60;
+unset window_partition_spilling_memory_ratio;
 
 statement ok
-set window_partition_spilling_bytes_threshold_per_proc = 0;
+unset window_partition_spilling_bytes_threshold_per_proc;

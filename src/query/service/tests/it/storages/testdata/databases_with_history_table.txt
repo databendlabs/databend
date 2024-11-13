@@ -1,5 +1,5 @@
 ---------- TABLE INFO ------------
-DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: SystemDatabases
+DB.Table: 'system'.'databases_with_history', Table: databases_with_history-table_id:1, ver:0, Engine: SystemDatabases
 -------- TABLE CONTENTS ----------
 +-----------+----------------------+---------------------+----------+----------+
 | Column 0  | Column 1             | Column 2            | Column 3 | Column 4 |

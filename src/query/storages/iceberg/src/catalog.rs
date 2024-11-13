@@ -251,6 +251,10 @@ impl Catalog for IcebergCatalog {
         Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
     }
 
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        unimplemented!()
+    }
+
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self

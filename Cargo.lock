@@ -4614,7 +4614,6 @@ name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
  "backtrace",
- "bincode 2.0.0-rc.3",
  "chrono",
  "databend-common-base",
  "databend-common-exception",

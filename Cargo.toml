@@ -486,7 +486,7 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 unindent = "0.2"
 url = "2.3.1"
-uuid = { version = "1.10.0", features = ["serde", "v4", "v7"] }
+uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
 wiremock = "0.6"

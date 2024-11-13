@@ -292,7 +292,7 @@ impl StoreInner {
     /// Return snapshot id and meta of the last snapshot.
     ///
     /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
-    pub(crate) async fn try_get_snapshot_key_num(&self) -> Option<u64> {
+    pub(crate) async fn try_get_snapshot_key_count(&self) -> Option<u64> {
         let sm = self.state_machine.read().await;
         let db = sm.levels().persisted()?;
         Some(db.stat().key_num)
