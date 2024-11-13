@@ -411,7 +411,7 @@ impl Binder {
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
-        let mut new_bind_context = BindContext::with_parent(Box::new(left_bind_context.clone()));
+        let mut new_bind_context = BindContext::new();
         new_bind_context
             .cte_context
             .set_cte_context(right_bind_context.cte_context);
