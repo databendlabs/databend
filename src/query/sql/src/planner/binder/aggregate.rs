@@ -349,6 +349,13 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
+        if !bind_context.srf_info.srfs.is_empty() {
+            // Rewrite the Set-returning functions in Aggregate function as columns.
+            let mut srf_rewriter = SetReturningRewriter::new(bind_context, true);
+            for item in select_list.items.iter_mut() {
+                srf_rewriter.visit(&mut item.scalar)?;
+            }
+        }
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
             rewriter.visit(&mut item.scalar)?;
@@ -658,7 +665,7 @@ impl Binder {
             }
 
             if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context);
+                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
                 srf_rewriter.visit(&mut scalar_expr)?;
             }
 
@@ -810,7 +817,7 @@ impl Binder {
             let (alias, mut scalar) = available_aliases[result[0]].clone();
 
             if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context);
+                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
                 srf_rewriter.visit(&mut scalar)?;
             }
 

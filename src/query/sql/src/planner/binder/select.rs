@@ -92,7 +92,7 @@ impl Binder {
 
         // rewrite Set-returning functions as columns.
         if !bind_context.srf_info.srfs.is_empty() {
-            let mut srf_rewriter = SetReturningRewriter::new(bind_context);
+            let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
             srf_rewriter.visit(&mut scalar)?;
         }
 

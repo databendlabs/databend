@@ -359,7 +359,7 @@ impl Binder {
                     // analyze Set-returning functions.
                     self.analyze_project_set_select(&mut bind_context, &mut select_list)?;
                     // rewrite Set-returning functions as columns.
-                    let mut srf_rewriter = SetReturningRewriter::new(&mut bind_context);
+                    let mut srf_rewriter = SetReturningRewriter::new(&mut bind_context, false);
                     for item in select_list.items.iter_mut() {
                         srf_rewriter.visit(&mut item.scalar)?;
                     }

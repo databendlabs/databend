@@ -137,7 +137,7 @@ impl Binder {
         // Check Set-returning functions, if the argument contains aggregation function or group item,
         // set as lazy Set-returning functions.
         if !from_context.srf_info.srfs.is_empty() {
-            self.check_project_set_select(&mut from_context, &mut select_list)?;
+            self.check_project_set_select(&mut from_context)?;
         }
 
         // Bind Set-returning functions before filter plan and aggregate plan.
