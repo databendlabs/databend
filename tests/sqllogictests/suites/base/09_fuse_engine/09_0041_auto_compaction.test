@@ -7,6 +7,8 @@ use i15760;
 statement ok
 set auto_compaction_imperfect_blocks_threshold = 3;
 
+statement ok
+set enable_parallel_multi_merge_sort = 0;
 
 # ISSUE 15760
 statement ok
@@ -83,17 +85,17 @@ statement ok
 insert into t1 values(1),(2),(7);
 
 statement ok
-insert into t1 values(3),(5),(9);
+insert into t1 values(3),(5),(8);
 
 statement ok
-insert into t1 values(4),(6),(8);
+insert into t1 values(4),(6);
 
 query III
 select segment_count, block_count, row_count from fuse_snapshot('i15760', 't1') limit 10;
 ----
-1 1 9
-1 2 9
-3 3 9
+1 1 8
+1 2 8
+3 3 8
 2 2 6
 1 1 3
 
