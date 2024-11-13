@@ -94,12 +94,19 @@ impl BlockReader {
             let table_data_cache = CacheManager::instance().get_table_data_cache();
             // add raw data (compressed raw bytes) to column cache
             for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
-                let cache_key = TableDataCacheKey::new(
-                    &merge_io_result.block_path,
-                    *column_id,
-                    range.start as u64,
-                    (range.end - range.start) as u64,
-                );
+                // Safe to unwrap here, since this column has been fetched, its meta must be present.
+                let column_meta = columns_meta.get(column_id).unwrap();
+                let (offset, len) = column_meta.offset_length();
+
+                // Should NOT use `range.start` as part of the cache key,
+                // as they are not stable and can vary for the same column depending on the query's projection.
+                // For instance:
+                //  - `SELECT col1, col2 FROM t;`
+                //  - `SELECT col2 FROM t;`
+                // may result in different ranges for `col2`
+                // This can lead to cache missing or INCONSISTENCIES
+
+                let cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
                 let chunk_data = merge_io_result
                     .owner_memory
                     .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
