@@ -59,7 +59,7 @@ pub struct RulePushDownFilterWindowTopN {
 impl RulePushDownFilterWindowTopN {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
-            id: RuleID::PushDownFilterWindowRank,
+            id: RuleID::PushDownFilterWindowTopN,
             metadata,
             matchers: vec![Matcher::MatchOp {
                 op_type: RelOp::Filter,

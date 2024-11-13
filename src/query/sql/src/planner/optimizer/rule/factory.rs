@@ -92,7 +92,7 @@ impl RuleFactory {
             }
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
-            RuleID::PushDownFilterWindowRank => {
+            RuleID::PushDownFilterWindowTopN => {
                 Ok(Box::new(RulePushDownFilterWindowTopN::new(ctx.metadata)))
             }
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new(ctx.metadata))),
