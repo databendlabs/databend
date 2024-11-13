@@ -496,7 +496,8 @@ pub fn to_data(array: &dyn Array) -> arrow_data::ArrayData {
             })
         }
         Map => to_data_dyn!(array, MapArray),
-        BinaryView | Utf8View => unimplemented!(),
+        BinaryView => to_data_dyn!(array, BinaryViewArray),
+        Utf8View => to_data_dyn!(array, Utf8ViewArray),
     }
 }
 
@@ -527,7 +528,8 @@ pub fn from_data(data: &arrow_data::ArrayData) -> Box<dyn Array> {
             })
         }
         Map => Box::new(MapArray::from_data(data)),
-        BinaryView | Utf8View => unimplemented!(),
+        BinaryView => Box::new(BinaryViewArray::from_data(data)),
+        Utf8View => Box::new(Utf8ViewArray::from_data(data)),
     }
 }
 
@@ -748,7 +750,7 @@ mod union;
 mod utf8;
 
 mod equal;
-mod ffi;
+
 mod fmt;
 #[doc(hidden)]
 pub mod indexable;
@@ -796,10 +798,6 @@ pub use utf8::MutableUtf8Array;
 pub use utf8::MutableUtf8ValuesArray;
 pub use utf8::Utf8Array;
 pub use utf8::Utf8ValuesIter;
-
-pub(crate) use self::ffi::offset_buffers_children_dictionary;
-pub(crate) use self::ffi::FromFfi;
-pub(crate) use self::ffi::ToFfi;
 
 /// A trait describing the ability of a struct to create itself from a iterator.
 /// This is similar to [`Extend`], but accepted the creation to error.

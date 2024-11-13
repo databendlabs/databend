@@ -30,7 +30,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')

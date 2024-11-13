@@ -918,6 +918,10 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        todo!()
+    }
+
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         todo!()
     }

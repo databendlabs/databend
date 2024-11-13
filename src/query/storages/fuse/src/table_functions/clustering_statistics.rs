@@ -159,7 +159,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
         let mut segment_name = Vec::with_capacity(len);
-        let mut block_name = StringColumnBuilder::with_capacity(len, len);
+        let mut block_name = StringColumnBuilder::with_capacity(len);
         let mut max = Vec::with_capacity(len);
         let mut min = Vec::with_capacity(len);
         let mut level = Vec::with_capacity(len);
@@ -196,8 +196,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_name.put_str(&block.location.0);
-                    block_name.commit_row();
+                    block_name.put_and_commit(&block.location.0);
 
                     let cluster_stats = block.cluster_stats.as_ref();
                     let clustered = block

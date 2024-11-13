@@ -733,17 +733,13 @@ impl TestFixture {
             schema,
             (0..num_of_block)
                 .map(|idx| {
-                    let mut title_builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
-                    let mut content_builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                    let mut title_builder = StringColumnBuilder::with_capacity(rows_per_block);
+                    let mut content_builder = StringColumnBuilder::with_capacity(rows_per_block);
 
                     for i in 0..rows_per_block {
                         let j = (idx * rows_per_block + i) % sample_books.len();
-                        title_builder.put_str(sample_books[j].0);
-                        title_builder.commit_row();
-                        content_builder.put_str(sample_books[j].1);
-                        content_builder.commit_row();
+                        title_builder.put_and_commit(sample_books[j].0);
+                        content_builder.put_and_commit(sample_books[j].1);
                     }
                     let title_column = Column::String(title_builder.build());
                     let content_column = Column::String(content_builder.build());

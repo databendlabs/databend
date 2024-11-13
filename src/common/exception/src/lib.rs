@@ -14,7 +14,11 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+extern crate core;
+
 mod context;
+#[cfg(target_os = "linux")]
+mod elf;
 pub mod exception;
 mod exception_backtrace;
 mod exception_code;
@@ -28,5 +32,6 @@ pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;
 pub use exception_backtrace::set_backtrace;
+pub use exception_backtrace::StackTrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 pub use exception_into::SerializedError;

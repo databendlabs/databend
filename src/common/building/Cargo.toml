@@ -12,6 +12,7 @@ test = true
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 cargo-license = { workspace = true }
 cargo_metadata = { workspace = true }
 gix = { workspace = true }

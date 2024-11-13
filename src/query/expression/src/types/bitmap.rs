@@ -161,7 +161,7 @@ impl ValueType for BitmapType {
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        col.data().len() + col.offsets().len() * 8
+        col.memory_size()
     }
 
     #[inline(always)]

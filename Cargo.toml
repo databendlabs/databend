@@ -27,7 +27,6 @@ members = [
     "src/common/storage",
     "src/common/vector",
     "src/common/license",
-    "src/common/parquet2",
     "src/query/ast",
     "src/query/codegen",
     "src/query/config",
@@ -140,7 +139,6 @@ databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-openai = { path = "src/common/openai" }
-databend-common-parquet2 = { path = "src/common/parquet2" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
 databend-common-pipeline-sources = { path = "src/query/pipeline/sources" }
@@ -196,12 +194,6 @@ databend-storages-common-session = { path = "src/query/storages/common/session" 
 databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
-# Specific dependencies
-parquet2 = { package = "databend-common-parquet2", path = "src/common/parquet2", default-features = false, features = [
-    "serde_types",
-    "async",
-] }
-
 # Crates.io dependencies
 ahash = "0.8"
 aho-corasick = { version = "1.0.1" } #
@@ -214,14 +206,13 @@ arrow-buffer = { version = "53" }
 arrow-cast = { version = "53", features = ["prettyprint"] }
 arrow-data = { version = "53" }
 arrow-flight = { version = "53", features = ["flight-sql-experimental", "tls"] }
-arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
 arrow-ipc = { version = "53" }
 arrow-ord = { version = "53" }
 arrow-schema = { version = "53", features = ["serde"] }
 arrow-select = { version = "53" }
-arrow-udf-js = "0.5.0"
-arrow-udf-python = "0.4.0"
-arrow-udf-wasm = "0.4.0"
+arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
+arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
+arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
@@ -260,6 +251,7 @@ cidr = { version = "0.2.2" }
 clap = { version = "4.4.2", features = ["derive"] }
 comfy-table = "7"
 convert_case = "0.6.0"
+cookie = "0.18.1"
 crc32fast = "1.3.2"
 criterion = "0.5"
 cron = "0.12.0"
@@ -289,6 +281,7 @@ flagset = "0.4"
 flatbuffers = "24" # Must use the same version with arrow-ipc
 flate2 = "1"
 foreign_vec = "0.1.0"
+fs_extra = "1.3.0"
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
@@ -297,6 +290,7 @@ geo-types = "0.7.13"
 geohash = "0.13.0"
 geos = { version = "9.0.0", features = ["static", "geo", "geo-types"] }
 geozero = { version = "0.14.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+gimli = "0.31.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.4.0"
@@ -352,6 +346,7 @@ num-bigint = "0.4.6"
 num-derive = "0.3.3"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
+object = "0.36.5"
 object_store_opendal = "0.48.1"
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
@@ -408,6 +403,7 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
 quanta = "0.11.1"
+raft-log = { version = "0.2.2" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
@@ -511,6 +507,7 @@ nom-rule = "0.4"
 pratt = "0.4.0"
 pretty = "0.11.3"
 rspack-codespan-reporting = "0.11"
+rustc-demangle = "0.1"
 strsim = "0.10"
 strum_macros = "0.24"
 vergen = { version = "8.3.1", default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
@@ -570,7 +567,7 @@ debug = 1
 lto = "thin"
 overflow-checks = false
 opt-level = "s"         ## defaults to be 3
-incremental = false
+incremental = true
 
 # [profile.release.package]
 # databend-common-arrow = { codegen-units = 16 }
@@ -584,8 +581,8 @@ overflow-checks = false
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
-# wait until https://github.com/rust-lang/rust/issues/100142 fixed
-incremental = false
+# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
+incremental = true
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }
@@ -594,6 +591,7 @@ gimli = { opt-level = 3 }
 miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
+databend-common-exception = { opt-level = 3 }
 
 [profile.test]
 opt-level = 0
@@ -605,7 +603,6 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "5502823a" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = [
@@ -617,7 +614,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.6" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
 orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

@@ -429,11 +429,7 @@ impl Debug for BinaryColumn {
 impl Debug for StringColumn {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StringColumn")
-            .field(
-                "data",
-                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
-            )
-            .field("offsets", &self.offsets())
+            .field("data", &format_args!("{:?}", self.data))
             .finish()
     }
 }

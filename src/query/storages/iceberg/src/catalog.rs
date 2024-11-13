@@ -216,10 +216,18 @@ impl Catalog for IcebergCatalog {
         self.info.clone()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        unimplemented!()
     }
 
     #[async_backtrace::framed]

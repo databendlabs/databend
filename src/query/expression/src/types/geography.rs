@@ -19,6 +19,7 @@ use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use databend_common_exception::Result;
 use databend_common_io::geography::*;
 use databend_common_io::wkb::make_point;
@@ -29,8 +30,7 @@ use geozero::ToWkt;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::binary::BinaryLike;
-use super::binary::BinaryLikeIterator;
+use super::binary::BinaryIterator;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -83,9 +83,9 @@ impl<'a> GeographyRef<'a> {
     }
 }
 
-impl<'a> BinaryLike<'a> for GeographyRef<'a> {
-    fn from(value: &'a [u8]) -> Self {
-        GeographyRef(value)
+impl<'a> AsRef<[u8]> for GeographyRef<'a> {
+    fn as_ref(&self) -> &[u8] {
+        self.0
     }
 }
 
@@ -281,10 +281,8 @@ impl GeographyColumn {
     }
 
     pub fn iter(&self) -> GeographyIterator<'_> {
-        BinaryLikeIterator {
-            data: &self.0.data,
-            offsets: self.0.offsets.windows(2),
-            _t: std::marker::PhantomData,
+        GeographyIterator {
+            inner: self.0.iter(),
         }
     }
 
@@ -293,4 +291,18 @@ impl GeographyColumn {
     }
 }
 
-pub type GeographyIterator<'a> = BinaryLikeIterator<'a, GeographyRef<'a>>;
+pub struct GeographyIterator<'a> {
+    inner: BinaryIterator<'a>,
+}
+
+impl<'a> Iterator for GeographyIterator<'a> {
+    type Item = GeographyRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(GeographyRef)
+    }
+}
+
+unsafe impl<'a> TrustedLen for GeographyIterator<'a> {}
+
+unsafe impl<'a> std::iter::TrustedLen for GeographyIterator<'a> {}

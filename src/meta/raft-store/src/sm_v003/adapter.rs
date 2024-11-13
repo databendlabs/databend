@@ -31,19 +31,21 @@ use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::marked::Marked;
 use crate::sm_v003::write_entry::WriteEntry;
-use crate::sm_v003::SnapshotStoreV003;
+use crate::sm_v003::SnapshotStoreV004;
 use crate::state_machine::StateMachineMetaKey;
 
+pub type SnapshotUpgradeV002ToV003 = SnapshotUpgradeV002ToV004;
+
 /// Convert V002 snapshot lines in json of [`SMEntry`]
-/// to V003 rotbl key-value pairs. `(String, SeqMarked)`,
+/// to V004 rotbl key-value pairs. `(String, SeqMarked)`,
 /// or update SysData in place.
 ///
 /// It holds a lock of SysData because this converter may be run concurrently in multiple threads.
-pub struct SnapshotUpgradeV002ToV003 {
+pub struct SnapshotUpgradeV002ToV004 {
     pub sys_data: Arc<Mutex<SysData>>,
 }
 
-impl SnapshotUpgradeV002ToV003 {
+impl SnapshotUpgradeV002ToV004 {
     pub fn convert_line(&mut self, s: &str) -> Result<Option<(String, SeqMarked)>, io::Error> {
         let ent: SMEntry =
             serde_json::from_str(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -58,7 +60,7 @@ impl SnapshotUpgradeV002ToV003 {
     ) -> Result<Option<(String, SeqMarked)>, io::Error> {
         match ent {
             SMEntry::DataHeader { .. } => {
-                // Snapshot V003 in rotbl format does not store data header
+                // Snapshot V004 in rotbl format does not store data header
             }
             SMEntry::Nodes { key, value } => {
                 let mut s = self.sys_data.lock().unwrap();
@@ -108,7 +110,7 @@ impl SnapshotUpgradeV002ToV003 {
     }
 }
 
-impl ordq::Work for SnapshotUpgradeV002ToV003 {
+impl ordq::Work for SnapshotUpgradeV002ToV004 {
     type I = WriteEntry<Vec<String>>;
     type O = Result<WriteEntry<Vec<(String, SeqMarked)>>, io::Error>;
 
@@ -128,11 +130,11 @@ impl ordq::Work for SnapshotUpgradeV002ToV003 {
     }
 }
 
-/// Upgrade snapshot V002(ndjson) to V003(rotbl).
+/// Upgrade snapshot V002(ndjson) to V004(rotbl).
 ///
 /// After install, the state machine has only one level of data.
-pub async fn upgrade_snapshot_data_v002_to_v003(
-    snapshot_store: &SnapshotStoreV003,
+pub async fn upgrade_snapshot_data_v002_to_v003_or_v004(
+    snapshot_store: &SnapshotStoreV004,
     data: Box<SnapshotData>,
     snapshot_id: SnapshotId,
 ) -> Result<DB, io::Error> {
@@ -142,7 +144,7 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
 
     let data_size = data.data_size().await?;
     info!(
-        "upgrade snapshot from v002 to v003, data len: {}",
+        "upgrade snapshot from v002 to v004, data len: {}",
         data_size
     );
 
@@ -155,10 +157,10 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
 
     let sys_data = Arc::new(Mutex::new(SysData::default()));
 
-    // Create a writer to write converted kvs to snapshot v003
+    // Create a writer to write converted kvs to snapshot v004
     let writer = snapshot_store.new_writer()?;
     let (writer_tx, writer_join_handle) =
-        writer.spawn_writer_thread("upgrade_snapshot_data_v002_to_v003");
+        writer.spawn_writer_thread("upgrade_snapshot_data_v002_to_v004");
 
     // Create a worker pool to convert the ndjson lines.
     let (ordq_tx, ordq_rx) = {
@@ -167,7 +169,7 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
 
         ordq::new(
             queue_depth,
-            repeat_with(|| SnapshotUpgradeV002ToV003 {
+            repeat_with(|| SnapshotUpgradeV002ToV004 {
                 sys_data: sys_data.clone(),
             })
             .take(n_workers),
@@ -177,7 +179,7 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
     // Chain ordq output to writer
     databend_common_base::runtime::spawn_blocking(move || {
         // snapshot v002 stores expire index(`exp-/`) after kvs(`kv--/`),
-        // We need to store expire index before kvs in snapshot v003.
+        // We need to store expire index before kvs in snapshot v004.
         let mut kv_cache = Vec::with_capacity(1_000_000);
 
         while let Some(res) = ordq_rx.recv() {
@@ -242,7 +244,7 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
     let temp_snapshot = writer_join_handle.await.map_err(closed_err)??;
     let db = temp_snapshot.move_to_final_path(snapshot_id)?;
     info!(
-        "upgraded snapshot from v002 to v003: file_size: {}, db stat: {}, sys_data: {}",
+        "upgraded snapshot from v002 to v004: file_size: {}, db stat: {}, sys_data: {}",
         db.inner().file_size(),
         db.inner().stat(),
         db.inner().meta().user_data(),

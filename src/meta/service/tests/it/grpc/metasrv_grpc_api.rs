@@ -71,6 +71,7 @@ async fn test_restart() -> anyhow::Result<()> {
         srv.stop(None).await?;
 
         drop(client);
+        drop(srv);
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
