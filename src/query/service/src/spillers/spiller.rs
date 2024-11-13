@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::Bytes;
-use databend_common_base::base::dma_buffer_as_vec;
+use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
@@ -277,7 +277,7 @@ impl Spiller {
                     None => {
                         let file_size = path.size();
                         let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
-                        Buffer::from(dma_buffer_as_vec(buf)).slice(range)
+                        Buffer::from(dma_buffer_to_bytes(buf)).slice(range)
                     }
                 }
             }
@@ -330,7 +330,7 @@ impl Spiller {
                 );
 
                 let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
-                Buffer::from(dma_buffer_as_vec(buf)).slice(range)
+                Buffer::from(dma_buffer_to_bytes(buf)).slice(range)
             }
             (Location::Local(path), Some(ref local)) => {
                 local
@@ -371,7 +371,7 @@ impl Spiller {
                 }
                 None => {
                     let (buf, range) = dma_read_file_range(path, data_range).await?;
-                    Buffer::from(dma_buffer_as_vec(buf)).slice(range)
+                    Buffer::from(dma_buffer_to_bytes(buf)).slice(range)
                 }
             },
             Location::Remote(loc) => self.operator.read_with(loc).range(data_range).await?,
@@ -410,7 +410,7 @@ impl Spiller {
         let buf = buf
             .into_data()
             .into_iter()
-            .map(|x| Bytes::from(dma_buffer_as_vec(x)))
+            .map(|x| Bytes::from(dma_buffer_to_bytes(x)))
             .collect::<Buffer>();
         let written = buf.len();
         writer.write(buf).await?;

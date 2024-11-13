@@ -28,6 +28,7 @@ use std::path::Path;
 use std::ptr;
 use std::ptr::NonNull;
 
+use bytes::Bytes;
 use rustix::fs::OFlags;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
@@ -116,10 +117,6 @@ impl DmaAllocator {
             Layout::from_size_align(layout.size(), self.0.as_usize()).unwrap()
         }
     }
-
-    fn real_cap(&self, cap: usize) -> usize {
-        self.0.align_up(cap)
-    }
 }
 
 unsafe impl Allocator for DmaAllocator {
@@ -129,6 +126,10 @@ unsafe impl Allocator for DmaAllocator {
 
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         Global {}.allocate_zeroed(self.real_layout(layout))
+    }
+
+    unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: Layout) {
+        Global {}.deallocate(ptr, self.real_layout(layout))
     }
 
     unsafe fn grow(
@@ -157,20 +158,25 @@ unsafe impl Allocator for DmaAllocator {
         )
     }
 
-    unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: Layout) {
-        Global {}.deallocate(ptr, self.real_layout(layout))
+    unsafe fn shrink(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        Global {}.shrink(
+            ptr,
+            self.real_layout(old_layout),
+            self.real_layout(new_layout),
+        )
     }
 }
 
 type DmaBuffer = Vec<u8, DmaAllocator>;
 
-pub fn dma_buffer_as_vec(mut buf: DmaBuffer) -> Vec<u8> {
-    let ptr = buf.as_mut_ptr();
-    let len = buf.len();
-    let cap = buf.allocator().real_cap(buf.capacity());
-    std::mem::forget(buf);
-
-    unsafe { Vec::from_raw_parts(ptr, len, cap) }
+pub fn dma_buffer_to_bytes(buf: DmaBuffer) -> Bytes {
+    let (ptr, len, cap) = buf.into_raw_parts();
+    Bytes::from(unsafe { Vec::from_raw_parts(ptr, len, cap) })
 }
 
 /// A `DmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
@@ -696,5 +702,29 @@ mod tests {
         assert_eq!(&want, &**file.buffer());
 
         let _ = std::fs::remove_file(filename);
+    }
+
+    #[test]
+    fn test_dma_buffer_to_bytes() {
+        let want = (0..10_u8).into_iter().collect::<Vec<_>>();
+        let alloc = DmaAllocator::new(Alignment::new(4096).unwrap());
+        let mut buf = DmaBuffer::with_capacity_in(3000, alloc);
+        buf.extend_from_slice(&want);
+
+        println!("{:?} {}", buf.as_ptr(), buf.capacity());
+        buf.shrink_to_fit();
+        println!("{:?} {}", buf.as_ptr(), buf.capacity());
+        buf.reserve(3000 - buf.capacity());
+        println!("{:?} {}", buf.as_ptr(), buf.capacity());
+
+        // let slice = buf.into_boxed_slice();
+        // println!("{:?}", slice.as_ptr());
+
+        let got = dma_buffer_to_bytes(buf);
+        println!("{:?}", got.as_ptr());
+        assert_eq!(&want, &got);
+
+        let buf = got.to_vec();
+        println!("{:?} {}", buf.as_ptr(), buf.capacity());
     }
 }

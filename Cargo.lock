@@ -3100,6 +3100,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "borsh",
+ "bytes",
  "bytesize",
  "chrono",
  "ctrlc",
