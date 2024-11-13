@@ -13,6 +13,11 @@ on:
         type: string
         required: true
         default: "aws"
+      license_type:
+        description: "License type, enterprise or trial"
+        type: string
+        required: true
+        default: "trial"
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -196,6 +201,7 @@ jobs:
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
         with:
@@ -266,6 +272,7 @@ jobs:
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
