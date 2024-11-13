@@ -1026,17 +1026,17 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             // Others.
-            Plan::Insert(plan) => {
-                let target_table_privileges = if plan.overwrite {
-                    vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
-                } else {
-                    vec![UserPrivilegeType::Insert]
-                };
-                for privilege in target_table_privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false, false).await?;
-                }
-                self.validate_insert_source(ctx, &plan.source).await?;
-            }
+            // Plan::Insert(plan) => {
+            //     let target_table_privileges = if plan.overwrite {
+            //         vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
+            //     } else {
+            //         vec![UserPrivilegeType::Insert]
+            //     };
+            //     for privilege in target_table_privileges {
+            //         self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false, false).await?;
+            //     }
+            //     self.validate_insert_source(ctx, &plan.source).await?;
+            // }
             Plan::InsertMultiTable(plan) => {
                 let target_table_privileges = if plan.overwrite {
                     vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
@@ -1187,12 +1187,15 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
             }
-            Plan::CopyIntoTable(plan) => {
-                self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
-                if let Some(query) = &plan.query {
-                    self.check(ctx, query).await?;
-                }
+            Plan::CopyIntoTable { .. } => {
+                // match &plan.source{
+
+                // }
+                // self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
+                // self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
+                // if let Some(query) = &plan.query {
+                //     self.check(ctx, query).await?;
+                // }
             }
             Plan::CopyIntoLocation(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;

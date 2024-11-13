@@ -401,7 +401,8 @@ impl<'a> Binder {
                         warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_insert(bind_context, stmt).await?
+                // self.bind_insert(bind_context, stmt).await?
+                todo!()
             }
             Statement::InsertMultiTable(stmt) => {
                 self.bind_insert_multi_table(bind_context, stmt).await?

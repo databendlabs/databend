@@ -156,10 +156,11 @@ impl InterpreterFactory {
                 *graphical,
             )?)),
 
-            Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
-                ctx,
-                *copy_plan.clone(),
-            )?)),
+            Plan::CopyIntoTable { .. } => todo!(),
+            // Ok(Arc::new(CopyIntoTableInterpreter::try_create(
+            //     ctx,
+            //     *copy_plan.clone(),
+            // )?)),
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
                 CopyIntoLocationInterpreter::try_create(ctx, copy_plan.clone())?,
             )),
@@ -377,8 +378,6 @@ impl InterpreterFactory {
                 ctx,
                 *desc_user.clone(),
             )?)),
-
-            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
             Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(

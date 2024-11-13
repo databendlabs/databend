@@ -391,24 +391,24 @@ impl ReplaceInterpreter {
                 self.connect_query_plan_source(ctx.clone(), plan).await
             }
             InsertInputSource::Stage(plan) => match *plan.clone() {
-                Plan::CopyIntoTable(copy_plan) => {
-                    let interpreter =
-                        CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
+                // Plan::CopyIntoTable(copy_plan) => {
+                //     let interpreter =
+                //         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
+                //     let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
 
-                    // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
+                //     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 
-                    *purge_info = Some((
-                        copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
-                        copy_plan.stage_table_info.stage_info.clone(),
-                    ));
-                    Ok(ReplaceSourceCtx {
-                        root: Box::new(physical_plan),
-                        select_ctx: None,
-                        update_stream_meta: vec![],
-                        bind_context: None,
-                    })
-                }
+                //     *purge_info = Some((
+                //         copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
+                //         copy_plan.stage_table_info.stage_info.clone(),
+                //     ));
+                //     Ok(ReplaceSourceCtx {
+                //         root: Box::new(physical_plan),
+                //         select_ctx: None,
+                //         update_stream_meta: vec![],
+                //         bind_context: None,
+                //     })
+                // }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
         }

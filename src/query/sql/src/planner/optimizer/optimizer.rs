@@ -286,40 +286,40 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
             options,
         })),
-        Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
-            plan.enable_distributed = opt_ctx.enable_distributed_optimization
-                && opt_ctx
-                    .table_ctx
-                    .get_settings()
-                    .get_enable_distributed_copy()?;
-            info!(
-                "after optimization enable_distributed_copy? : {}",
-                plan.enable_distributed
-            );
+        // Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
+        //     plan.enable_distributed = opt_ctx.enable_distributed_optimization
+        //         && opt_ctx
+        //             .table_ctx
+        //             .get_settings()
+        //             .get_enable_distributed_copy()?;
+        //     info!(
+        //         "after optimization enable_distributed_copy? : {}",
+        //         plan.enable_distributed
+        //     );
 
-            if let Some(p) = &plan.query {
-                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-                plan.query = Some(Box::new(optimized_plan));
-            }
-            Ok(Plan::CopyIntoTable(plan))
-        }
+        //     // if let Some(p) = &plan.query {
+        //     //     let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+        //     //     plan.query = Some(Box::new(optimized_plan));
+        //     // }
+        //     Ok(Plan::CopyIntoTable(plan))
+        // }
         Plan::DataMutation { s_expr, .. } => optimize_mutation(opt_ctx, *s_expr).await,
 
         // distributed insert will be optimized in `physical_plan_builder`
-        Plan::Insert(mut plan) => {
-            match plan.source {
-                InsertInputSource::SelectPlan(p) => {
-                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-                    plan.source = InsertInputSource::SelectPlan(Box::new(optimized_plan));
-                }
-                InsertInputSource::Stage(p) => {
-                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-                    plan.source = InsertInputSource::Stage(Box::new(optimized_plan));
-                }
-                _ => {}
-            }
-            Ok(Plan::Insert(plan))
-        }
+        // Plan::Insert(mut plan) => {
+        //     match plan.source {
+        //         InsertInputSource::SelectPlan(p) => {
+        //             let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+        //             plan.source = InsertInputSource::SelectPlan(Box::new(optimized_plan));
+        //         }
+        //         InsertInputSource::Stage(p) => {
+        //             let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+        //             plan.source = InsertInputSource::Stage(Box::new(optimized_plan));
+        //         }
+        //         _ => {}
+        //     }
+        //     Ok(Plan::Insert(plan))
+        // }
         Plan::InsertMultiTable(mut plan) => {
             plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
             Ok(Plan::InsertMultiTable(plan))

@@ -33,11 +33,13 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_metrics::storage::*;
 use databend_common_storage::init_stage_operator;
+use databend_common_storage::StageFileInfo;
+use enum_as_inner::EnumAsInner;
 use log::info;
 
+use super::InsertValue;
 use crate::plans::Plan;
 
 #[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -115,169 +117,180 @@ impl CopyIntoTableMode {
 
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
-    pub no_file_to_copy: bool,
-
-    pub catalog_info: Arc<CatalogInfo>,
+    pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
-    pub from_attachment: bool,
-
     pub required_values_schema: DataSchemaRef,
-    // ... into table(<columns>) ..  -> <columns>
     pub values_consts: Vec<Scalar>,
-    // (1, ?, 'a', ?) -> (1, 'a')
-    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
-
-    pub write_mode: CopyIntoTableMode,
-    pub validation_mode: ValidationMode,
+    pub required_source_schema: DataSchemaRef,
     pub force: bool,
+}
 
-    pub stage_table_info: StageTableInfo,
-    pub query: Option<Box<Plan>>,
-    // query may be Some even if is_transform=false
-    pub is_transform: bool,
+#[derive(Clone, EnumAsInner)]
+pub enum AppendSource {
+    Query(Box<Plan>),
+    Stage(Box<StageTableInfo>),
+    Values(InsertValue),
+}
 
-    pub enable_distributed: bool,
+impl AppendSource {
+    pub fn files_to_copy(&self) -> Vec<StageFileInfo> {
+        match self {
+            AppendSource::Stage(stage) => stage.files_to_copy.clone().unwrap_or_default(),
+            _ => vec![],
+        }
+    }
+
+    pub fn duplicated_files_detected(&self) -> Vec<String> {
+        match self {
+            AppendSource::Stage(stage) => stage.duplicated_files_detected.clone(),
+            _ => vec![],
+        }
+    }
 }
 
 impl CopyIntoTablePlan {
     pub async fn collect_files(&mut self, ctx: &dyn TableContext) -> Result<()> {
-        ctx.set_status_info("begin to list files");
-        let start = Instant::now();
+        // ctx.set_status_info("begin to list files");
+        // let start = Instant::now();
 
-        let stage_table_info = &self.stage_table_info;
-        let max_files = stage_table_info.stage_info.copy_options.max_files;
-        let max_files = if max_files == 0 {
-            None
-        } else {
-            Some(max_files)
-        };
+        // let stage_table_info = self.source.as_stage().unwrap();
+        // let max_files = stage_table_info.stage_info.copy_options.max_files;
+        // let max_files = if max_files == 0 {
+        //     None
+        // } else {
+        //     Some(max_files)
+        // };
 
-        let thread_num = ctx.get_settings().get_max_threads()? as usize;
-        let operator = init_stage_operator(&stage_table_info.stage_info)?;
-        let all_source_file_infos = if operator.info().native_capability().blocking {
-            if self.force {
-                stage_table_info
-                    .files_info
-                    .blocking_list(&operator, max_files)
-            } else {
-                stage_table_info.files_info.blocking_list(&operator, None)
-            }
-        } else if self.force {
-            stage_table_info
-                .files_info
-                .list(&operator, thread_num, max_files)
-                .await
-        } else {
-            stage_table_info
-                .files_info
-                .list(&operator, thread_num, None)
-                .await
-        }?;
+        // let thread_num = ctx.get_settings().get_max_threads()? as usize;
+        // let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        // let all_source_file_infos = if operator.info().native_capability().blocking {
+        //     if self.force {
+        //         stage_table_info
+        //             .files_info
+        //             .blocking_list(&operator, max_files)
+        //     } else {
+        //         stage_table_info.files_info.blocking_list(&operator, None)
+        //     }
+        // } else if self.force {
+        //     stage_table_info
+        //         .files_info
+        //         .list(&operator, thread_num, max_files)
+        //         .await
+        // } else {
+        //     stage_table_info
+        //         .files_info
+        //         .list(&operator, thread_num, None)
+        //         .await
+        // }?;
 
-        let num_all_files = all_source_file_infos.len();
+        // let num_all_files = all_source_file_infos.len();
 
-        let end_get_all_source = Instant::now();
-        let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
-        metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+        // let end_get_all_source = Instant::now();
+        // let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
+        // metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
 
-        ctx.set_status_info(&format!(
-            "end list files: got {} files, time used {:?}",
-            num_all_files,
-            start.elapsed()
-        ));
+        // ctx.set_status_info(&format!(
+        //     "end list files: got {} files, time used {:?}",
+        //     num_all_files,
+        //     start.elapsed()
+        // ));
 
-        let (need_copy_file_infos, duplicated) = if self.force {
-            if !self.stage_table_info.stage_info.copy_options.purge
-                && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
-            {
-                return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
-            }
-            info!(
-                "force mode, ignore file filtering. ({}.{})",
-                &self.database_name, &self.table_name
-            );
-            (all_source_file_infos, vec![])
-        } else {
-            // Status.
-            ctx.set_status_info("begin filtering out copied files");
+        // let (need_copy_file_infos, duplicated) = if self.force {
+        //     if !stage_table_info.stage_info.copy_options.purge
+        //         && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
+        //     {
+        //         return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+        //     }
+        //     info!(
+        //         "force mode, ignore file filtering. ({}.{})",
+        //         &self.database_name, &self.table_name
+        //     );
+        //     (all_source_file_infos, vec![])
+        // } else {
+        //     // Status.
+        //     ctx.set_status_info("begin filtering out copied files");
 
-            let filter_start = Instant::now();
-            let FilteredCopyFiles {
-                files_to_copy,
-                duplicated_files,
-            } = ctx
-                .filter_out_copied_files(
-                    self.catalog_info.catalog_name(),
-                    &self.database_name,
-                    &self.table_name,
-                    &all_source_file_infos,
-                    max_files,
-                )
-                .await?;
-            ctx.set_status_info(&format!(
-                "end filtering out copied files: {}, time used {:?}",
-                num_all_files,
-                filter_start.elapsed()
-            ));
+        //     let filter_start = Instant::now();
+        //     let FilteredCopyFiles {
+        //         files_to_copy,
+        //         duplicated_files,
+        //     } = ctx
+        //         .filter_out_copied_files(
+        //             &self.catalog_name,
+        //             &self.database_name,
+        //             &self.table_name,
+        //             &all_source_file_infos,
+        //             max_files,
+        //         )
+        //         .await?;
+        //     ctx.set_status_info(&format!(
+        //         "end filtering out copied files: {}, time used {:?}",
+        //         num_all_files,
+        //         filter_start.elapsed()
+        //     ));
 
-            let end_filter_out = Instant::now();
-            let cost_filter_out = end_filter_out
-                .duration_since(end_get_all_source)
-                .as_millis();
-            metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
+        //     let end_filter_out = Instant::now();
+        //     let cost_filter_out = end_filter_out
+        //         .duration_since(end_get_all_source)
+        //         .as_millis();
+        //     metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
 
-            (files_to_copy, duplicated_files)
-        };
+        //     (files_to_copy, duplicated_files)
+        // };
 
-        let num_copied_files = need_copy_file_infos.len();
-        let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+        // let num_copied_files = need_copy_file_infos.len();
+        // let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
 
-        info!(
-            "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
-            max_files,
-            need_copy_file_infos.len(),
-            copied_bytes,
-            num_all_files - num_copied_files,
-            start.elapsed()
-        );
+        // info!(
+        //     "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
+        //     max_files,
+        //     need_copy_file_infos.len(),
+        //     copied_bytes,
+        //     num_all_files - num_copied_files,
+        //     start.elapsed()
+        // );
 
-        if need_copy_file_infos.is_empty() {
-            self.no_file_to_copy = true;
-        }
+        // if need_copy_file_infos.is_empty() {
+        //     self.no_file_to_copy = true;
+        // }
 
-        self.stage_table_info.files_to_copy = Some(need_copy_file_infos);
-        self.stage_table_info.duplicated_files_detected = duplicated;
+        // let stage_table_info = self.source.as_stage_mut().unwrap();
 
-        Ok(())
+        // stage_table_info.files_to_copy = Some(need_copy_file_infos);
+        // stage_table_info.duplicated_files_detected = duplicated;
+
+        // Ok(())
+        todo!()
     }
 }
 
 impl Debug for CopyIntoTablePlan {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let CopyIntoTablePlan {
-            catalog_info,
-            database_name,
-            table_name,
-            no_file_to_copy,
-            validation_mode,
-            force,
-            stage_table_info,
-            query,
-            ..
-        } = self;
-        write!(
-            f,
-            "Copy into {:}.{database_name:}.{table_name:}",
-            catalog_info.catalog_name()
-        )?;
-        write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
-        write!(f, ", validation_mode: {validation_mode:?}")?;
-        write!(f, ", from: {stage_table_info:?}")?;
-        write!(f, " force: {force}")?;
-        write!(f, " is_from: {force}")?;
-        write!(f, " query: {query:?}")?;
-        Ok(())
+        // let CopyIntoTablePlan {
+        //     catalog_name: catalog_info,
+        //     database_name,
+        //     table_name,
+        //     no_file_to_copy,
+        //     validation_mode,
+        //     force,
+        //     stage_table_info,
+        //     query,
+        //     ..
+        // } = self;
+        // write!(
+        //     f,
+        //     "Copy into {:}.{database_name:}.{table_name:}",
+        //     &catalog_info
+        // )?;
+        // write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
+        // write!(f, ", validation_mode: {validation_mode:?}")?;
+        // write!(f, ", from: {stage_table_info:?}")?;
+        // write!(f, " force: {force}")?;
+        // write!(f, " is_from: {force}")?;
+        // write!(f, " query: {query:?}")?;
+        // Ok(())
+        todo!()
     }
 }
 
@@ -301,10 +314,11 @@ impl CopyIntoTablePlan {
     }
 
     pub fn schema(&self) -> DataSchemaRef {
-        if self.from_attachment {
-            Arc::new(DataSchema::empty())
-        } else {
-            Self::copy_into_table_schema()
-        }
+        // if self.from_attachment {
+        //     Arc::new(DataSchema::empty())
+        // } else {
+        //     Self::copy_into_table_schema()
+        // }
+        todo!()
     }
 }

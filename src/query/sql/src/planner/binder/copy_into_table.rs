@@ -67,10 +67,11 @@ use parking_lot::RwLock;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
+use crate::optimizer::SExpr;
+use crate::plans::AppendSource;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
-use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
@@ -83,34 +84,35 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
     ) -> Result<Plan> {
-        match &stmt.src {
-            CopyIntoTableSource::Location(location) => {
-                let mut plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location, false)
-                    .await?;
+        // match &stmt.src {
+        //     CopyIntoTableSource::Location(location) => {
+        //         let mut plan = self
+        //             .bind_copy_into_table_common(bind_context, stmt, location)
+        //             .await?;
 
-                // for copy from location, collect files explicitly
-                plan.collect_files(self.ctx.as_ref()).await?;
-                self.bind_copy_into_table_from_location(bind_context, plan)
-                    .await
-            }
-            CopyIntoTableSource::Query(query) => {
-                self.init_cte(bind_context, &stmt.with)?;
+        //         // for copy from location, collect files explicitly
+        //         plan.collect_files(self.ctx.as_ref()).await?;
+        //         self.bind_copy_into_table_from_location(bind_context, plan)
+        //             .await
+        //     }
+        //     CopyIntoTableSource::Query(query) => {
+        //         self.init_cte(bind_context, &stmt.with)?;
 
-                let mut max_column_position = MaxColumnPosition::new();
-                query.drive(&mut max_column_position);
-                self.metadata
-                    .write()
-                    .set_max_column_position(max_column_position.max_pos);
-                let (select_list, location, alias) = check_transform_query(query)?;
-                let plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location, true)
-                    .await?;
+        //         let mut max_column_position = MaxColumnPosition::new();
+        //         query.drive(&mut max_column_position);
+        //         self.metadata
+        //             .write()
+        //             .set_max_column_position(max_column_position.max_pos);
+        //         let (select_list, location, alias) = check_transform_query(query)?;
+        //         let plan = self
+        //             .bind_copy_into_table_common(bind_context, stmt, location)
+        //             .await?;
 
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
-                    .await
-            }
-        }
+        //         self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
+        //             .await
+        //     }
+        // }
+        todo!()
     }
 
     pub(crate) fn resolve_copy_pattern(
@@ -138,22 +140,16 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
-        is_transform: bool,
-    ) -> Result<CopyIntoTablePlan> {
+    ) -> Result<SExpr> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
             &stmt.dst.database,
             &stmt.dst.table,
         );
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let catalog_info = catalog.info();
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-
-        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-            .map_err(ErrorCode::SyntaxException)?;
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
         self.apply_copy_into_table_options(stmt, &mut stage_info)
@@ -186,34 +182,31 @@ impl<'a> Binder {
         } else {
             None
         };
+        // source: crate::plans::AppendSource::Stage(Box::new(StageTableInfo {
+        //     schema: stage_schema,
+        //     files_info,
+        //     stage_info,
+        //     files_to_copy: None,
+        //     duplicated_files_detected: vec![],
+        //     is_select: false,
+        //     default_values,
+        //     copy_into_location_options: Default::default(),
+        // })),
 
-        Ok(CopyIntoTablePlan {
-            catalog_info,
-            database_name,
-            table_name,
-            validation_mode,
-            is_transform,
-            no_file_to_copy: false,
-            from_attachment: false,
-            force: stmt.force,
-            stage_table_info: StageTableInfo {
-                schema: stage_schema,
-                files_info,
-                stage_info,
-                files_to_copy: None,
-                duplicated_files_detected: vec![],
-                is_select: false,
-                default_values,
-                copy_into_location_options: Default::default(),
-            },
-            values_consts: vec![],
-            required_source_schema: required_values_schema.clone(),
-            required_values_schema: required_values_schema.clone(),
-            write_mode: CopyIntoTableMode::Copy,
-            query: None,
+        // let source = SExpr::create_leaf(Arc::new(plan));
+        // let copy_into = CopyIntoTablePlan {
+        //     catalog_name,
+        //     database_name,
+        //     table_name,
+        //     force: stmt.force,
+        //     values_consts: vec![],
+        //     required_source_schema: required_values_schema.clone(),
+        //     required_values_schema: required_values_schema.clone(),
+        // };
+        // let copy_into_table = SExpr::create_unary(Arc::new(plan), source);
 
-            enable_distributed: false,
-        })
+        // Ok()
+        todo!()
     }
 
     /// Bind COPY INFO <table> FROM <stage_location>
@@ -223,45 +216,46 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
-            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
+        // let use_query = matches!(&plan.source.as_stage().unwrap().stage_info.file_format_params,
+        //     FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
 
-        if use_query {
-            let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
-            for dest_field in plan.required_source_schema.fields().iter() {
-                let column = Expr::ColumnRef {
-                    span: None,
-                    column: ColumnRef {
-                        database: None,
-                        table: None,
-                        column: AstColumnID::Name(Identifier::from_name(
-                            None,
-                            dest_field.name().to_string(),
-                        )),
-                    },
-                };
-                // cast types to variant, tuple will be rewrite as `json_object_keep_null`
-                let expr = if dest_field.data_type().remove_nullable() == DataType::Variant {
-                    Expr::Cast {
-                        span: None,
-                        expr: Box::new(column),
-                        target_type: TypeName::Variant,
-                        pg_style: false,
-                    }
-                } else {
-                    column
-                };
-                select_list.push(SelectTarget::AliasedExpr {
-                    expr: Box::new(expr),
-                    alias: None,
-                });
-            }
+        // if use_query {
+        //     let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
+        //     for dest_field in plan.required_source_schema.fields().iter() {
+        //         let column = Expr::ColumnRef {
+        //             span: None,
+        //             column: ColumnRef {
+        //                 database: None,
+        //                 table: None,
+        //                 column: AstColumnID::Name(Identifier::from_name(
+        //                     None,
+        //                     dest_field.name().to_string(),
+        //                 )),
+        //             },
+        //         };
+        //         // cast types to variant, tuple will be rewrite as `json_object_keep_null`
+        //         let expr = if dest_field.data_type().remove_nullable() == DataType::Variant {
+        //             Expr::Cast {
+        //                 span: None,
+        //                 expr: Box::new(column),
+        //                 target_type: TypeName::Variant,
+        //                 pg_style: false,
+        //             }
+        //         } else {
+        //             column
+        //         };
+        //         select_list.push(SelectTarget::AliasedExpr {
+        //             expr: Box::new(expr),
+        //             alias: None,
+        //         });
+        //     }
 
-            self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
-                .await
-        } else {
-            Ok(Plan::CopyIntoTable(Box::new(plan)))
-        }
+        //     self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
+        //         .await
+        // } else {
+        //     Ok(Plan::CopyIntoTable(Box::new(plan)))
+        // }
+        todo!()
     }
 
     #[async_backtrace::framed]
@@ -323,9 +317,6 @@ impl<'a> Binder {
                 .await?
         };
 
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let catalog_info = catalog.info();
-
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
         let (stage_info, files_info) = self.bind_attachment(attachment).await?;
@@ -338,7 +329,7 @@ impl<'a> Binder {
         // as the vanilla Copy-Into does.
         // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
         let files_to_copy = list_stage_files(&stage_info, &files_info, thread_num, None).await?;
-        let duplicated_files_detected = vec![];
+        // let duplicated_files_detected = vec![];
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
@@ -346,36 +337,31 @@ impl<'a> Binder {
             .prepare_default_values(bind_context, &data_schema)
             .await?;
 
-        let plan = CopyIntoTablePlan {
-            catalog_info,
-            database_name,
-            table_name,
-            no_file_to_copy: false,
-            from_attachment: true,
-            required_source_schema: data_schema.clone(),
-            required_values_schema,
-            values_consts: const_columns,
-            force: true,
-            stage_table_info: StageTableInfo {
-                schema: stage_schema,
-                files_info,
-                stage_info,
-                files_to_copy: Some(files_to_copy),
-                duplicated_files_detected,
-                is_select: false,
-                default_values: Some(default_values),
-                copy_into_location_options: Default::default(),
-            },
-            write_mode,
-            query: None,
-            validation_mode: ValidationMode::None,
+        // let plan = CopyIntoTablePlan {
+        //     catalog_name,
+        //     database_name,
+        //     table_name,
+        //     no_file_to_copy: false,
+        //     required_source_schema: data_schema.clone(),
+        //     required_values_schema,
+        //     values_consts: const_columns,
+        //     force: true,
+        //     source: crate::plans::AppendSource::Stage(Box::new(StageTableInfo {
+        //         schema: stage_schema,
+        //         files_info,
+        //         stage_info,
+        //         files_to_copy: Some(files_to_copy),
+        //         duplicated_files_detected,
+        //         is_select: false,
+        //         default_values: Some(default_values),
+        //         copy_into_location_options: Default::default(),
+        //     })),
+        //     enable_distributed: false,
+        // };
 
-            enable_distributed: false,
-            is_transform: false,
-        };
-
-        self.bind_copy_into_table_from_location(bind_context, plan)
-            .await
+        // self.bind_copy_into_table_from_location(bind_context, plan)
+        //     .await
+        todo!()
     }
 
     /// Bind COPY INTO <table> FROM <query>
@@ -387,93 +373,94 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        plan.collect_files(self.ctx.as_ref()).await?;
-        if plan.no_file_to_copy {
-            return Ok(Plan::CopyIntoTable(Box::new(plan)));
-        }
+        // plan.collect_files(self.ctx.as_ref()).await?;
+        // if plan.no_file_to_copy {
+        //     return Ok(Plan::CopyIntoTable(Box::new(plan)));
+        // }
 
-        let table_ctx = self.ctx.clone();
-        let (s_expr, mut from_context) = self
-            .bind_stage_table(
-                table_ctx,
-                bind_context,
-                plan.stage_table_info.stage_info.clone(),
-                plan.stage_table_info.files_info.clone(),
-                alias,
-                plan.stage_table_info.files_to_copy.clone(),
-            )
-            .await?;
+        // let stage_table_info = plan.source.as_stage().unwrap();
+        // let table_ctx = self.ctx.clone();
+        // let (s_expr, mut from_context) = self
+        //     .bind_stage_table(
+        //         table_ctx,
+        //         bind_context,
+        //         stage_table_info.stage_info.clone(),
+        //         stage_table_info.files_info.clone(),
+        //         alias,
+        //         stage_table_info.files_to_copy.clone(),
+        //     )
+        //     .await?;
 
-        // Generate an analyzed select list with from context
-        let select_list = self.normalize_select_list(&mut from_context, select_list)?;
+        // // Generate an analyzed select list with from context
+        // let select_list = self.normalize_select_list(&mut from_context, select_list)?;
 
-        for item in select_list.items.iter() {
-            if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
-                // in fact, if there is a join, we will stop in `check_transform_query()`
-                return Err(ErrorCode::SemanticError(
-                    "copy into table source can't contain window|aggregate|join functions"
-                        .to_string(),
-                ));
-            };
-        }
-        let (scalar_items, projections) = self.analyze_projection(
-            &from_context.aggregate_info,
-            &from_context.windows,
-            &select_list,
-        )?;
+        // for item in select_list.items.iter() {
+        //     if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
+        //         // in fact, if there is a join, we will stop in `check_transform_query()`
+        //         return Err(ErrorCode::SemanticError(
+        //             "copy into table source can't contain window|aggregate|join functions"
+        //                 .to_string(),
+        //         ));
+        //     };
+        // }
+        // let (scalar_items, projections) = self.analyze_projection(
+        //     &from_context.aggregate_info,
+        //     &from_context.windows,
+        //     &select_list,
+        // )?;
 
-        if projections.len() != plan.required_source_schema.num_fields() {
-            return Err(ErrorCode::BadArguments(format!(
-                "Number of columns in select list ({}) does not match that of the corresponding table ({})",
-                projections.len(),
-                plan.required_source_schema.num_fields(),
-            )));
-        }
+        // if projections.len() != plan.required_source_schema.num_fields() {
+        //     return Err(ErrorCode::BadArguments(format!(
+        //         "Number of columns in select list ({}) does not match that of the corresponding table ({})",
+        //         projections.len(),
+        //         plan.required_source_schema.num_fields(),
+        //     )));
+        // }
 
-        let mut s_expr =
-            self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+        // let mut s_expr =
+        //     self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite async function and udf
-        s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
+        // // rewrite async function and udf
+        // s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
-        let mut output_context = BindContext::new();
-        output_context.parent = from_context.parent;
-        output_context.columns = from_context.columns;
+        // let mut output_context = BindContext::new();
+        // output_context.parent = from_context.parent;
+        // output_context.columns = from_context.columns;
 
-        // disable variant check to allow copy invalid JSON into tables
-        let disable_variant_check = plan
-            .stage_table_info
-            .stage_info
-            .copy_options
-            .disable_variant_check;
-        if disable_variant_check {
-            let hints = Hint {
-                hints_list: vec![HintItem {
-                    name: Identifier::from_name(None, "disable_variant_check"),
-                    expr: Expr::Literal {
-                        span: None,
-                        value: Literal::UInt64(1),
-                    },
-                }],
-            };
-            if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
-                warn!(
-                    "In COPY resolve optimize hints {:?} failed, err: {:?}",
-                    hints, e
-                );
-            }
-        }
+        // // disable variant check to allow copy invalid JSON into tables
+        // let disable_variant_check = stage_table_info
+        //     .stage_info
+        //     .copy_options
+        //     .disable_variant_check;
+        // if disable_variant_check {
+        //     let hints = Hint {
+        //         hints_list: vec![HintItem {
+        //             name: Identifier::from_name(None, "disable_variant_check"),
+        //             expr: Expr::Literal {
+        //                 span: None,
+        //                 value: Literal::UInt64(1),
+        //             },
+        //         }],
+        //     };
+        //     if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
+        //         warn!(
+        //             "In COPY resolve optimize hints {:?} failed, err: {:?}",
+        //             hints, e
+        //         );
+        //     }
+        // }
 
-        plan.query = Some(Box::new(Plan::Query {
-            s_expr: Box::new(s_expr),
-            metadata: self.metadata.clone(),
-            bind_context: Box::new(output_context),
-            rewrite_kind: None,
-            ignore_result: false,
-            formatted_ast: None,
-        }));
+        // plan.source = AppendSource::Query(Box::new(Plan::Query {
+        //     s_expr: Box::new(s_expr),
+        //     metadata: self.metadata.clone(),
+        //     bind_context: Box::new(output_context),
+        //     rewrite_kind: None,
+        //     ignore_result: false,
+        //     formatted_ast: None,
+        // }));
 
-        Ok(Plan::CopyIntoTable(Box::new(plan)))
+        // Ok(Plan::CopyIntoTable(Box::new(plan)))
+        todo!()
     }
 
     #[async_backtrace::framed]

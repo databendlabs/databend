@@ -42,7 +42,6 @@ use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallProcedurePlan;
-use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateConnectionPlan;
@@ -231,9 +230,6 @@ pub enum Plan {
         s_expr: Box<SExpr>,
         need_purge: bool,
     },
-
-    // Insert
-    Insert(Box<Insert>),
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     DataMutation {
@@ -242,7 +238,9 @@ pub enum Plan {
         metadata: MetadataRef,
     },
 
-    CopyIntoTable(Box<CopyIntoTablePlan>),
+    CopyIntoTable {
+        s_expr: Box<SExpr>,
+    },
     CopyIntoLocation(CopyIntoLocationPlan),
 
     // Views
@@ -413,24 +411,25 @@ pub enum RewriteKind {
 
 impl Plan {
     pub fn kind(&self) -> QueryKind {
-        match self {
-            Plan::Query { .. } => QueryKind::Query,
-            Plan::CopyIntoTable(copy_plan) => match copy_plan.write_mode {
-                CopyIntoTableMode::Insert { .. } => QueryKind::Insert,
-                _ => QueryKind::CopyIntoTable,
-            },
-            Plan::Explain { .. }
-            | Plan::ExplainAnalyze { .. }
-            | Plan::ExplainAst { .. }
-            | Plan::ExplainSyntax { .. } => QueryKind::Explain,
-            Plan::Insert(_) => QueryKind::Insert,
-            Plan::Replace(_)
-            | Plan::DataMutation { .. }
-            | Plan::OptimizePurge(_)
-            | Plan::OptimizeCompactSegment(_)
-            | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
-            _ => QueryKind::Other,
-        }
+        // match self {
+        //     Plan::Query { .. } => QueryKind::Query,
+        //     Plan::CopyIntoTable(copy_plan) => match copy_plan.write_mode {
+        //         CopyIntoTableMode::Insert { .. } => QueryKind::Insert,
+        //         _ => QueryKind::CopyIntoTable,
+        //     },
+        //     Plan::Explain { .. }
+        //     | Plan::ExplainAnalyze { .. }
+        //     | Plan::ExplainAst { .. }
+        //     | Plan::ExplainSyntax { .. } => QueryKind::Explain,
+        //     Plan::Insert(_) => QueryKind::Insert,
+        //     Plan::Replace(_)
+        //     | Plan::DataMutation { .. }
+        //     | Plan::OptimizePurge(_)
+        //     | Plan::OptimizeCompactSegment(_)
+        //     | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
+        //     _ => QueryKind::Other,
+        // }
+        todo!()
     }
 }
 
@@ -476,7 +475,7 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::DescPasswordPolicy(plan) => plan.schema(),
-            Plan::CopyIntoTable(plan) => plan.schema(),
+            // Plan::CopyIntoTable(plan) => plan.schema(),
             Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),

@@ -40,7 +40,7 @@ impl Plan {
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
-            Plan::CopyIntoTable(_) => Ok("CopyIntoTable".to_string()),
+            Plan::CopyIntoTable { .. } => Ok("CopyIntoTable".to_string()),
             Plan::CopyIntoLocation(_) => Ok("CopyIntoLocation".to_string()),
 
             // catalog
@@ -109,8 +109,6 @@ impl Plan {
             Plan::DropVirtualColumn(_) => Ok("DropVirtualColumn".to_string()),
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
 
-            // Insert
-            Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
             Plan::DataMutation { s_expr, .. } => format_merge_into(s_expr),
