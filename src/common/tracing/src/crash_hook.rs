@@ -359,6 +359,7 @@ pub fn set_crash_hook(output: File) {
             libc::SIGFPE,
             libc::SIGSYS,
             libc::SIGTRAP,
+            libc::SIGABRT,
         ]);
     };
 }
@@ -534,6 +535,7 @@ mod tests {
                         pos = new_pos;
                     }
 
+                    // eprintln!("{:?}", StackTrace::from_ips(&frames));
                     assert_eq!(sig, signal);
                     assert_eq!(crash_query_id, query_id);
                     assert!(!frames.is_empty());
