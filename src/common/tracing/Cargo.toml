@@ -12,7 +12,6 @@ test = true
 
 [dependencies]
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
-bincode = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
