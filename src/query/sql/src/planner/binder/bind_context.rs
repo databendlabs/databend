@@ -176,10 +176,12 @@ impl CteContext {
         self.m_cte_materialized_indexes.insert(cte_idx, index);
     }
 
+    // Check if the materialized cte has been bound.
     pub fn has_bound(&self, cte_idx: IndexType) -> bool {
         self.m_cte_bound_s_expr.contains_key(&cte_idx)
     }
 
+    // Merge two `CteContext` into one.
     pub fn merge(&mut self, other: CteContext) {
         let mut merged_cte_map = IndexMap::new();
         for (left_key, left_value) in self.cte_map.iter() {
@@ -197,6 +199,8 @@ impl CteContext {
             .extend(other.m_cte_materialized_indexes);
     }
 
+    // Wrap materialized cte to main plan.
+    // It will be called at the end of binding.
     pub fn wrap_m_cte(&self, mut s_expr: SExpr) -> SExpr {
         for (_, cte_info) in self.cte_map.iter().rev() {
             if !cte_info.materialized {
@@ -218,6 +222,9 @@ impl CteContext {
         s_expr
     }
 
+    // Set cte context to current `BindContext`.
+    // To make sure the last `BindContext` of the whole binding phase contains `cte context`
+    // Then we can wrap materialized cte to main plan.
     pub fn set_cte_context(&mut self, cte_context: CteContext) {
         self.cte_map = cte_context.cte_map;
         self.m_cte_bound_s_expr = cte_context.m_cte_bound_s_expr;
