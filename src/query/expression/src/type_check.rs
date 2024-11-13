@@ -187,12 +187,47 @@ pub fn check_cast<Index: ColumnIndex>(
             }
         }
 
-        Ok(Expr::Cast {
-            span,
-            is_try,
-            expr: Box::new(expr),
-            dest_type: wrapped_dest_type,
-        })
+        match (expr.data_type(), dest_type) {
+            (DataType::Null, DataType::Nullable(_))
+            | (DataType::Nullable(_), DataType::Nullable(_))
+            | (DataType::Nullable(_), _)
+            | (_, DataType::Nullable(_))
+            | (DataType::EmptyArray, DataType::Array(_))
+            | (DataType::Array(_), DataType::Array(_))
+            | (DataType::Variant, DataType::Array(_))
+            | (DataType::EmptyMap, DataType::Map(_))
+            | (DataType::Map(_), DataType::Map(_)) => Ok(Expr::Cast {
+                span,
+                is_try,
+                expr: Box::new(expr),
+                dest_type: wrapped_dest_type,
+            }),
+            (DataType::Variant, DataType::Map(box DataType::Tuple(fields_dest_ty)))
+                if fields_dest_ty.len() == 2 && fields_dest_ty[0] == DataType::String =>
+            {
+                Ok(Expr::Cast {
+                    span,
+                    is_try,
+                    expr: Box::new(expr),
+                    dest_type: wrapped_dest_type,
+                })
+            }
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
+                Ok(Expr::Cast {
+                    span,
+                    is_try,
+                    expr: Box::new(expr),
+                    dest_type: wrapped_dest_type,
+                })
+            }
+
+            (src_type, dest_type) => Err(ErrorCode::BadArguments(format!(
+                "unable to cast type `{src_type}` to type `{dest_type}`"
+            ))
+            .set_span(span)),
+        }
     }
 }
 
