@@ -215,6 +215,23 @@ impl StackTrace {
         crate::elf::LibraryManager::instance().executable_build_id()
     }
 
+    #[cfg(target_os = "linux")]
+    pub fn from_ips(frames: &[u64]) -> StackTrace {
+        let mut stack_frames = Vec::with_capacity(frames.len());
+        for frame in frames {
+            stack_frames.push(StackFrame::Ip(*frame as usize));
+        }
+
+        StackTrace {
+            frames: stack_frames,
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn from_ips(_: &[u64]) -> StackTrace {
+        StackTrace::no_capture()
+    }
+
     #[cfg(not(target_os = "linux"))]
     fn capture_frames(frames: &mut Vec<StackFrame>) {
         unsafe {

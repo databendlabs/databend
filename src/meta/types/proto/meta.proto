@@ -167,7 +167,7 @@ message ClusterStatus {
   string binary_version = 2;
   string data_version = 3;
   string endpoint = 4;
-  uint64 db_size = 5;
+  uint64 raft_log_size = 5;
   string state = 6;
   bool is_leader = 7;
   uint64 current_term = 8;
@@ -180,7 +180,7 @@ message ClusterStatus {
   repeated string voters = 15;
   repeated string non_voters = 16;
   uint64 last_seq = 17;
-  uint64 key_num = 18;
+  uint64 snapshot_key_count = 18;
 }
 
 message ClientInfo {

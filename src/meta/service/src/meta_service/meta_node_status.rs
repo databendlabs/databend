@@ -32,11 +32,11 @@ pub struct MetaNodeStatus {
     /// The raft service endpoint for internal communication
     pub endpoint: String,
 
-    /// The size in bytes of the on disk data.
-    pub db_size: u64,
+    /// The size in bytes of the raft-log on disk data.
+    pub raft_log_size: u64,
 
-    /// key number of current snapshot
-    pub key_num: u64,
+    /// Total number of keys in current snapshot
+    pub snapshot_key_count: u64,
 
     /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,

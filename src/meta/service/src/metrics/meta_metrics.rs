@@ -52,8 +52,8 @@ pub mod server_metrics {
         node_is_health: Gauge,
         leader_changes: Counter,
         applying_snapshot: Gauge,
-        snapshot_key_num: Gauge,
-        db_size: Gauge,
+        snapshot_key_count: Gauge,
+        raft_log_size: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
         current_term: Gauge,
@@ -73,8 +73,8 @@ pub mod server_metrics {
                 node_is_health: Gauge::default(),
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
-                snapshot_key_num: Gauge::default(),
-                db_size: Gauge::default(),
+                snapshot_key_count: Gauge::default(),
+                raft_log_size: Gauge::default(),
                 last_log_index: Gauge::default(),
                 last_seq: Gauge::default(),
                 current_term: Gauge::default(),
@@ -109,11 +109,15 @@ pub mod server_metrics {
                 metrics.applying_snapshot.clone(),
             );
             registry.register(
-                key!("snapshot_key_num"),
-                "snapshot key numbers",
-                metrics.snapshot_key_num.clone(),
+                key!("snapshot_key_count"),
+                "number of keys in the last snapshot",
+                metrics.snapshot_key_count.clone(),
             );
-            registry.register(key!("db_size"), "db size", metrics.db_size.clone());
+            registry.register(
+                key!("raft_log_size"),
+                "the size in bytes of the on disk data of raft log",
+                metrics.raft_log_size.clone(),
+            );
             registry.register(
                 key!("proposals_applied"),
                 "proposals applied",
@@ -174,12 +178,12 @@ pub mod server_metrics {
         SERVER_METRICS.applying_snapshot.inc_by(cnt);
     }
 
-    pub fn set_snapshot_key_num(snapshot_key_num: u64) {
-        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num as i64);
+    pub fn set_snapshot_key_count(n: u64) {
+        SERVER_METRICS.snapshot_key_count.set(n as i64);
     }
 
-    pub fn set_db_size(db_size: u64) {
-        SERVER_METRICS.db_size.set(db_size as i64);
+    pub fn set_raft_log_size(raft_log_size: u64) {
+        SERVER_METRICS.raft_log_size.set(raft_log_size as i64);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {
