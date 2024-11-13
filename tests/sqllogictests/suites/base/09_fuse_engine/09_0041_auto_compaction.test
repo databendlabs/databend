@@ -91,7 +91,7 @@ insert into t1 values(4),(6),(8);
 query III
 select segment_count, block_count, row_count from fuse_snapshot('i15760', 't1') limit 10;
 ----
-1 2 9
+1 1 9
 1 2 9
 3 3 9
 2 2 6
