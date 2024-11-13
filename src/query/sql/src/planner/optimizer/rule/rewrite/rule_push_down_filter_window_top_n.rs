@@ -16,21 +16,28 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::ComparisonOp;
+use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
+use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::Window;
 use crate::plans::WindowFuncType;
+use crate::MetadataRef;
 
 /// Input:  Filter
 ///           \
@@ -45,13 +52,15 @@ use crate::plans::WindowFuncType;
 ///              Sort(top n)
 pub struct RulePushDownFilterWindowTopN {
     id: RuleID,
+    metadata: MetadataRef,
     matchers: Vec<Matcher>,
 }
 
 impl RulePushDownFilterWindowTopN {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterWindowRank,
+            metadata,
             matchers: vec![Matcher::MatchOp {
                 op_type: RelOp::Filter,
                 children: vec![Matcher::MatchOp {
@@ -93,7 +102,22 @@ impl Rule for RulePushDownFilterWindowTopN {
         };
 
         if top_n == 0 {
-            // TODO
+            let output_columns = s_expr
+                .plan()
+                .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
+                .output_columns
+                .clone();
+            let metadata = self.metadata.read();
+            let mut columns = output_columns.iter().copied().collect::<Vec<_>>();
+            columns.sort();
+            let fields = columns
+                .into_iter()
+                .map(|col| DataField::new(&col.to_string(), metadata.column(col).data_type()))
+                .collect::<Vec<_>>();
+            let empty_scan =
+                ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
+            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            state.add_result(result);
             return Ok(());
         }
 
