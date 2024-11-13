@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::fs::File;
-use std::io::BufRead;
+use std::io::Read;
 use std::io::Write;
 use std::os::fd::FromRawFd;
 use std::os::fd::IntoRawFd;
@@ -24,12 +24,19 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::time::Duration;
 
-use backtrace::Backtrace;
-use backtrace::BacktraceFrame;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::StackTrace;
 
-use crate::panic_hook::captures_frames;
+const BUFFER_SIZE: usize = {
+    size_of::<i32>() // sig
+        + size_of::<i32>() // si_code
+        + size_of::<u64>()  // si_addr
+        + size_of::<u64>()  // current query id length
+        + 36 // max query id length, example: a9ef0b3f-b3a1-4759-b129-e1bcf3a551c0
+        + size_of::<u64>()  // frame length
+        + size_of::<u64>() * 50 // max frames ip size
+};
 
 struct CrashHandler {
     write_file: File,
@@ -41,61 +48,80 @@ impl CrashHandler {
     }
 
     pub fn recv_signal(&mut self, sig: i32, info: *mut libc::siginfo_t, _uc: *mut libc::c_void) {
-        let mut writer = std::io::BufWriter::new(&mut self.write_file);
+        let mut buffer = [0_u8; BUFFER_SIZE];
+
+        let mut pos = 0;
+
+        fn write_i32(buf: &mut [u8], v: i32, mut pos: usize) -> usize {
+            for x in v.to_le_bytes() {
+                buf[pos] = x;
+                pos += 1;
+            }
+
+            pos
+        }
+
+        fn write_u64(buf: &mut [u8], v: u64, mut pos: usize) -> usize {
+            for x in v.to_le_bytes() {
+                buf[pos] = x;
+                pos += 1;
+            }
+
+            pos
+        }
+
+        fn write_string(buf: &mut [u8], v: &str, mut pos: usize, max_length: usize) -> usize {
+            let bytes = v.as_bytes();
+            let length = std::cmp::min(bytes.len(), max_length);
+            pos = write_u64(buf, length as u64, pos);
+
+            #[allow(clippy::needless_range_loop)]
+            for index in 0..length {
+                buf[pos] = bytes[index];
+                pos += 1;
+            }
+
+            pos
+        }
+
         let current_query_id = match ThreadTracker::query_id() {
             None => "Unknown",
             Some(query_id) => query_id,
         };
 
-        bincode::serde::encode_into_std_write(sig, &mut writer, bincode::config::standard())
-            .unwrap();
+        pos = write_i32(&mut buffer, sig, pos);
+        pos = write_i32(&mut buffer, unsafe { (*info).si_code }, pos);
+        pos = write_u64(&mut buffer, unsafe { (*info).si_addr() as u64 }, pos);
+        pos = write_string(&mut buffer, current_query_id, pos, 36);
 
-        bincode::serde::encode_into_std_write(
-            unsafe { (*info).si_code },
-            &mut writer,
-            bincode::config::standard(),
-        )
-        .unwrap();
+        let mut frames_len = 0;
+        let mut frames = [0_u64; 50];
 
-        bincode::serde::encode_into_std_write(
-            unsafe { (*info).si_addr() as usize },
-            &mut writer,
-            bincode::config::standard(),
-        )
-        .unwrap();
-
-        bincode::serde::encode_into_std_write(
-            std::thread::current().id().as_u64(),
-            &mut writer,
-            bincode::config::standard(),
-        )
-        .unwrap();
-
-        bincode::serde::encode_into_std_write(
-            current_query_id,
-            &mut writer,
-            bincode::config::standard(),
-        )
-        .unwrap();
-
-        let mut frames = Vec::with_capacity(50);
-        captures_frames(&mut frames);
-
-        bincode::serde::encode_into_std_write(
-            frames.len(),
-            &mut writer,
-            bincode::config::standard(),
-        )
-        .unwrap();
-
-        writer.flush().unwrap();
-
-        for frame in frames {
-            bincode::serde::encode_into_std_write(frame, &mut writer, bincode::config::standard())
-                .unwrap();
+        unsafe {
+            backtrace::trace_unsynchronized(|frame| {
+                frames[frames_len] = frame.ip() as u64;
+                frames_len += 1;
+                frames_len < 50
+            });
         }
 
-        writer.flush().unwrap();
+        pos = write_u64(&mut buffer, frames_len as u64, pos);
+        for frame in frames {
+            pos = write_u64(&mut buffer, frame, pos);
+        }
+
+        if let Err(e) = self.write_file.write(&buffer) {
+            eprintln!("write signal pipe failure");
+            let _ = std::io::stderr().flush();
+            eprintln!("cause: {:?}", e);
+        }
+
+        if let Err(e) = self.write_file.flush() {
+            eprintln!("flush signal pipe failure");
+            let _ = std::io::stderr().flush();
+            eprintln!("cause: {:?}", e);
+        }
+
         std::thread::sleep(Duration::from_secs(4));
     }
 }
@@ -380,66 +406,70 @@ pub fn pipe_file() -> std::io::Result<(File, File)> {
     }
 }
 
+fn read_i32(buf: &[u8], pos: usize) -> (i32, usize) {
+    let bytes: [u8; 4] = buf[pos..pos + 4].try_into().expect("expect");
+    (i32::from_le_bytes(bytes), pos + 4)
+}
+
+fn read_u64(buf: &[u8], pos: usize) -> (u64, usize) {
+    let bytes: [u8; 8] = buf[pos..pos + 8].try_into().expect("expect");
+    (u64::from_le_bytes(bytes), pos + 8)
+}
+
+fn read_string(buf: &[u8], pos: usize) -> (&str, usize) {
+    unsafe {
+        let (len, pos) = read_u64(buf, pos);
+        (
+            std::str::from_utf8_unchecked(&buf[pos..pos + len as usize]),
+            pos + len as usize,
+        )
+    }
+}
+
 pub struct SignalListener;
 
 impl SignalListener {
-    pub fn spawn(file: File, crash_version: String) {
+    pub fn spawn(mut file: File, crash_version: String) {
         Thread::named_spawn(Some(String::from("SignalListener")), move || {
-            let mut reader = std::io::BufReader::new(file);
-            while let Ok(true) = reader.has_data_left() {
-                let sig: i32 =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let si_code: i32 =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let si_addr: usize =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
+            loop {
+                let mut buffer = [0_u8; BUFFER_SIZE];
 
-                let crash_thread_id: u64 =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let crash_query_id: String =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let frame_size: usize =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
+                if file.read_exact(&mut buffer).is_ok() {
+                    let pos = 0;
+                    let (sig, pos) = read_i32(&buffer, pos);
+                    let (si_code, pos) = read_i32(&buffer, pos);
+                    let (si_addr, pos) = read_u64(&buffer, pos);
+                    let (crash_query_id, pos) = read_string(&buffer, pos);
 
-                let mut frames = Vec::<BacktraceFrame>::with_capacity(frame_size);
-                for _index in 0..frame_size {
-                    frames.push(
-                        bincode::serde::decode_from_reader(
-                            &mut reader,
-                            bincode::config::standard(),
-                        )
-                        .unwrap(),
-                    );
+                    let (frames_len, mut pos) = read_u64(&buffer, pos);
+                    let mut frames = Vec::with_capacity(50);
+
+                    for _ in 0..frames_len {
+                        let (ip, new_pos) = read_u64(&buffer, pos);
+                        frames.push(ip);
+                        pos = new_pos;
+                    }
+
+                    let stack_trace = StackTrace::from_ips(&frames);
+
+                    eprintln!("{:#^80}", " Crash fault info ");
+                    eprintln!("PID: {}", std::process::id());
+                    eprintln!("Version: {}", crash_version);
+                    eprintln!("Timestamp(UTC): {}", chrono::Utc::now());
+                    eprintln!("Timestamp(Local): {}", chrono::Local::now());
+                    eprintln!("QueryId: {:?}", crash_query_id);
+                    eprintln!("{}", signal_message(sig, si_code, si_addr as usize));
+                    eprintln!("Backtrace:\n {:?}", stack_trace);
+
+                    log::error!("{:#^80}", " Crash fault info ");
+                    log::error!("PID: {}", std::process::id());
+                    log::error!("Version: {}", crash_version);
+                    log::error!("Timestamp(UTC): {}", chrono::Utc::now());
+                    log::error!("Timestamp(Local): {}", chrono::Local::now());
+                    log::error!("QueryId: {:?}", crash_query_id);
+                    log::error!("{}", signal_message(sig, si_code, si_addr as usize));
+                    log::error!("Backtrace:\n {:?}", stack_trace);
                 }
-
-                let mut backtrace = Backtrace::from(frames);
-                backtrace.resolve();
-
-                eprintln!("{:#^80}", " Crash fault info ");
-                eprintln!("PID: {}", std::process::id());
-                eprintln!("TID: {}", crash_thread_id);
-                eprintln!("Version: {}", crash_version);
-                eprintln!("Timestamp(UTC): {}", chrono::Utc::now());
-                eprintln!("Timestamp(Local): {}", chrono::Local::now());
-                eprintln!("QueryId: {:?}", crash_query_id);
-                eprintln!("{}", signal_message(sig, si_code, si_addr));
-                eprintln!("Backtrace:\n {:?}", backtrace);
-
-                log::error!("{:#^80}", " Crash fault info ");
-                log::error!("PID: {}", std::process::id());
-                log::error!("TID: {}", crash_thread_id);
-                log::error!("Version: {}", crash_version);
-                log::error!("Timestamp(UTC): {}", chrono::Utc::now());
-                log::error!("Timestamp(Local): {}", chrono::Local::now());
-                log::error!("QueryId: {:?}", crash_query_id);
-                log::error!("{}", signal_message(sig, si_code, si_addr));
-                log::error!("Backtrace:\n {:?}", backtrace);
             }
         });
     }
@@ -447,13 +477,17 @@ impl SignalListener {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
     use std::ptr::addr_of_mut;
 
-    use backtrace::BacktraceFrame;
     use databend_common_base::runtime::ThreadTracker;
 
     use crate::crash_hook::pipe_file;
+    use crate::crash_hook::read_i32;
+    use crate::crash_hook::read_string;
+    use crate::crash_hook::read_u64;
     use crate::crash_hook::sigsetjmp;
+    use crate::crash_hook::BUFFER_SIZE;
     use crate::crash_hook::TEST_JMP_BUFFER;
     use crate::set_crash_hook;
 
@@ -482,40 +516,28 @@ mod tests {
                     libc::raise(signal);
                 }
 
-                let sig: i32 =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let _si_code: i32 =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let _si_addr: usize =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
+                let mut buffer = [0_u8; BUFFER_SIZE];
 
-                let _crash_thread_id: u64 =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let crash_query_id: String =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
-                let frame_size: usize =
-                    bincode::serde::decode_from_reader(&mut reader, bincode::config::standard())
-                        .unwrap();
+                let pos = 0;
+                if reader.read_exact(&mut buffer).is_ok() {
+                    let (sig, pos) = read_i32(&buffer, pos);
+                    let (_si_code, pos) = read_i32(&buffer, pos);
+                    let (_si_addr, pos) = read_u64(&buffer, pos);
+                    let (crash_query_id, pos) = read_string(&buffer, pos);
 
-                let mut frames = Vec::<BacktraceFrame>::with_capacity(frame_size);
-                for _index in 0..frame_size {
-                    frames.push(
-                        bincode::serde::decode_from_reader(
-                            &mut reader,
-                            bincode::config::standard(),
-                        )
-                        .unwrap(),
-                    );
+                    let (frames_len, mut pos) = read_u64(&buffer, pos);
+                    let mut frames = Vec::with_capacity(50);
+
+                    for _index in 0..frames_len {
+                        let (ip, new_pos) = read_u64(&buffer, pos);
+                        frames.push(ip);
+                        pos = new_pos;
+                    }
+
+                    assert_eq!(sig, signal);
+                    assert_eq!(crash_query_id, query_id);
+                    assert!(!frames.is_empty());
                 }
-
-                assert_eq!(sig, signal);
-                assert_eq!(crash_query_id, query_id);
-                assert!(!frames.is_empty());
             }
         }
     }
