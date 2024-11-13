@@ -293,6 +293,11 @@ impl Catalog for HiveCatalog {
         Ok(res)
     }
 
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        // TODO: Implement list_databases_history
+        unimplemented!()
+    }
+
     // Get all the databases.
     #[fastrace::trace]
     #[async_backtrace::framed]

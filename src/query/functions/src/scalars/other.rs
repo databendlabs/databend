@@ -234,7 +234,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let mut builder = BinaryColumnBuilder::with_capacity(ctx.num_rows, 0);
 
             for _ in 0..ctx.num_rows {
-                let value = Uuid::new_v4();
+                let value = Uuid::now_v7();
                 write!(&mut builder.data, "{}", value).unwrap();
                 builder.commit_row();
             }
