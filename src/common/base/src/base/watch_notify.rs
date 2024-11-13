@@ -61,11 +61,16 @@ mod tests {
     #[tokio::test]
     async fn test_notify_waiters_ahead() {
         let notify = WatchNotify::new();
+
+        let notified1 = notify.notified();
+
         // notify_waiters ahead of notified being instantiated and awaited
         notify.notify_waiters();
 
         // this should not await indefinitely
-        let notified = notify.notified();
-        notified.await;
+        let notified2 = notify.notified();
+        notified2.await;
+
+        notified1.await;
     }
 }

@@ -12,26 +12,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::group_hash_columns_slice;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Exchange;
 
+use super::sort_simple::SortSimpleState;
+
 pub struct SortRangeExchange {
+    sort_desc: Arc<Vec<SortColumnDescription>>,
     num_partitions: usize,
-    init: bool,
+    state: Arc<SortSimpleState>,
 }
 
 impl Exchange for SortRangeExchange {
-    fn partition(&self, mut block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        match block.take_meta() {
-            Some(_) => {}
-            None => {}
-        };
-        todo!()
+    const NAME: &'static str = "SortRange";
+    fn partition(&self, data: DataBlock, _n: usize) -> Result<Vec<DataBlock>> {
+        let bounds = self.state.bounds().unwrap();
+        debug_assert!(bounds.num_rows() < self.num_partitions);
+
+        let max_bound = bounds.num_rows();
+        let mut indices = vec![max_bound as u32; data.num_rows()];
+        for bound_idx in 0..bounds.num_rows() {
+            let mut finish = true;
+            for (row, partition) in indices.iter_mut().enumerate() {
+                if *partition < max_bound as u32 {
+                    continue;
+                }
+                if self.cmp(&data, row, &bounds, bound_idx) == Ordering::Less {
+                    *partition = bound_idx as u32
+                }
+                finish = false
+            }
+            if finish {
+                break;
+            }
+        }
+
+        DataBlock::scatter(&data, &indices, self.num_partitions)
+    }
+}
+
+impl SortRangeExchange {
+    pub fn new(
+        num_partitions: usize,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
+        state: Arc<SortSimpleState>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            sort_desc,
+            num_partitions,
+            state,
+        })
+    }
+
+    fn cmp(&self, block: &DataBlock, row: usize, bounds: &DataBlock, bound_idx: usize) -> Ordering {
+        use databend_common_expression::Value;
+        for (i, desc) in self.sort_desc.iter().enumerate() {
+            let data = match &block.get_by_offset(desc.offset).value {
+                Value::Scalar(scalar) => scalar.as_ref(),
+                Value::Column(column) => column.index(row).unwrap(),
+            };
+            let bound = bounds
+                .get_by_offset(i)
+                .value
+                .as_column()
+                .unwrap()
+                .index(bound_idx)
+                .unwrap();
+
+            let o = data.cmp(&bound);
+            if o != Ordering::Equal {
+                return o;
+            }
+        }
+        Ordering::Equal
     }
 }

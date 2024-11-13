@@ -34,6 +34,8 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::create_transform_sort_spill;
+use crate::pipelines::processors::transforms::sort::add_range_shuffle_exchange;
+use crate::pipelines::processors::transforms::sort::add_range_shuffle_merge;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
@@ -133,9 +135,16 @@ impl PipelineBuilder {
             None => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
-                builder
-                    .remove_order_col_at_last()
-                    .build_full_sort_pipeline(&mut self.main_pipeline)
+                if true {
+                    builder
+                        .remove_order_col_at_last()
+                        .build_full_sort_pipeline(&mut self.main_pipeline)
+                } else {
+                    let k = 20;
+                    builder
+                        .remove_order_col_at_last()
+                        .build_range_shuffle_sort_pipeline(&mut self.main_pipeline, k)
+                }
             }
         }
     }
@@ -195,6 +204,25 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false)
     }
 
+    pub fn build_range_shuffle_sort_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        k: usize,
+    ) -> Result<()> {
+        add_range_shuffle_exchange(pipeline, self.sort_desc.clone(), k)?;
+
+        // Partial sort
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.sort_desc.clone(),
+            )
+        });
+
+        self.build_merge_sort(pipeline, false)?;
+        add_range_shuffle_merge(pipeline)
+    }
+
     fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {
         let enable_sort_spill = self.ctx.get_enable_sort_spill();
         if !enable_sort_spill {
@@ -224,14 +252,13 @@ impl SortPipelineBuilder {
         Ok((max_memory_usage, spill_threshold_per_core))
     }
 
-    pub fn build_merge_sort_pipeline(
-        self,
+    pub fn build_merge_sort(
+        &self,
         pipeline: &mut Pipeline,
         order_col_generated: bool,
     ) -> Result<()> {
         // Merge sort
-        let need_multi_merge = pipeline.output_len() > 1;
-        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
+        let output_order_col = pipeline.output_len() > 1 || !self.remove_order_col_at_last;
         debug_assert!(if order_col_generated {
             // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
             !output_order_col
@@ -300,12 +327,21 @@ impl SortPipelineBuilder {
                 )))
             })?;
         }
+        Ok(())
+    }
 
-        if !need_multi_merge {
-            return Ok(());
+    pub fn build_merge_sort_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        order_col_generated: bool,
+    ) -> Result<()> {
+        self.build_merge_sort(pipeline, order_col_generated)?;
+
+        if pipeline.output_len() > 1 {
+            self.build_multi_merge(pipeline)
+        } else {
+            Ok(())
         }
-
-        self.build_multi_merge(pipeline)
     }
 
     pub fn build_multi_merge(self, pipeline: &mut Pipeline) -> Result<()> {

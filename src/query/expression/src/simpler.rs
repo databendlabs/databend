@@ -170,7 +170,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add_indeces() {
+    fn test_add_indices() {
         let rng = StdRng::seed_from_u64(0);
         let k = 5;
         let core = AlgoL::new(k.try_into().unwrap(), rng);

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta;
 mod sort_exchange;
+mod sort_merge;
 mod sort_simple;
+
+pub use sort_merge::*;
+pub use sort_simple::*;
