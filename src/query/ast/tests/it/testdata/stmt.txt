@@ -13,6 +13,36 @@ ShowDatabases(
 
 
 ---------- Input ----------
+show drop databases
+---------- Output ---------
+SHOW DROP DATABASES
+---------- AST ------------
+ShowDropDatabases(
+    ShowDropDatabasesStmt {
+        catalog: None,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show drop databases like 'db%'
+---------- Output ---------
+SHOW DROP DATABASES LIKE 'db%'
+---------- AST ------------
+ShowDropDatabases(
+    ShowDropDatabasesStmt {
+        catalog: None,
+        limit: Some(
+            Like {
+                pattern: "db%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show databases format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
 SHOW DATABASES
@@ -49,7 +79,7 @@ ShowTables(
 ---------- Input ----------
 show drop tables
 ---------- Output ---------
-SHOW DROP TABLE
+SHOW DROP TABLES
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -62,7 +92,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables like 't%'
 ---------- Output ---------
-SHOW DROP TABLE LIKE 't%'
+SHOW DROP TABLES LIKE 't%'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -79,7 +109,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables where name='t'
 ---------- Output ---------
-SHOW DROP TABLE WHERE name = 't'
+SHOW DROP TABLES WHERE name = 't'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {

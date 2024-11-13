@@ -268,6 +268,7 @@ impl<'a> Binder {
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
+            Statement::ShowDropDatabases(stmt) => self.bind_show_drop_databases(bind_context, stmt).await?,
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,

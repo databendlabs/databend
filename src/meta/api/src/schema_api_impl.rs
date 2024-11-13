@@ -669,7 +669,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     name_ident: DatabaseNameIdent::new_from(db_id_list_key.clone()),
                     meta: db_meta,
                 };
-
                 dbs.insert(db_id.db_id, Arc::new(db));
             }
         }
