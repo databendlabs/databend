@@ -136,7 +136,7 @@ impl PhysicalPlanBuilder {
             is_broadcast_join = true;
         }
         let mut is_shuffle_join = false;
-        if let (
+        let conmon_data_types = if let (
             PhysicalPlan::Exchange(Exchange {
                 keys: probe_keys, ..
             }),
@@ -147,8 +147,11 @@ impl PhysicalPlanBuilder {
         {
             // Shuffle join, unify the data types of the left and right exchange keys.
             is_shuffle_join = true;
-            self.unify_keys_data_type(probe_keys, build_keys)?;
-        }
+            let conmon_data_types = self.unify_keys_data_type(probe_keys, build_keys)?;
+            Some(conmon_data_types)
+        } else {
+            None
+        };
 
         // The output schema of build and probe side.
         let (build_schema, probe_schema) =
@@ -159,7 +162,7 @@ impl PhysicalPlanBuilder {
         let mut is_null_equal = Vec::new();
         let mut probe_to_build_index = Vec::new();
         let mut runtime_filter_source_fields = Vec::new();
-        for condition in join.equi_conditions.iter() {
+        for (index, condition) in join.equi_conditions.iter().enumerate() {
             let build_condition = &condition.right;
             let probe_condition = &condition.left;
             let build_expr = build_condition
@@ -173,7 +176,14 @@ impl PhysicalPlanBuilder {
                 self.support_runtime_filter(probe_condition, build_condition)?
             {
                 let build_index = build_schema.index_of(&build_index.to_string())?;
-                runtime_filter_source_fields.push(build_schema.field(build_index).clone());
+                let build_field = build_schema.field(build_index);
+                if let Some(conmon_data_types) = &conmon_data_types {
+                    let data_type = conmon_data_types[index].clone();
+                    runtime_filter_source_fields
+                        .push(DataField::new(build_field.name(), data_type));
+                } else {
+                    runtime_filter_source_fields.push(build_field.clone());
+                }
             }
 
             if join.join_type == JoinType::Inner {
@@ -470,7 +480,8 @@ impl PhysicalPlanBuilder {
         &self,
         probe_keys: &mut [RemoteExpr],
         build_keys: &mut [RemoteExpr],
-    ) -> Result<()> {
+    ) -> Result<Vec<DataType>> {
+        let mut common_data_types = Vec::with_capacity(probe_keys.len());
         for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
             let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
             let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
@@ -501,9 +512,10 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?
             .as_remote_expr();
+            common_data_types.push(common_ty);
         }
 
-        Ok(())
+        Ok(common_data_types)
     }
 
     fn build_and_probe_output_schema(
