@@ -15,8 +15,8 @@
 use crate::arrow::array::Array;
 use crate::arrow::datatypes::Field;
 use crate::arrow::error::Result;
-use crate::arrow::io::parquet::read::create_map;
-use crate::arrow::io::parquet::read::NestedState;
+use crate::native::nested::create_map;
+use crate::native::nested::NestedState;
 use crate::native::read::deserialize::DynIter;
 
 /// An iterator adapter over [`DynIter`] assumed to be encoded as Map arrays

@@ -19,14 +19,16 @@ renew_url = "http://localhost:8000/v1/session/refresh"
 verify_url = "http://localhost:8000/v1/verify"
 auth = ("root", "")
 
+
 class GlobalCookieJar(RequestsCookieJar):
     def __init__(self):
         super().__init__()
 
     def set_cookie(self, cookie: Cookie, *args, **kwargs):
-        cookie.domain = ''
-        cookie.path = '/'
+        cookie.domain = ""
+        cookie.path = "/"
         super().set_cookie(cookie, *args, **kwargs)
+
 
 client = requests.session()
 client.cookies = GlobalCookieJar()

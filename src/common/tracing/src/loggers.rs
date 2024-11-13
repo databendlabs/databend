@@ -49,8 +49,13 @@ pub fn get_layout(format: &str) -> Layout {
     match format {
         "text" => text_layout(),
         "json" => json_layout(),
+        "identical" => identical_layout(),
         _ => unimplemented!("file logging format {format} is not supported"),
     }
+}
+
+fn identical_layout() -> Layout {
+    CustomLayout::new(|record: &Record| Ok(format!("{}\n", record.args()).into_bytes())).into()
 }
 
 fn text_layout() -> Layout {

@@ -57,8 +57,8 @@ CompoundBlockOperator(Project) × 1
         Merge to Resize × 4
           Transform Window × 1
             TransformWindowPartitionCollect × 1
-              ShuffleMergePartition × 1
-                ShufflePartition × 1
+              ShuffleMergePartition(Window) × 1
+                ShufflePartition(Window) × 1
                   DeserializeDataTransform × 1
                     SyncReadParquetDataTransform × 1
                       BlockPartitionSource × 1
@@ -79,8 +79,8 @@ CompoundBlockOperator(Project) × 1
           Merge to Resize × 4
             Transform Window × 1
               TransformWindowPartitionCollect × 1
-                ShuffleMergePartition × 1
-                  ShufflePartition × 1
+                ShuffleMergePartition(Window) × 1
+                  ShufflePartition(Window) × 1
                     DeserializeDataTransform × 1
                       SyncReadParquetDataTransform × 1
                         BlockPartitionSource × 1
@@ -367,8 +367,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -385,8 +385,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -404,8 +404,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -418,8 +418,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -432,8 +432,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -452,8 +452,8 @@ CompoundBlockOperator(Project) × 1
             Merge to Resize × 4
               Transform Window × 1
                 TransformWindowPartitionCollect × 1
-                  ShuffleMergePartition × 1
-                    ShufflePartition × 1
+                  ShuffleMergePartition(Window) × 1
+                    ShufflePartition(Window) × 1
                       DeserializeDataTransform × 1
                         SyncReadParquetDataTransform × 1
                           BlockPartitionSource × 1
@@ -471,8 +471,8 @@ CompoundBlockOperator(Project) × 1
             Merge to Resize × 4
               Transform Window × 1
                 TransformWindowPartitionCollect × 1
-                  ShuffleMergePartition × 1
-                    ShufflePartition × 1
+                  ShuffleMergePartition(Window) × 1
+                    ShufflePartition(Window) × 1
                       TransformFilter × 1
                         AddInternalColumnsTransform × 1
                           DeserializeDataTransform × 1
@@ -535,8 +535,8 @@ CompoundBlockOperator(Project) × 1
     TransformFilter × 1
       Transform Window × 1
         TransformWindowPartitionCollect × 1
-          ShuffleMergePartition × 1
-            ShufflePartition × 1
+          ShuffleMergePartition(WindowTopN) × 1
+            ShufflePartition(WindowTopN) × 1
               DeserializeDataTransform × 1
                 SyncReadParquetDataTransform × 1
                   BlockPartitionSource × 1
@@ -565,8 +565,8 @@ CompoundBlockOperator(Project) × 1
   Transform Window × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             CompoundBlockOperator(Map) × 1
               NumbersSourceTransform × 1
 

@@ -42,13 +42,10 @@ use databend_common_arrow::arrow::compute;
 use databend_common_arrow::arrow::datatypes::DataType;
 use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Schema;
-use databend_common_arrow::arrow::io::parquet::read::n_columns;
-use databend_common_arrow::arrow::io::parquet::read::ColumnDescriptor;
-use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_arrow::native::n_columns;
 use databend_common_arrow::native::read::batch_read::batch_read_array;
 use databend_common_arrow::native::read::deserialize::column_iter_to_arrays;
-use databend_common_arrow::native::read::reader::is_primitive;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::write::NativeWriter;
 use databend_common_arrow::native::write::WriteOptions;
@@ -352,14 +349,16 @@ fn create_map(size: usize, null_density: f32) -> MapArray {
 
 fn create_struct(size: usize, null_density: f32, uniq: usize) -> StructArray {
     let dt = DataType::Struct(vec![
-        Field::new("name", DataType::LargeBinary, true),
         Field::new("age", DataType::Int32, true),
+        Field::new("name", DataType::Utf8View, true),
+        Field::new("name2", DataType::LargeBinary, true),
     ]);
     StructArray::try_new(
         dt,
         vec![
-            Box::new(create_random_string(size, null_density, uniq)) as _,
             Box::new(create_random_index(size, null_density, uniq)) as _,
+            Box::new(create_random_view(size, null_density, uniq)) as _,
+            Box::new(create_random_string(size, null_density, uniq)) as _,
         ],
         None,
     )
@@ -501,14 +500,11 @@ fn test_write_read_with_options(chunk: Chunk<Box<dyn Array>>, options: WriteOpti
 
     let mut batch_metas = writer.metas.clone();
     let mut metas = writer.metas.clone();
-    let schema_descriptor = to_parquet_schema(&schema).unwrap();
-    let mut leaves = schema_descriptor.columns().to_vec();
     let mut results = Vec::with_capacity(schema.fields.len());
     for field in schema.fields.iter() {
         let n = n_columns(&field.data_type);
 
         let curr_metas: Vec<ColumnMeta> = metas.drain(..n).collect();
-        let curr_leaves: Vec<ColumnDescriptor> = leaves.drain(..n).collect();
 
         let mut native_readers = Vec::with_capacity(n);
         for curr_meta in curr_metas.iter() {
@@ -518,10 +514,8 @@ fn test_write_read_with_options(chunk: Chunk<Box<dyn Array>>, options: WriteOpti
             let native_reader = NativeReader::new(range_bytes, curr_meta.pages.clone(), vec![]);
             native_readers.push(native_reader);
         }
-        let is_nested = !is_primitive(field.data_type());
 
-        let mut array_iter =
-            column_iter_to_arrays(native_readers, curr_leaves, field.clone(), is_nested).unwrap();
+        let mut array_iter = column_iter_to_arrays(native_readers, field.clone(), vec![]).unwrap();
 
         let mut arrays = vec![];
         for array in array_iter.by_ref() {
@@ -536,14 +530,11 @@ fn test_write_read_with_options(chunk: Chunk<Box<dyn Array>>, options: WriteOpti
     assert_eq!(chunk, result_chunk);
 
     // test batch read
-    let schema_descriptor = to_parquet_schema(&schema).unwrap();
-    let mut leaves = schema_descriptor.columns().to_vec();
     let mut batch_results = Vec::with_capacity(schema.fields.len());
     for field in schema.fields.iter() {
         let n = n_columns(&field.data_type);
 
         let curr_metas: Vec<ColumnMeta> = batch_metas.drain(..n).collect();
-        let curr_leaves: Vec<ColumnDescriptor> = leaves.drain(..n).collect();
 
         let mut pages: Vec<Vec<PageMeta>> = Vec::with_capacity(n);
         let mut readers = Vec::with_capacity(n);
@@ -557,9 +548,7 @@ fn test_write_read_with_options(chunk: Chunk<Box<dyn Array>>, options: WriteOpti
 
             readers.push(reader);
         }
-        let is_nested = !is_primitive(field.data_type());
-        let batch_result =
-            batch_read_array(readers, curr_leaves, field.clone(), is_nested, pages).unwrap();
+        let batch_result = batch_read_array(readers, field.clone(), pages).unwrap();
         batch_results.push(batch_result);
     }
     let batch_result_chunk = Chunk::new(batch_results);

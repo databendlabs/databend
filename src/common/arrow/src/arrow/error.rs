@@ -81,6 +81,12 @@ impl From<simdutf8::basic::Utf8Error> for Error {
     }
 }
 
+impl From<serde_json::Error> for Error {
+    fn from(error: serde_json::Error) -> Self {
+        Error::External("".to_string(), Box::new(error))
+    }
+}
+
 impl From<std::collections::TryReserveError> for Error {
     fn from(_: std::collections::TryReserveError) -> Error {
         Error::Overflow

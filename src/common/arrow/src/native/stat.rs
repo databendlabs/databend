@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::BufRead;
+
 use crate::arrow::datatypes::Field;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Result;
@@ -61,15 +63,20 @@ pub struct DictPageBody {
 pub fn stat_simple<'a, I>(reader: I, field: Field) -> Result<ColumnInfo>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a {
     let mut pages = vec![];
+
     for compressed in reader {
-        let (_, buffer) = compressed?;
+        let (num_values, buffer) = compressed?;
 
         let mut buffer = buffer.as_slice();
         let mut opt_validity_size = None;
         if field.is_nullable {
             let validity_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
-            buffer = &buffer[4 + validity_size as usize..];
-            opt_validity_size = Some(u32::from_le_bytes(buffer[0..4].try_into().unwrap()));
+            debug_assert!(validity_size == 0 || validity_size as u64 == num_values);
+            let consume_validity_size = 4 + ((validity_size + 7) / 8) as usize;
+            buffer.consume(consume_validity_size);
+            if validity_size > 0 {
+                opt_validity_size = Some(validity_size);
+            }
         };
 
         let physical_type = field.data_type.to_physical_type();
@@ -174,6 +181,7 @@ mod test {
     use super::ColumnInfo;
     use crate::arrow::array::Array;
     use crate::arrow::array::BinaryArray;
+    use crate::arrow::array::PrimitiveArray;
     use crate::arrow::chunk::Chunk;
     use crate::arrow::datatypes::Field;
     use crate::arrow::datatypes::Schema;
@@ -225,6 +233,18 @@ mod test {
     #[test]
     fn test_stat_simple() {
         remove_all_env();
+
+        let values: Vec<Option<i64>> = (0..COLUMN_SIZE)
+            .map(|d| if d % 3 == 0 { None } else { Some(d as i64) })
+            .collect();
+        let array = Box::new(PrimitiveArray::<i64>::from_iter(values));
+        let column_info = write_and_stat_simple_column(array.clone());
+
+        assert_eq!(column_info.pages.len(), 10);
+        for p in column_info.pages {
+            assert_eq!(p.validity_size, Some(PAGE_SIZE as u32));
+        }
+
         let array = Box::new(BinaryArray::<i64>::from_iter_values(
             ["a"; COLUMN_SIZE].iter(),
         ));

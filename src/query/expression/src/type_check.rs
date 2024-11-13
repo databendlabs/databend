@@ -75,7 +75,7 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let args_expr: Vec<_> = args
+            let mut args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
@@ -84,41 +84,32 @@ pub fn check<Index: ColumnIndex>(
             // c:int16 = 12456 will be resolve as `to_int32(c) == to_int32(12456)`
             // This may hurt the bloom filter, we should try cast to literal as the datatype of column
             if name == "eq" && args_expr.len() == 2 {
-                match args_expr.as_slice() {
+                match args_expr.as_mut_slice() {
                     [
                         e,
                         Expr::Constant {
                             span,
                             scalar,
-                            data_type: src_ty,
+                            data_type,
                         },
                     ]
                     | [
                         Expr::Constant {
                             span,
                             scalar,
-                            data_type: src_ty,
+                            data_type,
                         },
                         e,
                     ] => {
-                        let src_ty = src_ty.remove_nullable();
+                        let src_ty = data_type.remove_nullable();
                         let dest_ty = e.data_type().remove_nullable();
 
                         if dest_ty.is_integer() && src_ty.is_integer() {
-                            if let Ok(scalar) =
+                            if let Ok(casted_scalar) =
                                 cast_scalar(*span, scalar.clone(), dest_ty, fn_registry)
                             {
-                                return check_function(
-                                    *span,
-                                    name,
-                                    params,
-                                    &[e.clone(), Expr::Constant {
-                                        span: *span,
-                                        data_type: scalar.as_ref().infer_data_type(),
-                                        scalar,
-                                    }],
-                                    fn_registry,
-                                );
+                                *scalar = casted_scalar;
+                                *data_type = scalar.as_ref().infer_data_type();
                             }
                         }
                     }

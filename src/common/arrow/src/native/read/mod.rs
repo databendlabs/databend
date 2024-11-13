@@ -25,10 +25,9 @@ use crate::arrow::error::Result;
 pub(crate) mod read_basic;
 use std::io::BufReader;
 
+use super::nested::InitNested;
 use super::PageMeta;
-use super::SchemaDescriptor;
 use crate::arrow::datatypes::Schema;
-use crate::arrow::io::parquet::write::to_parquet_schema;
 pub mod reader;
 
 pub trait NativeReadBuf: std::io::BufRead {
@@ -73,51 +72,33 @@ pub trait PageIterator {
 #[derive(Clone)]
 pub struct NativeColumnsReader {
     schema: Schema,
-    schema_desc: SchemaDescriptor,
 }
 
 impl NativeColumnsReader {
     pub fn new(schema: Schema) -> Result<Self> {
-        let schema_desc = to_parquet_schema(&schema)?;
-        Ok(Self {
-            schema,
-            schema_desc,
-        })
+        Ok(Self { schema })
     }
 
     /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
     pub fn column_iter_to_arrays<'a, I>(
         &self,
         readers: Vec<I>,
-        leaf_indexes: &[usize],
         field: Field,
-        is_nested: bool,
+        init: Vec<InitNested>,
     ) -> Result<ArrayIter<'a>>
     where
         I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
     {
-        let leaves = leaf_indexes
-            .iter()
-            .map(|i| self.schema_desc.columns()[*i].clone())
-            .collect();
-
-        column_iter_to_arrays(readers, leaves, field, is_nested)
+        column_iter_to_arrays(readers, field, init)
     }
 
     /// Read all pages of column at once.
     pub fn batch_read_array<R: NativeReadBuf>(
         &self,
         readers: Vec<R>,
-        leaf_indexes: &[usize],
         field: Field,
-        is_nested: bool,
         page_metas: Vec<Vec<PageMeta>>,
     ) -> Result<Box<dyn Array>> {
-        let leaves = leaf_indexes
-            .iter()
-            .map(|i| self.schema_desc.columns()[*i].clone())
-            .collect();
-
-        batch_read_array(readers, leaves, field, is_nested, page_metas)
+        batch_read_array(readers, field, page_metas)
     }
 }

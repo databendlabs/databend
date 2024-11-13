@@ -750,7 +750,7 @@ mod union;
 mod utf8;
 
 mod equal;
-mod ffi;
+
 mod fmt;
 #[doc(hidden)]
 pub mod indexable;
@@ -798,10 +798,6 @@ pub use utf8::MutableUtf8Array;
 pub use utf8::MutableUtf8ValuesArray;
 pub use utf8::Utf8Array;
 pub use utf8::Utf8ValuesIter;
-
-pub(crate) use self::ffi::offset_buffers_children_dictionary;
-pub(crate) use self::ffi::FromFfi;
-pub(crate) use self::ffi::ToFfi;
 
 /// A trait describing the ability of a struct to create itself from a iterator.
 /// This is similar to [`Extend`], but accepted the creation to error.
