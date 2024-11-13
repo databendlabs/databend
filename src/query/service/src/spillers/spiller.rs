@@ -20,7 +20,6 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
-use bytes::Bytes;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::Alignment;
@@ -410,7 +409,7 @@ impl Spiller {
         let buf = buf
             .into_data()
             .into_iter()
-            .map(|x| Bytes::from(dma_buffer_to_bytes(x)))
+            .map(dma_buffer_to_bytes)
             .collect::<Buffer>();
         let written = buf.len();
         writer.write(buf).await?;

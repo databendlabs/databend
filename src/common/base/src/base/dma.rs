@@ -706,7 +706,7 @@ mod tests {
 
     #[test]
     fn test_dma_buffer_to_bytes() {
-        let want = (0..10_u8).into_iter().collect::<Vec<_>>();
+        let want = (0..10_u8).collect::<Vec<_>>();
         let alloc = DmaAllocator::new(Alignment::new(4096).unwrap());
         let mut buf = DmaBuffer::with_capacity_in(3000, alloc);
         buf.extend_from_slice(&want);
