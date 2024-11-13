@@ -621,22 +621,22 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
         "to_date",
-        |ctx, _| {
+        |ctx, domain| {
             FunctionDomain::Domain(SimpleDomain {
-                min: calc_timestamp_to_date(-30610224000000000, ctx.jiff_tz.clone()),
-                max: calc_timestamp_to_date(253402207200000000, ctx.jiff_tz.clone()),
+                min: calc_timestamp_to_date(domain.min, ctx.jiff_tz.clone()),
+                max: calc_timestamp_to_date(domain.max, ctx.jiff_tz.clone()),
             })
         },
         eval_timestamp_to_date,
     );
     registry.register_combine_nullable_1_arg::<TimestampType, DateType, _, _>(
         "try_to_date",
-        |ctx, _| {
+        |ctx, domain| {
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(SimpleDomain {
-                    min: calc_timestamp_to_date(-30610224000000000, ctx.jiff_tz.clone()),
-                    max: calc_timestamp_to_date(253402207200000000, ctx.jiff_tz.clone()),
+                    min: calc_timestamp_to_date(domain.min, ctx.jiff_tz.clone()),
+                    max: calc_timestamp_to_date(domain.max, ctx.jiff_tz.clone()),
                 })),
             })
         },
