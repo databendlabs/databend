@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;

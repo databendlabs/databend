@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_catalog::plan::TopK;
 use databend_common_exception::Result;
 use databend_common_expression::Column;

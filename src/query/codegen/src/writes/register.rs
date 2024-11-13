@@ -606,7 +606,7 @@ pub fn codegen_register() {
                     .iter()
                     .map(|n| format!("arg{}.validity", n + 1))
                     .reduce(|acc, item| {
-                        format!("databend_common_arrow::arrow::bitmap::and(&{acc}, &{item})")
+                        format!("databend_common_column::bitmap::and(&{acc}, &{item})")
                     })
                     .unwrap();
                 let func_arg = (0..n_args)
@@ -714,7 +714,7 @@ pub fn codegen_register() {
                     .iter()
                     .map(|n| format!("arg{}.validity", n + 1))
                     .reduce(|acc, item| {
-                        format!("databend_common_arrow::arrow::bitmap::and(&{acc}, &{item})")
+                        format!("databend_common_column::bitmap::and(&{acc}, &{item})")
                     })
                     .unwrap();
                 let func_arg = (0..n_args)
@@ -733,7 +733,7 @@ pub fn codegen_register() {
                         let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let nullable_column = func({func_arg} ctx).into_column().unwrap();
-                        let combine_validity = databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+                        let combine_validity = databend_common_column::bitmap::and(&validity, &nullable_column.validity);
                         Value::Column(NullableColumn::new(nullable_column.column, combine_validity))
                     }}"
                 )

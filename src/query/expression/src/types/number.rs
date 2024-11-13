@@ -19,7 +19,7 @@ use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_base::base::OrderedFloat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;

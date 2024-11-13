@@ -14,7 +14,7 @@
 
 use bstr::ByteSlice;
 use chrono_tz::Tz;
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::types::array::ArrayColumn;

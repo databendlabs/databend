@@ -11,7 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-base = { workspace = true }
 ## Must disable feature "runtime-rng", it will make the hash results unstable in cluster
 ahash = { workspace = true, features = ["no-rng"] }

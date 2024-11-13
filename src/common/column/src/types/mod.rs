@@ -41,10 +41,8 @@ pub use bit_chunk::BitChunkIter;
 pub use bit_chunk::BitChunkOnes;
 mod index;
 pub use index::*;
-pub mod simd;
-mod view;
-pub use view::*;
 mod native;
+pub mod simd;
 pub use native::*;
 mod offset;
 pub use offset::*;
@@ -92,7 +90,7 @@ pub enum PrimitiveType {
 }
 
 mod private {
-    use crate::types::View;
+    use crate::binview::View;
 
     pub trait Sealed {}
 

@@ -23,7 +23,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
 dashmap = { workspace = true }
-databend-common-arrow = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-datavalues = { workspace = true }

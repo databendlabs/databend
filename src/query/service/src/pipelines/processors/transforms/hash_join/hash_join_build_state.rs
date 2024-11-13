@@ -20,7 +20,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_context::TableContext;
@@ -515,7 +515,7 @@ impl HashJoinBuildState {
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::String(col)) => col.current_buffer_len(),
+                    KeysState::Column(Column::String(col)) => col.total_bytes_len(),
                     KeysState::Column(
                         Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col),
                     ) => col.data().len(),

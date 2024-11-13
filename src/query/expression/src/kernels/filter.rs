@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::Utf8ViewArray;
-use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::bitmap::TrueIdxIter;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::binview::Utf8ViewColumn;
+use databend_common_column::bitmap::utils::SlicesIterator;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::bitmap::TrueIdxIter;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
@@ -344,24 +343,21 @@ impl<'a> FilterVisitor<'a> {
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 for i in iter {
                     unsafe {
-                        builder.put_and_commit(values.index_unchecked(i));
+                        builder.put_and_commit(values.value_unchecked(i));
                     }
                 }
                 builder.build()
             }
             _ => {
                 // reuse the buffers
-                let new_views = self.filter_primitive_types(values.data.views().clone());
-                let new_col = unsafe {
-                    Utf8ViewArray::new_unchecked_unknown_md(
-                        values.data.data_type().clone(),
+                let new_views = self.filter_primitive_types(values.views().clone());
+                unsafe {
+                    StringColumn::new_unchecked_unknown_md(
                         new_views,
-                        values.data.data_buffers().clone(),
-                        None,
-                        Some(values.data.total_buffer_len()),
+                        values.data_buffers().clone(),
+                        Some(values.total_buffer_len()),
                     )
-                };
-                StringColumn::new(new_col)
+                }
             }
         }
     }

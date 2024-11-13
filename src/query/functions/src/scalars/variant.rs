@@ -20,8 +20,8 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use chrono::Datelike;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::string_to_date;

@@ -225,7 +225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             | (ValueRef::Column(other), ValueRef::Scalar(true)) => Value::Column(!&other),
             (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
             (ValueRef::Column(a), ValueRef::Column(b)) => {
-                Value::Column(databend_common_arrow::arrow::bitmap::xor(&a, &b))
+                Value::Column(databend_common_column::bitmap::xor(&a, &b))
             }
         },
     );

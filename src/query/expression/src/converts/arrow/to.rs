@@ -25,7 +25,6 @@ use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
 use arrow_schema::Schema as ArrowSchema;
-use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::Result;
 
 use crate::infer_table_schema;
@@ -38,53 +37,29 @@ use crate::TableSchema;
 
 impl From<&DataSchema> for ArrowSchema {
     fn from(schema: &DataSchema) -> Self {
-        let fields = schema
-            .fields
-            .iter()
-            .map(|f| ArrowField::from(Arrow2Field::from(f)))
-            .collect::<Vec<_>>();
-        ArrowSchema {
-            fields: Fields::from(fields),
-            metadata: schema.metadata.clone().into_iter().collect(),
-        }
+        todo!("cc")
     }
 }
 
 impl From<&TableSchema> for ArrowSchema {
     fn from(schema: &TableSchema) -> Self {
-        let fields = schema
-            .fields
-            .iter()
-            .map(|f| ArrowField::from(Arrow2Field::from(f)))
-            .collect::<Vec<_>>();
-        ArrowSchema {
-            fields: Fields::from(fields),
-            metadata: schema.metadata.clone().into_iter().collect(),
-        }
+        todo!("cc")
     }
 }
 
 pub fn table_schema_to_arrow_schema(schema: &TableSchema) -> ArrowSchema {
-    let fields = schema
-        .fields
-        .iter()
-        .map(|f| ArrowField::from(Arrow2Field::from(f)))
-        .collect::<Vec<_>>();
-    ArrowSchema {
-        fields: Fields::from(fields),
-        metadata: schema.metadata.clone().into_iter().collect(),
-    }
+    todo!("cc")
 }
 
 impl From<&TableField> for ArrowField {
     fn from(field: &TableField) -> Self {
-        ArrowField::from(Arrow2Field::from(field))
+        todo!("cc")
     }
 }
 
 impl From<&DataField> for ArrowField {
     fn from(field: &DataField) -> Self {
-        ArrowField::from(Arrow2Field::from(field))
+        todo!("cc")
     }
 }
 
@@ -168,8 +143,6 @@ impl DataBlock {
 
 impl Column {
     pub fn into_arrow_rs(self) -> Arc<dyn arrow_array::Array> {
-        let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = self.as_arrow();
-        let arrow_array: Arc<dyn arrow_array::Array> = arrow2_array.into();
-        arrow_array
+        todo!("cc")
     }
 }

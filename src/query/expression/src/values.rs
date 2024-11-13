@@ -24,10 +24,11 @@ use base64::prelude::*;
 use binary::BinaryColumnBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
+use databend_common_column::iterator::ColumnAccessor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
@@ -946,7 +947,7 @@ impl Column {
             Column::Decimal(col) => Some(ScalarRef::Decimal(col.index(index)?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::Binary(col) => Some(ScalarRef::Binary(col.index(index)?)),
-            Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
+            Column::String(col) => Some(ScalarRef::String(col.value(index))),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
@@ -1025,7 +1026,9 @@ impl Column {
                 Column::Boolean(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Binary(col) => Column::Binary(col.slice(range)),
-            Column::String(col) => Column::String(col.slice(range)),
+            Column::String(col) => {
+                Column::String(col.clone().sliced(range.start, range.end - range.start))
+            }
             Column::Timestamp(col) => {
                 Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
             }
@@ -1446,7 +1449,7 @@ impl Column {
             | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col) => col.memory_size(),
-            Column::String(col) => col.len() * 8 + col.current_buffer_len(),
+            Column::String(col) => col.len() * 8 + col.total_bytes_len(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),

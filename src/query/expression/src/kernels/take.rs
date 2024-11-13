@@ -15,11 +15,10 @@
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::Utf8ViewArray;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::slice_ext::GetSaferUnchecked;
+use databend_common_column::binview::Utf8ViewColumn;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
@@ -39,7 +38,7 @@ pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
 impl DataBlock {
     pub fn take<I>(&self, indices: &[I]) -> Result<Self>
-    where I: databend_common_arrow::arrow::types::Index {
+    where I: databend_common_column::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -49,7 +48,7 @@ impl DataBlock {
     }
 
     pub fn take_with_optimize_size<I>(&self, indices: &[I]) -> Result<Self>
-    where I: databend_common_arrow::arrow::types::Index {
+    where I: databend_common_column::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -59,7 +58,7 @@ impl DataBlock {
     }
 
     fn take_inner<I>(&self, mut taker: TakeVisitor<I>) -> Result<Self>
-    where I: databend_common_arrow::arrow::types::Index {
+    where I: databend_common_column::types::Index {
         let after_columns = self
             .columns()
             .iter()
@@ -82,7 +81,7 @@ impl DataBlock {
 }
 
 struct TakeVisitor<'a, I>
-where I: databend_common_arrow::arrow::types::Index
+where I: databend_common_column::types::Index
 {
     indices: &'a [I],
     result: Option<Value<AnyType>>,
@@ -90,7 +89,7 @@ where I: databend_common_arrow::arrow::types::Index
 }
 
 impl<'a, I> TakeVisitor<'a, I>
-where I: databend_common_arrow::arrow::types::Index
+where I: databend_common_column::types::Index
 {
     fn new(indices: &'a [I]) -> Self {
         Self {
@@ -112,7 +111,7 @@ where I: databend_common_arrow::arrow::types::Index
 }
 
 impl<'a, I> ValueVisitor for TakeVisitor<'a, I>
-where I: databend_common_arrow::arrow::types::Index
+where I: databend_common_column::types::Index
 {
     fn visit_scalar(&mut self, scalar: crate::Scalar) -> Result<()> {
         self.result = Some(Value::Scalar(scalar));
@@ -251,7 +250,7 @@ where I: databend_common_arrow::arrow::types::Index
 }
 
 impl<'a, I> TakeVisitor<'a, I>
-where I: databend_common_arrow::arrow::types::Index
+where I: databend_common_column::types::Index
 {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         let col = buffer.as_slice();
@@ -285,17 +284,14 @@ where I: databend_common_arrow::arrow::types::Index
             }
             builder.build()
         } else {
-            let new_views = self.take_primitive_types(col.data.views().clone());
-            let new_col = unsafe {
-                Utf8ViewArray::new_unchecked_unknown_md(
-                    col.data.data_type().clone(),
+            let new_views = self.take_primitive_types(col.views().clone());
+            unsafe {
+                StringColumn::new_unchecked_unknown_md(
                     new_views,
-                    col.data.data_buffers().clone(),
-                    None,
-                    Some(col.data.total_buffer_len()),
+                    col.data_buffers().clone(),
+                    Some(col.total_buffer_len()),
                 )
-            };
-            StringColumn::new(new_col)
+            }
         }
     }
 }
@@ -303,11 +299,7 @@ where I: databend_common_arrow::arrow::types::Index
 impl Column {
     pub fn maybe_gc(self) -> Self {
         match self {
-            Column::String(c) => {
-                let data = c.data.maybe_gc();
-                let c = StringColumn::new(data);
-                Column::String(c)
-            }
+            Column::String(c) => Column::String(c.maybe_gc()),
             Column::Nullable(n) => {
                 let c = n.column.maybe_gc();
                 NullableColumn::new_column(c, n.validity)

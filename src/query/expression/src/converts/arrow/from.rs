@@ -17,7 +17,6 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use arrow_schema::Field;
 use arrow_schema::Schema as ArrowSchema;
-use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -39,7 +38,7 @@ impl TryFrom<&Field> for DataField {
 impl TryFrom<&Field> for TableField {
     type Error = ErrorCode;
     fn try_from(arrow_f: &Field) -> Result<TableField> {
-        TableField::try_from(&Arrow2Field::from(arrow_f))
+        todo!("cc")
     }
 }
 
@@ -50,9 +49,10 @@ impl TryFrom<&ArrowSchema> for DataSchema {
             .fields
             .iter()
             .map(|arrow_f| {
-                Ok(DataField::from(&TableField::try_from(&Arrow2Field::from(
-                    arrow_f,
-                ))?))
+                // Ok(DataField::from(&TableField::try_from(&Arrow2Field::from(
+                //     arrow_f,
+                // ))?))
+                todo!("cc")
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(DataSchema::new_from(
@@ -65,15 +65,16 @@ impl TryFrom<&ArrowSchema> for DataSchema {
 impl TryFrom<&ArrowSchema> for TableSchema {
     type Error = ErrorCode;
     fn try_from(schema: &ArrowSchema) -> Result<TableSchema> {
-        let fields = schema
-            .fields
-            .iter()
-            .map(|arrow_f| TableField::try_from(&Arrow2Field::from(arrow_f)))
-            .collect::<Result<Vec<_>>>()?;
-        Ok(TableSchema::new_from(
-            fields,
-            schema.metadata.clone().into_iter().collect(),
-        ))
+        // let fields = schema
+        //     .fields
+        //     .iter()
+        //     .map(|arrow_f| TableField::try_from(&Arrow2Field::from(arrow_f)))
+        //     .collect::<Result<Vec<_>>>()?;
+        // Ok(TableSchema::new_from(
+        //     fields,
+        //     schema.metadata.clone().into_iter().collect(),
+        // ))
+        todo!("cc")
     }
 }
 
@@ -113,7 +114,6 @@ impl DataBlock {
 
 impl Column {
     pub fn from_arrow_rs(array: Arc<dyn arrow_array::Array>, data_type: &DataType) -> Result<Self> {
-        let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = array.into();
-        Column::from_arrow(arrow2_array.as_ref(), data_type)
+        todo!("cc")
     }
 }

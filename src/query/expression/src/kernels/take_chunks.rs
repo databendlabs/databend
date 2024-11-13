@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 use string::StringColumnBuilder;

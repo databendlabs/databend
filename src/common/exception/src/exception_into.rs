@@ -107,16 +107,6 @@ impl From<std::num::TryFromIntError> for ErrorCode {
     }
 }
 
-impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::arrow::error::Error) -> Self {
-        use databend_common_arrow::arrow::error::Error;
-        match error {
-            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
-            v => ErrorCode::from_std_error(v),
-        }
-    }
-}
-
 impl From<arrow_schema::ArrowError> for ErrorCode {
     fn from(error: arrow_schema::ArrowError) -> Self {
         match error {

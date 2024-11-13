@@ -15,8 +15,8 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use memchr::memchr;
 

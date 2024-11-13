@@ -19,7 +19,7 @@ use crate::DataBlock;
 
 impl DataBlock {
     pub fn scatter<I>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>>
-    where I: databend_common_arrow::arrow::types::Index {
+    where I: databend_common_column::types::Index {
         if indices.is_empty() {
             let mut result = Vec::with_capacity(scatter_size);
             result.push(self.clone());
@@ -41,7 +41,7 @@ impl DataBlock {
     }
 
     pub fn divide_indices_by_scatter_size<I>(indices: &[I], scatter_size: usize) -> Vec<Vec<u32>>
-    where I: databend_common_arrow::arrow::types::Index {
+    where I: databend_common_column::types::Index {
         let mut scatter_indices: Vec<Vec<u32>> = Vec::with_capacity(scatter_size);
         unsafe {
             let mut scatter_num_rows = vec![0usize; scatter_size];

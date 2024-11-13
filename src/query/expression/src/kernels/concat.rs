@@ -14,11 +14,8 @@
 
 use std::iter::TrustedLen;
 
-use databend_common_arrow::arrow::array::growable::make_growable;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::BooleanArray;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use ethnum::i256;
@@ -247,33 +244,11 @@ impl Column {
         data_type: DataType,
         num_rows: usize,
     ) -> Column {
-        let arrays: Vec<Box<dyn databend_common_arrow::arrow::array::Array>> =
-            cols.map(|c| c.as_arrow()).collect();
-
-        let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();
-        let mut grow = make_growable(&arrays, false, num_rows);
-
-        for (idx, array) in arrays.iter().enumerate() {
-            grow.extend(idx, 0, array.len());
-        }
-        let array = grow.as_box();
-        Column::from_arrow(array.as_ref(), &data_type).unwrap()
+        todo!("cc")
     }
 
     pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
-        use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
-        let arrays: Vec<BooleanArray> = bitmaps
-            .map(|c| BooleanArray::new(ArrowType::Boolean, c, None))
-            .collect();
-        let arrays = arrays.iter().map(|c| c as &dyn Array).collect::<Vec<_>>();
-        let mut grow = make_growable(&arrays, false, num_rows);
-
-        for (idx, array) in arrays.iter().enumerate() {
-            grow.extend(idx, 0, array.len());
-        }
-        let array = grow.as_box();
-        let array = array.as_any().downcast_ref::<BooleanArray>().unwrap();
-        array.values().clone()
+        todo!("cc")
     }
 
     fn concat_value_types<T: ValueType>(

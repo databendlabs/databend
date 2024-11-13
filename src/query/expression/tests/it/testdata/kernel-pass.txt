@@ -26,7 +26,7 @@ Concat-Column 0:
 | 1         | UInt8 NULL     | Column(NullableColumn { column: UInt8([10, 11, 12, 13, 14]), validity: [0b___00010] })                         |
 | 2         | NULL           | Column(Null { len: 5 })                                                                                        |
 | 3         | Array(Nothing) | Column(EmptyArray { len: 5 })                                                                                  |
-| 4         | String NULL    | Column(NullableColumn { column: StringColumn { data: Utf8ViewArray[x, y, z, a, b] }, validity: [0b___00110] }) |
+| 4         | String NULL    | Column(NullableColumn { column: StringColumn { data: Utf8ViewColumn[x, y, z, a, b] }, validity: [0b___00110] }) |
 +-----------+----------------+----------------------------------------------------------------------------------------------------------------+
 Concat-Column 1:
 +-----------+----------------+-------------------------------------------------------------------------------------------------------+
@@ -36,7 +36,7 @@ Concat-Column 1:
 | 1         | UInt8 NULL     | Column(NullableColumn { column: UInt8([15, 16]), validity: [0b______10] })                            |
 | 2         | NULL           | Column(Null { len: 2 })                                                                               |
 | 3         | Array(Nothing) | Column(EmptyArray { len: 2 })                                                                         |
-| 4         | String NULL    | Column(NullableColumn { column: StringColumn { data: Utf8ViewArray[x, y] }, validity: [0b______10] }) |
+| 4         | String NULL    | Column(NullableColumn { column: StringColumn { data: Utf8ViewColumn[x, y] }, validity: [0b______10] }) |
 +-----------+----------------+-------------------------------------------------------------------------------------------------------+
 Result:
 +----------+----------+----------+----------+----------+

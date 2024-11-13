@@ -34,7 +34,6 @@ arrow-default = [
 
 [dependencies]
 ahash = { workspace = true }
-databend-common-column = { workspace = true }
 arrow-array = { workspace = true, optional = true }
 arrow-buffer = { workspace = true, optional = true }
 arrow-data = { workspace = true, optional = true }

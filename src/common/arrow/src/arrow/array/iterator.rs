@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use crate::arrow::bitmap::Bitmap;
 use crate::arrow::bitmap::TrueIdxIter;
-use std::iter::TrustedLen;
 
 mod private {
     pub trait Sealed {}

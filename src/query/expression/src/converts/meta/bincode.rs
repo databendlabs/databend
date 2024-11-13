@@ -15,8 +15,8 @@
 // DO NOT EDIT.
 // This crate keeps some legacy codes for compatibility, it's locked by bincode of meta's v3 version
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Deserializer;

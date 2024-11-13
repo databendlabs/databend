@@ -16,7 +16,7 @@ use std::any::Any;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;

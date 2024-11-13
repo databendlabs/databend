@@ -16,8 +16,8 @@ use std::alloc::Allocator;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
 use crate::hashjoin_hashtable::combine_header;

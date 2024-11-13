@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -340,12 +339,6 @@ impl DataSchema {
     #[must_use]
     pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
         Self::new_from(fields, self.meta().clone())
-    }
-
-    pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
-
-        ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 }
 

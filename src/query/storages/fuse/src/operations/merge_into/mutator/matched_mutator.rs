@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;

@@ -19,7 +19,7 @@ use std::iter::once;
 
 use ahash::HashSet;
 use ahash::HashSetExt;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

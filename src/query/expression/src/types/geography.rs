@@ -15,11 +15,11 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use std::iter::TrustedLen;
 use databend_common_exception::Result;
 use databend_common_io::geography::*;
 use databend_common_io::wkb::make_point;
@@ -296,7 +296,5 @@ impl<'a> Iterator for GeographyIterator<'a> {
         self.inner.next().map(GeographyRef)
     }
 }
-
-unsafe impl<'a> TrustedLen for GeographyIterator<'a> {}
 
 unsafe impl<'a> std::iter::TrustedLen for GeographyIterator<'a> {}

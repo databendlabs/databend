@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use either::Either;
 
 use super::specification::try_check_offsets_bounds;
@@ -27,7 +29,6 @@ use crate::arrow::error::Error;
 use crate::arrow::offset::Offset;
 use crate::arrow::offset::Offsets;
 use crate::arrow::offset::OffsetsBuffer;
-use std::iter::TrustedLen;
 
 pub(super) mod fmt;
 mod iterator;

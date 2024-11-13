@@ -18,7 +18,7 @@ use std::intrinsics::assume;
 use std::mem;
 use std::ptr;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_base::runtime::drop_guard;
 
 use crate::types::*;

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
@@ -545,7 +545,7 @@ impl BloomIndex {
     /// If it does, the bloom index for the column will not be established.
     fn check_large_string(column: &Column) -> bool {
         if let Column::String(v) = &column {
-            let bytes_per_row = v.current_buffer_len() / v.len().max(1);
+            let bytes_per_row = v.total_bytes_len() / v.len().max(1);
             if bytes_per_row > 256 {
                 return true;
             }

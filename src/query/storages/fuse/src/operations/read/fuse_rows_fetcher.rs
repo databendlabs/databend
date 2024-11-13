@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;

@@ -20,7 +20,7 @@ use std::ops::BitXor;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::DecimalDomain;

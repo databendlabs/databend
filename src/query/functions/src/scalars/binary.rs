@@ -15,7 +15,7 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::error_to_null;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::binary::BinaryColumn;
@@ -89,7 +89,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_binary_to_string(
-            |col| col.current_buffer_len() * 2,
+            |col| col.total_bytes_len() * 2,
             |val, output, _| {
                 let extra_len = val.len() * 2;
                 output.row_buffer.resize(extra_len, 0);
@@ -115,7 +115,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_base64",
         |_, _| FunctionDomain::Full,
         vectorize_binary_to_string(
-            |col| col.current_buffer_len() * 4 / 3 + col.len() * 4,
+            |col| col.total_bytes_len() * 4 / 3 + col.len() * 4,
             |val, output, _| {
                 base64::write::EncoderWriter::new(
                     &mut output.row_buffer,
@@ -190,7 +190,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {
     vectorize_binary_to_string(
-        |col| col.current_buffer_len(),
+        |col| col.total_bytes_len(),
         |val, output, ctx| {
             if let Ok(val) = simdutf8::basic::from_utf8(val) {
                 output.put_str(val);
@@ -204,7 +204,7 @@ fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Va
 
 fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
     vectorize_string_to_binary(
-        |col| col.current_buffer_len() / 2,
+        |col| col.total_bytes_len() / 2,
         |val, output, ctx| {
             let old_len = output.data.len();
             let extra_len = val.len() / 2;
@@ -219,7 +219,7 @@ fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryT
 
 fn eval_from_base64(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
     vectorize_string_to_binary(
-        |col| col.current_buffer_len() * 4 / 3 + col.len() * 4,
+        |col| col.total_bytes_len() * 4 / 3 + col.len() * 4,
         |val, output, ctx| {
             if let Err(err) = base64::Engine::decode_vec(
                 &base64::engine::general_purpose::STANDARD,

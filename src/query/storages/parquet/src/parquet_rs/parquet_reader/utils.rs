@@ -16,7 +16,7 @@ use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use databend_common_arrow::arrow::array::Arrow2Arrow;
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;

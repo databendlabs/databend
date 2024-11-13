@@ -16,7 +16,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;
@@ -589,7 +589,7 @@ fn vectorize_like(
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
             let mut builder = MutableBitmap::with_capacity(arg1.len());
-            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.current_buffer_len());
+            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.total_bytes_len());
             if let LikePattern::SurroundByPercent(searcher) = pattern_type {
                 for arg1 in arg1_iter {
                     builder.push(searcher.search(arg1.as_bytes()).is_some());
@@ -636,7 +636,7 @@ fn variant_vectorize_like(
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = VariantType::iter_column(&arg1);
 
-            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.current_buffer_len());
+            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.total_bytes_len());
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for arg1 in arg1_iter {
                 builder.push(func(arg1, &pattern_type));

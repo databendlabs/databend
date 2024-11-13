@@ -18,8 +18,16 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 #![allow(dead_code)]
 #![feature(trusted_len)]
+#![feature(try_blocks)]
 
+pub mod binary;
+pub mod binview;
 pub mod bitmap;
 pub mod buffer;
 pub mod error;
+pub mod fmt;
+pub mod iterator;
 pub mod types;
+
+#[macro_use]
+pub(crate) mod utils;
