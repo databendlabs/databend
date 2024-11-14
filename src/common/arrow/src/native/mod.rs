@@ -18,15 +18,18 @@ mod errors;
 mod util;
 
 mod compression;
+pub mod nested;
 pub use compression::CommonCompression;
 pub use compression::Compression;
-pub type SchemaDescriptor = parquet2::metadata::SchemaDescriptor;
 pub mod read;
 pub mod stat;
 pub mod write;
+pub use util::*;
 
-const ARROW_MAGIC: [u8; 6] = [b'A', b'R', b'R', b'O', b'W', b'2'];
-pub(crate) const CONTINUATION_MARKER: [u8; 4] = [0xff; 4];
+// StrawBoat = SB, haha
+const STRAWBOAT_MAGIC: [u8; 2] = [b'S', b'B'];
+const STRAWBOAT_VERSION: u16 = 2;
+pub(crate) const EOF_MARKER: [u8; 4] = [0xff; 4];
 
 #[derive(
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize,

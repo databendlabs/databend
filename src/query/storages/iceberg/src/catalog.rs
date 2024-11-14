@@ -79,6 +79,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -215,10 +216,18 @@ impl Catalog for IcebergCatalog {
         self.info.clone()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        unimplemented!()
     }
 
     #[async_backtrace::framed]
@@ -600,6 +609,10 @@ impl Catalog for IcebergCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        unimplemented!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         unimplemented!()
     }
 }

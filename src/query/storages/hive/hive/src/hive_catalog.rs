@@ -80,6 +80,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -290,6 +291,11 @@ impl Catalog for HiveCatalog {
         let hive_database: HiveDatabase = db.into();
         let res: Arc<dyn Database> = Arc::new(hive_database);
         Ok(res)
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        // TODO: Implement list_databases_history
+        unimplemented!()
     }
 
     // Get all the databases.
@@ -748,6 +754,10 @@ impl Catalog for HiveCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        unimplemented!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         unimplemented!()
     }
 }

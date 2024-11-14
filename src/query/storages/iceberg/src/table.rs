@@ -27,6 +27,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -37,10 +38,12 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
+use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
+use crate::predicate::PredicateBuilder;
 use crate::table_source::IcebergTableSource;
 use crate::IcebergCatalog;
 
@@ -200,8 +203,10 @@ impl IcebergTable {
                         .map(|v| v.name.clone()),
                 );
             }
-            // TODO: Implement filter based on iceberg-rust's scan builder.
-            // if let Some(filter) = &push_downs.filters {}
+            if let Some(filter) = &push_downs.filters {
+                let predicate = PredicateBuilder::default().build(&filter.filter);
+                scan = scan.with_filter(predicate)
+            }
         }
 
         let tasks: Vec<_> = scan
@@ -249,6 +254,16 @@ impl Table for IcebergTable {
 
     fn name(&self) -> &str {
         &self.get_table_info().name
+    }
+
+    // TODO load summary
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
+        _change_type: Option<ChangeType>,
+    ) -> Result<Option<TableStatistics>> {
+        Ok(None)
     }
 
     #[async_backtrace::framed]

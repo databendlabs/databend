@@ -16,7 +16,7 @@ use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
@@ -462,8 +462,8 @@ impl MetaService for MetaServiceImpl {
             binary_version: status.binary_version,
             data_version: status.data_version.to_string(),
             endpoint: status.endpoint,
-            db_size: status.db_size,
-            key_num: status.key_num as u64,
+            raft_log_size: status.raft_log_size,
+            snapshot_key_count: status.snapshot_key_count as u64,
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,

@@ -57,6 +57,7 @@ pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
 pub use self::geography::GeographyColumn;
 pub use self::geography::GeographyType;
+pub use self::geometry::GeometryType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableColumn;

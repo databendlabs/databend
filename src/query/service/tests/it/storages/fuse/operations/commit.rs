@@ -106,6 +106,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -482,22 +483,6 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
-        todo!()
-    }
-
-    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
-        todo!()
-    }
-
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        todo!()
-    }
-
-    fn set_lazy_mutation_delete(&self, _lazy: bool) {
-        todo!()
-    }
-
-    fn get_lazy_mutation_delete(&self) -> bool {
         todo!()
     }
 
@@ -917,6 +902,10 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        todo!()
+    }
+
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         todo!()
     }
@@ -1208,6 +1197,10 @@ impl Catalog for FakedCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        todo!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         todo!()
     }
 }

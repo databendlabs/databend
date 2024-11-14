@@ -14,12 +14,13 @@
 
 use std::io::Write;
 
-use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
+
+type MergeSlice = (usize, usize, usize);
 
 pub fn new_block(columns: &[Column]) -> DataBlock {
     let len = columns.first().map_or(1, |c| c.len());
@@ -127,7 +128,7 @@ pub fn run_scatter(file: &mut impl Write, block: &DataBlock, indices: &[u32], sc
 }
 
 pub fn run_take(file: &mut impl Write, indices: &[u32], block: &DataBlock) {
-    let result = DataBlock::take(block, indices, &mut None);
+    let result = DataBlock::take(block, indices);
 
     match result {
         Ok(result_block) => {

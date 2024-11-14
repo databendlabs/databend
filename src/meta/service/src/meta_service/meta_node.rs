@@ -113,6 +113,16 @@ pub struct MetaNode {
     pub joined_tasks: AtomicI32,
 }
 
+impl Drop for MetaNode {
+    fn drop(&mut self) {
+        info!(
+            "MetaNode(id={}, raft={}) is dropping",
+            self.sto.id,
+            self.sto.config.raft_api_advertise_host_string()
+        );
+    }
+}
+
 impl Opened for MetaNode {
     fn is_opened(&self) -> bool {
         self.sto.is_opened()
@@ -305,18 +315,9 @@ impl MetaNode {
     }
 
     /// Open or create a meta node.
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
     #[fastrace::trace]
-    pub async fn open_create(
-        config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}",
-            config, open, create
-        );
+    pub async fn open(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
+        info!("MetaNode::open, config: {:?}", config);
 
         let mut config = config.clone();
 
@@ -329,7 +330,7 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = RaftStore::open_create(&config, open, create).await?;
+        let sto = RaftStore::open(&config).await?;
 
         // config.id only used for the first time
         let self_node_id = if sto.is_opened() { sto.id } else { config.id };
@@ -346,17 +347,15 @@ impl MetaNode {
     }
 
     /// Open or create a metasrv node.
+    ///
     /// Optionally boot a single node cluster.
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
+    /// If `initialize_cluster` is `Some`, initialize the cluster as a single-node cluster.
     #[fastrace::trace]
-    pub async fn open_create_boot(
+    pub async fn open_boot(
         config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
         initialize_cluster: Option<Node>,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open_create(config, open, create).await?;
+        let mn = Self::open(config).await?;
 
         if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
@@ -448,8 +447,8 @@ impl MetaNode {
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
                 // metrics about server storage
-                server_metrics::set_db_size(meta_node.get_db_size().unwrap_or_default());
-                server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
+                server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
+                server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
 
                 last_leader = mm.current_leader;
             }
@@ -740,20 +739,12 @@ impl MetaNode {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
-            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
+            let mn = MetaNode::open(raft_conf).await?;
             mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
-        if !raft_conf.join.is_empty() {
-            // Bring up a new node, join it into a cluster
-
-            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
-            return Ok(mn);
-        }
-        // open mode
-
-        let mn = MetaNode::open_create(raft_conf, Some(()), None).await?;
+        let mn = MetaNode::open(raft_conf).await?;
         Ok(mn)
     }
 
@@ -761,7 +752,7 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[fastrace::trace]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
+        let mn = Self::open(&config.raft_config).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)
     }
@@ -826,16 +817,14 @@ impl MetaNode {
         nodes
     }
 
-    fn get_db_size(&self) -> Result<u64, MetaError> {
-        self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::Damaged(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::StorageError(se)
-        })
+    /// Get the size in bytes of the on disk files of the raft log storage.
+    async fn get_raft_log_size(&self) -> u64 {
+        self.sto.log.read().await.on_disk_size()
     }
 
-    async fn get_key_num(&self) -> u64 {
+    async fn get_snapshot_key_count(&self) -> u64 {
         self.sto
-            .try_get_snapshot_key_num()
+            .try_get_snapshot_key_count()
             .await
             .unwrap_or_default()
     }
@@ -853,8 +842,8 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let db_size = self.get_db_size()?;
-        let key_num = self.get_key_num().await;
+        let raft_log_size = self.get_raft_log_size().await;
+        let key_count = self.get_snapshot_key_count().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -871,8 +860,8 @@ impl MetaNode {
             binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
-            db_size,
-            key_num,
+            raft_log_size,
+            snapshot_key_count: key_count,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,

@@ -241,6 +241,7 @@ impl<'a> Binder {
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
+            Statement::ShowDropDatabases(stmt) => self.bind_show_drop_databases(bind_context, stmt).await?,
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
@@ -282,6 +283,7 @@ impl<'a> Binder {
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
             Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,

@@ -124,8 +124,7 @@ impl SeparatedTextDecoder {
                 Ok(())
             }
             ColumnBuilder::String(c) => {
-                c.put_str(std::str::from_utf8(data)?);
-                c.commit_row();
+                c.put_and_commit(std::str::from_utf8(data)?);
                 Ok(())
             }
             ColumnBuilder::Boolean(c) => self.read_bool(c, data),

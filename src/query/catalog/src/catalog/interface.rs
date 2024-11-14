@@ -74,6 +74,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -150,6 +151,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
+
+    // List all databases history
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get all the databases.
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
@@ -526,4 +530,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>>;
+
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()>;
 }

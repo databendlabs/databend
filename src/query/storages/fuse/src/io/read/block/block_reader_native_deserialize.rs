@@ -169,13 +169,12 @@ impl BlockReader {
 
     fn chunks_to_native_array(
         &self,
-        column_node: &ColumnNode,
+        _column_node: &ColumnNode,
         metas: Vec<&ColumnMeta>,
         chunks: Vec<&[u8]>,
-        leaf_ids: Vec<usize>,
+        _leaf_ids: Vec<usize>,
         field: ArrowField,
     ) -> Result<Box<dyn Array>> {
-        let is_nested = column_node.is_nested;
         let mut page_metas = Vec::with_capacity(chunks.len());
         let mut readers = Vec::with_capacity(chunks.len());
         for (chunk, meta) in chunks.into_iter().zip(metas.into_iter()) {
@@ -187,7 +186,7 @@ impl BlockReader {
 
         match self
             .native_columns_reader
-            .batch_read_array(readers, &leaf_ids, field, is_nested, page_metas)
+            .batch_read_array(readers, field, page_metas)
         {
             Ok(array) => Ok(array),
             Err(err) => Err(err.into()),
@@ -276,12 +275,11 @@ impl BlockReader {
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ArrayIter<'static>> {
         let field = column_node.field.clone();
-        let is_nested = column_node.is_nested;
+
         match self.native_columns_reader.column_iter_to_arrays(
             readers,
-            &column_node.leaf_indices,
             field,
-            is_nested,
+            column_node.init.clone(),
         ) {
             Ok(array_iter) => Ok(array_iter),
             Err(err) => Err(err.into()),
@@ -303,7 +301,7 @@ impl BlockReader {
         );
         let schema = ArrowSchema::from(vec![field.clone()]);
         let native_column_reader = NativeColumnsReader::new(schema)?;
-        match native_column_reader.column_iter_to_arrays(readers, &[0], field, false) {
+        match native_column_reader.column_iter_to_arrays(readers, field, vec![]) {
             Ok(array_iter) => Ok(array_iter),
             Err(err) => Err(err.into()),
         }

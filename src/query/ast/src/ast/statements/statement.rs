@@ -127,6 +127,7 @@ pub enum Statement {
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
+    ShowDropDatabases(ShowDropDatabasesStmt),
     ShowCreateDatabase(ShowCreateDatabaseStmt),
     CreateDatabase(CreateDatabaseStmt),
     DropDatabase(DropDatabaseStmt),
@@ -161,6 +162,7 @@ pub enum Statement {
     DropDictionary(DropDictionaryStmt),
     ShowCreateDictionary(ShowCreateDictionaryStmt),
     ShowDictionaries(ShowDictionariesStmt),
+    RenameDictionary(RenameDictionaryStmt),
 
     // Columns
     ShowColumns(ShowColumnsStmt),
@@ -547,6 +549,7 @@ impl Display for Statement {
             Statement::CreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::DropCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowDropDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatabase(stmt) => write!(f, "{stmt}")?,
@@ -576,6 +579,7 @@ impl Display for Statement {
             Statement::DropDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDictionaries(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,

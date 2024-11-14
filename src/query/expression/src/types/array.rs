@@ -232,6 +232,7 @@ impl<T: ValueType> ArrayColumn<T> {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
+        // We need keep the last offsets in slice
         let offsets = self
             .offsets
             .clone()

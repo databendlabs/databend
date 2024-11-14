@@ -113,6 +113,7 @@ impl DataBlock {
             .zip(arrow_schema.fields())
         {
             let column = entry.value.to_owned().into_column().unwrap();
+            let column = column.maybe_gc();
             let array = column.into_arrow_rs();
 
             // Adjust struct array names

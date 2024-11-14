@@ -77,6 +77,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -150,6 +151,11 @@ impl Catalog for SessionCatalog {
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         self.inner.get_database(tenant, db_name).await
+    }
+
+    // List all the databases history.
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        self.inner.list_databases_history(tenant).await
     }
 
     // Get all the databases.
@@ -699,6 +705,10 @@ impl Catalog for SessionCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.inner.list_dictionaries(req).await
+    }
+
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
+        self.inner.rename_dictionary(req).await
     }
 }
 

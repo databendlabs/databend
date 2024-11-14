@@ -529,6 +529,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
+    let show_drop_databases = map(
+        rule! {
+            SHOW ~ DROP ~ ( DATABASES | DATABASES ) ~ ( FROM ~ ^#ident )? ~ #show_limit?
+        },
+        |(_, _, _, opt_catalog, limit)| {
+            Statement::ShowDropDatabases(ShowDropDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                limit,
+            })
+        },
+    );
+
     let show_create_database = map(
         rule! {
             SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #dot_separated_idents_1_to_2
@@ -1015,6 +1028,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 dictionary_name,
+            })
+        },
+    );
+    let rename_dictionary = map(
+        rule! {
+            RENAME ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
+        },
+        |(
+            _,
+            _,
+            opt_if_exists,
+            (catalog, database, dictionary),
+            _,
+            (new_catalog, new_database, new_dictionary),
+        )| {
+            Statement::RenameDictionary(RenameDictionaryStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                dictionary,
+                new_catalog,
+                new_database,
+                new_dictionary,
             })
         },
     );
@@ -2261,6 +2297,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+            | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
             | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
@@ -2336,6 +2373,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
             | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
             | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
+            | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
         ),
         // view,index
         rule!(

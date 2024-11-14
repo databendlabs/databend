@@ -61,10 +61,11 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 20] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
     "catalogs",
     "columns",
     "databases",
+    "databases_with_history",
     "dictionaries",
     "tables",
     "views",
@@ -708,6 +709,7 @@ impl AccessChecker for PrivilegeAccess {
             } => {
                 match rewrite_kind {
                     Some(RewriteKind::ShowDatabases)
+                    | Some(RewriteKind::ShowDropDatabases)
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowUserFunctions)
@@ -1021,7 +1023,8 @@ impl AccessChecker for PrivilegeAccess {
             // Dictionary
             Plan::ShowCreateDictionary(_)
             | Plan::CreateDictionary(_)
-            | Plan::DropDictionary(_) => {
+            | Plan::DropDictionary(_)
+            | Plan::RenameDictionary(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }

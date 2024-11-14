@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parquet2::metadata::ColumnDescriptor;
-
 use super::array::*;
 use super::NativeReadBuf;
 use crate::arrow::array::*;
@@ -22,56 +20,17 @@ use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::Field;
 use crate::arrow::datatypes::PhysicalType;
 use crate::arrow::error::Result;
-use crate::arrow::io::parquet::read::create_list;
-use crate::arrow::io::parquet::read::create_map;
-use crate::arrow::io::parquet::read::n_columns;
-use crate::arrow::io::parquet::read::InitNested;
-use crate::arrow::io::parquet::read::NestedState;
+use crate::native::nested::create_list;
+use crate::native::nested::create_map;
+use crate::native::nested::create_struct;
+use crate::native::nested::InitNested;
+use crate::native::nested::NestedState;
+use crate::native::util::n_columns;
 use crate::native::PageMeta;
-
-pub fn read_simple<R: NativeReadBuf>(
-    reader: &mut R,
-    field: Field,
-    page_metas: Vec<PageMeta>,
-) -> Result<Box<dyn Array>> {
-    use PhysicalType::*;
-
-    let is_nullable = field.is_nullable;
-    let data_type = field.data_type().clone();
-
-    match data_type.to_physical_type() {
-        Null => read_null(data_type, page_metas),
-        Boolean => read_boolean(reader, is_nullable, data_type, page_metas),
-        Primitive(primitive) => with_match_integer_double_type!(primitive,
-        |$T| {
-            read_integer::<$T, _>(
-                reader,
-                is_nullable,
-                data_type,
-                page_metas,
-            )
-        },
-        |$T| {
-            read_double::<$T, _>(
-                reader,
-                is_nullable,
-                data_type,
-                page_metas,
-            )
-        }),
-        Binary | Utf8 => read_binary::<i32, _>(reader, is_nullable, data_type, page_metas),
-        LargeBinary | LargeUtf8 => {
-            read_binary::<i64, _>(reader, is_nullable, data_type, page_metas)
-        }
-        FixedSizeBinary => unimplemented!(),
-        _ => unreachable!(),
-    }
-}
 
 pub fn read_nested<R: NativeReadBuf>(
     mut readers: Vec<R>,
     field: Field,
-    mut leaves: Vec<ColumnDescriptor>,
     mut init: Vec<InitNested>,
     mut page_metas: Vec<Vec<PageMeta>>,
 ) -> Result<Vec<(NestedState, Box<dyn Array>)>> {
@@ -84,7 +43,6 @@ pub fn read_nested<R: NativeReadBuf>(
             read_nested_boolean(
                 &mut readers.pop().unwrap(),
                 field.data_type().clone(),
-                leaves.pop().unwrap(),
                 init,
                 page_metas.pop().unwrap(),
             )?
@@ -95,7 +53,6 @@ pub fn read_nested<R: NativeReadBuf>(
             read_nested_integer::<$T, _>(
                 &mut readers.pop().unwrap(),
                 field.data_type().clone(),
-                leaves.pop().unwrap(),
                 init,
                 page_metas.pop().unwrap(),
             )?
@@ -105,7 +62,6 @@ pub fn read_nested<R: NativeReadBuf>(
             read_nested_primitive::<$T, _>(
                 &mut readers.pop().unwrap(),
                 field.data_type().clone(),
-                leaves.pop().unwrap(),
                 init,
                 page_metas.pop().unwrap(),
             )?
@@ -116,17 +72,26 @@ pub fn read_nested<R: NativeReadBuf>(
             read_nested_binary::<i32, _>(
                 &mut readers.pop().unwrap(),
                 field.data_type().clone(),
-                leaves.pop().unwrap(),
                 init,
                 page_metas.pop().unwrap(),
             )?
         }
+
+        BinaryView | Utf8View => {
+            init.push(InitNested::Primitive(field.is_nullable));
+            read_nested_view_array::<_>(
+                &mut readers.pop().unwrap(),
+                field.data_type().clone(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
+
         LargeBinary | LargeUtf8 => {
             init.push(InitNested::Primitive(field.is_nullable));
             read_nested_binary::<i64, _>(
                 &mut readers.pop().unwrap(),
                 field.data_type().clone(),
-                leaves.pop().unwrap(),
                 init,
                 page_metas.pop().unwrap(),
             )?
@@ -138,8 +103,7 @@ pub fn read_nested<R: NativeReadBuf>(
             | DataType::LargeList(inner)
             | DataType::FixedSizeList(inner, _) => {
                 init.push(InitNested::List(field.is_nullable));
-                let results =
-                    read_nested(readers, inner.as_ref().clone(), leaves, init, page_metas)?;
+                let results = read_nested(readers, inner.as_ref().clone(), init, page_metas)?;
                 let mut arrays = Vec::with_capacity(results.len());
                 for (mut nested, values) in results {
                     let array = create_list(field.data_type().clone(), &mut nested, values);
@@ -149,8 +113,7 @@ pub fn read_nested<R: NativeReadBuf>(
             }
             DataType::Map(inner, _) => {
                 init.push(InitNested::List(field.is_nullable));
-                let results =
-                    read_nested(readers, inner.as_ref().clone(), leaves, init, page_metas)?;
+                let results = read_nested(readers, inner.as_ref().clone(), init, page_metas)?;
                 let mut arrays = Vec::with_capacity(results.len());
                 for (mut nested, values) in results {
                     let array = create_map(field.data_type().clone(), &mut nested, values);
@@ -166,9 +129,8 @@ pub fn read_nested<R: NativeReadBuf>(
                         init.push(InitNested::Struct(field.is_nullable));
                         let n = n_columns(&f.data_type);
                         let readers = readers.drain(..n).collect();
-                        let leaves = leaves.drain(..n).collect();
                         let page_metas = page_metas.drain(..n).collect();
-                        read_nested(readers, f.clone(), leaves, init, page_metas)
+                        read_nested(readers, f.clone(), init, page_metas)
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let mut arrays = Vec::with_capacity(results[0].len());
@@ -193,22 +155,12 @@ pub fn read_nested<R: NativeReadBuf>(
 
 /// Read all pages of column at once.
 pub fn batch_read_array<R: NativeReadBuf>(
-    mut readers: Vec<R>,
-    leaves: Vec<ColumnDescriptor>,
+    readers: Vec<R>,
     field: Field,
-    is_nested: bool,
-    mut page_metas: Vec<Vec<PageMeta>>,
+    page_metas: Vec<Vec<PageMeta>>,
 ) -> Result<Box<dyn Array>> {
-    if is_nested {
-        let results = read_nested(readers, field, leaves, vec![], page_metas)?;
-        let arrays: Vec<&dyn Array> = results.iter().map(|(_, v)| v.as_ref()).collect();
-        let array = concatenate(&arrays).unwrap();
-        Ok(array)
-    } else {
-        read_simple(
-            &mut readers.pop().unwrap(),
-            field,
-            page_metas.pop().unwrap(),
-        )
-    }
+    let results = read_nested(readers, field, vec![], page_metas)?;
+    let arrays: Vec<&dyn Array> = results.iter().map(|(_, v)| v.as_ref()).collect();
+    let array = concatenate(&arrays).unwrap();
+    Ok(array)
 }

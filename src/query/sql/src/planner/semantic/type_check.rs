@@ -38,6 +38,7 @@ use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::Weekday as ASTWeekday;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
@@ -1045,6 +1046,15 @@ impl<'a> TypeChecker<'a> {
             Expr::DateTrunc {
                 span, unit, date, ..
             } => self.resolve_date_trunc(*span, date, unit)?,
+            Expr::LastDay {
+                span, unit, date, ..
+            } => self.resolve_last_day(*span, date, unit)?,
+            Expr::PreviousDay {
+                span, unit, date, ..
+            } => self.resolve_previous_or_next_day(*span, date, unit, true)?,
+            Expr::NextDay {
+                span, unit, date, ..
+            } => self.resolve_previous_or_next_day(*span, date, unit, false)?,
             Expr::Trim {
                 span,
                 expr,
@@ -2736,13 +2746,16 @@ impl<'a> TypeChecker<'a> {
             params: params.clone(),
             args: arguments,
         };
+
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
         // the implicitly casted literal values, e.g. `timestamp > '2001-01-01'`
         // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
-        let folded_args = match &expr {
+        // Note: check function may reorder the args
+
+        let mut folded_args = match &expr {
             databend_common_expression::Expr::FunctionCall {
                 args: checked_args, ..
             } => {
@@ -2768,6 +2781,15 @@ impl<'a> TypeChecker<'a> {
 
         if let Some(constant) = self.try_fold_constant(&expr) {
             return Ok(constant);
+        }
+
+        // reorder
+        if func_name == "eq"
+            && folded_args.len() == 2
+            && matches!(folded_args[0], ScalarExpr::ConstantExpr(_))
+            && !matches!(folded_args[1], ScalarExpr::ConstantExpr(_))
+        {
+            folded_args.swap(0, 1);
         }
 
         Ok(Box::new((
@@ -2964,6 +2986,59 @@ impl<'a> TypeChecker<'a> {
             }
             _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second]".to_string()).set_span(span)),
         }
+    }
+
+    pub fn resolve_last_day(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        kind: &ASTIntervalKind,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        match kind {
+            ASTIntervalKind::Year => {
+                self.resolve_function(span, "to_last_of_year", vec![], &[date])
+            }
+            ASTIntervalKind::Quarter => {
+                self.resolve_function(span, "to_last_of_quarter", vec![], &[date])
+            }
+            ASTIntervalKind::Month => {
+                self.resolve_function(span, "to_last_of_month", vec![], &[date])
+            }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_last_of_week", vec![], &[date])
+            }
+            _ => Err(ErrorCode::SemanticError(
+                "Only these interval types are currently supported: [year, quarter, month, week]"
+                    .to_string(),
+            )
+            .set_span(span)),
+        }
+    }
+
+    pub fn resolve_previous_or_next_day(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        weekday: &ASTWeekday,
+        is_previous: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let prefix = if is_previous {
+            "to_previous_"
+        } else {
+            "to_next_"
+        };
+
+        let func_name = match weekday {
+            ASTWeekday::Monday => format!("{}monday", prefix),
+            ASTWeekday::Tuesday => format!("{}tuesday", prefix),
+            ASTWeekday::Wednesday => format!("{}wednesday", prefix),
+            ASTWeekday::Thursday => format!("{}thursday", prefix),
+            ASTWeekday::Friday => format!("{}friday", prefix),
+            ASTWeekday::Saturday => format!("{}saturday", prefix),
+            ASTWeekday::Sunday => format!("{}sunday", prefix),
+        };
+
+        self.resolve_function(span, &func_name, vec![], &[date])
     }
 
     pub fn resolve_subquery(

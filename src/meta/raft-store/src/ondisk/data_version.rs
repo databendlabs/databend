@@ -37,6 +37,9 @@ pub enum DataVersion {
 
     /// Store snapshot in rotbl.
     V003,
+
+    /// WAL based raft-log.
+    V004,
 }
 
 impl fmt::Debug for DataVersion {
@@ -51,8 +54,8 @@ impl fmt::Debug for DataVersion {
                 "V001(2023-05-15: Get rid of compat, use only openraft v08 data types)"
             ),
             Self::V002 => write!(f, "V002(2023-07-22: Store snapshot in a file)"),
-            // TODO(rotbl): udpate the date when merged.
-            Self::V003 => write!(f, "V003(2024-05-31: Store snapshot in rotbl)"),
+            Self::V003 => write!(f, "V003(2024-06-27: Store snapshot in rotbl)"),
+            Self::V004 => write!(f, "V004(2024-11-11: WAL based raft-log)"),
         }
     }
 }
@@ -64,6 +67,7 @@ impl fmt::Display for DataVersion {
             Self::V001 => write!(f, "V001"),
             Self::V002 => write!(f, "V002"),
             Self::V003 => write!(f, "V003"),
+            Self::V004 => write!(f, "V004"),
         }
     }
 }
@@ -75,7 +79,8 @@ impl DataVersion {
             Self::V0 => Some(Self::V001),
             Self::V001 => Some(Self::V002),
             Self::V002 => Some(Self::V003),
-            Self::V003 => None,
+            Self::V003 => Some(Self::V004),
+            Self::V004 => None,
         }
     }
 
@@ -91,6 +96,7 @@ impl DataVersion {
             Self::V001 => Self::V0,
             Self::V002 => Self::V001,
             Self::V003 => Self::V002,
+            Self::V004 => Self::V002,
         }
     }
 

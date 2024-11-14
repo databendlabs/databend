@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       build_profile:
-        description: 'Build profile, debug or release'
+        description: "Build profile, debug or release"
         type: string
         required: true
-        default: 'debug'
+        default: "debug"
       runner_provider:
-        description: 'Self-hosted runner provider, aws or gcp'
+        description: "Self-hosted runner provider, aws or gcp"
         type: string
         required: true
-        default: 'aws'
+        default: "aws"
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -32,6 +32,8 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         timeout-minutes: 60
+        env:
+          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}

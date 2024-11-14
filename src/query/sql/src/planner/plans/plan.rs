@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRefExt;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
+use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
@@ -372,6 +373,7 @@ pub enum Plan {
     CreateDictionary(Box<CreateDictionaryPlan>),
     DropDictionary(Box<DropDictionaryPlan>),
     ShowCreateDictionary(Box<ShowCreateDictionaryPlan>),
+    RenameDictionary(Box<RenameDictionaryPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -387,6 +389,7 @@ pub enum RewriteKind {
 
     ShowCatalogs,
     ShowDatabases,
+    ShowDropDatabases,
     ShowTables(String, String),
     ShowColumns(String, String, String),
     ShowTablesStatus,
