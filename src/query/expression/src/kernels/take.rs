@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
 use databend_common_base::slice_ext::GetSaferUnchecked;
-use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;

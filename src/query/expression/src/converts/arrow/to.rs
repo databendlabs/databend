@@ -26,7 +26,6 @@ use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::buffer_to_array_data;
-use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
 use super::ARROW_EXT_TYPE_BITMAP;
@@ -37,12 +36,9 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
 use crate::types::DataType;
-use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::GeographyColumn;
-use crate::types::NumberColumn;
 use crate::types::NumberDataType;
-use crate::types::F32;
 use crate::with_number_type;
 use crate::Column;
 use crate::DataBlock;
@@ -132,13 +128,13 @@ impl From<&TableField> for Field {
             TableDataType::Map(ty) => {
                 let inner_ty = match ty.as_ref() {
                     TableDataType::Tuple {
-                        fields_name: _fields_name,
+                        fields_name,
                         fields_type,
                     } => {
-                        let key = TableField::new("key", *ty.clone());
+                        let key = TableField::new(&fields_name[0], fields_type[0].clone());
                         let arrow_key = Field::from(&key);
 
-                        let value = TableField::new("value", *ty.clone());
+                        let value = TableField::new(&fields_name[1], fields_type[1].clone());
                         let arrow_value = Field::from(&value);
 
                         ArrowDataType::Struct(Fields::from(vec![arrow_key, arrow_value]))
@@ -310,9 +306,10 @@ impl From<&Column> for ArrayData {
             }
             Column::Map(col) => {
                 let child_data = ArrayData::from(&col.values);
+                let offsets: Vec<i32> = col.offsets.iter().map(|x| *x as i32).collect();
                 let builder = ArrayDataBuilder::new(arrow_type)
                     .len(value.len())
-                    .buffers(vec![col.offsets.clone().into()])
+                    .buffers(vec![offsets.into()])
                     .child_data(vec![child_data]);
                 unsafe { builder.build_unchecked() }
             }

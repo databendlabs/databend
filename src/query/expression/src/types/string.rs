@@ -13,19 +13,15 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::iter::TrustedLen;
 use std::ops::Range;
 
-use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_column::binview::BinaryViewColumnBuilder;
 use databend_common_column::binview::BinaryViewColumnIter;
 use databend_common_column::binview::Utf8ViewColumn;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;

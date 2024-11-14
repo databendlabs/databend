@@ -14,7 +14,6 @@
 
 use binary::BinaryColumnBuilder;
 use databend_common_base::vec_ext::VecExt;
-use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 

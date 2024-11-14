@@ -28,7 +28,6 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
-use databend_common_column::iterator::ColumnAccessor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;

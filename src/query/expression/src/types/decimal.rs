@@ -1168,6 +1168,35 @@ impl DecimalColumn {
             .buffers(vec![buffer]);
         unsafe { builder.build_unchecked() }
     }
+
+    pub fn try_from_arrow_data(array: ArrayData) -> Result<Self> {
+        let buffer = array.buffers()[0].clone();
+        match array.data_type() {
+            arrow_schema::DataType::Decimal128(p, s) => {
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal128(buffer.into(), decimal_size))
+            }
+            arrow_schema::DataType::Decimal256(p, s) => {
+                let buffer: Buffer<databend_common_column::types::i256> = buffer.into();
+                let buffer = unsafe { std::mem::transmute::<_, Buffer<i256>>(buffer) };
+
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal256(buffer, decimal_size))
+            }
+            data_type => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported data type: {:?} into decimal column",
+                    data_type
+                )));
+            }
+        }
+    }
 }
 
 impl DecimalColumnBuilder {

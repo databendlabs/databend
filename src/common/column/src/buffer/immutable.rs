@@ -38,7 +38,7 @@ use crate::types::NativeType;
 ///
 /// # Examples
 /// ```
-/// use arrow2::buffer::Buffer;
+/// use crate::buffer::Buffer;
 ///
 /// let mut buffer: Buffer<u32> = vec![1, 2, 3].into();
 /// assert_eq!(buffer.as_ref(), [1, 2, 3].as_ref());

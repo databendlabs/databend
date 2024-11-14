@@ -138,3 +138,12 @@ impl From<BinaryColumn> for ArrayData {
         unsafe { builder.build_unchecked() }
     }
 }
+
+impl From<ArrayData> for BinaryColumn {
+    fn from(data: ArrayData) -> Self {
+        let offsets = data.buffers()[0].clone();
+        let values = data.buffers()[1].clone();
+
+        BinaryColumn::new(values.into(), offsets.into())
+    }
+}

@@ -105,6 +105,7 @@ mod private {
     impl Sealed for i128 {}
     impl Sealed for u128 {}
     impl Sealed for super::i256 {}
+    impl Sealed for ethnum::i256 {}
     impl Sealed for super::f16 {}
     impl Sealed for f32 {}
     impl Sealed for f64 {}

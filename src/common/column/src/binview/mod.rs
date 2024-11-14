@@ -585,6 +585,18 @@ impl From<BinaryViewColumn> for ArrayData {
     }
 }
 
+impl From<ArrayData> for Utf8ViewColumn {
+    fn from(data: ArrayData) -> Self {
+        let views = data.buffers()[0].clone();
+        let buffers = data.buffers()[1..]
+            .iter()
+            .map(|x| x.clone().into())
+            .collect();
+
+        unsafe { Utf8ViewColumn::new_unchecked_unknown_md(views.into(), buffers, None) }
+    }
+}
+
 // Loads (up to) the first 4 bytes of s as little-endian, padded with zeros.
 #[inline]
 fn load_prefix(s: &[u8]) -> u32 {

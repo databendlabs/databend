@@ -30,11 +30,8 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::BlockEntry;
 use crate::Column;
-use crate::ColumnBuilder;
 use crate::DataField;
-use crate::Value;
 
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
     bitmap

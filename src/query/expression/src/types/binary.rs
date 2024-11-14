@@ -13,16 +13,8 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::iter::once;
-use std::iter::TrustedLen;
-use std::marker::PhantomData;
 use std::ops::Range;
 
-use databend_common_column::buffer::Buffer;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -30,7 +22,6 @@ use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;

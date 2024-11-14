@@ -12,19 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 
+use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
+use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
-use arrow_schema::Schema as ArrowSchema;
+use arrow_schema::Schema;
+use databend_common_column::binary::BinaryColumn;
+use databend_common_column::binview::StringColumn;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::ARROW_EXT_TYPE_BITMAP;
+use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOMETRY;
+use super::ARROW_EXT_TYPE_VARIANT;
+use super::EXTENSION_KEY;
+use crate::types::ArrayColumn;
 use crate::types::DataType;
+use crate::types::DecimalColumn;
+use crate::types::DecimalDataType;
+use crate::types::DecimalSize;
+use crate::types::GeographyColumn;
+use crate::types::NullableColumn;
+use crate::types::NumberColumn;
+use crate::types::NumberDataType;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
+use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
 
@@ -38,43 +58,128 @@ impl TryFrom<&Field> for DataField {
 impl TryFrom<&Field> for TableField {
     type Error = ErrorCode;
     fn try_from(arrow_f: &Field) -> Result<TableField> {
-        todo!("cc")
+        let mut data_type = match arrow_f
+            .metadata()
+            .get(EXTENSION_KEY)
+            .map(|x| x.as_str())
+            .unwrap_or("")
+        {
+            ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
+            ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
+            ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
+            ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
+            ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
+            _ => match arrow_f.data_type() {
+                ArrowDataType::Null => TableDataType::Null,
+                ArrowDataType::Boolean => TableDataType::Boolean,
+                ArrowDataType::Int8 => TableDataType::Number(NumberDataType::Int8),
+                ArrowDataType::Int16 => TableDataType::Number(NumberDataType::Int16),
+                ArrowDataType::Int32 => TableDataType::Number(NumberDataType::Int32),
+                ArrowDataType::Int64 => TableDataType::Number(NumberDataType::Int64),
+                ArrowDataType::UInt8 => TableDataType::Number(NumberDataType::UInt8),
+                ArrowDataType::UInt16 => TableDataType::Number(NumberDataType::UInt16),
+                ArrowDataType::UInt32 => TableDataType::Number(NumberDataType::UInt32),
+                ArrowDataType::UInt64 => TableDataType::Number(NumberDataType::UInt64),
+                ArrowDataType::Float32 => TableDataType::Number(NumberDataType::Float32),
+                ArrowDataType::Float64 => TableDataType::Number(NumberDataType::Float64),
+
+                ArrowDataType::FixedSizeBinary(_)
+                | ArrowDataType::Binary
+                | ArrowDataType::LargeBinary => TableDataType::Binary,
+                ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
+                    TableDataType::String
+                }
+                ArrowDataType::Decimal128(precision, scale) => {
+                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                        precision: *precision,
+                        scale: *scale as u8,
+                    }))
+                }
+                ArrowDataType::Decimal256(precision, scale) => {
+                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                        precision: *precision,
+                        scale: *scale as u8,
+                    }))
+                }
+                ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
+                ArrowDataType::Date32 => TableDataType::Date,
+                ArrowDataType::LargeList(field) => {
+                    let inner_type = TableField::try_from(field.as_ref())?;
+                    TableDataType::Array(Box::new(inner_type.data_type))
+                }
+                ArrowDataType::Map(field, _) => {
+                    if let ArrowDataType::Struct(fields) = field.data_type() {
+                        let fields_name: Vec<String> =
+                            fields.iter().map(|f| f.name().clone()).collect();
+                        let fields_type: Vec<TableDataType> = fields
+                            .iter()
+                            .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
+                            .collect::<Result<Vec<_>>>()?;
+                        TableDataType::Map(Box::new(TableDataType::Tuple {
+                            fields_name,
+                            fields_type,
+                        }))
+                    } else {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid map field type: {:?}",
+                            field.data_type()
+                        )));
+                    }
+                }
+                ArrowDataType::Struct(fields) => {
+                    let fields_name: Vec<String> =
+                        fields.iter().map(|f| f.name().clone()).collect();
+                    let fields_type: Vec<TableDataType> = fields
+                        .iter()
+                        .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
+                        .collect::<Result<Vec<_>>>()?;
+                    TableDataType::Tuple {
+                        fields_name,
+                        fields_type,
+                    }
+                }
+                arrow_type => {
+                    return Err(ErrorCode::Internal(format!(
+                        "Unsupported Arrow type: {:?}",
+                        arrow_type
+                    )));
+                }
+            },
+        };
+        if arrow_f.is_nullable() {
+            data_type = data_type.wrap_nullable();
+        }
+        Ok(TableField::new(arrow_f.name(), data_type))
     }
 }
 
-impl TryFrom<&ArrowSchema> for DataSchema {
+impl TryFrom<&Schema> for DataSchema {
     type Error = ErrorCode;
-    fn try_from(schema: &ArrowSchema) -> Result<DataSchema> {
+    fn try_from(schema: &Schema) -> Result<DataSchema> {
         let fields = schema
-            .fields
+            .fields()
             .iter()
-            .map(|arrow_f| {
-                // Ok(DataField::from(&TableField::try_from(&Arrow2Field::from(
-                //     arrow_f,
-                // ))?))
-                todo!("cc")
-            })
+            .map(|arrow_f| DataField::try_from(arrow_f.as_ref()))
             .collect::<Result<Vec<_>>>()?;
         Ok(DataSchema::new_from(
             fields,
-            schema.metadata.clone().into_iter().collect(),
+            schema.metadata().clone().into_iter().collect(),
         ))
     }
 }
 
-impl TryFrom<&ArrowSchema> for TableSchema {
+impl TryFrom<&Schema> for TableSchema {
     type Error = ErrorCode;
-    fn try_from(schema: &ArrowSchema) -> Result<TableSchema> {
-        // let fields = schema
-        //     .fields
-        //     .iter()
-        //     .map(|arrow_f| TableField::try_from(&Arrow2Field::from(arrow_f)))
-        //     .collect::<Result<Vec<_>>>()?;
-        // Ok(TableSchema::new_from(
-        //     fields,
-        //     schema.metadata.clone().into_iter().collect(),
-        // ))
-        todo!("cc")
+    fn try_from(schema: &Schema) -> Result<TableSchema> {
+        let fields = schema
+            .fields()
+            .iter()
+            .map(|arrow_f| TableField::try_from(arrow_f.as_ref()))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(TableSchema::new_from(
+            fields,
+            schema.metadata().clone().into_iter().collect(),
+        ))
     }
 }
 
@@ -118,100 +223,128 @@ impl Column {
         Field::from(&f)
     }
 
-    pub fn from_arrow_rs(array: Arc<dyn arrow_array::Array>, data_type: &DataType) -> Result<Self> {
+    pub fn from_arrow_rs(array: ArrayRef, data_type: &DataType) -> Result<Self> {
         let column = match data_type {
             DataType::Null => Column::Null { len: array.len() },
             DataType::EmptyArray => Column::EmptyArray { len: array.len() },
             DataType::EmptyMap => Column::EmptyMap { len: array.len() },
-            DataType::Number(NumberDataType::UInt8) => Column::Number(NumberColumn::UInt8(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::UInt8Array>()
-                    .expect("Expected UInt8Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::UInt16) => Column::Number(NumberColumn::UInt16(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::UInt16Array>()
-                    .expect("Expected UInt16Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::UInt32) => Column::Number(NumberColumn::UInt32(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::UInt32Array>()
-                    .expect("Expected UInt32Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::UInt64) => Column::Number(NumberColumn::UInt64(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::UInt64Array>()
-                    .expect("Expected UInt64Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::Int8) => Column::Number(NumberColumn::Int8(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::Int8Array>()
-                    .expect("Expected Int8Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::Int16) => Column::Number(NumberColumn::Int16(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::Int16Array>()
-                    .expect("Expected Int16Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::Int32) => Column::Number(NumberColumn::Int32(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::Int32Array>()
-                    .expect("Expected Int32Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::Int64) => Column::Number(NumberColumn::Int64(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::Int64Array>()
-                    .expect("Expected Int64Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::Float32) => Column::Number(NumberColumn::Float32(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::Float32Array>()
-                    .expect("Expected Float32Array")
-                    .values()
-                    .to_vec(),
-            )),
-            DataType::Number(NumberDataType::Float64) => Column::Number(NumberColumn::Float64(
-                array
-                    .as_any()
-                    .downcast_ref::<arrow_array::Float64Array>()
-                    .expect("Expected Float64Array")
-                    .values()
-                    .to_vec(),
-            )),
-            // Add more data type conversions as needed
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported data type: {:?}",
-                    data_type
-                )));
+            DataType::Number(_ty) => {
+                let col = NumberColumn::try_from_arrow_data(array.to_data())?;
+                Column::Number(col)
             }
+            DataType::Boolean => Column::Boolean(Bitmap::from_array_data(array.to_data())),
+            DataType::String => Column::String(try_to_string_column(array)?),
+            DataType::Decimal(_) => {
+                Column::Decimal(DecimalColumn::try_from_arrow_data(array.to_data())?)
+            }
+            DataType::Timestamp => {
+                let array = arrow_cast::cast(
+                    array.as_ref(),
+                    &ArrowDataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
+                )?;
+                let buffer: Buffer<i64> = array.to_data().buffers()[0].clone().into();
+                Column::Timestamp(buffer)
+            }
+            DataType::Date => {
+                let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Date32)?;
+                let buffer: Buffer<i32> = array.to_data().buffers()[0].clone().into();
+                Column::Date(buffer)
+            }
+            DataType::Nullable(_) => {
+                let validity = match array.nulls() {
+                    Some(nulls) => Bitmap::from_null_buffer(nulls.clone()),
+                    None => Bitmap::new_constant(true, array.len()),
+                };
+                let column = Column::from_arrow_rs(array, &data_type.remove_nullable())?;
+                NullableColumn::new_column(column, validity)
+            }
+            DataType::Array(inner) => {
+                let array = array
+                    .as_any()
+                    .downcast_ref::<arrow_array::ListArray>()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Cannot downcast to ListArray from array: {:?}",
+                            array
+                        ))
+                    })?;
+                let values = Column::from_arrow_rs(array.values().clone(), inner.as_ref())?;
+                let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
+
+                let inner_col = ArrayColumn { values, offsets };
+                Column::Map(Box::new(inner_col))
+            }
+            DataType::Map(inner) => {
+                let array = array
+                    .as_any()
+                    .downcast_ref::<arrow_array::MapArray>()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Cannot downcast to MapArray from array: {:?}",
+                            array
+                        ))
+                    })?;
+                let values = Column::from_arrow_rs(array.values().clone(), inner.as_ref())?;
+                let offsets: Buffer<i32> = array.offsets().inner().inner().clone().into();
+                let offsets = offsets.into_iter().map(|x| x as u64).collect();
+
+                let inner_col = ArrayColumn { values, offsets };
+                Column::Map(Box::new(inner_col))
+            }
+            DataType::Tuple(ts) => {
+                let array = array
+                    .as_any()
+                    .downcast_ref::<arrow_array::StructArray>()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Cannot downcast to MapArray from array: {:?}",
+                            array
+                        ))
+                    })?;
+                let columns = array
+                    .columns()
+                    .iter()
+                    .zip(ts.iter())
+                    .map(|(array, ty)| Column::from_arrow_rs(array.clone(), ty))
+                    .collect::<Result<Vec<_>>>()?;
+                Column::Tuple(columns)
+            }
+
+            DataType::Binary => Column::Binary(try_to_binary_column(array)?),
+            DataType::Bitmap => Column::Bitmap(try_to_binary_column(array)?),
+            DataType::Variant => Column::Variant(try_to_binary_column(array)?),
+            DataType::Geometry => Column::Geometry(try_to_binary_column(array)?),
+            DataType::Geography => Column::Geography(GeographyColumn(try_to_binary_column(array)?)),
+            DataType::Generic(_) => unreachable!("Generic type is not supported"),
         };
 
-        Ok(Self { /* initialize with column data */ })
+        Ok(column)
     }
+}
+
+// Convert from `ArrayData` into BinaryColumn ignores the validity
+fn try_to_binary_column(array: ArrayRef) -> Result<BinaryColumn> {
+    let array = if !matches!(array.data_type(), ArrowDataType::LargeBinary) {
+        arrow_cast::cast(array.as_ref(), &ArrowDataType::LargeBinary)?
+    } else {
+        array
+    };
+
+    let data = array.to_data();
+    let offsets = data.buffers()[0].clone();
+    let values = data.buffers()[1].clone();
+
+    Ok(BinaryColumn::new(values.into(), offsets.into()))
+}
+
+// Convert from `ArrayData` into BinaryColumn ignores the validity
+fn try_to_string_column(array: ArrayRef) -> Result<StringColumn> {
+    let array = if !matches!(array.data_type(), ArrowDataType::Utf8View) {
+        arrow_cast::cast(array.as_ref(), &ArrowDataType::Utf8View)?
+    } else {
+        array
+    };
+
+    let data = array.to_data();
+    Ok(data.into())
 }

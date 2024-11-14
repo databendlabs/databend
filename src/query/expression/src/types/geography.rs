@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::iter::TrustedLen;
 use std::ops::Range;
 
 use borsh::BorshDeserialize;

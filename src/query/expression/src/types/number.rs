@@ -22,8 +22,8 @@ use arrow_data::ArrayDataBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_base::base::OrderedFloat;
-use databend_common_column::buffer::buffer_to_array_data;
-use databend_common_column::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
@@ -46,6 +46,7 @@ use crate::ScalarRef;
 
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;
+pub use databend_common_column::buffer::Buffer;
 
 pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType] = &[
     NumberDataType::UInt8,
@@ -669,6 +670,34 @@ impl NumberColumn {
             .len(self.len())
             .buffers(vec![buffer]);
         unsafe { builder.build_unchecked() }
+    }
+
+    pub fn try_from_arrow_data(array: ArrayData) -> Result<Self> {
+        let buffer = array.buffers()[0].clone();
+        match array.data_type() {
+            arrow_schema::DataType::UInt8 => Ok(NumberColumn::UInt8(buffer.into())),
+            arrow_schema::DataType::UInt16 => Ok(NumberColumn::UInt16(buffer.into())),
+            arrow_schema::DataType::UInt32 => Ok(NumberColumn::UInt32(buffer.into())),
+            arrow_schema::DataType::UInt64 => Ok(NumberColumn::UInt64(buffer.into())),
+            arrow_schema::DataType::Int8 => Ok(NumberColumn::Int8(buffer.into())),
+            arrow_schema::DataType::Int16 => Ok(NumberColumn::Int16(buffer.into())),
+            arrow_schema::DataType::Int32 => Ok(NumberColumn::Int32(buffer.into())),
+            arrow_schema::DataType::Int64 => Ok(NumberColumn::Int64(buffer.into())),
+            arrow_schema::DataType::Float32 => {
+                let buffer = unsafe { std::mem::transmute::<_, Buffer<F32>>(buffer) };
+                Ok(NumberColumn::Float32(buffer))
+            }
+            arrow_schema::DataType::Float64 => {
+                let buffer = unsafe { std::mem::transmute::<_, Buffer<F64>>(buffer) };
+                Ok(NumberColumn::Float64(buffer))
+            }
+            data_type => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported data type: {:?} into number column",
+                    data_type
+                )));
+            }
+        }
     }
 }
 

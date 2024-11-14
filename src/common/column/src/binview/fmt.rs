@@ -49,7 +49,7 @@ impl Debug for BinaryViewColumn {
 impl Debug for Utf8ViewColumn {
     fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write!(f, "{}", self.value(index));
-        write!(f, "Utf8ViewColumn")?;
+        write!(f, "StringColumn")?;
         write_vec(f, writer, None, self.len(), "None", false)
     }
 }

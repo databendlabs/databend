@@ -244,7 +244,7 @@ impl Column {
     pub fn concat_use_arrow(
         cols: impl Iterator<Item = Column>,
         data_type: DataType,
-        num_rows: usize,
+        _num_rows: usize,
     ) -> Column {
         let arrays: Vec<Arc<dyn Array>> = cols.map(|c| c.into_arrow_rs()).collect();
         let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();

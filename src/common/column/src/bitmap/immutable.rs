@@ -40,8 +40,8 @@ use crate::error::Error;
 ///
 /// # Examples
 /// ```
-/// use arrow2::bitmap::Bitmap;
-/// use arrow2::bitmap::MutableBitmap;
+/// use crate::bitmap::Bitmap;
+/// use crate::bitmap::MutableBitmap;
 ///
 /// let bitmap = Bitmap::from([true, false, true]);
 /// assert_eq!(bitmap.iter().collect::<Vec<_>>(), vec![true, false, true]);
@@ -540,5 +540,17 @@ impl From<&Bitmap> for ArrayData {
 impl From<Bitmap> for ArrayData {
     fn from(value: Bitmap) -> Self {
         ArrayData::from(&value)
+    }
+}
+
+impl Bitmap {
+    pub fn from_array_data(data: ArrayData) -> Self {
+        assert_eq!(data.data_type(), &arrow_schema::DataType::Boolean);
+
+        let buffers = data.buffers();
+        let buffer =
+            arrow_buffer::BooleanBuffer::new(buffers[0].clone(), data.offset(), data.len());
+        // Use NullBuffer to compute set count
+        Bitmap::from_null_buffer(arrow_buffer::NullBuffer::new(buffer))
     }
 }

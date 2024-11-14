@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 
-use arrow_ord::sort::LexicographicalComparator;
-use arrow_ord::sort::SortColumn;
-use arrow_schema::SortOptions;
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::MutableBitmap;
-use databend_common_expression::converts::arrow2::set_validities;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::nullable::NullableColumn;

@@ -14,8 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
 use databend_common_exception::Result;
 use databend_common_expression::create_test_complex_schema;
 use databend_common_expression::types::NumberDataType;
@@ -657,8 +655,8 @@ fn test_geography_as_arrow() {
     builder.put_slice(&make_point(4.0, 5.0));
     builder.commit_row();
     let col = Column::Geography(GeographyColumn(builder.build()));
-
-    let arr = col.as_arrow();
-    let got = Column::from_arrow(&*arr, &col.data_type()).unwrap();
+    let data_type = col.data_type();
+    let arr = col.clone().into_arrow_rs();
+    let got = Column::from_arrow_rs(arr, &data_type).unwrap();
     assert_eq!(col, got)
 }

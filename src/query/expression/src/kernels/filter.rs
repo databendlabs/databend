@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use binary::BinaryColumnBuilder;
-use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
