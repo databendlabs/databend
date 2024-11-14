@@ -148,7 +148,6 @@ use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -171,6 +170,10 @@ impl Catalog for FakedCatalog {
     }
 
     async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
+        todo!()
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 
@@ -577,22 +580,6 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
-        todo!()
-    }
-
-    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
-        todo!()
-    }
-
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        todo!()
-    }
-
-    fn set_lazy_mutation_delete(&self, _lazy: bool) {
-        todo!()
-    }
-
-    fn get_lazy_mutation_delete(&self) -> bool {
         todo!()
     }
 

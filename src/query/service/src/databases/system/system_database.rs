@@ -34,7 +34,8 @@ use databend_common_storages_system::ColumnsTable;
 use databend_common_storages_system::ConfigsTable;
 use databend_common_storages_system::ContributorsTable;
 use databend_common_storages_system::CreditsTable;
-use databend_common_storages_system::DatabasesTable;
+use databend_common_storages_system::DatabasesTableWithHistory;
+use databend_common_storages_system::DatabasesTableWithoutHistory;
 use databend_common_storages_system::DictionariesTable;
 use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FullStreamsTable;
@@ -103,7 +104,8 @@ impl SystemDatabase {
             TablesTableWithoutHistory::create(sys_db_meta.next_table_id()),
             TablesTableWithHistory::create(sys_db_meta.next_table_id()),
             ClustersTable::create(sys_db_meta.next_table_id()),
-            DatabasesTable::create(sys_db_meta.next_table_id()),
+            DatabasesTableWithHistory::create(sys_db_meta.next_table_id()),
+            DatabasesTableWithoutHistory::create(sys_db_meta.next_table_id()),
             FullStreamsTable::create(sys_db_meta.next_table_id()),
             TerseStreamsTable::create(sys_db_meta.next_table_id()),
             ProcessesTable::create(sys_db_meta.next_table_id()),

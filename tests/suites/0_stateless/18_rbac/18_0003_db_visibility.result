@@ -1,6 +1,10 @@
 === test u1 with role1 ===
 information_schema
 system
+true	true
+db1	true
+system
+information_schema
 1
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u1'@'%' with roles [public,role1]
 db1

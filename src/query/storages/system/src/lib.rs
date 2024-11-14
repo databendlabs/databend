@@ -84,6 +84,8 @@ pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use credits_table::CreditsTable;
 pub use databases_table::DatabasesTable;
+pub use databases_table::DatabasesTableWithHistory;
+pub use databases_table::DatabasesTableWithoutHistory;
 pub use dictionaries_table::DictionariesTable;
 pub use engines_table::EnginesTable;
 pub use functions_table::FunctionsTable;

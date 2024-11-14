@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 
@@ -156,13 +157,17 @@ impl Interpreter for VacuumDropTablesInterpreter {
             drop_ids
         );
 
-        // TODO buggy, table as catalog obj should be allowed to drop
-        // also drop ids
-        // filter out read-only tables
-        let tables = tables
+        // Filter out read-only tables and views.
+        // Note: The drop_ids list still includes view IDs
+        let (views, tables): (Vec<_>, Vec<_>) = tables
             .into_iter()
             .filter(|tbl| !tbl.as_ref().is_read_only())
-            .collect::<Vec<_>>();
+            .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
+
+        {
+            let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
+            info!("view ids excluded from purging data: {:?}", view_ids);
+        }
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
@@ -187,6 +192,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
         // gc metadata only when not dry run
         if self.plan.option.dry_run.is_none() {
             let mut success_dropped_ids = vec![];
+            // Since drop_ids contains view IDs, any views (if present) will be added to
+            // the success_dropped_id list, with removal from the meta-server attempted later.
             for drop_id in drop_ids {
                 match &drop_id {
                     DroppedId::Db { db_id, db_name: _ } => {
@@ -205,6 +212,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 "failed dbs:{:?}, failed_tables:{:?}, success_drop_ids:{:?}",
                 failed_db_ids, failed_tables, success_dropped_ids
             );
+
             self.gc_drop_tables(catalog, success_dropped_ids).await?;
         }
 

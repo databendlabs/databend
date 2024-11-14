@@ -127,6 +127,7 @@ pub enum Statement {
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
+    ShowDropDatabases(ShowDropDatabasesStmt),
     ShowCreateDatabase(ShowCreateDatabaseStmt),
     CreateDatabase(CreateDatabaseStmt),
     DropDatabase(DropDatabaseStmt),
@@ -548,6 +549,7 @@ impl Display for Statement {
             Statement::CreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::DropCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowDropDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatabase(stmt) => write!(f, "{stmt}")?,

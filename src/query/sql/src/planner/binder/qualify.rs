@@ -53,8 +53,6 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let (mut scalar, _) = scalar_binder.bind(qualify)?;
         let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());

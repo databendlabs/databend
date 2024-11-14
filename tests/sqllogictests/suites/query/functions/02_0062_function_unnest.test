@@ -492,11 +492,16 @@ select unnest([[parse_json('[1,2,3]'), parse_json('false')],[parse_json('{"k":"v
 false
 {"k":"v"}
 
-statement error 1065
-select unnest(max(11))
+query T
+select unnest(max([11,12]))
+----
+11
+12
 
-statement error 1065
-select unnest(min(11),max(12))
+query T
+select max(unnest([11,12]))
+----
+12
 
 statement error 1065
 select unnest(first_value('aa') OVER (PARTITION BY 'bb'))

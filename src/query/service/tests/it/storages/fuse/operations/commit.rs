@@ -486,22 +486,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
-        todo!()
-    }
-
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        todo!()
-    }
-
-    fn set_lazy_mutation_delete(&self, _lazy: bool) {
-        todo!()
-    }
-
-    fn get_lazy_mutation_delete(&self) -> bool {
-        todo!()
-    }
-
     fn add_partitions_sha(&self, _sha: String) {
         todo!()
     }
@@ -915,6 +899,10 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        todo!()
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 

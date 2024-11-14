@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
+use super::WindowPartition;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -25,7 +26,6 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 
@@ -43,7 +43,7 @@ pub struct Sort {
     pub pre_projection: Option<Vec<IndexType>>,
 
     /// If sort is for window clause, we need the input to exchange by partitions
-    pub window_partition: Vec<ScalarItem>,
+    pub window_partition: Option<WindowPartition>,
 }
 
 impl Sort {
@@ -54,11 +54,12 @@ impl Sort {
     pub fn sort_items_exclude_partition(&self) -> Vec<SortItem> {
         self.items
             .iter()
-            .filter(|item| {
-                !self
-                    .window_partition
+            .filter(|item| match &self.window_partition {
+                Some(window) => !window
+                    .partition_by
                     .iter()
-                    .any(|partition| partition.index == item.index)
+                    .any(|partition| partition.index == item.index),
+                None => true,
             })
             .cloned()
             .collect()
@@ -79,14 +80,15 @@ impl Operator for Sort {
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-        if input_physical_prop.distribution == Distribution::Serial
-            || self.window_partition.is_empty()
-        {
+        if input_physical_prop.distribution == Distribution::Serial {
             return Ok(input_physical_prop);
         }
+        let Some(window) = &self.window_partition else {
+            return Ok(input_physical_prop);
+        };
 
-        let partition_by = self
-            .window_partition
+        let partition_by = window
+            .partition_by
             .iter()
             .map(|s| s.scalar.clone())
             .collect();
@@ -105,9 +107,9 @@ impl Operator for Sort {
         let mut required = required.clone();
         required.distribution = Distribution::Serial;
 
-        if self.window_partition.is_empty() {
+        let Some(window) = &self.window_partition else {
             return Ok(required);
-        }
+        };
 
         let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         // Can't merge to shuffle
@@ -115,8 +117,8 @@ impl Operator for Sort {
             return Ok(required);
         }
 
-        let partition_by = self
-            .window_partition
+        let partition_by = window
+            .partition_by
             .iter()
             .map(|s| s.scalar.clone())
             .collect();
@@ -134,9 +136,9 @@ impl Operator for Sort {
         let mut required = required.clone();
         required.distribution = Distribution::Serial;
 
-        if self.window_partition.is_empty() {
+        let Some(window) = &self.window_partition else {
             return Ok(vec![vec![required]]);
-        }
+        };
 
         // Can't merge to shuffle
         let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
@@ -144,8 +146,8 @@ impl Operator for Sort {
             return Ok(vec![vec![required]]);
         }
 
-        let partition_by = self
-            .window_partition
+        let partition_by = window
+            .partition_by
             .iter()
             .map(|s| s.scalar.clone())
             .collect();
@@ -163,13 +165,13 @@ impl Operator for Sort {
 
         // Derive orderings
         let orderings = self.items.clone();
-        let (orderings, partition_orderings) = if !self.window_partition.is_empty() {
-            (
+
+        let (orderings, partition_orderings) = match &self.window_partition {
+            Some(window) => (
                 vec![],
-                Some((self.window_partition.clone(), orderings.clone())),
-            )
-        } else {
-            (self.items.clone(), None)
+                Some((window.partition_by.clone(), orderings.clone())),
+            ),
+            None => (self.items.clone(), None),
         };
 
         Ok(Arc::new(RelationalProperty {

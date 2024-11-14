@@ -37,6 +37,7 @@ pub struct SortCompare {
     current_column_index: usize,
     validity: Option<Bitmap>,
     equality_index: Vec<u8>,
+    force_equality: bool,
 }
 
 macro_rules! do_sorter {
@@ -112,12 +113,25 @@ impl SortCompare {
             current_column_index: 0,
             validity: None,
             equality_index,
+            force_equality: matches!(limit, LimitType::LimitRank(_)),
+        }
+    }
+
+    pub fn with_force_equality(ordering_descs: Vec<SortColumnDescription>, rows: usize) -> Self {
+        Self {
+            rows,
+            limit: LimitType::None,
+            permutation: (0..rows as u32).collect(),
+            ordering_descs,
+            current_column_index: 0,
+            validity: None,
+            equality_index: vec![1; rows as _],
+            force_equality: true,
         }
     }
 
     fn need_update_equality_index(&self) -> bool {
-        self.current_column_index != self.ordering_descs.len() - 1
-            || matches!(self.limit, LimitType::LimitRank(_))
+        self.force_equality || self.current_column_index != self.ordering_descs.len() - 1
     }
 
     pub fn increment_column_index(&mut self) {
@@ -253,6 +267,11 @@ impl SortCompare {
                 current = end;
             }
         }
+    }
+
+    pub fn equality_index(&self) -> &[u8] {
+        debug_assert!(self.force_equality);
+        &self.equality_index
     }
 }
 
