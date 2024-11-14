@@ -92,12 +92,16 @@ impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
                         Some(StringColumnBuilder::with_capacity(capacity)),
                         vec![],
                     )
-                } else {
+                } else if params.group_data_types[0].is_binary()
+                    || params.group_data_types[0].is_variant()
+                {
                     (
                         Some(BinaryColumnBuilder::with_capacity(capacity, data_capacity)),
                         None,
                         vec![],
                     )
+                } else {
+                    (None, None, Vec::with_capacity(capacity))
                 }
             } else {
                 (None, None, Vec::with_capacity(capacity))
