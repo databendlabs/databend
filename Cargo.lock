@@ -3364,7 +3364,6 @@ dependencies = [
  "serde_json",
  "strength_reduce",
  "terminal_size 0.2.6",
- "time",
  "tonic",
  "typetag",
  "unicode-segmentation",
@@ -4560,7 +4559,6 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "chrono-tz 0.8.6",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
@@ -5264,7 +5262,6 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
- "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",

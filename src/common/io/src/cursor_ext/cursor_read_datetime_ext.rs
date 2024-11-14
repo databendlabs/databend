@@ -21,7 +21,7 @@ use chrono::Duration;
 use chrono::LocalResult;
 use chrono::MappedLocalTime;
 use chrono::NaiveDateTime;
-use chrono::TimeZone;
+use chrono::TimeZone as ChronoTimeZone;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,7 +29,7 @@ use databend_common_exception::ToErrorCode;
 use jiff::civil::date;
 use jiff::civil::Date;
 use jiff::tz::Offset;
-use jiff::tz::TimeZone as JiffTimeZone;
+use jiff::tz::TimeZone;
 use jiff::Timestamp;
 use jiff::Zoned;
 
@@ -41,11 +41,11 @@ pub enum DateTimeResType {
 }
 
 pub trait BufferReadDateTimeExt {
-    fn read_date_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<Date>;
-    fn read_timestamp_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<DateTimeResType>;
+    fn read_date_text(&mut self, jiff_tz: &TimeZone) -> Result<Date>;
+    fn read_timestamp_text(&mut self, jiff_tz: &TimeZone) -> Result<DateTimeResType>;
     fn parse_time_offset(
         &mut self,
-        tz: &JiffTimeZone,
+        tz: &TimeZone,
         buf: &mut Vec<u8>,
         dt: &Zoned,
         west_tz: bool,
@@ -53,7 +53,7 @@ pub trait BufferReadDateTimeExt {
     ) -> Result<Zoned>;
     fn read_text_to_datetime(
         &mut self,
-        jiff_tz: &JiffTimeZone,
+        jiff_tz: &TimeZone,
         need_date: bool,
     ) -> Result<DateTimeResType>;
 }
@@ -75,7 +75,7 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
 impl<T> BufferReadDateTimeExt for Cursor<T>
 where T: AsRef<[u8]>
 {
-    fn read_date_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<Date> {
+    fn read_date_text(&mut self, jiff_tz: &TimeZone) -> Result<Date> {
         // TODO support YYYYMMDD format
         self.read_text_to_datetime(jiff_tz, true)
             .map(|dt| match dt {
@@ -84,21 +84,21 @@ where T: AsRef<[u8]>
             })
     }
 
-    fn read_timestamp_text(&mut self, jiff_tz: &JiffTimeZone) -> Result<DateTimeResType> {
+    fn read_timestamp_text(&mut self, jiff_tz: &TimeZone) -> Result<DateTimeResType> {
         self.read_text_to_datetime(jiff_tz, false)
     }
 
     // Only support HH:mm format
     fn parse_time_offset(
         &mut self,
-        tz: &JiffTimeZone,
+        tz: &TimeZone,
         buf: &mut Vec<u8>,
         dt: &Zoned,
         west_tz: bool,
         calc_offset: impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
     ) -> Result<Zoned> {
         fn get_hour_minute_offset(
-            tz: &JiffTimeZone,
+            tz: &TimeZone,
             dt: &Zoned,
             west_tz: bool,
             calc_offset: &impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
@@ -201,7 +201,7 @@ where T: AsRef<[u8]>
 
     fn read_text_to_datetime(
         &mut self,
-        jiff_tz: &JiffTimeZone,
+        jiff_tz: &TimeZone,
         need_date: bool,
     ) -> Result<DateTimeResType> {
         // Date Part YYYY-MM-DD
@@ -374,7 +374,7 @@ where T: AsRef<[u8]>
 // -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
 // select to_date(to_timestamp('2021-03-28 01:00:00'));
 // Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
-fn get_local_time(tz: &JiffTimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned> {
+fn get_local_time(tz: &TimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned> {
     d.at(times[0] as i8, times[1] as i8, times[2] as i8, 0)
         .to_zoned(tz.clone())
         .map_err_to_code(ErrorCode::BadBytes, || {
