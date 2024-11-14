@@ -18,6 +18,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use fastrace::func_name;
+use std::collections::HashMap;
 
 use crate::common;
 
@@ -41,12 +42,17 @@ fn test_v111_add_glue_as_iceberg_catalog_option() -> anyhow::Result<()> {
         24,
     ];
 
+    let mut props = HashMap::new();
+    props.insert("AWS_KEY_ID".to_string(), "super secure access key".to_string());
+    props.insert("AWS_SECRET_KEY".to_string(), "even more secure secret key".to_string());
+    props.insert("REGION".to_string(), "us-east-1 aka anti-multi-availability".to_string());
+
     let want = || databend_common_meta_app::schema::CatalogMeta {
         catalog_option: CatalogOption::Iceberg(IcebergGlueCatalogOption::Rest(
             IcebergGlueCatalogOption {
                 address: "http://127.0.0.1:9900".to_string(),
                 warehouse: "s3://my_bucket".to_string(),
-                props: Default::default(),
+                props,
             },
         )),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
