@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
@@ -240,7 +241,7 @@ impl Column {
             DataType::Timestamp => {
                 let array = arrow_cast::cast(
                     array.as_ref(),
-                    &ArrowDataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
+                    &ArrowDataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
                 )?;
                 let buffer: Buffer<i64> = array.to_data().buffers()[0].clone().into();
                 Column::Timestamp(buffer)
@@ -261,10 +262,10 @@ impl Column {
             DataType::Array(inner) => {
                 let array = array
                     .as_any()
-                    .downcast_ref::<arrow_array::ListArray>()
+                    .downcast_ref::<arrow_array::LargeListArray>()
                     .ok_or_else(|| {
                         ErrorCode::Internal(format!(
-                            "Cannot downcast to ListArray from array: {:?}",
+                            "Cannot downcast to LargeListArray from array: {:?}",
                             array
                         ))
                     })?;
@@ -272,7 +273,7 @@ impl Column {
                 let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
 
                 let inner_col = ArrayColumn { values, offsets };
-                Column::Map(Box::new(inner_col))
+                Column::Array(Box::new(inner_col))
             }
             DataType::Map(inner) => {
                 let array = array
@@ -284,7 +285,8 @@ impl Column {
                             array
                         ))
                     })?;
-                let values = Column::from_arrow_rs(array.values().clone(), inner.as_ref())?;
+                let entries = Arc::new(array.entries().clone());
+                let values = Column::from_arrow_rs(entries, inner.as_ref())?;
                 let offsets: Buffer<i32> = array.offsets().inner().inner().clone().into();
                 let offsets = offsets.into_iter().map(|x| x as u64).collect();
 
@@ -297,7 +299,7 @@ impl Column {
                     .downcast_ref::<arrow_array::StructArray>()
                     .ok_or_else(|| {
                         ErrorCode::Internal(format!(
-                            "Cannot downcast to MapArray from array: {:?}",
+                            "Cannot downcast to StructArray from array: {:?}",
                             array
                         ))
                     })?;

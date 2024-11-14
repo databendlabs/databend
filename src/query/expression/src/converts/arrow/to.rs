@@ -280,7 +280,10 @@ impl From<&Column> for ArrayData {
     fn from(value: &Column) -> Self {
         let arrow_type = ArrowDataType::from(&value.data_type());
         match value {
-            Column::Null { len } => Bitmap::new_constant(true, *len).into(),
+            Column::Null { len } => {
+                let builder = ArrayDataBuilder::new(arrow_type).len(*len);
+                unsafe { builder.build_unchecked() }
+            }
             Column::EmptyArray { len } => Bitmap::new_constant(true, *len).into(),
             Column::EmptyMap { len } => Bitmap::new_constant(true, *len).into(),
             Column::Boolean(col) => col.into(),

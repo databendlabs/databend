@@ -50,12 +50,11 @@ fn test_convert_types() {
     assert_eq!(schema, schema2);
 
     let random_block = rand_block_for_all_types(1024);
-
-    for c in random_block.columns() {
+    for (idx, c) in random_block.columns().iter().enumerate() {
         let c = c.value.as_column().unwrap().clone();
+
         let data = serialize_column(&c);
         let c2 = deserialize_column(&data).unwrap();
-
-        assert_eq!(c, c2);
+        assert_eq!(c, c2, "in {idx} | datatype: {}", c.data_type());
     }
 }

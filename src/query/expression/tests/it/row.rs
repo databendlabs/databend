@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+use arrow_array::ArrayRef;
+use arrow_ord::sort::LexicographicalComparator;
+use arrow_ord::sort::SortColumn;
+use arrow_schema::SortOptions;
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
@@ -495,4 +498,71 @@ fn print_options(cols: &[(bool, bool)]) -> String {
         })
         .collect();
     t.join(",")
+}
+
+#[test]
+fn fuzz_test() {
+    for _ in 0..100 {
+        let mut rng = thread_rng();
+        let num_columns = rng.gen_range(1..5);
+        let num_rows = rng.gen_range(5..100);
+        let columns = (0..num_columns)
+            .map(|_| generate_column(num_rows))
+            .collect::<Vec<_>>();
+
+        let options = (0..num_columns)
+            .map(|_| (rng.gen_bool(0.5), rng.gen_bool(0.5)))
+            .collect::<Vec<_>>();
+
+        let order_columns = columns
+            .iter()
+            .map(|col| col.clone().into_arrow_rs())
+            .collect::<Vec<ArrayRef>>();
+
+        let sort_columns = options
+            .iter()
+            .zip(order_columns.iter())
+            .map(|((asc, nulls_first), a)| SortColumn {
+                values: a.clone(),
+                options: Some(SortOptions {
+                    descending: !*asc,
+                    nulls_first: *nulls_first,
+                }),
+            })
+            .collect::<Vec<_>>();
+
+        let comparator = LexicographicalComparator::try_new(&sort_columns).unwrap();
+
+        let fields = options
+            .iter()
+            .zip(&columns)
+            .map(|((asc, nulls_first), col)| {
+                SortField::new_with_options(col.data_type(), *asc, *nulls_first)
+            })
+            .collect();
+
+        let converter = RowConverter::new(fields).unwrap();
+        let rows = converter.convert_columns(&columns, num_rows);
+
+        unsafe {
+            for i in 0..num_rows {
+                for j in 0..num_rows {
+                    let row_i = rows.index_unchecked(i);
+                    let row_j = rows.index_unchecked(j);
+                    let row_cmp = row_i.cmp(row_j);
+                    let lex_cmp = comparator.compare(i, j);
+                    assert_eq!(
+                        row_cmp,
+                        lex_cmp,
+                        "\ndata: ({:?} vs {:?})\nrow format: ({:?} vs {:?})\noptions: {:?}",
+                        print_row(&columns, i),
+                        print_row(&columns, j),
+                        row_i,
+                        row_j,
+                        print_options(&options)
+                    );
+                }
+            }
+        }
+    }
 }

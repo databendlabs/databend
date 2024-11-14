@@ -684,11 +684,13 @@ impl NumberColumn {
             arrow_schema::DataType::Int32 => Ok(NumberColumn::Int32(buffer.into())),
             arrow_schema::DataType::Int64 => Ok(NumberColumn::Int64(buffer.into())),
             arrow_schema::DataType::Float32 => {
-                let buffer = unsafe { std::mem::transmute::<_, Buffer<F32>>(buffer) };
+                let buffer = buffer.into();
+                let buffer = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(buffer) };
                 Ok(NumberColumn::Float32(buffer))
             }
             arrow_schema::DataType::Float64 => {
-                let buffer = unsafe { std::mem::transmute::<_, Buffer<F64>>(buffer) };
+                let buffer = buffer.into();
+                let buffer = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(buffer) };
                 Ok(NumberColumn::Float64(buffer))
             }
             data_type => {
