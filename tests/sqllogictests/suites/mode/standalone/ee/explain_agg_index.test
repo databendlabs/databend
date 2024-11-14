@@ -324,11 +324,11 @@ query T
 EXPLAIN SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name
 ----
 EvalScalar
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
-├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
+├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── AggregateFinal
-    ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+    ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
     ├── group by: [station_name]
     ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
     ├── estimated rows: 0.00
@@ -358,15 +358,15 @@ query T
 EXPLAIN SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
         ├── group by: [station_name]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00
@@ -396,15 +396,15 @@ query T
 EXPLAIN SELECT * FROM (SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name) ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
         ├── group by: [station_name]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00
@@ -434,15 +434,15 @@ query T
 EXPLAIN WITH aggi AS (SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name) SELECT * FROM aggi ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
         ├── group by: [station_name]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00
@@ -473,15 +473,15 @@ query T
 EXPLAIN WITH aggi AS (SELECT station_name, measurement, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc WHERE station_name='Beijing' AND measurement > 0 AND measurement IN (1, 2) GROUP BY station_name, measurement) SELECT * FROM aggi ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0), onebrc.measurement (#1)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1)]
         ├── group by: [station_name, measurement]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00
@@ -516,15 +516,15 @@ query T
 EXPLAIN WITH aggi AS (SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc WHERE station_name='Beijing' GROUP BY station_name) SELECT * FROM aggi ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
         ├── group by: [station_name]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00
@@ -559,15 +559,15 @@ query T
 EXPLAIN WITH aggi AS (SELECT station_name, measurement, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc where measurement > 2 and measurement < 5 GROUP BY station_name, measurement) SELECT * FROM aggi ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0), onebrc.measurement (#1)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1)]
         ├── group by: [station_name, measurement]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00
@@ -602,15 +602,15 @@ query T
 EXPLAIN WITH aggi AS (SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc WHERE station_name IN ('Paris', 'Beijing') GROUP BY station_name) SELECT * FROM aggi ORDER BY station_name
 ----
 Sort
-├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
 ├── sort keys: [station_name ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
-    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
+    ├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
-        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
         ├── group by: [station_name]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
         ├── estimated rows: 0.00

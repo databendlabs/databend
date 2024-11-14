@@ -114,13 +114,20 @@ pub async fn build_distributed_pipeline(
 
     let exchange_manager = ctx.get_exchange_manager();
 
-    let mut build_res = exchange_manager
+    match exchange_manager
         .commit_actions(ctx.clone(), fragments_actions)
-        .await?;
-
-    let settings = ctx.get_settings();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-    Ok(build_res)
+        .await
+    {
+        Ok(mut build_res) => {
+            let settings = ctx.get_settings();
+            build_res.set_max_threads(settings.get_max_threads()? as usize);
+            Ok(build_res)
+        }
+        Err(error) => {
+            exchange_manager.on_finished_query(&ctx.get_id(), Some(error.clone()));
+            Err(error)
+        }
+    }
 }
 
 pub struct ServiceQueryExecutor {

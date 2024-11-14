@@ -42,7 +42,6 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
-use indexmap::IndexMap;
 use log::warn;
 
 use super::Finder;
@@ -50,7 +49,6 @@ use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::query_executor::QueryExecutor;
@@ -63,7 +61,6 @@ use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUserPlan;
-use crate::plans::MaterializedCte;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
@@ -74,7 +71,6 @@ use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -95,13 +91,6 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
-    // Save the bound context for materialized cte, the key is cte_idx
-    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
-    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
-    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
-    /// Use `IndexMap` because need to keep the insertion order
-    /// Then wrap materialized ctes to main plan.
-    pub ctes_map: Box<IndexMap<String, CteInfo>>,
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
@@ -132,10 +121,6 @@ impl<'a> Binder {
             catalogs,
             name_resolution_ctx,
             metadata,
-            m_cte_bound_ctx: Default::default(),
-            m_cte_bound_s_expr: Default::default(),
-            m_cte_materialized_indexes: Default::default(),
-            ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
             enable_result_cache,
@@ -177,19 +162,7 @@ impl<'a> Binder {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                for (_, cte_info) in self.ctes_map.iter().rev() {
-                    if !cte_info.materialized || cte_info.used_count == 0 {
-                        continue;
-                    }
-                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-                    let materialized_output_columns = cte_info.columns.clone();
-                    s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: self.m_cte_materialized_indexes.clone() })),
-                        Arc::new(s_expr),
-                        Arc::new(cte_s_expr.clone()),
-                    );
-                }
-
+                s_expr = bind_context.cte_context.wrap_m_cte(s_expr);
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
@@ -717,15 +690,6 @@ impl<'a> Binder {
         self.ctx
             .get_settings()
             .set_batch_settings(&hint_settings, true)
-    }
-
-    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
-    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
-        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
-    }
-
-    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
-        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     pub fn set_bind_recursive_cte(&mut self, val: bool) {
