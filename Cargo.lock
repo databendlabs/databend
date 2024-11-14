@@ -3319,7 +3319,6 @@ dependencies = [
  "chrono-tz 0.8.6",
  "comfy-table",
  "criterion",
- "dashmap 6.1.0",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -3360,7 +3359,6 @@ dependencies = [
  "simdutf8",
  "strength_reduce",
  "terminal_size 0.2.6",
- "time",
  "tonic",
  "typetag",
  "unicode-segmentation",
@@ -4082,7 +4080,6 @@ dependencies = [
  "serde",
  "sha2",
  "simsearch",
- "time",
  "tokio",
  "url",
 ]
@@ -4541,7 +4538,6 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "chrono-tz 0.8.6",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
@@ -5164,7 +5160,6 @@ dependencies = [
  "sysinfo",
  "temp-env",
  "tempfile",
- "time",
  "tokio",
  "tokio-stream",
  "toml 0.8.19",
@@ -5246,7 +5241,6 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
- "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",

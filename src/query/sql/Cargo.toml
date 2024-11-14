@@ -71,7 +71,6 @@ roaring = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 simsearch = { workspace = true }
-time = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
 

@@ -22,7 +22,6 @@ bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
-dashmap = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -60,7 +59,6 @@ serde_json = { workspace = true }
 simdutf8 = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }
-time = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
 unicode-segmentation = { workspace = true }
