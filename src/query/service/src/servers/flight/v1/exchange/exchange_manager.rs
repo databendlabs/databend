@@ -242,7 +242,13 @@ impl DataExchangeManager {
                 "Query {} cannot start command while in 180 seconds",
                 query_id
             );
-            self.on_finished_query(&query_id);
+            self.on_finished_query(
+                &query_id,
+                Some(ErrorCode::Internal(format!(
+                    "Query {} cannot start command while in 180 seconds",
+                    query_id
+                ))),
+            );
         }
     }
 
@@ -379,17 +385,17 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn shutdown_query(&self, query_id: &str) {
+    pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         if let Some(query_coordinator) = queries_coordinator.get_mut(query_id) {
-            query_coordinator.shutdown_query();
+            query_coordinator.shutdown_query(cause);
         }
     }
 
     #[fastrace::trace]
-    pub fn on_finished_query(&self, query_id: &str) {
+    pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -397,7 +403,7 @@ impl DataExchangeManager {
             // Drop mutex guard to avoid deadlock during shutdown,
             drop(queries_coordinator_guard);
 
-            query_coordinator.shutdown_query();
+            query_coordinator.shutdown_query(cause);
             query_coordinator.on_finished();
         }
     }
@@ -476,7 +482,8 @@ impl DataExchangeManager {
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
-                        ctx.get_exchange_manager().on_finished_query(&query_id);
+                        ctx.get_exchange_manager()
+                            .on_finished_query(&query_id, info.res.clone().err());
                         statistics_receiver.wait_shutdown()
                     },
                 ));
@@ -768,10 +775,10 @@ impl QueryCoordinator {
         Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
     }
 
-    pub fn shutdown_query(&mut self) {
+    pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
         if let Some(query_info) = &mut self.info {
             if let Some(query_executor) = &query_info.query_executor {
-                query_executor.finish(None);
+                query_executor.finish(cause);
             }
 
             if let Some(worker) = query_info.remove_leak_query_worker.take() {
@@ -871,10 +878,11 @@ impl QueryCoordinator {
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
-            statistics_sender.shutdown(executor.execute().err());
+            let error = executor.execute().err();
+            statistics_sender.shutdown(error.clone());
             query_ctx
                 .get_exchange_manager()
-                .on_finished_query(&query_id);
+                .on_finished_query(&query_id, error);
         });
 
         Ok(())
