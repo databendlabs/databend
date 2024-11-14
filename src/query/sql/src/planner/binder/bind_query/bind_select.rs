@@ -257,6 +257,9 @@ impl Binder {
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
+        output_context
+            .cte_context
+            .set_cte_context(from_context.cte_context.clone());
         output_context.columns = from_context.columns;
 
         Ok((s_expr, output_context))

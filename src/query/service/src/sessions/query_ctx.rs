@@ -113,7 +113,6 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -151,8 +150,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    snapshot: Arc<RwLock<Option<Arc<TableSnapshot>>>>,
-    lazy_mutaion_delete: Arc<RwLock<bool>>,
 }
 
 impl QueryContext {
@@ -178,8 +175,6 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
-            snapshot: Arc::new(RwLock::new(None)),
-            lazy_mutaion_delete: Arc::new(RwLock::new(false)),
         })
     }
 
@@ -530,22 +525,6 @@ impl TableContext for QueryContext {
             partition_queue.push_back(part);
         }
         Ok(())
-    }
-
-    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>) {
-        *self.snapshot.write() = Some(snapshot);
-    }
-
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        self.snapshot.read().clone()
-    }
-
-    fn set_lazy_mutation_delete(&self, lazy: bool) {
-        *self.lazy_mutaion_delete.write() = lazy;
-    }
-
-    fn get_lazy_mutation_delete(&self) -> bool {
-        *self.lazy_mutaion_delete.read()
     }
 
     fn partition_num(&self) -> usize {
