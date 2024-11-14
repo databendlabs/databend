@@ -324,6 +324,8 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::ExpressionScan(_)
         | PhysicalPlan::CacheScan(_)
         | PhysicalPlan::DistributedInsertSelect(_)
+        | PhysicalPlan::RuntimeFilterSource(_)
+        | PhysicalPlan::RuntimeFilterSink(_)
         | PhysicalPlan::ExchangeSource(_)
         | PhysicalPlan::ExchangeSink(_)
         | PhysicalPlan::CopyIntoTable(_)

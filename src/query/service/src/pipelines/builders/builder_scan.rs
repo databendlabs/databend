@@ -40,6 +40,11 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
+        if let Some(table_index) = scan.table_index {
+            let runtime_filter_columns = scan.runtime_filter_columns.clone();
+            self.ctx
+                .set_runtime_filter_columns(table_index, runtime_filter_columns);
+        }
         self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(
             self.ctx.clone(),

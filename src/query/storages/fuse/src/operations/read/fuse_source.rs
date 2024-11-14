@@ -28,7 +28,9 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_storages_common_io::ReadSettings;
 use log::info;
+use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
@@ -40,6 +42,9 @@ use crate::operations::read::native_data_transform_reader::ReadNativeDataTransfo
 use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::PartitionDeserializer;
+use crate::operations::read::PartitionReader;
+use crate::operations::read::PartitionScanState;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -253,9 +258,76 @@ pub fn build_fuse_parquet_source_pipeline(
             index_reader.clone(),
             virtual_reader.clone(),
         )
-    })?;
+    })
+}
 
-    Ok(())
+#[allow(clippy::too_many_arguments)]
+pub fn build_partition_source_pipeline(
+    pipeline: &mut Pipeline,
+    plan: &DataSourcePlan,
+    ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
+    max_threads: usize,
+    max_io_requests: usize,
+    bloom_filter_columns: Vec<(usize, String)>,
+    column_indices: Vec<usize>,
+    operator: Operator,
+    put_cache: bool,
+) -> Result<()> {
+    let (max_threads, max_io_requests) =
+        adjust_threads_and_request(false, max_threads, max_io_requests, plan);
+
+    let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+    let partitions = StealablePartitions::new(partitions, ctx.clone());
+    let partition_scan_state = Arc::new(PartitionScanState::new());
+    let read_settings = ReadSettings::from_ctx(&partitions.ctx)?;
+    let (sender, receiver) = async_channel::unbounded();
+
+    let mut source_builder = SourcePipeBuilder::create();
+    for i in 0..max_io_requests {
+        let output = OutputPort::create();
+        source_builder.add_source(
+            output.clone(),
+            PartitionReader::create(
+                output,
+                i,
+                ctx.clone(),
+                plan.table_index,
+                table_schema.clone(),
+                read_settings,
+                partitions.clone(),
+                bloom_filter_columns.clone(),
+                column_indices.clone(),
+                partition_scan_state.clone(),
+                receiver.clone(),
+                operator.clone(),
+                plan.query_internal_columns,
+                plan.update_stream_columns,
+                put_cache,
+            )?,
+        );
+    }
+    pipeline.add_pipe(source_builder.finalize());
+
+    pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    if max_threads < max_io_requests {
+        info!(
+            "read block pipeline resize from:{} to:{}",
+            max_io_requests,
+            pipeline.output_len()
+        );
+    }
+
+    pipeline.add_transform(|transform_input, transform_output| {
+        PartitionDeserializer::create(
+            plan,
+            ctx.clone(),
+            transform_input,
+            transform_output,
+            partition_scan_state.clone(),
+            sender.clone(),
+        )
+    })
 }
 
 pub fn dispatch_partitions(

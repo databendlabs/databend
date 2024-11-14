@@ -24,9 +24,12 @@ mod probe_join;
 mod probe_state;
 mod result_blocks;
 pub(crate) mod row;
+mod runtime_filter;
 mod spill_common;
 mod transform_hash_join_build;
 mod transform_hash_join_probe;
+mod transform_runtime_filter_sink;
+mod transform_runtime_filter_source;
 mod util;
 
 pub use desc::HashJoinDesc;
@@ -38,3 +41,5 @@ pub use probe_state::ProbeState;
 pub use probe_state::ProcessState;
 pub use transform_hash_join_build::TransformHashJoinBuild;
 pub use transform_hash_join_probe::TransformHashJoinProbe;
+pub use transform_runtime_filter_sink::TransformRuntimeFilterSink;
+pub use transform_runtime_filter_source::TransformRuntimeFilterSource;

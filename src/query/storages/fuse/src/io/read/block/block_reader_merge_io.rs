@@ -31,6 +31,7 @@ pub enum DataItem<'a> {
     ColumnArray(&'a Arc<SizedColumnArray>),
 }
 
+#[derive(Clone)]
 pub struct BlockReadResult {
     merge_io_result: MergeIOReadResult,
     pub(crate) cached_column_data: CachedColumnData,

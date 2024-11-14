@@ -203,11 +203,16 @@ where F: RowsFetcher + Send + Sync + 'static
         fetcher: F,
         need_wrap_nullable: bool,
     ) -> ProcessorPtr {
-        ProcessorPtr::create(AsyncTransformer::create(input, output, Self {
-            row_id_col_offset,
-            fetcher,
-            need_wrap_nullable,
-        }))
+        ProcessorPtr::create(AsyncTransformer::create_with_batch_size(
+            input,
+            output,
+            8,
+            Self {
+                row_id_col_offset,
+                fetcher,
+                need_wrap_nullable,
+            },
+        ))
     }
 }
 

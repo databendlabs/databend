@@ -214,6 +214,13 @@ impl PhysicalPlanReplacer for Fragmenter {
         fragments.append(&mut self.fragments);
         let probe_input = self.replace(plan.probe.as_ref())?;
         fragments.append(&mut self.fragments);
+        let runtime_filter = if let Some(runtime_filter) = &plan.runtime_filter {
+            let runtime_filter = self.replace(runtime_filter)?;
+            fragments.append(&mut self.fragments);
+            Some(Box::new(runtime_filter))
+        } else {
+            None
+        };
         self.fragments = fragments;
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
@@ -221,8 +228,10 @@ impl PhysicalPlanReplacer for Fragmenter {
             projections: plan.projections.clone(),
             probe_projections: plan.probe_projections.clone(),
             build_projections: plan.build_projections.clone(),
+            hash_join_id: plan.hash_join_id,
             build: Box::new(build_input),
             probe: Box::new(probe_input),
+            runtime_filter,
             build_keys: plan.build_keys.clone(),
             probe_keys: plan.probe_keys.clone(),
             is_null_equal: plan.is_null_equal.clone(),
@@ -234,8 +243,9 @@ impl PhysicalPlanReplacer for Fragmenter {
             output_schema: plan.output_schema.clone(),
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
-            probe_keys_rt: plan.probe_keys_rt.clone(),
-            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
+            runtime_filter_exprs: plan.runtime_filter_exprs.clone(),
+            runtime_filter_source_fields: plan.runtime_filter_source_fields.clone(),
+            support_runtime_filter: plan.support_runtime_filter,
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
@@ -31,6 +32,9 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
+use databend_common_sql::plans::JoinType;
+
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(build_schema.fields().len());
@@ -54,11 +58,28 @@ pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSc
     DataSchemaRefExt::create(nullable_field)
 }
 
+pub fn build_key_data_block(join_type: &JoinType, data_block: &DataBlock) -> DataBlock {
+    if matches!(
+        join_type,
+        JoinType::Left | JoinType::LeftSingle | JoinType::Full
+    ) {
+        let validity = Bitmap::new_constant(true, data_block.num_rows());
+        let nullable_columns = data_block
+            .columns()
+            .iter()
+            .map(|c| wrap_true_validity(c, data_block.num_rows(), &validity))
+            .collect::<Vec<_>>();
+        DataBlock::new(nullable_columns, data_block.num_rows())
+    } else {
+        data_block.clone()
+    }
+}
+
 // Construct inlist runtime filter
 pub(crate) fn inlist_filter(
     probe_key: &Expr<String>,
     build_column: Value<AnyType>,
-) -> Result<Option<Expr<String>>> {
+) -> Result<Option<(String, Expr<String>)>> {
     // Currently, only support key is a column, will support more later.
     // Such as t1.a + 1 = t2.a, or t1.a + t1.b = t2.a (left side is probe side)
     if let Expr::ColumnRef {
@@ -88,7 +109,7 @@ pub(crate) fn inlist_filter(
             args,
         };
         let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
-        return Ok(Some(expr));
+        return Ok(Some((id.to_string(), expr)));
     }
     Ok(None)
 }
@@ -96,27 +117,11 @@ pub(crate) fn inlist_filter(
 // Deduplicate build key column
 pub(crate) fn dedup_build_key_column(
     func_ctx: &FunctionContext,
-    data_blocks: &[DataBlock],
-    build_key: &Expr,
-) -> Result<Option<Value<AnyType>>> {
-    // Dedup build key column
-    let mut columns = Vec::with_capacity(data_blocks.len());
-    for block in data_blocks.iter() {
-        if block.num_columns() == 0 {
-            continue;
-        }
-        let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
-        let column = evaluator
-            .run(build_key)?
-            .convert_to_full_column(build_key.data_type(), block.num_rows());
-        columns.push(column);
-    }
-    if columns.is_empty() {
-        return Ok(None);
-    }
-    let build_key_column = Column::concat_columns(columns.into_iter())?;
-    let mut list = Vec::with_capacity(build_key_column.len());
-    for value in build_key_column.iter() {
+    column: Column,
+) -> Result<Value<AnyType>> {
+    // Deduplicate build key column.
+    let mut list = Vec::with_capacity(column.len());
+    for value in column.iter() {
         list.push(RawExpr::Constant {
             span: None,
             scalar: value.to_owned(),
@@ -135,13 +140,9 @@ pub(crate) fn dedup_build_key_column(
         args: vec![array],
     };
 
-    // Deduplicate build key column
     let empty_key_block = DataBlock::empty();
     let evaluator = Evaluator::new(&empty_key_block, func_ctx, &BUILTIN_FUNCTIONS);
-    Ok(Some(evaluator.run(&type_check::check(
-        &distinct_list,
-        &BUILTIN_FUNCTIONS,
-    )?)?))
+    evaluator.run(&type_check::check(&distinct_list, &BUILTIN_FUNCTIONS)?)
 }
 
 // Get row hash by HashMethod

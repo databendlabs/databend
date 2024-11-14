@@ -25,6 +25,7 @@ impl PipelineBuilder {
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
             self.exchange_injector.clone(),
+            self.runtime_filter_hash_join_state.clone(),
         )?;
 
         // add profile

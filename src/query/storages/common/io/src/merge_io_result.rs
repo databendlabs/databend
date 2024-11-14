@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 
 type ChunkIndex = usize;
+#[derive(Clone)]
 pub struct OwnerMemory {
     pub chunks: HashMap<ChunkIndex, Bytes>,
 }
@@ -45,6 +46,7 @@ impl OwnerMemory {
     }
 }
 
+#[derive(Clone)]
 pub struct MergeIOReadResult {
     pub block_path: String,
     pub columns_chunk_offsets: HashMap<ColumnId, (ChunkIndex, Range<usize>)>,

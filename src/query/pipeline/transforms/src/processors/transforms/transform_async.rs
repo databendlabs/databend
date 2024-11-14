@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -48,8 +49,11 @@ pub struct AsyncTransformer<T: AsyncTransform + 'static> {
 
     called_on_start: bool,
     called_on_finish: bool,
-    input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
+
+    batch_size: Option<usize>,
+    num_input_rows: usize,
+    input_data_blocks: Vec<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
 }
 
 impl<T: AsyncTransform + 'static> AsyncTransformer<T> {
@@ -58,8 +62,29 @@ impl<T: AsyncTransform + 'static> AsyncTransformer<T> {
             input,
             output,
             transform: inner,
-            input_data: None,
-            output_data: None,
+            batch_size: None,
+            num_input_rows: 0,
+            input_data_blocks: Vec::new(),
+            output_data_blocks: VecDeque::new(),
+            called_on_start: false,
+            called_on_finish: false,
+        })
+    }
+
+    pub fn create_with_batch_size(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        batch_size: usize,
+        inner: T,
+    ) -> Box<dyn Processor> {
+        Box::new(Self {
+            input,
+            output,
+            transform: inner,
+            batch_size: Some(batch_size * 65536),
+            num_input_rows: 0,
+            input_data_blocks: Vec::new(),
+            output_data_blocks: VecDeque::new(),
             called_on_start: false,
             called_on_finish: false,
         })
@@ -85,11 +110,15 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
             true => self.finish_input(),
             false if !self.output.can_push() => self.not_need_data(),
             false => {
-                if let Some(data) = self.output_data.take() {
+                if let Some(data) = self.output_data_blocks.pop_front() {
                     self.output.push_data(Ok(data));
                 }
 
-                if self.input_data.is_some() {
+                if let Some(batch_size) = self.batch_size {
+                    if self.num_input_rows >= batch_size {
+                        return Ok(Event::Async);
+                    }
+                } else if !self.input_data_blocks.is_empty() {
                     return Ok(Event::Async);
                 }
 
@@ -106,9 +135,21 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
             return Ok(());
         }
 
-        if let Some(data_block) = self.input_data.take() {
-            let data_block = self.transform.transform(data_block).await?;
-            self.output_data = Some(data_block);
+        if !self.input_data_blocks.is_empty() {
+            let input_data_blocks = std::mem::take(&mut self.input_data_blocks);
+            if self.batch_size.is_some() {
+                let data_block = self
+                    .transform
+                    .transform(DataBlock::concat(&input_data_blocks)?)
+                    .await?;
+                self.output_data_blocks.push_back(data_block);
+            } else {
+                for data_block in input_data_blocks {
+                    let data_block = self.transform.transform(data_block).await?;
+                    self.output_data_blocks.push_back(data_block);
+                }
+            }
+            self.num_input_rows = 0;
             return Ok(());
         }
 
@@ -124,8 +165,16 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
 impl<T: AsyncTransform> AsyncTransformer<T> {
     fn pull_data(&mut self) -> Result<Event> {
         if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Async);
+            let input_data = self.input.pull_data().unwrap()?;
+            self.num_input_rows += input_data.num_rows();
+            self.input_data_blocks.push(input_data);
+            if let Some(batch_size) = self.batch_size {
+                if self.num_input_rows >= batch_size {
+                    return Ok(Event::Async);
+                }
+            } else {
+                return Ok(Event::Async);
+            }
         }
 
         if self.input.is_finished() {

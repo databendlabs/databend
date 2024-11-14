@@ -164,6 +164,7 @@ impl SubqueryRewriter {
                 is_lateral: false,
                 single_to_inner: None,
                 build_side_cache_info: None,
+                is_merge_into_join: false,
             }
             .into();
 
@@ -522,6 +523,7 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    is_merge_into_join: false,
                 }
                 .into(),
             ),

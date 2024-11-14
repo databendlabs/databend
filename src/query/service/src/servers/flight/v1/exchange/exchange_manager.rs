@@ -54,6 +54,7 @@ use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::QueryFragmentActions;
@@ -461,7 +462,7 @@ impl DataExchangeManager {
                 assert!(query_coordinator.fragment_exchanges.is_empty());
                 let injector = DefaultExchangeInjector::create();
                 let mut build_res =
-                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
+                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector, None)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
@@ -522,6 +523,7 @@ impl DataExchangeManager {
         query_id: &str,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
+        runtime_filter_hash_join_state: Option<Arc<HashJoinState>>,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -536,7 +538,12 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+                query_coordinator.subscribe_fragment(
+                    &query_ctx,
+                    fragment_id,
+                    injector,
+                    runtime_filter_hash_join_state,
+                )
             }
         }
     }
@@ -711,8 +718,11 @@ impl QueryCoordinator {
 
         for fragment in &fragments.fragments {
             let fragment_id = fragment.fragment_id;
+            if fragment.physical_plan.contain_runtime_filter_source() {
+                continue;
+            }
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(query_context.clone())?;
+                coordinator.prepare_pipeline(query_context.clone(), None)?;
             }
         }
 
@@ -724,11 +734,12 @@ impl QueryCoordinator {
         ctx: &Arc<QueryContext>,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
+        runtime_filter_hash_join_state: Option<Arc<HashJoinState>>,
     ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
-            fragment_coordinator.prepare_pipeline(ctx.clone())?;
+            fragment_coordinator.prepare_pipeline(ctx.clone(), runtime_filter_hash_join_state)?;
 
             if fragment_coordinator.pipeline_build_res.is_none() {
                 return Err(ErrorCode::Internal(
@@ -811,6 +822,10 @@ impl QueryCoordinator {
                         .as_ref()
                         .map(|x| x.exchange_injector.clone())
                         .ok_or_else(|| {
+                            dbg!(
+                                "BB fragment_coordinator.plan = {:?}",
+                                &coordinator.physical_plan
+                            );
                             ErrorCode::Internal("Pipeline build result is none, It's a bug")
                         })?,
                 )?,
@@ -948,7 +963,11 @@ impl FragmentCoordinator {
         Err(ErrorCode::Internal("Cannot find data exchange."))
     }
 
-    pub fn prepare_pipeline(&mut self, ctx: Arc<QueryContext>) -> Result<()> {
+    pub fn prepare_pipeline(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        runtime_filter_hash_join_state: Option<Arc<HashJoinState>>,
+    ) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
 
@@ -962,12 +981,13 @@ impl FragmentCoordinator {
                 drop(ctx);
             }
 
-            let pipeline_builder = PipelineBuilder::create(
+            let mut pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
                 vec![],
             );
+            pipeline_builder.runtime_filter_hash_join_state = runtime_filter_hash_join_state;
 
             let res = pipeline_builder.finalize(&self.physical_plan)?;
 

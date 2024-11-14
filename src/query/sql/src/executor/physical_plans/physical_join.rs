@@ -111,7 +111,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         join: &crate::plans::Join,
         required: ColumnSet,
-        stat_info: PlanStatsInfo,
+        plan_stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let mut others_required = join
@@ -160,7 +160,7 @@ impl PhysicalPlanBuilder {
                     others_required,
                     left_required,
                     right_required,
-                    stat_info,
+                    plan_stat_info,
                 )
                 .await
             }

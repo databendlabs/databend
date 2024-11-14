@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::atomic::AtomicUsize;
@@ -21,16 +22,19 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::DataType;
 use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
@@ -40,10 +44,13 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
+use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
+use databend_common_storages_fuse::TableContext;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use xorf::BinaryFuse16;
 
 use super::ProbeState;
 use super::ProcessState;
@@ -52,10 +59,10 @@ use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
-use crate::sql::planner::plans::JoinType;
 
 // ({(Interval,prefix),(Interval,repfix),...},chunk_idx)
 // 1.The Interval is the partial unmodified interval offset in chunks.
@@ -91,6 +98,8 @@ pub struct HashJoinProbeState {
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
+    /// Runtime filter
+    pub(crate) build_runtime_filter_worker: AtomicUsize,
 }
 
 impl HashJoinProbeState {
@@ -136,6 +145,7 @@ impl HashJoinProbeState {
             merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
+            build_runtime_filter_worker: AtomicUsize::new(0),
         })
     }
 
@@ -163,6 +173,20 @@ impl HashJoinProbeState {
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })
+    }
+
+    fn increase_probe_num_rows(&self, num_rows: u64) {
+        self.hash_join_state
+            .probe_statistics
+            .num_rows
+            .fetch_add(num_rows, Ordering::AcqRel);
+    }
+
+    fn increase_probe_num_hash_matched_rows(&self, num_hash_matched_rows: u64) {
+        self.hash_join_state
+            .probe_statistics
+            .num_hash_matched_rows
+            .fetch_add(num_hash_matched_rows, Ordering::AcqRel);
     }
 
     pub fn probe_join(
@@ -277,11 +301,13 @@ impl HashJoinProbeState {
         // Adaptive early filtering.
         // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
         // when all keys have matches. This allows us to achieve the same performance as before.
-        probe_state.num_keys += if let Some(valids) = &valids {
+        let num_keys = if let Some(valids) = &valids {
             (valids.len() - valids.unset_bits()) as u64
         } else {
             input_num_rows as u64
         };
+        probe_state.num_keys += num_keys;
+        self.increase_probe_num_rows(num_keys);
         // We use the information from the probed data to predict the matching state of this probe.
         let prefer_early_filtering =
             (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
@@ -348,6 +374,7 @@ impl HashJoinProbeState {
                     }
                 };
                 probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
+                self.increase_probe_num_hash_matched_rows(probe_state.selection_count as u64);
 
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
@@ -356,6 +383,79 @@ impl HashJoinProbeState {
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })
+    }
+
+    fn construct_binary_fuse(
+        &self,
+        column: Column,
+        validity: Option<Bitmap>,
+        data_type: DataType,
+    ) -> Result<BinaryFuse16> {
+        // Generate bloom filter using build column
+        let num_rows = column.len();
+        let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
+        let mut column_hashes = HashSet::with_capacity(num_rows);
+        let column = if let Some(validity) = validity {
+            column.filter(&validity)
+        } else {
+            column
+        };
+        let key_columns = &[column];
+        hash_by_method(&method, key_columns.into(), num_rows, &mut column_hashes)?;
+        let mut hashes = Vec::with_capacity(column_hashes.len());
+        column_hashes.into_iter().for_each(|hash| {
+            hashes.push(hash);
+        });
+        Ok(BinaryFuse16::try_from(&hashes)?)
+    }
+
+    pub fn build_bloom_filter(&self) -> Result<()> {
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let bloom_filter_columns = &mut build_state.runtime_filter_columns;
+
+        for ((build_key, probe_key, table_index), column) in self
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .zip(
+                self.hash_join_state
+                    .hash_join_desc
+                    .runtime_filter_exprs
+                    .iter(),
+            )
+            .filter_map(|(build_key, runtime_filter_expr)| {
+                runtime_filter_expr
+                    .as_ref()
+                    .map(|(probe_key, table_index)| (build_key, probe_key, table_index))
+            })
+            .filter(|(_, probe_key, _)| Expr::<String>::column_id(probe_key).is_some())
+            .zip(bloom_filter_columns.iter())
+        {
+            // Build runtime filter.
+            let mut runtime_filter = RuntimeFilterInfo::default();
+            let (column, validity) = if let Column::Nullable(inner_column) = column.clone() {
+                if inner_column.validity.unset_bits() == 0 {
+                    (inner_column.column, None)
+                } else {
+                    (inner_column.column, Some(inner_column.validity))
+                }
+            } else {
+                (column.clone(), None)
+            };
+
+            // Construct bloom filter.
+            let data_type = build_key.data_type().remove_nullable();
+            let bloom_filter = self.construct_binary_fuse(column, validity, data_type)?;
+            let probe_key_column_id = Expr::<String>::column_id(probe_key).unwrap();
+            runtime_filter.add_bloom((probe_key_column_id, Arc::new(bloom_filter)));
+            if !runtime_filter.is_empty() {
+                self.ctx.set_runtime_filter((*table_index, runtime_filter));
+            }
+        }
+
+        bloom_filter_columns.clear();
+        Ok(())
     }
 
     /// Checks if a join type can eliminate valids.
@@ -390,6 +490,8 @@ impl HashJoinProbeState {
     pub fn probe_attach(&self) {
         self.wait_probe_counter.fetch_add(1, Ordering::AcqRel);
         self.next_round_counter.fetch_add(1, Ordering::AcqRel);
+        self.build_runtime_filter_worker
+            .fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn probe_done(&self) -> Result<()> {

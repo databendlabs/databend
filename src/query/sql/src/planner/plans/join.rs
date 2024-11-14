@@ -201,6 +201,7 @@ pub struct Join {
     pub single_to_inner: Option<JoinType>,
     // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+    pub is_merge_into_join: bool,
 }
 
 impl Default for Join {
@@ -215,6 +216,7 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            is_merge_into_join: false,
         }
     }
 }

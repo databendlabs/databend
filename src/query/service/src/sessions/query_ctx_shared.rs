@@ -30,6 +30,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
@@ -64,6 +65,7 @@ use crate::sessions::Session;
 use crate::storages::Table;
 
 type DatabaseAndTable = (String, String, String);
+type HashJoinRuntimeFilterColumn = HashMap<IndexType, Vec<(usize, String)>>;
 
 /// Data that needs to be shared in a query context.
 pub struct QueryContextShared {
@@ -132,6 +134,11 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
 
+    pub(in crate::sessions) runtime_filter_columns: Arc<RwLock<HashJoinRuntimeFilterColumn>>,
+
+    pub(in crate::sessions) hash_join_probe_statistics:
+        Arc<RwLock<HashMap<usize, Arc<HashJoinProbeStatistics>>>>,
+
     pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
     // Records query level data cache metrics
@@ -189,6 +196,8 @@ impl QueryContextShared {
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
+            runtime_filter_columns: Default::default(),
+            hash_join_probe_statistics: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),

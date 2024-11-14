@@ -55,7 +55,10 @@ pub struct BlockReader {
     pub native_columns_reader: NativeColumnsReader,
 }
 
-fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
+pub fn inner_project_field_default_values(
+    default_vals: &[Scalar],
+    paths: &[usize],
+) -> Result<Scalar> {
     if paths.is_empty() {
         return Err(ErrorCode::BadArguments(
             "path should not be empty".to_string(),

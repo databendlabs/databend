@@ -77,6 +77,8 @@ pub struct TableScan {
 
     pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
+
+    pub runtime_filter_columns: Vec<(usize, String)>,
 }
 
 impl TableScan {
@@ -281,6 +283,18 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
+        let runtime_filter_columns = if scan.is_merge_into_target {
+            let mut runtime_filter_columns = Vec::new();
+            for (hash_join_id, columns) in self.runtime_filter_columns.iter() {
+                for (_, column_name) in columns.iter() {
+                    runtime_filter_columns.push((*hash_join_id, column_name.clone()))
+                }
+            }
+            runtime_filter_columns
+        } else {
+            vec![]
+        };
+
         let mut plan = PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
             name_mapping,
@@ -288,6 +302,7 @@ impl PhysicalPlanBuilder {
             table_index: Some(scan.table_index),
             stat_info: Some(stat_info),
             internal_column,
+            runtime_filter_columns,
         });
 
         // Update stream columns if needed.
@@ -326,6 +341,7 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             internal_column: None,
+            runtime_filter_columns: vec![],
         }))
     }
 

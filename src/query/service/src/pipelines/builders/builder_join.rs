@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::Sinker;
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::physical_plans::MaterializedCte;
 use databend_common_sql::executor::physical_plans::RangeJoin;
+use databend_common_sql::executor::physical_plans::RuntimeFilterSink;
+use databend_common_sql::executor::physical_plans::RuntimeFilterSource;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::IndexType;
@@ -34,6 +38,8 @@ use crate::pipelines::processors::transforms::MaterializedCteSink;
 use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::pipelines::processors::transforms::TransformRuntimeFilterSink;
+use crate::pipelines::processors::transforms::TransformRuntimeFilterSource;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuilder;
@@ -80,6 +86,7 @@ impl PipelineBuilder {
         right_side_builder.cte_state = self.cte_state.clone();
         right_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         right_side_builder.hash_join_states = self.hash_join_states.clone();
+        right_side_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
 
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
@@ -109,6 +116,9 @@ impl PipelineBuilder {
             self.hash_join_states
                 .insert(build_cache_index, state.clone());
         }
+        if let Some(runtime_filter) = &join.runtime_filter {
+            self.expand_runtime_filter_pipeline(runtime_filter, state.clone())?;
+        }
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)?;
 
@@ -123,7 +133,7 @@ impl PipelineBuilder {
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
     ) -> Result<Arc<HashJoinState>> {
-        HashJoinState::try_create(
+        let hash_join_state = HashJoinState::create(
             self.ctx.clone(),
             join.build.output_schema()?,
             &join.build_projections,
@@ -132,7 +142,13 @@ impl PipelineBuilder {
             merge_into_is_distributed,
             enable_merge_into_optimization,
             join.build_side_cache_info.clone(),
-        )
+            join.runtime_filter_source_fields.clone(),
+        )?;
+        self.ctx.set_hash_join_probe_statistics(
+            join.hash_join_id,
+            hash_join_state.probe_statistics.clone(),
+        );
+        Ok(hash_join_state)
     }
 
     fn expand_build_side_pipeline(
@@ -151,6 +167,7 @@ impl PipelineBuilder {
         build_side_builder.cte_state = self.cte_state.clone();
         build_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         build_side_builder.hash_join_states = self.hash_join_states.clone();
+        build_side_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -170,11 +187,27 @@ impl PipelineBuilder {
                 build_state.clone(),
             )?))
         };
-        // for distributed merge into when source as build side.
-        if hash_join_plan.need_hold_hash_table {
-            self.join_state = Some(build_state.clone())
-        }
         build_res.main_pipeline.add_sink(create_sink_processor)?;
+
+        self.pipelines.push(build_res.main_pipeline.finalize());
+        self.pipelines.extend(build_res.sources_pipelines);
+        Ok(())
+    }
+
+    fn expand_runtime_filter_pipeline(
+        &mut self,
+        runtime_filter: &PhysicalPlan,
+        hash_join_state: Arc<HashJoinState>,
+    ) -> Result<()> {
+        let context = QueryContext::create_from(self.ctx.clone());
+        let mut builder = PipelineBuilder::create(
+            self.func_ctx.clone(),
+            self.settings.clone(),
+            context,
+            self.main_pipeline.get_scopes(),
+        );
+        builder.runtime_filter_hash_join_state = Some(hash_join_state);
+        let build_res = builder.finalize(runtime_filter)?;
 
         self.pipelines.push(build_res.main_pipeline.finalize());
         self.pipelines.extend(build_res.sources_pipelines);
@@ -258,6 +291,7 @@ impl PipelineBuilder {
         materialized_side_builder.cte_state = self.cte_state.clone();
         materialized_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         materialized_side_builder.hash_join_states = self.hash_join_states.clone();
+        materialized_side_builder.runtime_filter_columns = self.runtime_filter_columns.clone();
         let mut materialized_side_pipeline =
             materialized_side_builder.finalize(materialized_side)?;
         assert!(
@@ -286,5 +320,54 @@ impl PipelineBuilder {
         self.pipelines
             .extend(materialized_side_pipeline.sources_pipelines);
         Ok(())
+    }
+
+    pub(crate) fn build_runtime_filter_source(
+        &mut self,
+        _runtime_filter_source: &RuntimeFilterSource,
+    ) -> Result<()> {
+        let node_id = self.ctx.get_cluster().local_id.clone();
+        let hash_join_state = self.runtime_filter_hash_join_state.clone().unwrap();
+        self.main_pipeline.add_source(
+            |output| {
+                TransformRuntimeFilterSource::create(
+                    output,
+                    node_id.clone(),
+                    hash_join_state.clone(),
+                )
+            },
+            1,
+        )
+    }
+
+    pub(crate) fn build_runtime_filter_sink(
+        &mut self,
+        runtime_filter_sink: &RuntimeFilterSink,
+    ) -> Result<()> {
+        self.build_pipeline(&runtime_filter_sink.input)?;
+        self.main_pipeline.try_resize(1)?;
+
+        let local_id = self.ctx.get_cluster().local_id.clone();
+        let num_cluster_nodes = self.ctx.get_cluster().nodes.len();
+        let mut is_collected = self
+            .ctx
+            .get_cluster()
+            .nodes
+            .iter()
+            .map(|node| (node.id.clone(), false))
+            .collect::<HashMap<_, _>>();
+        is_collected.insert(local_id, true);
+
+        let hash_join_state = self.runtime_filter_hash_join_state.clone().unwrap();
+        let create_sink_processor = |input| {
+            TransformRuntimeFilterSink::create(
+                input,
+                hash_join_state.clone(),
+                num_cluster_nodes,
+                is_collected.clone(),
+            )
+        };
+
+        self.main_pipeline.add_sink(create_sink_processor)
     }
 }

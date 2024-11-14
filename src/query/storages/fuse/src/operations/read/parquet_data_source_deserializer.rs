@@ -71,7 +71,7 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+    cached_runtime_filter: Option<Vec<(FieldIndex, Arc<BinaryFuse16>)>>,
     // for merge_into target build.
     need_reserve_block_info: bool,
 }
@@ -141,7 +141,7 @@ impl DeserializeDataTransform {
                         .ok()
                         .map(|idx| (idx, filter.1.clone()))
                 })
-                .collect::<Vec<(FieldIndex, BinaryFuse16)>>();
+                .collect::<Vec<(FieldIndex, Arc<BinaryFuse16>)>>();
             if bloom_filters.is_empty() {
                 return Ok(None);
             }

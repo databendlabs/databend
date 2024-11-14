@@ -32,6 +32,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
@@ -928,19 +929,39 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_runtime_filter_columns(&self, _table_index: usize, _columns: Vec<(usize, String)>) {
+        todo!()
+    }
+
+    fn get_runtime_filter_columns(&self, _table_index: usize) -> Vec<(usize, String)> {
+        todo!()
+    }
+
+    fn set_hash_join_probe_statistics(
+        &self,
+        _join_id: usize,
+        _statistics: Arc<HashJoinProbeStatistics>,
+    ) {
+        todo!()
+    }
+
+    fn get_hash_join_probe_statistics(&self, _join_id: usize) -> Arc<HashJoinProbeStatistics> {
+        todo!()
+    }
+
     fn clear_runtime_filter(&self) {
         todo!()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, Arc<BinaryFuse16>)> {
         todo!()
     }
 
-    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, Expr<String>)> {
         todo!()
     }
 
-    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, Expr<String>)> {
         todo!()
     }
 

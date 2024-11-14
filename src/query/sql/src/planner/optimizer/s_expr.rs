@@ -119,6 +119,10 @@ impl SExpr {
         self.original_group
     }
 
+    pub fn stat_info(&self) -> Option<Arc<StatInfo>> {
+        self.stat_info.lock().unwrap().clone()
+    }
+
     /// Replace children with given new `children`.
     /// Note that this method will keep the `applied_rules` of
     /// current `SExpr` unchanged.

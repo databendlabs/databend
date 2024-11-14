@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileLabel;
+use databend_common_catalog::runtime_filter_info::HashJoinProbeStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -57,6 +58,8 @@ pub struct PipelineBuilder {
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
+    pub runtime_filter_columns: HashMap<usize, Vec<(String, Arc<HashJoinProbeStatistics>)>>,
+    pub runtime_filter_hash_join_state: Option<Arc<HashJoinState>>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
     pub(crate) is_exchange_neighbor: bool,
@@ -83,6 +86,8 @@ impl PipelineBuilder {
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
             is_exchange_neighbor: false,
+            runtime_filter_columns: HashMap::new(),
+            runtime_filter_hash_join_state: None,
         }
     }
 
@@ -174,6 +179,12 @@ impl PipelineBuilder {
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
             PhysicalPlan::HashJoin(join) => self.build_join(join),
+            PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
+                self.build_runtime_filter_source(runtime_filter_source)
+            }
+            PhysicalPlan::RuntimeFilterSink(runtime_filter_sink) => {
+                self.build_runtime_filter_sink(runtime_filter_sink)
+            }
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),

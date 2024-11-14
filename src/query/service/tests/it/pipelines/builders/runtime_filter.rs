@@ -83,7 +83,7 @@ async fn join_build_state(
 ) -> Result<Arc<HashJoinBuildState>> {
     let func_ctx = ctx.get_function_context()?;
 
-    let join_state = HashJoinState::try_create(
+    let join_state = HashJoinState::create(
         ctx.clone(),
         join.build.output_schema()?,
         &join.build_projections,
@@ -92,6 +92,7 @@ async fn join_build_state(
         false,
         true,
         None,
+        vec![],
     )?;
     let build_state = HashJoinBuildState::try_create(
         ctx.clone(),
@@ -126,9 +127,7 @@ async fn test_generate_runtime_filter() -> Result<()> {
     )
     .await?;
     let join = find_join(&plan)?;
-    assert!(join.enable_bloom_runtime_filter);
     let join_build_state = join_build_state(&fixture.new_query_ctx().await?, &join).await?;
-    assert!(join_build_state.get_enable_bloom_runtime_filter());
-    assert!(join_build_state.get_enable_min_max_runtime_filter());
+    assert!(join_build_state.support_runtime_filter());
     Ok(())
 }
