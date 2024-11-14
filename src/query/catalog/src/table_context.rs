@@ -61,7 +61,6 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -181,10 +180,6 @@ pub trait TableContext: Send + Sync {
     fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
         unimplemented!()
     }
-    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
-    fn set_lazy_mutation_delete(&self, lazy: bool);
-    fn get_lazy_mutation_delete(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
