@@ -24,6 +24,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
+use arrow_schema::DataType;
 pub use builder::BinaryViewColumnBuilder;
 use either::Either;
 pub use iterator::BinaryViewColumnIter;
@@ -547,6 +550,38 @@ impl TryFrom<BinaryColumn> for Utf8ViewColumn {
 impl From<StringColumn> for BinaryColumn {
     fn from(col: Utf8ViewColumn) -> BinaryColumn {
         BinaryColumnBuilder::from_iter(col.iter()).into()
+    }
+}
+
+impl From<Utf8ViewColumn> for ArrayData {
+    fn from(column: Utf8ViewColumn) -> Self {
+        let builder = ArrayDataBuilder::new(DataType::Utf8View)
+            .len(column.len())
+            .add_buffer(column.views.into())
+            .add_buffers(
+                column
+                    .buffers
+                    .into_iter()
+                    .map(|x| x.clone().into())
+                    .collect::<Vec<_>>(),
+            );
+        unsafe { builder.build_unchecked() }
+    }
+}
+
+impl From<BinaryViewColumn> for ArrayData {
+    fn from(column: BinaryViewColumn) -> Self {
+        let builder = ArrayDataBuilder::new(DataType::BinaryView)
+            .len(column.len())
+            .add_buffer(column.views.into())
+            .add_buffers(
+                column
+                    .buffers
+                    .into_iter()
+                    .map(|x| x.clone().into())
+                    .collect::<Vec<_>>(),
+            );
+        unsafe { builder.build_unchecked() }
     }
 }
 

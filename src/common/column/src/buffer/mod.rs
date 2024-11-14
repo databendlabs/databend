@@ -20,6 +20,9 @@ mod iterator;
 
 use std::ops::Deref;
 
+pub use immutable::buffer_to_array_data;
+pub use immutable::Buffer;
+
 #[allow(dead_code)]
 pub(crate) enum BytesAllocator {
     Arrow(arrow_buffer::Buffer),
@@ -76,7 +79,7 @@ impl<T> From<BytesInner<T>> for Bytes<T> {
     }
 }
 
-pub(crate) fn to_buffer<T: crate::types::NativeType>(
+pub(crate) fn to_buffer<T: Send + Sync + std::panic::RefUnwindSafe + 'static>(
     value: std::sync::Arc<Bytes<T>>,
 ) -> arrow_buffer::Buffer {
     // This should never panic as ForeignVec pointer must be non-null
@@ -86,7 +89,9 @@ pub(crate) fn to_buffer<T: crate::types::NativeType>(
     unsafe { arrow_buffer::Buffer::from_custom_allocation(ptr, len, value) }
 }
 
-pub(crate) fn to_bytes<T: crate::types::NativeType>(value: arrow_buffer::Buffer) -> Bytes<T> {
+pub(crate) fn to_bytes<T: Send + Sync + std::panic::RefUnwindSafe + 'static>(
+    value: arrow_buffer::Buffer,
+) -> Bytes<T> {
     let ptr = value.as_ptr();
     let align = ptr.align_offset(std::mem::align_of::<T>());
     assert_eq!(align, 0, "not aligned");
@@ -100,5 +105,3 @@ pub(crate) fn to_bytes<T: crate::types::NativeType>(value: arrow_buffer::Buffer)
     // Safety: slice is valid for len elements of T
     unsafe { Bytes::from_foreign(ptr, len, owner) }
 }
-
-pub use immutable::Buffer;

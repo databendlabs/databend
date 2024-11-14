@@ -113,7 +113,105 @@ impl DataBlock {
 }
 
 impl Column {
+    pub fn arrow_field(&self) -> Field {
+        let f = DataField::new("DUMMY", self.data_type());
+        Field::from(&f)
+    }
+
     pub fn from_arrow_rs(array: Arc<dyn arrow_array::Array>, data_type: &DataType) -> Result<Self> {
-        todo!("cc")
+        let column = match data_type {
+            DataType::Null => Column::Null { len: array.len() },
+            DataType::EmptyArray => Column::EmptyArray { len: array.len() },
+            DataType::EmptyMap => Column::EmptyMap { len: array.len() },
+            DataType::Number(NumberDataType::UInt8) => Column::Number(NumberColumn::UInt8(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::UInt8Array>()
+                    .expect("Expected UInt8Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::UInt16) => Column::Number(NumberColumn::UInt16(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::UInt16Array>()
+                    .expect("Expected UInt16Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::UInt32) => Column::Number(NumberColumn::UInt32(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::UInt32Array>()
+                    .expect("Expected UInt32Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::UInt64) => Column::Number(NumberColumn::UInt64(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::UInt64Array>()
+                    .expect("Expected UInt64Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::Int8) => Column::Number(NumberColumn::Int8(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::Int8Array>()
+                    .expect("Expected Int8Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::Int16) => Column::Number(NumberColumn::Int16(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::Int16Array>()
+                    .expect("Expected Int16Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::Int32) => Column::Number(NumberColumn::Int32(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::Int32Array>()
+                    .expect("Expected Int32Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::Int64) => Column::Number(NumberColumn::Int64(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::Int64Array>()
+                    .expect("Expected Int64Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::Float32) => Column::Number(NumberColumn::Float32(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::Float32Array>()
+                    .expect("Expected Float32Array")
+                    .values()
+                    .to_vec(),
+            )),
+            DataType::Number(NumberDataType::Float64) => Column::Number(NumberColumn::Float64(
+                array
+                    .as_any()
+                    .downcast_ref::<arrow_array::Float64Array>()
+                    .expect("Expected Float64Array")
+                    .values()
+                    .to_vec(),
+            )),
+            // Add more data type conversions as needed
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported data type: {:?}",
+                    data_type
+                )));
+            }
+        };
+
+        Ok(Self { /* initialize with column data */ })
     }
 }

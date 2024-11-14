@@ -17,12 +17,14 @@ use std::iter::FromIterator;
 use std::ops::Deref;
 use std::sync::Arc;
 
-
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
+use arrow_schema::DataType;
 use either::Either;
 use num_traits::Zero;
 
-use super::iterator::IntoIter;
 use super::Bytes;
+use crate::types::NativeType;
 
 /// [`Buffer`] is a contiguous memory region that can be shared across
 /// thread boundaries.
@@ -332,13 +334,22 @@ impl<T> FromIterator<T> for Buffer<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a Buffer<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_ref().iter()
+    }
+}
+
 impl<T: Copy> IntoIterator for Buffer<T> {
     type Item = T;
 
-    type IntoIter = IntoIter<T>;
+    type IntoIter = super::iterator::IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        IntoIter::new(self)
+        super::iterator::IntoIter::new(self)
     }
 }
 
@@ -355,4 +366,11 @@ impl<T: crate::types::NativeType> From<Buffer<T>> for arrow_buffer::Buffer {
             value.length * std::mem::size_of::<T>(),
         )
     }
+}
+
+pub fn buffer_to_array_data<T: NativeType>(value: (Buffer<T>, DataType)) -> ArrayData {
+    let l = value.0.len();
+    let buffer = value.0.into();
+    let builder = ArrayDataBuilder::new(value.1).len(l).buffers(vec![buffer]);
+    unsafe { builder.build_unchecked() }
 }

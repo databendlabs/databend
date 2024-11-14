@@ -19,6 +19,9 @@ mod iterator;
 
 use std::ops::Range;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
+use arrow_schema::DataType;
 pub use builder::BinaryColumnBuilder;
 pub use iterator::BinaryColumnBuilderIter;
 pub use iterator::BinaryColumnIter;
@@ -123,5 +126,15 @@ impl BinaryColumn {
             }
         }
         Ok(())
+    }
+}
+
+impl From<BinaryColumn> for ArrayData {
+    fn from(column: BinaryColumn) -> Self {
+        let builder = ArrayDataBuilder::new(DataType::LargeBinary)
+            .len(column.len())
+            .buffers(vec![column.offsets.into(), column.data.into()]);
+
+        unsafe { builder.build_unchecked() }
     }
 }

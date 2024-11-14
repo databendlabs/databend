@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_column::buffer::Buffer;
@@ -1143,6 +1145,28 @@ impl DecimalColumn {
                 )
             }
         })
+    }
+
+    pub fn arrow_buffer(&self) -> arrow_buffer::Buffer {
+        match self {
+            DecimalColumn::Decimal128(col, _) => col.clone().into(),
+            DecimalColumn::Decimal256(col, _) => {
+                let col = unsafe {
+                    std::mem::transmute::<_, Buffer<databend_common_column::types::i256>>(
+                        col.clone(),
+                    )
+                };
+                col.into()
+            }
+        }
+    }
+
+    pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
+        let buffer = self.arrow_buffer();
+        let builder = ArrayDataBuilder::new(arrow_type)
+            .len(self.len())
+            .buffers(vec![buffer]);
+        unsafe { builder.build_unchecked() }
     }
 }
 

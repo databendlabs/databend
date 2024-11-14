@@ -18,6 +18,8 @@ use std::iter::TrustedLen;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
 use either::Either;
 
 use super::chunk_iter_to_vec;
@@ -519,5 +521,24 @@ impl From<Bitmap> for arrow_buffer::buffer::NullBuffer {
         let buffer = arrow_buffer::buffer::BooleanBuffer::new(buffer, value.offset, value.length);
         // Safety: null count is accurate
         unsafe { arrow_buffer::buffer::NullBuffer::new_unchecked(buffer, null_count) }
+    }
+}
+
+impl From<&Bitmap> for ArrayData {
+    fn from(value: &Bitmap) -> Self {
+        let buffer = arrow_buffer::buffer::NullBuffer::from(value.clone());
+        let builder = ArrayDataBuilder::new(arrow_schema::DataType::Boolean)
+            .len(buffer.len())
+            .offset(buffer.offset())
+            .buffers(vec![buffer.into_inner().into_inner()]);
+
+        // Safety: Array is valid
+        unsafe { builder.build_unchecked() }
+    }
+}
+
+impl From<Bitmap> for ArrayData {
+    fn from(value: Bitmap) -> Self {
+        ArrayData::from(&value)
     }
 }

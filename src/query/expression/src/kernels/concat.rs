@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
+use std::sync::Arc;
 
+use arrow_array::Array;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
@@ -219,7 +221,7 @@ impl Column {
             | Column::Binary(_)
             | Column::String(_)
             | Column::Bitmap(_) => {
-                Self::concat_use_grows(columns, first_column.data_type(), capacity)
+                Self::concat_use_arrow(columns, first_column.data_type(), capacity)
             }
         };
         Ok(column)
@@ -239,16 +241,22 @@ impl Column {
         builder.into()
     }
 
-    pub fn concat_use_grows(
+    pub fn concat_use_arrow(
         cols: impl Iterator<Item = Column>,
         data_type: DataType,
         num_rows: usize,
     ) -> Column {
-        todo!("cc")
+        let arrays: Vec<Arc<dyn Array>> = cols.map(|c| c.into_arrow_rs()).collect();
+        let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();
+        let result = arrow_select::concat::concat(&arrays).unwrap();
+        Column::from_arrow_rs(result, &data_type).unwrap()
     }
 
     pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
-        todo!("cc")
+        let cols = bitmaps.map(|bitmap| Column::Boolean(bitmap));
+        Self::concat_use_arrow(cols, DataType::Boolean, num_rows)
+            .into_boolean()
+            .unwrap()
     }
 
     fn concat_value_types<T: ValueType>(

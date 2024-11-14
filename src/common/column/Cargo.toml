@@ -18,12 +18,19 @@ column-default = [
 ]
 
 [dependencies]
+
+databend-common-exception = { workspace = true }
+databend-common-base = { workspace = true }
+
 serde = { workspace = true, features = ["rc"], optional = true }
 serde_derive = { workspace = true, optional = true }
 foreign_vec = { workspace = true }
+match-template = { workspace = true }
 bytemuck = { workspace = true }
 num-traits = { workspace = true }
+enum-as-inner = { workspace = true }
 arrow-buffer = { workspace = true }
+arrow-schema = { workspace = true }
 hex = { workspace = true }
 arrow-data = { workspace = true }
 ethnum =  { workspace = true }

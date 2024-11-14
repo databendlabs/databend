@@ -12,6 +12,8 @@ test = true
 [dependencies]
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
+arrow-data = { workspace = true }
+arrow-buffer = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4"] }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }

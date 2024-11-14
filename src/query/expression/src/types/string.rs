@@ -248,12 +248,11 @@ impl StringColumnBuilder {
     }
 
     pub fn try_from_bin_column(col: BinaryColumn) -> Result<Self> {
-        // let data = Utf8ViewColumnBuilder::try_from_bin_column(col).map_err(|e| todo!("ccc"))?;
-        // Ok(StringColumnBuilder {
-        //     data,
-        //     row_buffer: Vec::new(),
-        // })
-        todo!("ccc")
+        let data = Utf8ViewColumnBuilder::try_from_bin_column(col)?;
+        Ok(StringColumnBuilder {
+            data,
+            row_buffer: Vec::new(),
+        })
     }
 
     pub fn repeat(scalar: &str, n: usize) -> Self {

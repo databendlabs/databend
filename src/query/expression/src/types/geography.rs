@@ -281,7 +281,7 @@ impl GeographyColumn {
     }
 
     pub fn check_valid(&self) -> Result<()> {
-        self.0.check_valid().map_err(|e| todo!("ccc error"))
+        Ok(self.0.check_valid()?)
     }
 }
 

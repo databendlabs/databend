@@ -78,7 +78,7 @@ pub fn write_column(
     col: &Column,
     w: &mut impl Write,
 ) -> std::result::Result<(), arrow_schema::ArrowError> {
-    let field: arrow_schema::Field = todo!("cc");
+    let field = col.arrow_field();
     let schema = Schema::new(vec![field]);
     let mut writer = FileWriter::try_new_with_options(
         w,

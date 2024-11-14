@@ -17,10 +17,13 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_column::buffer::Buffer;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::buffer::buffer_to_array_data;
+use databend_common_column::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
@@ -637,6 +640,35 @@ impl NumberColumn {
                 })
             }
         })
+    }
+
+    pub fn arrow_buffer(&self) -> arrow_buffer::Buffer {
+        match self {
+            NumberColumn::UInt8(buffer) => buffer.clone().into(),
+            NumberColumn::UInt16(buffer) => buffer.clone().into(),
+            NumberColumn::UInt32(buffer) => buffer.clone().into(),
+            NumberColumn::UInt64(buffer) => buffer.clone().into(),
+            NumberColumn::Int8(buffer) => buffer.clone().into(),
+            NumberColumn::Int16(buffer) => buffer.clone().into(),
+            NumberColumn::Int32(buffer) => buffer.clone().into(),
+            NumberColumn::Int64(buffer) => buffer.clone().into(),
+            NumberColumn::Float32(buffer) => {
+                let r = unsafe { std::mem::transmute::<_, Buffer<f32>>(buffer.clone()) };
+                r.into()
+            }
+            NumberColumn::Float64(buffer) => {
+                let r = unsafe { std::mem::transmute::<_, Buffer<f64>>(buffer.clone()) };
+                r.into()
+            }
+        }
+    }
+
+    pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
+        let buffer = self.arrow_buffer();
+        let builder = ArrayDataBuilder::new(arrow_type)
+            .len(self.len())
+            .buffers(vec![buffer]);
+        unsafe { builder.build_unchecked() }
     }
 }
 

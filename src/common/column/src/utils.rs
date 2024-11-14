@@ -44,3 +44,13 @@ macro_rules! impl_sliced {
         }
     };
 }
+
+#[macro_export]
+macro_rules! with_number_type {
+    ( | $t:tt | $($tail:tt)* ) => {
+        match_template::match_template! {
+            $t = [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64],
+            $($tail)*
+        }
+    }
+}

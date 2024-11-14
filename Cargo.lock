@@ -3227,11 +3227,16 @@ version = "0.1.0"
 dependencies = [
  "arrow-buffer",
  "arrow-data",
+ "arrow-schema",
  "bytemuck",
+ "databend-common-base",
+ "databend-common-exception",
  "either",
+ "enum-as-inner 0.5.1",
  "ethnum",
  "foreign_vec",
  "hex",
+ "match-template",
  "num-traits",
  "serde",
  "serde_derive",
@@ -3323,6 +3328,8 @@ name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
+ "arrow-data",
  "arrow-flight",
  "arrow-ipc",
  "arrow-ord",
