@@ -175,8 +175,21 @@ unsafe impl Allocator for DmaAllocator {
 type DmaBuffer = Vec<u8, DmaAllocator>;
 
 pub fn dma_buffer_to_bytes(buf: DmaBuffer) -> Bytes {
-    let (ptr, len, cap) = buf.into_raw_parts();
-    Bytes::from(unsafe { Vec::from_raw_parts(ptr, len, cap) })
+    if buf.is_empty() {
+        return Bytes::new();
+    }
+    let (ptr, len, cap, alloc) = buf.into_raw_parts_with_alloc();
+    // Memory fitting
+    let old_layout = Layout::from_size_align(cap, alloc.0.as_usize()).unwrap();
+    let new_layout = Layout::from_size_align(len, std::mem::align_of::<u8>()).unwrap();
+    let data = unsafe {
+        let p = Global {}
+            .shrink(NonNull::new(ptr).unwrap(), old_layout, new_layout)
+            .unwrap();
+        let cap = p.len();
+        Vec::from_raw_parts(p.cast().as_mut(), len, cap)
+    };
+    Bytes::from(data)
 }
 
 /// A `DmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
