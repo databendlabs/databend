@@ -32,7 +32,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_VERSION_COL_NAME;
-use indexmap::IndexMap;
 
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
@@ -258,8 +257,6 @@ impl Binder {
             &name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
 
         // Bind matched clause columns and add update fields and exprs
