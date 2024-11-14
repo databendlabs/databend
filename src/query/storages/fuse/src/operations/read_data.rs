@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
@@ -23,7 +22,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
@@ -36,8 +34,6 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
-use crate::pruning::SegmentLocation;
-use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
@@ -81,7 +77,7 @@ impl FuseTable {
         )
     }
 
-    fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
+    pub(crate) fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
@@ -142,19 +138,6 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let snapshot_loc = plan.statistics.snapshot.clone();
-        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
-
-        for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(SegmentLocation {
-                    segment_idx: lazy_part_info.segment_index,
-                    location: lazy_part_info.segment_location.clone(),
-                    snapshot_loc: snapshot_loc.clone(),
-                });
-            }
-        }
-
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
@@ -196,12 +179,7 @@ impl FuseTable {
                 .transpose()?,
         );
 
-        let (tx, rx) = if !lazy_init_segments.is_empty() {
-            let (tx, rx) = async_channel::bounded(max_io_requests);
-            (Some(tx), Some(rx))
-        } else {
-            (None, None)
-        };
+        let rx = self.pruned_result_receiver.lock().take();
 
         self.build_fuse_source_pipeline(
             ctx.clone(),
@@ -218,42 +196,6 @@ impl FuseTable {
 
         // replace the column which has data mask if needed
         self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
-
-        if let Some(sender) = tx {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            pipeline.set_on_init(move || {
-                ctx.get_runtime()?.try_spawn(
-                    async move {
-                        match table
-                            .prune_snapshot_blocks(
-                                ctx,
-                                push_downs,
-                                table_schema,
-                                lazy_init_segments,
-                                0,
-                            )
-                            .await
-                        {
-                            Ok((_, partitions)) => {
-                                for part in partitions.partitions {
-                                    // ignore the error, the sql may be killed or early stop
-                                    let _ = sender.send(Ok(part)).await;
-                                }
-                            }
-                            Err(err) => {
-                                let _ = sender.send(Err(err)).await;
-                            }
-                        }
-                        Ok::<_, ErrorCode>(())
-                    },
-                    None,
-                )?;
-
-                Ok(())
-            });
-        }
 
         Ok(())
     }

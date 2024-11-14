@@ -16,6 +16,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use async_channel::Receiver;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -27,9 +30,11 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -38,17 +43,26 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
+use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexBuilder;
 use crate::pruning::create_segment_location_vector;
+use crate::pruning::table_sample;
+use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
+use crate::pruning_pipeline::AsyncBlockPruneTransform;
+use crate::pruning_pipeline::ExtractSegmentTransform;
+use crate::pruning_pipeline::PrunedSegmentReceiverSource;
+use crate::pruning_pipeline::SampleBlockMetasTransform;
+use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
@@ -124,6 +138,89 @@ impl FuseTable {
         }
     }
 
+    pub(crate) fn do_build_prune_pipeline(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        source_pipeline: &mut Pipeline,
+    ) -> Result<Option<Pipeline>> {
+        let segments_location = plan.statistics.snapshot.clone();
+        let table_schema = self.schema_with_stream();
+        let dal = self.operator.clone();
+        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+
+        for part in &plan.parts.partitions {
+            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
+                lazy_init_segments.push(SegmentLocation {
+                    segment_idx: lazy_part_info.segment_index,
+                    location: lazy_part_info.segment_location.clone(),
+                    snapshot_loc: segments_location.clone(),
+                });
+            }
+        }
+        // If there is no lazy part, we don't need to prune
+        if lazy_init_segments.is_empty() {
+            return Ok(None);
+        }
+        let push_downs = plan.push_downs.clone();
+        let max_io_requests = self.adjust_io_request(&ctx)?;
+        let (tx, rx) = async_channel::bounded(max_io_requests);
+        self.pruned_result_receiver.lock().replace(rx);
+
+        // If we can get the pruning result from cache, we don't need to prune again, but need sent
+        // the parts to the next pipeline
+        let derterministic_cache_key =
+            push_downs
+                .as_ref()
+                .filter(|p| p.is_deterministic)
+                .map(|push_downs| {
+                    format!(
+                        "{:x}",
+                        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+                    )
+                });
+
+        if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+            let sender = tx.clone();
+            source_pipeline.set_on_init(move || {
+                ctx.get_runtime()?.try_spawn(
+                    async move {
+                        for part in part.partitions {
+                            // ignore the error, the sql may be killed or early stop
+                            let _ = sender.send(Ok(part)).await;
+                        }
+                    },
+                    None,
+                )?;
+
+                Ok(())
+            });
+            return Ok(None);
+        }
+
+        let mut prune_pipeline = Pipeline::create();
+        let pruner = self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?;
+
+        let (tx, rx) = async_channel::bounded(max_io_requests);
+
+        self.prune_segments_with_pipeline(&pruner, &mut prune_pipeline, ctx.clone(), rx)?;
+        prune_pipeline.set_on_init(move || {
+            ctx.get_runtime()?.try_spawn(
+                async move {
+                    let segment_pruned_result = pruner.segment_pruning(lazy_init_segments).await?;
+                    for segment in segment_pruned_result {
+                        let _ = tx.send(Ok(segment)).await;
+                    }
+                    Ok::<_, ErrorCode>(())
+                },
+                None,
+            )?;
+            Ok(())
+        });
+
+        Ok(Some(prune_pipeline))
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
@@ -155,65 +252,13 @@ impl FuseTable {
                     )
                 });
 
-        if let Some(cache_key) = derterministic_cache_key.as_ref() {
-            if let Some(cache) = CacheItem::cache() {
-                if let Some(data) = cache.get(cache_key) {
-                    info!(
-                        "prune snapshot block from cache, final block numbers:{}, cost:{:?}",
-                        data.1.len(),
-                        start.elapsed()
-                    );
-                    return Ok((data.0.clone(), data.1.clone()));
-                }
-            }
+        if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
+            return Ok(cached_result);
         }
 
-        let bloom_index_builder = if ctx
-            .get_settings()
-            .get_enable_auto_fix_missing_bloom_index()?
-        {
-            let storage_format = self.storage_format;
+        let mut pruner =
+            self.build_fuse_pruner(ctx.clone(), push_downs.clone(), table_schema.clone(), dal)?;
 
-            let bloom_columns_map = self
-                .bloom_index_cols()
-                .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
-
-            Some(BloomIndexBuilder {
-                table_ctx: ctx.clone(),
-                table_schema: table_schema.clone(),
-                table_dal: dal.clone(),
-                storage_format,
-                bloom_columns_map,
-            })
-        } else {
-            None
-        };
-
-        let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(
-                &ctx,
-                dal,
-                table_schema.clone(),
-                &push_downs,
-                self.bloom_index_cols(),
-                bloom_index_builder,
-                self.get_storage_format(),
-            )?
-        } else {
-            let cluster_keys = self.cluster_keys(ctx.clone());
-
-            FusePruner::create_with_pages(
-                &ctx,
-                dal,
-                table_schema,
-                &push_downs,
-                self.cluster_key_meta.clone(),
-                cluster_keys,
-                self.bloom_index_cols(),
-                bloom_index_builder,
-                self.get_storage_format(),
-            )?
-        };
         let block_metas = pruner.read_pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 
@@ -244,6 +289,115 @@ impl FuseTable {
             }
         }
         Ok(result)
+    }
+
+    pub fn prune_segments_with_pipeline(
+        &self,
+        pruner: &FusePruner,
+        prune_pipeline: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        rx: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
+    ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        prune_pipeline.add_source(
+            |output| PrunedSegmentReceiverSource::create(ctx.clone(), rx.clone(), output),
+            max_threads,
+        )?;
+        prune_pipeline
+            .add_transform(|input, output| ExtractSegmentTransform::create(input, output, true))?;
+        let sample_probability = table_sample(&pruner.push_down)?;
+        if let Some(probability) = sample_probability {
+            prune_pipeline.add_transform(|input, output| {
+                SampleBlockMetasTransform::create(input, output, probability)
+            })?;
+        }
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        if pruner.pruning_ctx.bloom_pruner.is_some()
+            || pruner.pruning_ctx.inverted_index_pruner.is_some()
+        {
+            // async pruning with bloom index or inverted index.
+            prune_pipeline.add_transform(|intput, output| {
+                AsyncBlockPruneTransform::create(intput, output, block_pruner.clone())
+            })?;
+        } else {
+            // sync pruning without a bloom index and inverted index.
+            prune_pipeline.add_transform(|input, output| {
+                SyncBlockPruneTransform::create(input, output, block_pruner.clone())
+            })?;
+        }
+
+        Ok(())
+    }
+
+    pub fn build_fuse_pruner(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        table_schema: TableSchemaRef,
+        dal: Operator,
+    ) -> Result<FusePruner> {
+        let bloom_index_builder = if ctx
+            .get_settings()
+            .get_enable_auto_fix_missing_bloom_index()?
+        {
+            let storage_format = self.storage_format;
+
+            let bloom_columns_map = self
+                .bloom_index_cols()
+                .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
+
+            Some(BloomIndexBuilder {
+                table_ctx: ctx.clone(),
+                table_schema: table_schema.clone(),
+                table_dal: dal.clone(),
+                storage_format,
+                bloom_columns_map,
+            })
+        } else {
+            None
+        };
+
+        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                dal,
+                table_schema.clone(),
+                &push_downs,
+                self.bloom_index_cols(),
+                bloom_index_builder,
+                self.get_storage_format(),
+            )?
+        } else {
+            let cluster_keys = self.cluster_keys(ctx.clone());
+
+            FusePruner::create_with_pages(
+                &ctx,
+                dal,
+                table_schema,
+                &push_downs,
+                self.cluster_key_meta.clone(),
+                cluster_keys,
+                self.bloom_index_cols(),
+                bloom_index_builder,
+                self.get_storage_format(),
+            )?
+        };
+        Ok(pruner)
+    }
+
+    pub fn check_prune_cache(
+        derterministic_cache_key: &Option<String>,
+    ) -> Option<(PartStatistics, Partitions)> {
+        type CacheItem = (PartStatistics, Partitions);
+
+        if let Some(cache_key) = derterministic_cache_key.as_ref() {
+            if let Some(cache) = CacheItem::cache() {
+                if let Some(data) = cache.get(cache_key) {
+                    return Some((data.0.clone(), data.1.clone()));
+                }
+            }
+        }
+        None
     }
 
     pub fn read_partitions_with_metas(

@@ -218,6 +218,17 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        source_pipeline: &mut Pipeline,
+    ) -> Result<Option<Pipeline>> {
+        let (_, _, _) = (table_ctx, plan, source_pipeline);
+
+        Ok(None)
+    }
+
     /// Assembly the pipeline of appending data to storage
     fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let (_, _) = (ctx, pipeline);

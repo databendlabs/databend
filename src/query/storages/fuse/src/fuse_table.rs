@@ -23,7 +23,6 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::TimeDelta;
-use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -136,7 +135,11 @@ pub struct FuseTable {
 
     // A table instance level cache of snapshot_location, if this table is attaching to someone else.
     attached_table_location: tokio::sync::OnceCell<String>,
+
+    pub(crate) pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
+
+type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -243,6 +246,7 @@ impl FuseTable {
             table_type,
             changes_desc: None,
             attached_table_location: Default::default(),
+            pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -716,6 +720,15 @@ impl Table for FuseTable {
         put_cache: bool,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline, put_cache)
+    }
+
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        source_pipeline: &mut Pipeline,
+    ) -> Result<Option<Pipeline>> {
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
     }
 
     fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
