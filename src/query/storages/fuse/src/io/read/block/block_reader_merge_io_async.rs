@@ -61,7 +61,7 @@ impl BlockReader {
             if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
 
-                let column_cache_key = column_cache_key_builder.cache_cache(column_id, column_meta);
+                let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
 
                 // first, check in memory table data cache
                 // column_array_cache
@@ -106,7 +106,7 @@ impl BlockReader {
 
                 // Safe to unwrap here, since this column has been fetched, its meta must be present.
                 let column_meta = columns_meta.get(column_id).unwrap();
-                let column_cache_key = column_cache_key_builder.cache_cache(column_id, column_meta);
+                let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
 
                 let chunk_data = merge_io_result
                     .owner_memory
@@ -133,7 +133,7 @@ impl<'a> ColumnCacheKeyBuilder<'a> {
     fn new(block_path: &'a str) -> Self {
         Self { block_path }
     }
-    fn cache_cache(&self, column_id: &ColumnId, column_meta: &ColumnMeta) -> TableDataCacheKey {
+    fn cache_key(&self, column_id: &ColumnId, column_meta: &ColumnMeta) -> TableDataCacheKey {
         let (offset, len) = column_meta.offset_length();
         TableDataCacheKey::new(self.block_path, *column_id, offset, len)
     }
