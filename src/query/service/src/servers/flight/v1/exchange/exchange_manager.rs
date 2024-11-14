@@ -879,7 +879,7 @@ impl QueryCoordinator {
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             let error = executor.execute().err();
-            statistics_sender.shutdown(error);
+            statistics_sender.shutdown(error.clone());
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id, error);

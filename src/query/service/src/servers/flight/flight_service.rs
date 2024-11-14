@@ -19,8 +19,6 @@ use std::sync::Arc;
 use arrow_flight::flight_service_server::FlightServiceServer;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Notify;
-use databend_common_base::runtime::defer;
-use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

@@ -27,7 +27,7 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
 
     debug!("start prepared query {}", id);
     if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
-        DataExchangeManager::instance().on_finished_query(&id, Some(cause));
+        DataExchangeManager::instance().on_finished_query(&id, Some(cause.clone()));
         return Err(cause);
     }
     Ok(())
