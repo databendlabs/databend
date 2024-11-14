@@ -21,9 +21,5 @@
 
 //#[macro_use]
 // mod errors;
-
-pub mod arrow;
 pub mod native;
 pub mod schema_projection;
-
-pub type ArrayRef = Box<dyn crate::arrow::array::Array>;
