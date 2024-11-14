@@ -5,7 +5,7 @@ statement ok
 insert into t values('a'),('b'),('%c')
 
 statement ok
-CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 query T
 select a, dict_get(d, 'value', a) from t

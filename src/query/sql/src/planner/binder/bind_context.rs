@@ -39,6 +39,7 @@ use itertools::Itertools;
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
+use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
@@ -46,7 +47,6 @@ use crate::optimizer::SExpr;
 use crate::plans::MaterializedCte;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -122,6 +122,9 @@ pub struct BindContext {
 
     pub windows: WindowInfo,
 
+    /// Set-returning functions info in current context.
+    pub srf_info: SetReturningInfo,
+
     pub cte_context: CteContext,
 
     /// True if there is aggregation in current context, which means
@@ -133,9 +136,6 @@ pub struct BindContext {
     ///
     /// It's used to check if the view has a loop dependency.
     pub view_info: Option<(String, String)>,
-
-    /// Set-returning functions in current context.
-    pub srfs: Vec<ScalarItem>,
 
     /// True if there is async function in current context, need rewrite.
     pub have_async_func: bool,
@@ -251,10 +251,10 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
+            srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
             in_grouping: false,
             view_info: None,
-            srfs: Vec::new(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
@@ -272,10 +272,10 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
+            srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
             in_grouping: false,
             view_info: None,
-            srfs: Vec::new(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,

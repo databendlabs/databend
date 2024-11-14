@@ -1087,10 +1087,10 @@ impl<'a> TypeChecker<'a> {
     // TODO: remove this function
     fn rewrite_substring(args: &mut [ScalarExpr]) {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
-            if let databend_common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
+            if let Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: databend_common_expression::Scalar::Number(1i64.into()),
+                    value: Scalar::Number(1i64.into()),
                 }
                 .into();
             }
@@ -1266,7 +1266,7 @@ impl<'a> TypeChecker<'a> {
                 let box (expr, _) = self.resolve(expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let databend_common_expression::Expr::Constant { scalar, .. } = expr {
+                if let EExpr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {
                     Err(ErrorCode::SemanticError(
@@ -1630,7 +1630,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve aggregation function call.
-
     fn resolve_aggregate_function(
         &mut self,
         span: Span,
@@ -1646,16 +1645,6 @@ impl<'a> TypeChecker<'a> {
         ) {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InSetReturningFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "aggregate functions can not be used in set-returning function".to_string(),
             )
             .set_span(span));
         }
@@ -2756,7 +2745,7 @@ impl<'a> TypeChecker<'a> {
         // Note: check function may reorder the args
 
         let mut folded_args = match &expr {
-            databend_common_expression::Expr::FunctionCall {
+            EExpr::FunctionCall {
                 args: checked_args, ..
             } => {
                 let mut folded_args = Vec::with_capacity(args.len());
@@ -3563,7 +3552,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: databend_common_expression::Scalar::String(" ".to_string()),
+                value: Scalar::String(" ".to_string()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -4862,10 +4851,10 @@ impl<'a> TypeChecker<'a> {
 
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
-        expr: &databend_common_expression::Expr<Index>,
+        expr: &EExpr<Index>,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            if let (databend_common_expression::Expr::Constant { scalar, .. }, _) =
+            if let (EExpr::Constant { scalar, .. }, _) =
                 ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
                 let scalar = shrink_scalar(scalar);

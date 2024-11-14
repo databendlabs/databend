@@ -134,10 +134,15 @@ impl Binder {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        let have_srfs = !from_context.srfs.is_empty();
-        if have_srfs {
-            // Bind set returning functions first.
-            s_expr = self.bind_project_set(&mut from_context, s_expr)?;
+        // Check Set-returning functions, if the argument contains aggregation function or group item,
+        // set as lazy Set-returning functions.
+        if !from_context.srf_info.srfs.is_empty() {
+            self.check_project_set_select(&mut from_context)?;
+        }
+
+        // Bind Set-returning functions before filter plan and aggregate plan.
+        if !from_context.srf_info.srfs.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, false)?;
         }
 
         // To support using aliased column in `WHERE` clause,
@@ -179,7 +184,7 @@ impl Binder {
         )?;
 
         // After all analysis is done.
-        if !have_srfs {
+        if from_context.srf_info.srfs.is_empty() {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,
@@ -206,6 +211,11 @@ impl Binder {
         // window run after the HAVING clause but before the ORDER BY clause.
         for window_info in &from_context.windows.window_functions {
             s_expr = self.bind_window_function(window_info, s_expr)?;
+        }
+
+        // Bind lazy Set-returning functions after aggregate plan.
+        if !from_context.srf_info.lazy_srf_set.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, true)?;
         }
 
         if let Some(qualify) = qualify {
