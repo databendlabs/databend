@@ -12,27 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::LazyLock;
-
-use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Days;
-use chrono::LocalResult;
-use chrono::NaiveDate;
-use chrono::NaiveDateTime;
-use chrono::NaiveTime;
-use chrono::Offset;
-use chrono::TimeZone;
-use chrono::Timelike;
+use chrono::TimeZone as ChronoTimeZone;
 use chrono::Utc;
-use chrono_tz::Tz;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use jiff::civil::date;
 use jiff::civil::datetime;
 use jiff::civil::Date;
 use jiff::civil::Weekday;
-use jiff::tz::TimeZone as JiffTimeZone;
+use jiff::tz::TimeZone;
 use jiff::SignedDuration;
 use jiff::Timestamp;
 use jiff::Unit;
@@ -43,236 +32,20 @@ use crate::types::date::clamp_date;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::MICROS_PER_SEC;
 
-#[derive(Debug, Clone, Copy)]
-pub struct TzLUT {
-    pub tz: Tz,
-    // whether the timezone offset is round hour, offset % 3600 == 0
-    pub offset_round_hour: bool,
-    // whether the timezone offset is round minute, offset % 60 == 0
-    pub offset_round_minute: bool,
-}
-
-impl Default for TzLUT {
-    fn default() -> Self {
-        Self {
-            tz: Tz::UTC,
-            offset_round_hour: true,
-            offset_round_minute: true,
-        }
-    }
-}
-
-static TZ_FACTORY: LazyLock<TzFactory> = LazyLock::new(|| {
-    let factory = TzFactory {
-        luts: dashmap::DashMap::new(),
-    };
-    let _ = factory.get(Tz::UTC);
-    let _ = factory.get(Tz::Asia__Shanghai);
-    let _ = factory.get(Tz::Asia__Tokyo);
-    let _ = factory.get(Tz::America__New_York);
-    let _ = factory.get(Tz::Europe__London);
-    factory
-});
-
-pub struct TzFactory {
-    pub luts: dashmap::DashMap<String, TzLUT>,
-}
-
-impl TzFactory {
-    pub fn instance() -> &'static TzFactory {
-        &TZ_FACTORY
-    }
-
-    pub fn get_by_name(&self, tz_name: &str) -> Result<TzLUT> {
-        if let Some(lut) = self.luts.get(tz_name) {
-            return Ok(*lut.value());
-        }
-
-        let tz = tz_name.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
-        let lut = TzLUT::new(tz);
-        self.luts.insert(tz_name.to_string(), lut);
-        Ok(lut)
-    }
-
-    pub fn get(&self, tz: Tz) -> TzLUT {
-        let tz_name = tz.name();
-        if let Some(lut) = self.luts.get(tz_name) {
-            return *lut.value();
-        }
-        let lut = TzLUT::new(tz);
-        self.luts.insert(tz_name.to_string(), lut);
-        lut
-    }
-}
-
-impl TzLUT {
-    // it's very heavy to initial a TzLUT
-    fn new(tz: Tz) -> Self {
-        static DATE_LUT_MIN_YEAR: i32 = 1925;
-        static DATE_LUT_MAX_YEAR: i32 = 2283;
-
-        let mut offset_round_hour = true;
-        let mut offset_round_minute = true;
-
-        let date = NaiveDate::from_ymd_opt(DATE_LUT_MIN_YEAR, 1, 1).unwrap();
-        let mut days = date.num_days_from_ce();
-
-        loop {
-            let time = NaiveDateTime::new(
-                NaiveDate::from_num_days_from_ce_opt(days).unwrap(),
-                NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-            );
-            if time.year() > DATE_LUT_MAX_YEAR {
-                break;
-            }
-
-            days += 1;
-
-            match tz.offset_from_local_datetime(&time) {
-                LocalResult::Single(offset) => {
-                    let offset = offset.fix();
-                    if offset_round_hour && offset.local_minus_utc() % 3600 != 0 {
-                        offset_round_hour = false;
-                    }
-                    if offset_round_minute && offset.local_minus_utc() % 60 != 0 {
-                        offset_round_minute = false;
-                    }
-                }
-                _ => {
-                    continue;
-                }
-            }
-        }
-        Self {
-            tz,
-            offset_round_hour,
-            offset_round_minute,
-        }
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    fn start_of_second(&self, us: i64, seconds: i64) -> i64 {
-        if seconds == 1 {
-            return us / MICROS_PER_SEC * MICROS_PER_SEC;
-        }
-        if seconds % 60 == 0 {
-            return self.start_of_minutes(us, seconds / 60);
-        }
-        self.round_down(us, seconds)
-    }
-
-    #[inline]
-    fn start_of_minutes(&self, us: i64, minus: i64) -> i64 {
-        let us_div = minus * 60 * MICROS_PER_SEC;
-        if self.offset_round_minute {
-            return if us > 0 {
-                us / us_div * us_div
-            } else {
-                (us + MICROS_PER_SEC - us_div) / us_div * us_div
-            };
-        }
-        let datetime = self.to_datetime_from_us(us);
-        let fix = datetime.offset().fix().local_minus_utc() as i64;
-        fix + (us - fix * MICROS_PER_SEC) / us_div * us_div
-    }
-
-    #[inline]
-    fn round_down(&self, us: i64, seconds: i64) -> i64 {
-        let us_div = seconds * MICROS_PER_SEC;
-        if self.offset_round_hour {
-            return if us > 0 {
-                us / us_div * us_div
-            } else {
-                (us + MICROS_PER_SEC - us_div) / us_div * us_div
-            };
-        }
-        let datetime = self.to_datetime_from_us(us);
-        let fix = datetime.offset().fix().local_minus_utc() as i64;
-        fix + (us - fix * MICROS_PER_SEC) / us_div * us_div
-    }
-
-    #[inline]
-    pub fn round_us(&self, us: i64, round: Round) -> i64 {
-        match round {
-            Round::Second => self.start_of_second(us, 1),
-            Round::Minute => self.start_of_minutes(us, 1),
-            Round::FiveMinutes => self.start_of_minutes(us, 5),
-            Round::TenMinutes => self.start_of_minutes(us, 10),
-            Round::FifteenMinutes => self.start_of_minutes(us, 15),
-            Round::TimeSlot => self.start_of_minutes(us, 30),
-            Round::Hour => self.round_down(us, 3600),
-            Round::Day => {
-                let dt = self.to_datetime_from_us(us);
-                let dt = self
-                    .tz
-                    .with_ymd_and_hms(dt.year(), dt.month(), dt.day(), 0, 0, 0)
-                    .unwrap();
-                dt.timestamp() * MICROS_PER_SEC
-            }
-        }
-    }
-
-    #[inline]
-    pub fn to_minute(&self, us: i64) -> u8 {
-        if us >= 0 && self.offset_round_hour {
-            ((us / MICROS_PER_SEC / 60) % 60) as u8
-        } else {
-            let datetime = self.to_datetime_from_us(us);
-            datetime.minute() as u8
-        }
-    }
-
-    #[inline]
-    pub fn to_second(&self, us: i64) -> u8 {
-        if us >= 0 {
-            (us / MICROS_PER_SEC % 60) as u8
-        } else {
-            let datetime = self.to_datetime_from_us(us);
-            datetime.second() as u8
-        }
-    }
-
-    #[inline]
-    pub fn to_datetime_from_us(&self, us: i64) -> DateTime<Tz> {
-        us.to_timestamp(self.tz)
-    }
-
-    #[inline]
-    pub fn to_hour(&self, us: i64) -> u8 {
-        let datetime = self.to_datetime_from_us(us);
-        datetime.hour() as u8
-    }
-}
-
 pub trait DateConverter {
-    fn to_date(&self, tz: JiffTimeZone) -> Date;
-    fn to_timestamp(&self, tz: Tz) -> DateTime<Tz>;
-    fn to_timestamp_jiff(&self, tz: JiffTimeZone) -> Zoned;
+    fn to_date(&self, tz: TimeZone) -> Date;
+    fn to_timestamp(&self, tz: TimeZone) -> Zoned;
 }
 
 impl<T> DateConverter for T
 where T: AsPrimitive<i64>
 {
-    fn to_date(&self, _tz: JiffTimeZone) -> Date {
+    fn to_date(&self, _tz: TimeZone) -> Date {
         let dur = SignedDuration::from_hours(self.as_() * 24);
         date(1970, 1, 1).checked_add(dur).unwrap()
     }
 
-    fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
-        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
-        let micros = self.as_();
-        let (mut secs, mut nanos) = (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
-        if nanos < 0 {
-            secs -= 1;
-            nanos += 1_000_000_000;
-        }
-        tz.timestamp_opt(secs, nanos as u32).unwrap()
-    }
-
-    fn to_timestamp_jiff(&self, tz: JiffTimeZone) -> Zoned {
+    fn to_timestamp(&self, tz: TimeZone) -> Zoned {
         // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
         let micros = self.as_();
         let (mut secs, mut nanos) = (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
@@ -356,7 +129,7 @@ macro_rules! impl_interval_year_month {
         impl $name {
             pub fn eval_date(
                 date: i32,
-                tz: JiffTimeZone,
+                tz: TimeZone,
                 delta: impl AsPrimitive<i64>,
             ) -> std::result::Result<i32, String> {
                 let date = date.to_date(tz);
@@ -372,10 +145,10 @@ macro_rules! impl_interval_year_month {
 
             pub fn eval_timestamp(
                 us: i64,
-                tz: JiffTimeZone,
+                tz: TimeZone,
                 delta: impl AsPrimitive<i64>,
             ) -> std::result::Result<i64, String> {
-                let ts = us.to_timestamp_jiff(tz.clone());
+                let ts = us.to_timestamp(tz.clone());
                 let new_date = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
 
                 let mut ts = new_date
@@ -395,15 +168,15 @@ impl_interval_year_month!(EvalYearsImpl, eval_years_base);
 impl_interval_year_month!(EvalMonthsImpl, eval_months_base);
 
 impl EvalYearsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: JiffTimeZone) -> i32 {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
         let date_start = date_start.to_date(tz.clone());
         let date_end = date_end.to_date(tz);
         (date_end.year() - date_start.year()) as i32
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: JiffTimeZone) -> i64 {
-        let date_start = date_start.to_timestamp_jiff(tz.clone());
-        let date_end = date_end.to_timestamp_jiff(tz);
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
+        let date_start = date_start.to_timestamp(tz.clone());
+        let date_end = date_end.to_timestamp(tz);
         date_end.year() as i64 - date_start.year() as i64
     }
 }
@@ -411,7 +184,7 @@ impl EvalYearsImpl {
 pub struct EvalQuartersImpl;
 
 impl EvalQuartersImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: JiffTimeZone) -> i32 {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
         EvalQuartersImpl::eval_timestamp_diff(
             date_start as i64 * MICROSECS_PER_DAY,
             date_end as i64 * MICROSECS_PER_DAY,
@@ -419,23 +192,23 @@ impl EvalQuartersImpl {
         ) as i32
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: JiffTimeZone) -> i64 {
-        let date_start = date_start.to_timestamp_jiff(tz.clone());
-        let date_end = date_end.to_timestamp_jiff(tz);
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
+        let date_start = date_start.to_timestamp(tz.clone());
+        let date_end = date_end.to_timestamp(tz);
         (date_end.year() - date_start.year()) as i64 * 4 + ToQuarter::to_number(&date_end) as i64
             - ToQuarter::to_number(&date_start) as i64
     }
 }
 
 impl EvalMonthsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: JiffTimeZone) -> i32 {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
         let date_start = date_start.to_date(tz.clone());
         let date_end = date_end.to_date(tz);
         (date_end.year() - date_start.year()) as i32 * 12 + date_end.month() as i32
             - date_start.month() as i32
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: JiffTimeZone) -> i64 {
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
         EvalMonthsImpl::eval_date_diff(
             (date_start / MICROSECS_PER_DAY) as i32,
             (date_end / MICROSECS_PER_DAY) as i32,
@@ -556,7 +329,7 @@ impl EvalTimesImpl {
 }
 
 #[inline]
-pub fn today_date(now: &Zoned, tz: &JiffTimeZone) -> i32 {
+pub fn today_date(now: &Zoned, tz: &TimeZone) -> i32 {
     let now = now.with_time_zone(tz.clone());
     now.date()
         .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
@@ -571,12 +344,12 @@ pub trait ToNumber<N> {
 pub struct ToNumberImpl;
 
 impl ToNumberImpl {
-    pub fn eval_timestamp<T: ToNumber<R>, R>(us: i64, tz: JiffTimeZone) -> R {
-        let dt = us.to_timestamp_jiff(tz);
+    pub fn eval_timestamp<T: ToNumber<R>, R>(us: i64, tz: TimeZone) -> R {
+        let dt = us.to_timestamp(tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: JiffTimeZone) -> Result<R> {
+    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: TimeZone) -> Result<R> {
         let dt = date
             .to_date(tz.clone())
             .at(0, 0, 0, 0)
@@ -680,7 +453,7 @@ impl ToNumber<u8> for ToDayOfWeek {
 
 impl ToNumber<i64> for ToUnixTimestamp {
     fn to_number(dt: &Zoned) -> i64 {
-        dt.with_time_zone(JiffTimeZone::UTC).timestamp().as_second()
+        dt.with_time_zone(TimeZone::UTC).timestamp().as_second()
     }
 }
 
@@ -696,8 +469,8 @@ pub enum Round {
     Day,
 }
 
-pub fn round_timestamp(ts: i64, tz: &JiffTimeZone, round: Round) -> i64 {
-    let dtz = ts.to_timestamp_jiff(tz.clone());
+pub fn round_timestamp(ts: i64, tz: &TimeZone, round: Round) -> i64 {
+    let dtz = ts.to_timestamp(tz.clone());
     let res = match round {
         Round::Second => tz
             .to_zoned(datetime(
@@ -786,12 +559,12 @@ pub fn round_timestamp(ts: i64, tz: &JiffTimeZone, round: Round) -> i64 {
 pub struct DateRounder;
 
 impl DateRounder {
-    pub fn eval_timestamp<T: ToNumber<i32>>(us: i64, tz: JiffTimeZone) -> i32 {
-        let dt = us.to_timestamp_jiff(tz);
+    pub fn eval_timestamp<T: ToNumber<i32>>(us: i64, tz: TimeZone) -> i32 {
+        let dt = us.to_timestamp(tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: JiffTimeZone) -> Result<i32> {
+    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: TimeZone) -> Result<i32> {
         let naive_dt = date
             .to_date(tz.clone())
             .at(0, 0, 0, 0)

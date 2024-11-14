@@ -19,9 +19,7 @@ use chrono::format::Parsed;
 use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
-use chrono::Duration;
-use chrono::MappedLocalTime;
-use chrono::TimeZone;
+use chrono::TimeZone as ChronoTz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use databend_common_exception::ErrorCode;
@@ -64,11 +62,14 @@ use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use databend_common_io::cursor_ext::unwrap_local_time;
 use dtparse::parse;
 use jiff::civil::date;
+use jiff::civil::datetime;
 use jiff::civil::Date;
-use jiff::tz::TimeZone as JiffTimeZone;
+// use jiff::tz::Offset as JiffOffset;
+use jiff::tz::Offset;
+// use jiff::tz::TimeZone as JiffTimeZone;
+use jiff::tz::TimeZone;
 use jiff::Unit;
 use num_traits::AsPrimitive;
 
@@ -155,10 +156,10 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 }
                 // Convert source timestamp from source timezone to target timezone
-                let p_src_timestamp = src_timestamp.to_timestamp_jiff(ctx.func_ctx.jiff_tz.clone());
+                let p_src_timestamp = src_timestamp.to_timestamp(ctx.func_ctx.jiff_tz.clone());
                 let src_dst_from_utc = p_src_timestamp.offset().seconds();
 
-                let t_tz = match JiffTimeZone::get(target_tz) {
+                let t_tz = match TimeZone::get(target_tz) {
                     Ok(tz) => tz,
                     Err(e) => {
                         ctx.set_error(
@@ -225,8 +226,6 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            let tz = ctx.func_ctx.tz.tz;
-            let enable_dst_hour_fix = ctx.func_ctx.enable_dst_hour_fix;
             if ctx.func_ctx.enable_strict_datetime_parser {
                 match string_to_timestamp(val, &ctx.func_ctx.jiff_tz) {
                     Ok(ts) => output.push(ts.timestamp().as_microsecond()),
@@ -241,69 +240,30 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
             } else {
                 match parse(val) {
                     Ok((naive_dt, parse_tz)) => {
-                        if let Some(parse_tz) = parse_tz {
-                            match naive_dt.and_local_timezone(parse_tz) {
-                                MappedLocalTime::Single(res) => {
-                                    output.push(res.with_timezone(&tz).timestamp_micros())
-                                }
-                                MappedLocalTime::None => {
-                                    if enable_dst_hour_fix {
-                                        if let Some(res2) =
-                                            naive_dt.checked_add_signed(Duration::seconds(3600))
-                                        {
-                                            match tz.from_local_datetime(&res2) {
-                                                MappedLocalTime::Single(t) => {
-                                                    output.push(t.timestamp_micros())
-                                                }
-                                                MappedLocalTime::Ambiguous(t1, _) => {
-                                                    output.push(t1.timestamp_micros())
-                                                }
-                                                MappedLocalTime::None => {
-                                                    let err = format!(
-                                                        "Local Time Error: The local time {:?}, {} can not map to a single unique result with timezone {}",
-                                                        naive_dt, res2, tz
-                                                    );
-                                                    ctx.set_error(
-                                                        output.len(),
-                                                        format!(
-                                                            "cannot parse to type `TIMESTAMP`. {}",
-                                                            err
-                                                        ),
-                                                    );
-                                                    output.push(0);
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        let err = format!(
-                                            "The time {:?} can not map to a single unique result with timezone {}",
-                                            naive_dt, tz
-                                        );
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!("cannot parse to type `TIMESTAMP`. {}", err),
-                                        );
-                                        output.push(0);
-                                    }
-                                }
-                                MappedLocalTime::Ambiguous(t1, t2) => {
-                                    if enable_dst_hour_fix {
-                                        output.push(t1.with_timezone(&tz).timestamp_micros());
-                                    } else {
-                                        output.push(t2.with_timezone(&tz).timestamp_micros());
-                                    }
-                                }
-                            }
+                        let dt = datetime(
+                            naive_dt.year() as i16,
+                            naive_dt.month() as i8,
+                            naive_dt.day() as i8,
+                            naive_dt.hour() as i8,
+                            naive_dt.minute() as i8,
+                            naive_dt.second() as i8,
+                            naive_dt.nanosecond() as i32,
+                        );
+                        let tz = if let Some(parse_tz) = parse_tz {
+                            let offset = parse_tz.local_minus_utc();
+                            let offset = Offset::from_seconds(offset).unwrap();
+                            offset.to_time_zone()
                         } else {
-                            match unwrap_local_time(&tz, enable_dst_hour_fix, &naive_dt) {
-                                Ok(res) => output.push(res.timestamp_micros()),
-                                Err(e) => {
-                                    ctx.set_error(
-                                        output.len(),
-                                        format!("cannot parse to type `TIMESTAMP`. {}", e),
-                                    );
-                                    output.push(0);
-                                }
+                            ctx.func_ctx.jiff_tz.clone()
+                        };
+                        match dt.to_zoned(tz) {
+                            Ok(res) => output.push(res.timestamp().as_microsecond()),
+                            Err(e) => {
+                                ctx.set_error(
+                                    output.len(),
+                                    format!("cannot parse to type `TIMESTAMP`. {}", e),
+                                );
+                                output.push(0);
                             }
                         }
                     }
@@ -425,8 +385,6 @@ fn string_to_format_timestamp(
     let parse_tz = timezone_strftime
         .iter()
         .any(|&pattern| format.contains(pattern));
-    let enable_dst_hour_fix = ctx.func_ctx.enable_dst_hour_fix;
-    let tz = ctx.func_ctx.tz.tz;
     if ctx.func_ctx.parse_datetime_ignore_remainder {
         let mut parsed = Parsed::new();
         if let Err(e) = parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)) {
@@ -468,12 +426,24 @@ fn string_to_format_timestamp(
             parsed
                 .to_naive_datetime_with_offset(0)
                 .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                .and_then(
-                    |res| match unwrap_local_time(&tz, enable_dst_hour_fix, &res) {
-                        Ok(res) => Ok((res.timestamp_micros(), false)),
-                        Err(e) => Err(e),
-                    },
-                )
+                .and_then(|res| {
+                    let dt = datetime(
+                        res.year() as i16,
+                        res.month() as i8,
+                        res.day() as i8,
+                        res.hour() as i8,
+                        res.minute() as i8,
+                        res.second() as i8,
+                        res.nanosecond() as i32,
+                    );
+                    match dt.to_zoned(ctx.func_ctx.jiff_tz.clone()) {
+                        Ok(res) => Ok((res.timestamp().as_microsecond(), false)),
+                        Err(e) => Err(ErrorCode::BadArguments(format!(
+                            "Can not parse timestamp with error: {}",
+                            e
+                        ))),
+                    }
+                })
         }
     } else if parse_tz {
         DateTime::parse_from_str(timestamp, format)
@@ -482,12 +452,24 @@ fn string_to_format_timestamp(
     } else {
         NaiveDateTime::parse_from_str(timestamp, format)
             .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
-            .and_then(
-                |res| match unwrap_local_time(&tz, enable_dst_hour_fix, &res) {
-                    Ok(res) => Ok((res.timestamp_micros(), false)),
-                    Err(e) => Err(e),
-                },
-            )
+            .and_then(|res| {
+                let dt = datetime(
+                    res.year() as i16,
+                    res.month() as i8,
+                    res.day() as i8,
+                    res.hour() as i8,
+                    res.minute() as i8,
+                    res.second() as i8,
+                    res.nanosecond() as i32,
+                );
+                match dt.to_zoned(ctx.func_ctx.jiff_tz.clone()) {
+                    Ok(res) => Ok((res.timestamp().as_microsecond(), false)),
+                    Err(e) => Err(ErrorCode::BadArguments(format!(
+                        "Can not parse timestamp with error: {}",
+                        e
+                    ))),
+                }
+            })
     }
 }
 
@@ -525,7 +507,7 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
         })(val, ctx)
     }
 
-    fn calc_date_to_timestamp(val: i32, tz: JiffTimeZone) -> i64 {
+    fn calc_date_to_timestamp(val: i32, tz: TimeZone) -> i64 {
         let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
 
         let tz_offset_micros = tz
@@ -652,8 +634,8 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
             output.push(calc_timestamp_to_date(val, tz));
         })(val, ctx)
     }
-    fn calc_timestamp_to_date(val: i64, tz: JiffTimeZone) -> i32 {
-        val.to_timestamp_jiff(tz)
+    fn calc_timestamp_to_date(val: i64, tz: TimeZone) -> i32 {
+        val.to_timestamp(tz)
             .date()
             .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
             .unwrap()
@@ -699,11 +681,20 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
-            |date, format, output, ctx| {
+            |micros, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    let ts = date.to_timestamp(ctx.func_ctx.tz.tz);
+                    // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
+                    let (mut secs, mut nanos) =
+                        (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
+                    if nanos < 0 {
+                        secs -= 1;
+                        nanos += 1_000_000_000;
+                    }
+                    let ts = ctx.func_ctx.tz.timestamp_opt(secs, nanos as u32).unwrap();
+                    // https://github.com/BurntSushi/jiff/issues/155
+                    // ASCII is currently required in jiff crate
                     let res = ts.format(format).to_string();
                     output.push(&res);
                 }
@@ -1610,17 +1601,26 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_hour",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| ctx.func_ctx.tz.to_hour(val)),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
+            let datetime = val.to_timestamp(ctx.func_ctx.jiff_tz.clone());
+            datetime.hour() as u8
+        }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_minute",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| ctx.func_ctx.tz.to_minute(val)),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
+            let datetime = val.to_timestamp(ctx.func_ctx.jiff_tz.clone());
+            datetime.minute() as u8
+        }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_second",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| ctx.func_ctx.tz.to_second(val)),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
+            let datetime = val.to_timestamp(ctx.func_ctx.jiff_tz.clone());
+            datetime.second() as u8
+        }),
     );
 }
 

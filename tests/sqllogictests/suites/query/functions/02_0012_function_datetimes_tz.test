@@ -742,13 +742,15 @@ select try_to_timestamp('1947-04-15 00:00:00')
 ----
 1947-04-15 01:00:00.000000
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
 query T
 select to_date('1947-04-15')
@@ -1003,3 +1005,47 @@ drop table if exists t;
 
 statement ok
 unset timezone;
+
+# UTC +5:45
+statement ok
+set timezone='Asia/Kathmandu';
+
+query T
+select to_start_of_second('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:54:33.000000
+
+query T
+select to_start_of_minute('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:54:00.000000
+
+query T
+select to_start_of_five_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:50:00.000000
+
+query T
+select to_start_of_ten_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:50:00.000000
+
+query T
+select to_start_of_fifteen_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:45:00.000000
+
+query T
+select time_slot('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:30:00.000000
+
+query T
+select to_start_of_hour('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:00:00.000000
+
+query T
+select to_start_of_day('2024-11-14 11:54:33.667269');
+----
+2024-11-14 00:00:00.000000
