@@ -4587,6 +4587,7 @@ dependencies = [
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",
+ "jiff",
  "jsonb",
  "log",
  "once_cell",

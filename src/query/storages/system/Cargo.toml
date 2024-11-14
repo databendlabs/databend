@@ -43,6 +43,7 @@ databend-common-users = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 once_cell = { workspace = true }

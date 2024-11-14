@@ -19,6 +19,7 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -32,7 +33,6 @@ use jiff::Zoned;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
@@ -97,7 +97,7 @@ pub enum FunctionEval {
 
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: TzLUT,
+    pub tz: Tz,
     pub jiff_tz: TimeZone,
     pub now: Zoned,
     pub rounding_mode: bool,
@@ -112,7 +112,6 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
-    pub enable_dst_hour_fix: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
 }
@@ -120,7 +119,7 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: Default::default(),
+            tz: Tz::UTC,
             jiff_tz: TimeZone::UTC,
             now: Default::default(),
             rounding_mode: false,
@@ -134,7 +133,6 @@ impl Default for FunctionContext {
 
             geometry_output_format: Default::default(),
             parse_datetime_ignore_remainder: false,
-            enable_dst_hour_fix: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,
         }
