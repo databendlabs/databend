@@ -29,9 +29,21 @@ pub fn write_value<'a, W: Write>(array: &'a BinaryColumn, index: usize, f: &mut 
 }
 
 impl Debug for BinaryColumn {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        let writer = |f: &mut Formatter, index| write_value(self, index, f);
-        write!(f, "BinaryColumn")?;
-        write_vec(f, writer, None, self.len(), "None", false)
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.debug_struct("BinaryColumn")
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
+            .finish()
     }
 }
+
+// impl Debug for BinaryColumn {
+//     fn fmt(&self, f: &mut Formatter) -> Result {
+//         let writer = |f: &mut Formatter, index| write_value(self, index, f);
+//         write!(f, "BinaryColumn")?;
+//         write_vec(f, writer, None, self.len(), "None", false)
+//     }
+// }

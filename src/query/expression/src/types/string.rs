@@ -17,16 +17,15 @@ use std::iter::TrustedLen;
 use std::ops::Range;
 
 use databend_common_base::slice_ext::GetSaferUnchecked;
-use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binview::BinaryViewColumnBuilder;
-use databend_common_column::binview::BinaryViewValueIter;
+use databend_common_column::binview::BinaryViewColumnIter;
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::binary::BinaryColumn;
-use super::binary::BinaryColumnBuilder;
 use crate::property::Domain;
+use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
@@ -221,7 +220,7 @@ impl ArgType for StringType {
 }
 
 pub type StringColumn = Utf8ViewColumn;
-pub type StringIterator<'a> = BinaryViewValueIter<'a, str>;
+pub type StringIterator<'a> = BinaryViewColumnIter<'a, str>;
 
 type Utf8ViewColumnBuilder = BinaryViewColumnBuilder<str>;
 
@@ -249,11 +248,12 @@ impl StringColumnBuilder {
     }
 
     pub fn try_from_bin_column(col: BinaryColumn) -> Result<Self> {
-        let data = Utf8ViewColumnBuilder::try_from_binary(col)?;
-        Ok(StringColumnBuilder {
-            data,
-            row_buffer: Vec::new(),
-        })
+        // let data = Utf8ViewColumnBuilder::try_from_bin_column(col).map_err(|e| todo!("ccc"))?;
+        // Ok(StringColumnBuilder {
+        //     data,
+        //     row_buffer: Vec::new(),
+        // })
+        todo!("ccc")
     }
 
     pub fn repeat(scalar: &str, n: usize) -> Self {
@@ -363,7 +363,7 @@ impl<'a> FromIterator<&'a str> for StringColumnBuilder {
 
 impl PartialEq for StringColumnBuilder {
     fn eq(&self, other: &Self) -> bool {
-        self.data.values_iter().eq(other.data.values_iter())
+        self.data.iter().eq(other.data.iter())
     }
 }
 

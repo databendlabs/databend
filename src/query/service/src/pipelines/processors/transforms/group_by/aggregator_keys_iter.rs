@@ -20,7 +20,7 @@ use byteorder::ReadBytesExt;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
-use databend_common_expression::types::binary::BinaryIterator;
+use databend_common_expression::types::binary::BinaryColumnIter;
 use databend_common_expression::types::number::Number;
 use databend_common_hashtable::DictionaryKeys;
 
@@ -86,7 +86,7 @@ impl SerializedKeysColumnIter {
 }
 
 impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
-    type Iterator<'a> = BinaryIterator<'a> where Self: 'a;
+    type Iterator<'a> = BinaryColumnIter<'a> where Self: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.column.iter()

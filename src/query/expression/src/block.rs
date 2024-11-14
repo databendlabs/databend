@@ -55,6 +55,7 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
+            use databend_common_column::binview::CheckUTF8;
             if let crate::ValueRef::Column(c) = value.as_ref() {
                 c.check_valid().unwrap();
             }

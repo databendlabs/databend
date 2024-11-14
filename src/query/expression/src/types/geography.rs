@@ -30,7 +30,7 @@ use geozero::ToWkt;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::binary::BinaryIterator;
+use super::binary::BinaryColumnIter;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -281,12 +281,12 @@ impl GeographyColumn {
     }
 
     pub fn check_valid(&self) -> Result<()> {
-        self.0.check_valid()
+        self.0.check_valid().map_err(|e| todo!("ccc error"))
     }
 }
 
 pub struct GeographyIterator<'a> {
-    inner: BinaryIterator<'a>,
+    inner: BinaryColumnIter<'a>,
 }
 
 impl<'a> Iterator for GeographyIterator<'a> {

@@ -38,6 +38,7 @@ use crate::ScalarRef;
 
 pub type BinaryColumn = databend_common_column::binary::BinaryColumn;
 pub type BinaryColumnBuilder = databend_common_column::binary::BinaryColumnBuilder;
+pub type BinaryColumnIter<'a> = databend_common_column::binary::BinaryColumnIter<'a>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryType;
@@ -47,7 +48,7 @@ impl ValueType for BinaryType {
     type ScalarRef<'a> = &'a [u8];
     type Column = BinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = BinaryIterator<'a>;
+    type ColumnIterator<'a> = BinaryColumnIter<'a>;
     type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]

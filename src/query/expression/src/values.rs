@@ -1174,11 +1174,11 @@ impl Column {
 
     pub fn check_valid(&self) -> Result<()> {
         match self {
-            Column::Binary(x) => x.check_valid(),
-            Column::Variant(x) => x.check_valid(),
-            Column::Geometry(x) => x.check_valid(),
+            Column::Binary(x) => x.check_valid().map_err(|e| todo!("cccc")),
+            Column::Variant(x) => x.check_valid().map_err(|e| todo!("ccc")),
+            Column::Geometry(x) => x.check_valid().map_err(|e| todo!("ccc")),
             Column::Geography(x) => x.check_valid(),
-            Column::Bitmap(x) => x.check_valid(),
+            Column::Bitmap(x) => x.check_valid().map_err(|e| todo!("ccc")),
             Column::Map(x) => {
                 for y in x.iter() {
                     y.check_valid()?;
@@ -2050,7 +2050,8 @@ impl ColumnBuilder {
                 reader.read_exact(&mut builder.row_buffer)?;
 
                 #[cfg(debug_assertions)]
-                string::CheckUTF8::check_utf8(&builder.row_buffer).unwrap();
+                databend_common_column::binview::CheckUTF8::check_utf8(&builder.row_buffer)
+                    .unwrap();
 
                 builder.commit_row();
             }
@@ -2147,7 +2148,7 @@ impl ColumnBuilder {
                     let bytes = &reader[step * row..];
 
                     #[cfg(debug_assertions)]
-                    string::CheckUTF8::check_utf8(&bytes).unwrap();
+                    databend_common_column::binview::CheckUTF8::check_utf8(&bytes).unwrap();
 
                     let s = unsafe { std::str::from_utf8_unchecked(bytes) };
                     builder.put_and_commit(s);

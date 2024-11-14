@@ -29,6 +29,7 @@ use either::Either;
 pub use iterator::BinaryViewColumnIter;
 use private::Sealed;
 use view::validate_utf8_only;
+pub use view::CheckUTF8;
 pub use view::View;
 
 use crate::binary::BinaryColumn;
@@ -545,7 +546,7 @@ impl TryFrom<BinaryColumn> for Utf8ViewColumn {
 
 impl From<StringColumn> for BinaryColumn {
     fn from(col: Utf8ViewColumn) -> BinaryColumn {
-        BinaryColumnBuilder::from_iter(col.iter().map(|x| x.as_bytes())).into()
+        BinaryColumnBuilder::from_iter(col.iter()).into()
     }
 }
 
