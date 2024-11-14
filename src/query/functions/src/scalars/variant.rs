@@ -2529,4 +2529,3 @@ fn cast_to_f64(v: &[u8]) -> Result<f64, jsonb::Error> {
         }
     }
 }
-
