@@ -365,7 +365,7 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await?;
 
-    sm.levels.freeze_writable();
+    sm.map_mut().freeze_writable();
 
     let mut a = sm.new_applier();
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
