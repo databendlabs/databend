@@ -569,6 +569,12 @@ overflow-checks = false
 opt-level = "s"         ## defaults to be 3
 incremental = true
 
+[profile.ci]
+inherits = "release"
+overflow-checks = true
+incremental = false
+debug-assertions = true
+
 # [profile.release.package]
 # databend-common-arrow = { codegen-units = 16 }
 # databend-query = { codegen-units = 4 }
