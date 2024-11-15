@@ -108,21 +108,4 @@ impl MetaEmbedded {
 
         panic!("global meta store can not init twice");
     }
-
-    /// If global meta store is initialized, return it(production use).
-    /// Otherwise, return a meta store backed with temp dir for test.
-    pub async fn get_meta() -> Result<Arc<MetaEmbedded>, MetaStorageError> {
-        {
-            let m = GLOBAL_META_EMBEDDED.as_ref().lock().await;
-            let r = m.as_ref();
-
-            if let Some(x) = r {
-                return Ok(x.clone());
-            }
-        }
-
-        let meta = MetaEmbedded::new_temp().await?;
-        let meta = Arc::new(meta);
-        Ok(meta)
-    }
 }
