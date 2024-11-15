@@ -26,7 +26,6 @@ databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
-tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
