@@ -24,7 +24,6 @@ pub use db::init_get_sled_db;
 pub use db::init_sled_db;
 pub use openraft;
 pub use sled;
-pub use sled_iter::iter;
 pub use sled_key_space::SledKeySpace;
 pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledRangeSerde;
@@ -39,7 +38,6 @@ pub use store::Store;
 
 mod bytes_error;
 mod db;
-mod sled_iter;
 mod sled_key_space;
 mod sled_serde;
 mod sled_serde_impl;

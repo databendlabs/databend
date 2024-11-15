@@ -29,7 +29,6 @@ use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_embedded::MetaEmbedded;
 
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
