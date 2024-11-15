@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::future;
+use std::io;
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -21,6 +22,7 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
@@ -85,6 +87,17 @@ impl InMemoryMeta {
             sm: Arc::new(Mutex::new(InMemoryStateMachine::default())),
         }
     }
+
+    async fn init_applier<'a>(
+        &self,
+        a: &mut Applier<'a, InMemoryStateMachine>,
+    ) -> Result<(), io::Error> {
+        let now = SeqV::<()>::now_ms();
+        a.cmd_ctx = CmdContext::from_millis(now);
+        a.clean_expired_kvs(now).await?;
+        Ok(())
+    }
+
     fn non_expired<V>(seq_value: Option<SeqV<V>>, now_ms: u64) -> Option<SeqV<V>> {
         if seq_value.is_expired(now_ms) {
             None
@@ -103,6 +116,7 @@ impl KVApi for InMemoryMeta {
 
         let mut sm = self.sm.lock().await;
         let mut applier = Applier::new(&mut *sm);
+        self.init_applier(&mut applier).await?;
 
         let (prev, result) = applier.upsert_kv(&upsert_kv).await?;
 
@@ -150,6 +164,7 @@ impl KVApi for InMemoryMeta {
 
         let mut sm = self.sm.lock().await;
         let mut applier = Applier::new(&mut *sm);
+        self.init_applier(&mut applier).await?;
 
         let applied_state = applier.apply_txn(&txn).await?;
         match applied_state {
