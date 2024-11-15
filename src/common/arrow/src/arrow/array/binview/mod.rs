@@ -166,6 +166,18 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
         total_bytes_len: usize,
         total_buffer_len: usize,
     ) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            if total_bytes_len != UNKNOWN_LEN as usize {
+                let total = views.iter().map(|v| v.length as usize).sum::<usize>();
+                assert_eq!(total, total_bytes_len);
+            }
+
+            if total_buffer_len != UNKNOWN_LEN as usize {
+                let total = buffers.iter().map(|v| v.len() as usize).sum::<usize>();
+                assert_eq!(total, total_buffer_len);
+            }
+        }
         // # Safety
         // The caller must ensure
         // - the data is valid utf8 (if required)

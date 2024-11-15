@@ -263,12 +263,23 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
         // Push and pop to get the properly encoded value.
         // For long string this leads to a dictionary encoding,
         // as we push the string only once in the buffers
+
+        let old_bytes_len = self.total_bytes_len;
+        let old_buffer_len = self.total_buffer_len;
+
         let view_value = value
             .map(|v| {
                 self.push_value_ignore_validity(v);
                 self.views.pop().unwrap()
             })
             .unwrap_or_default();
+
+        self.total_bytes_len +=
+            (self.total_bytes_len - old_bytes_len) * additional.saturating_sub(1);
+
+        self.total_buffer_len +=
+            (self.total_buffer_len - old_buffer_len) * additional.saturating_sub(1);
+
         self.views
             .extend(std::iter::repeat(view_value).take(additional));
     }
