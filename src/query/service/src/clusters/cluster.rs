@@ -137,28 +137,23 @@ impl ClusterHelper for Cluster {
             )))
         }
 
-        let mut futures = Vec::with_capacity(message.len());
+        let mut response = HashMap::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
-            futures.push({
-                let config = GlobalConfig::instance();
-                let flight_address = node.flight_address.clone();
-                let node_secret = node.secret.clone();
+            let config = GlobalConfig::instance();
+            let flight_address = node.flight_address.clone();
+            let node_secret = node.secret.clone();
 
-                async move {
-                    let mut conn = create_client(&config, &flight_address).await?;
-                    Ok::<_, ErrorCode>((
-                        id,
-                        conn.do_action::<_, Res>(path, node_secret, message, timeout)
-                            .await?,
-                    ))
-                }
-            });
+            let mut conn = create_client(&config, &flight_address).await?;
+            response.insert(
+                id,
+                conn.do_action::<_, Res>(path, node_secret, message, timeout)
+                    .await?,
+            );
         }
 
-        let responses: Vec<(String, Res)> = futures::future::try_join_all(futures).await?;
-        Ok(responses.into_iter().collect::<HashMap<String, Res>>())
+        Ok(response)
     }
 }
 
