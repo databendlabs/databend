@@ -26,6 +26,7 @@ use opendal::raw::parse_content_length;
 use opendal::raw::HttpBody;
 use opendal::raw::HttpFetch;
 use opendal::Buffer;
+use url::Url;
 
 pub struct StorageHttpClient {
     client: reqwest::Client,
@@ -46,6 +47,7 @@ impl HttpFetch for StorageHttpClient {
         let uri = req.uri().clone();
         let is_head = req.method() == http::Method::HEAD;
 
+        let url = Url::parse(uri.to_string());
         let host = uri.host().unwrap_or_default();
         let method = match req.method() {
             &http::Method::GET => {
