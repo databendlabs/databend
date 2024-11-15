@@ -155,12 +155,11 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
     #[inline]
     pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
         let len = v.length;
-        self.total_bytes_len += len as usize;
         if len <= 12 {
+            self.total_bytes_len += len as usize;
             debug_assert!(self.views.capacity() > self.views.len());
             self.views.push(v)
         } else {
-            self.total_buffer_len += len as usize;
             let data = buffers.get_unchecked(v.buffer_idx as usize);
             let offset = v.offset as usize;
             let bytes = data.get_unchecked(offset..offset + len as usize);
@@ -263,12 +262,19 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
         // Push and pop to get the properly encoded value.
         // For long string this leads to a dictionary encoding,
         // as we push the string only once in the buffers
+
+        let old_bytes_len = self.total_bytes_len;
+
         let view_value = value
             .map(|v| {
                 self.push_value_ignore_validity(v);
                 self.views.pop().unwrap()
             })
             .unwrap_or_default();
+
+        self.total_bytes_len +=
+            (self.total_bytes_len - old_bytes_len) * additional.saturating_sub(1);
+
         self.views
             .extend(std::iter::repeat(view_value).take(additional));
     }

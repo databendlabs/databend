@@ -19,7 +19,6 @@ use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
@@ -258,7 +257,7 @@ where I: databend_common_arrow::arrow::types::Index
         let result: Vec<T> = self
             .indices
             .iter()
-            .map(|index| unsafe { *col.get_unchecked_release(index.to_usize()) })
+            .map(|index| unsafe { *col.get_unchecked(index.to_usize()) })
             .collect();
         result.into()
     }
@@ -292,7 +291,7 @@ where I: databend_common_arrow::arrow::types::Index
                     new_views,
                     col.data.data_buffers().clone(),
                     None,
-                    Some(col.data.total_buffer_len()),
+                    None,
                 )
             };
             StringColumn::new(new_col)
