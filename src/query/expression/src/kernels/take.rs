@@ -291,7 +291,7 @@ where I: databend_common_arrow::arrow::types::Index
                     new_views,
                     col.data.data_buffers().clone(),
                     None,
-                    Some(col.data.total_buffer_len()),
+                    None,
                 )
             };
             StringColumn::new(new_col)

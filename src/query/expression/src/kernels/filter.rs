@@ -358,7 +358,7 @@ impl<'a> FilterVisitor<'a> {
                         new_views,
                         values.data.data_buffers().clone(),
                         None,
-                        Some(values.data.total_buffer_len()),
+                        None,
                     )
                 };
                 StringColumn::new(new_col)

@@ -72,6 +72,12 @@ select name, database, owner from system.tables where database='c' and name ='t1
 t100 c account_admin
 
 statement ok
+select * from system.malloc_stats_totals;
+
+statement ok
+select * from system.malloc_stats;
+
+statement ok
 drop database if exists a;
 
 statement ok
