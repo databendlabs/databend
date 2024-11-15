@@ -20,8 +20,8 @@ use databend_common_management::*;
 use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::mem_meta::MemMeta;
 use databend_common_meta_types::MatchSeq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

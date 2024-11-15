@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_raft_store::mem_meta::MemMeta;
 use databend_common_meta_types::MatchSeq;
 use mockall::predicate::*;
 
