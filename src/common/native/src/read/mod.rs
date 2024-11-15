@@ -16,6 +16,7 @@ mod array;
 pub mod batch_read;
 pub mod deserialize;
 use arrow_array::Array;
+use arrow_array::ArrayRef;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use batch_read::batch_read_array;

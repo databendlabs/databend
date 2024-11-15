@@ -51,15 +51,47 @@ macro_rules! with_match_integer_double_type {
             UInt32 => __with_ty__! { u32 },
             UInt64 => __with_ty__! { u64 },
 
+            Date32 => __with_ty__! { i32 },
+            Date64 => __with_ty__! { i64 },
+            Timestamp(_, _) => __with_ty__! { i64 },
+
             Float32 => __with_ty_double__! { f32 },
             Float64 => __with_ty_double__! { f64 },
             Float16 => unreachable! {},
-            DaysMs => unreachable!(),
-            MonthDayNano => unreachable!(),
-            UInt128 => unimplemented!(),
+            _ => unimplemented!(),
         }
     }};
 }
+
+#[macro_export]
+macro_rules! with_match_primitive_type {(
+    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
+) => ({
+    macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
+
+    use arrow_buffer::i256;
+    use arrow_schema::DataType::*;
+
+    match $key_type {
+        Int8 => __with_ty__! { i8 },
+        Int16 => __with_ty__! { i16 },
+        Int32 => __with_ty__! { i32 },
+        Int64 => __with_ty__! { i64 },
+        Int128 => __with_ty__! { i128 },
+        Int256 => __with_ty__! { i256 },
+        UInt8 => __with_ty__! { u8 },
+        UInt16 => __with_ty__! { u16 },
+        UInt32 => __with_ty__! { u32 },
+        UInt64 => __with_ty__! { u64 },
+        Float32 => __with_ty__! { f32 },
+        Float64 => __with_ty__! { f64 },
+
+        Date32 => __with_ty__! { i32 },
+        Date64 => __with_ty__! { i64 },
+        Timestamp(_, _) => __with_ty__! { i64 },
+        _ => panic!("Do not support primitive `{:?}`", $key_type)
+    }
+})}
 
 /// Returns the number of (parquet) columns that a [`DataType`] contains.
 pub fn n_columns(data_type: &DataType) -> usize {

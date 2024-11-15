@@ -14,6 +14,8 @@
 
 use std::io::Write;
 
+use arrow_array::ArrayRef;
+
 use super::write;
 use super::NativeWriter;
 use crate::compression::CommonCompression;

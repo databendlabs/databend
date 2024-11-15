@@ -16,10 +16,10 @@ use std::convert::TryInto;
 use std::io::Cursor;
 use std::marker::PhantomData;
 
-use arrow_schema::DataType;
-
 use arrow_array::Array;
 use arrow_array::PrimitiveArray;
+use arrow_schema::DataType;
+
 use crate::compression::integer::decompress_integer;
 use crate::compression::integer::IntegerType;
 use crate::error::Result;
@@ -28,7 +28,6 @@ use crate::nested::NestedState;
 use crate::read::read_basic::*;
 use crate::read::BufReader;
 use crate::read::NativeReadBuf;
-use arrow_array::Array;
 use crate::read::PageIterator;
 use crate::PageMeta;
 

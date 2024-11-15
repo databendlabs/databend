@@ -16,6 +16,8 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 
+use arrow_schema::DataType;
+use arrow_schema::PhysicalType;
 use arrow_schema::Schema;
 use opendal::Reader;
 
@@ -23,31 +25,12 @@ use super::read_basic::read_u32;
 use super::read_basic::read_u64;
 use super::NativeReadBuf;
 use super::PageIterator;
-use arrow_schema::DataType;
-use arrow_schema::PhysicalType;
 use crate::error::Error;
 use crate::error::Result;
 use crate::ColumnMeta;
 use crate::PageMeta;
 
 const DEFAULT_FOOTER_SIZE: u64 = 64 * 1024;
-
-pub fn is_primitive(data_type: &DataType) -> bool {
-    matches!(
-        data_type.to_physical_type(),
-        PhysicalType::Primitive(_)
-            | PhysicalType::Null
-            | PhysicalType::Boolean
-            | PhysicalType::Utf8
-            | PhysicalType::LargeUtf8
-            | PhysicalType::Binary
-            | PhysicalType::Utf8View
-            | PhysicalType::BinaryView
-            | PhysicalType::LargeBinary
-            | PhysicalType::FixedSizeBinary
-            | PhysicalType::Dictionary(_)
-    )
-}
 
 #[derive(Debug)]
 pub struct NativeReader<R: NativeReadBuf> {

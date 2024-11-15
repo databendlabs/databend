@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use arrow_array::Array;
+use arrow_array::ArrayRef;
 use arrow_schema::Field;
+
 use crate::error::Result;
 use crate::nested::create_struct;
 use crate::nested::NestedState;
@@ -36,10 +38,7 @@ impl<'a> StructIterator<'a> {
 }
 
 impl<'a> StructIterator<'a> {
-    fn deserialize(
-        &mut self,
-        values: StructValues,
-    ) -> Option<Result<(NestedState, ArrayRef)>> {
+    fn deserialize(&mut self, values: StructValues) -> Option<Result<(NestedState, ArrayRef)>> {
         // This code is copied from arrow2 `StructIterator` and adds a custom `nth` method implementation
         // https://github.com/jorgecarleitao/arrow2/blob/main/src/io/parquet/read/deserialize/struct_.rs
         if values.iter().any(|x| x.is_none()) {

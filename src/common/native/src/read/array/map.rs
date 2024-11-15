@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use arrow_array::Array;
+use arrow_array::ArrayRef;
 use arrow_schema::Field;
+
 use crate::error::Result;
 use crate::nested::create_map;
 use crate::nested::NestedState;

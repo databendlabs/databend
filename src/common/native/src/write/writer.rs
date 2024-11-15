@@ -14,11 +14,12 @@
 
 use std::io::Write;
 
+use arrow_array::Array;
+use arrow_array::ArrayRef;
 use arrow_schema::Schema;
 
 use super::common::write_eof;
 use super::common::WriteOptions;
-use arrow_array::Array;
 use crate::arrow::chunk::Chunk;
 use crate::error::Error;
 use crate::error::Result;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use arrow_array::Array;
+use arrow_array::ArrayRef;
 use arrow_array::NullArray;
 use arrow_schema::DataType;
 

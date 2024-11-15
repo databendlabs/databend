@@ -184,7 +184,6 @@ mod test {
 
     use super::stat_simple;
     use super::ColumnInfo;
-    use crate::read::reader::is_primitive;
     use crate::read::reader::NativeReader;
     use crate::stat::PageBody;
     use crate::util::env::remove_all_env;
@@ -199,7 +198,7 @@ mod test {
     const COLUMN_SIZE: usize = PAGE_SIZE * PAGE_PER_COLUMN;
 
     fn write_and_stat_simple_column(array: ArrayRef) -> ColumnInfo {
-        assert!(is_primitive(array.data_type()));
+        assert!(array.data_type().is_primitive());
         let options = WriteOptions {
             default_compression: CommonCompression::Lz4,
             max_page_size: Some(PAGE_SIZE),

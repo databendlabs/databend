@@ -14,6 +14,13 @@
 
 use std::io::Write;
 
+use arrow_array::Array;
+use arrow_array::BinaryArray;
+use arrow_array::BinaryViewArray;
+use arrow_array::LargeBinaryArray;
+use arrow_array::LargeStringArray;
+use arrow_array::StringArray;
+use arrow_array::StringViewArray;
 use arrow_schema::DataType;
 use arrow_schema::PhysicalType;
 
@@ -35,7 +42,7 @@ pub fn write<W: Write>(
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    use PhysicalType::*;
+    use arrow_schema::DataType::*;
     write_nest_info::<W>(w, nested)?;
     match array.data_type() {
         Null => {}
@@ -43,10 +50,6 @@ pub fn write<W: Write>(
             let array: &BooleanArray = array.as_any().downcast_ref().unwrap();
             write_bitmap::<W>(w, array, write_options, scratch)?
         }
-        Primitive(primitive) => with_match_primitive_type!(primitive, |$T| {
-            let array: &PrimitiveArray<$T> = array.as_any().downcast_ref().unwrap();
-            write_primitive::<$T, W>(w, array, write_options, scratch)?;
-        }),
         Binary => {
             let array: &GenericBinaryArray<i32> = array.as_any().downcast_ref().unwrap();
             write_binary::<i32, W>(w, array, write_options, scratch)?;
@@ -56,23 +59,21 @@ pub fn write<W: Write>(
             write_binary::<i64, W>(w, array, write_options, scratch)?;
         }
         Utf8 => {
-            let binary_array: &Utf8Array<i32> = array.as_any().downcast_ref().unwrap();
+            let binary_array: &StringArray = array.as_any().downcast_ref().unwrap();
             let binary_array = BinaryArray::new(
-                DataType::Binary,
                 binary_array.offsets().clone(),
                 binary_array.values().clone(),
-                binary_array.validity().cloned(),
+                binary_array.nulls().cloned(),
             );
             write_binary::<i32, W>(w, &binary_array, write_options, scratch)?;
         }
         LargeUtf8 => {
-            let binary_array: &Utf8Array<i64> = array.as_any().downcast_ref().unwrap();
+            let binary_array: &LargeStringArray<i64> = array.as_any().downcast_ref().unwrap();
 
-            let binary_array = BinaryArray::new(
-                DataType::LargeBinary,
+            let binary_array = LargeBinaryArray::new(
                 binary_array.offsets().clone(),
                 binary_array.values().clone(),
-                binary_array.validity().cloned(),
+                binary_array.nulls().cloned(),
             );
             write_binary::<i64, W>(w, &binary_array, write_options, scratch)?;
         }
@@ -81,16 +82,22 @@ pub fn write<W: Write>(
             write_view::<W>(w, array, write_options, scratch)?;
         }
         Utf8View => {
-            let array: &Utf8ViewArray = array.as_any().downcast_ref().unwrap();
-            let array = array.clone().to_binview();
+            let array: &StringViewArray = array.as_any().downcast_ref().unwrap();
+            let array = array.clone().to_binary_view();
             write_view::<W>(w, &array, write_options, scratch)?;
         }
         Struct => unreachable!(),
         List => unreachable!(),
         FixedSizeList => unreachable!(),
-        Dictionary(_key_type) => unreachable!(),
+        Dictionary(_, _) => unreachable!(),
         Union => unreachable!(),
         Map => unreachable!(),
+        other if other.is_primitive() => {
+            with_match_primitive_type!(primitive, |$T| {
+                let array: &PrimitiveArray<$T> = array.as_any().downcast_ref().unwrap();
+                write_primitive::<$T, W>(w, array, write_options, scratch)?;
+            })
+        }
         _ => todo!(),
     }
 
