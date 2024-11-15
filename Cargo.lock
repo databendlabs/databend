@@ -4111,6 +4111,7 @@ dependencies = [
  "reqwest",
  "serde",
  "thiserror",
+ "url",
 ]
 
 [[package]]
