@@ -25,8 +25,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_raft_store::mem_meta::MemMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use fastrace::func_name;
 

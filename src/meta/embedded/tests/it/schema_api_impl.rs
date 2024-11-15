@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_raft_store::mem_sm::MemMeta;
+use databend_common_meta_raft_store::mem_meta::MemMeta;
 use test_harness::test;
 
 use crate::testing::mem_meta_test_harness;
