@@ -48,7 +48,7 @@ impl HttpFetch for StorageHttpClient {
         let uri = req.uri().clone();
         let is_head = req.method() == http::Method::HEAD;
 
-        let url = Url::parse(&uri).expect("input request url must be valid");
+        let url = Url::parse(uri.to_string().as_str()).expect("input request url must be valid");
         let host = url.host_str().unwrap_or_default();
         let method = match req.method() {
             &http::Method::GET => {
