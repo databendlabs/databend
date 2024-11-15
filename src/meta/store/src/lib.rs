@@ -21,7 +21,7 @@ use std::task::Poll;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_embedded::InMemoryMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -45,7 +45,7 @@ pub struct MetaStoreProvider {
 /// MetaStore is impl with either a local embedded meta store, or a grpc-client of metasrv
 #[derive(Clone)]
 pub enum MetaStore {
-    L(Arc<MetaEmbedded>),
+    L(Arc<InMemoryMeta>),
     R(Arc<ClientHandle>),
 }
 

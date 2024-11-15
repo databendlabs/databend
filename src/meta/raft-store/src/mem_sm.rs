@@ -76,18 +76,12 @@ impl StateMachineApi for InMemoryStateMachine {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct InMemoryMeta {
     sm: Arc<Mutex<InMemoryStateMachine>>,
 }
 
 impl InMemoryMeta {
-    pub fn new() -> Self {
-        InMemoryMeta {
-            sm: Arc::new(Mutex::new(InMemoryStateMachine::default())),
-        }
-    }
-
     async fn init_applier<'a>(
         &self,
         a: &mut Applier<'a, InMemoryStateMachine>,

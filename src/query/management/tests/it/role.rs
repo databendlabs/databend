@@ -90,7 +90,7 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> databend_common_exception::Result<(Arc<InMemoryMeta>, RoleMgr)> {
-    let test_api = Arc::new(InMemoryMeta::new());
+    let test_api = Arc::new(InMemoryMeta::default());
     let tenant = Tenant::new_literal("admin");
     let mgr = RoleMgr::create(
         test_api.clone(),
