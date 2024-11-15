@@ -20,7 +20,7 @@ use std::task::Poll;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_embedded::InMemoryMeta;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -44,7 +44,7 @@ pub struct MetaStoreProvider {
 /// MetaStore is impl with either a local embedded meta store, or a grpc-client of metasrv
 #[derive(Clone)]
 pub enum MetaStore {
-    L(Arc<InMemoryMeta>),
+    L(Arc<MemMeta>),
     R(Arc<ClientHandle>),
 }
 
@@ -127,7 +127,7 @@ impl MetaStoreProvider {
             );
 
             // NOTE: This can only be used for test: data will be removed when program quit.
-            let meta_store = InMemoryMeta::default();
+            let meta_store = MemMeta::default();
             Ok(MetaStore::L(Arc::new(meta_store)))
         } else {
             info!(conf :? =(&self.rpc_conf); "use remote meta");

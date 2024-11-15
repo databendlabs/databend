@@ -20,7 +20,7 @@ use databend_common_management::*;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::InMemoryMeta;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
@@ -114,8 +114,8 @@ async fn test_set_setting() -> Result<()> {
     Ok(())
 }
 
-async fn new_setting_api() -> Result<(Arc<InMemoryMeta>, SettingMgr)> {
-    let test_api = Arc::new(InMemoryMeta::default());
+async fn new_setting_api() -> Result<(Arc<MemMeta>, SettingMgr)> {
+    let test_api = Arc::new(MemMeta::default());
     let mgr = SettingMgr::create(
         test_api.clone(),
         &Tenant::new_or_err("databend_query", func_name!()).unwrap(),

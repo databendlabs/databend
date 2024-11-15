@@ -25,7 +25,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::InMemoryMeta;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::seq_value::SeqV;
 use fastrace::func_name;
@@ -138,8 +138,8 @@ fn create_test_stage_info() -> StageInfo {
     }
 }
 
-async fn new_stage_api() -> Result<(Arc<InMemoryMeta>, StageMgr)> {
-    let test_api = Arc::new(InMemoryMeta::default());
+async fn new_stage_api() -> Result<(Arc<MemMeta>, StageMgr)> {
+    let test_api = Arc::new(MemMeta::default());
     let mgr = StageMgr::create(
         test_api.clone(),
         &Tenant::new_or_err("admin", func_name!()).unwrap(),

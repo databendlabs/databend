@@ -17,7 +17,7 @@ use std::sync::Once;
 
 use databend_common_base::base::tokio;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
+use databend_common_meta_raft_store::mem_sm::MemMeta;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
 
@@ -25,12 +25,12 @@ use databend_common_tracing::Config;
 struct Builder;
 
 #[async_trait::async_trait]
-impl kvapi::ApiBuilder<InMemoryMeta> for Builder {
-    async fn build(&self) -> InMemoryMeta {
-        InMemoryMeta::default()
+impl kvapi::ApiBuilder<MemMeta> for Builder {
+    async fn build(&self) -> MemMeta {
+        MemMeta::default()
     }
 
-    async fn build_cluster(&self) -> Vec<InMemoryMeta> {
+    async fn build_cluster(&self) -> Vec<MemMeta> {
         unreachable!("InMemoryMeta does not support cluster")
     }
 }
