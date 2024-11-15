@@ -49,11 +49,6 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
         root: path.join("_data").to_str().unwrap().to_owned(),
     });
 
-    let meta_dir = path.join("_meta");
-    MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
-        .await
-        .unwrap();
-
     GlobalServices::init(&conf).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
