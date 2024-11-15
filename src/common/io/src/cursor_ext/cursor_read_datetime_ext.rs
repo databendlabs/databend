@@ -226,17 +226,6 @@ where T: AsRef<[u8]>
                 v
             )
         })?;
-        let less_1000 = |dt: Zoned| {
-            // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
-            if dt.year() < 1000 {
-                date(1000, 1, 1)
-                    .at(0, 0, 0, 0)
-                    .to_zoned(jiff_tz.clone())
-                    .map_err_to_code(ErrorCode::BadBytes, || format!("dt parse error"))
-            } else {
-                Ok(dt)
-            }
-        };
 
         // Time Part
         buf.clear();
@@ -263,7 +252,7 @@ where T: AsRef<[u8]>
             if times.len() < 3 {
                 times.resize(3, 0);
                 let dt = get_local_time(jiff_tz, &d, &mut times)?;
-                return Ok(DateTimeResType::Datetime(less_1000(dt)?));
+                return Ok(DateTimeResType::Datetime(dt));
             }
 
             let dt = get_local_time(jiff_tz, &d, &mut times)?;
@@ -311,21 +300,12 @@ where T: AsRef<[u8]>
             };
             if self.ignore(|b| b == b'z' || b == b'Z') {
                 // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
-                if dt.year() < 1000 {
-                    Ok(DateTimeResType::Datetime(
-                        date(1000, 1, 1)
-                            .at(0, 0, 0, 0)
-                            .to_zoned(jiff_tz.clone())
-                            .unwrap(),
-                    ))
-                } else {
-                    let current_tz = dt.offset().seconds();
-                    Ok(DateTimeResType::Datetime(calc_offset(
-                        current_tz.into(),
-                        0,
-                        &dt,
-                    )?))
-                }
+                let current_tz = dt.offset().seconds();
+                Ok(DateTimeResType::Datetime(calc_offset(
+                    current_tz.into(),
+                    0,
+                    &dt,
+                )?))
             } else if self.ignore_byte(b'+') {
                 Ok(DateTimeResType::Datetime(self.parse_time_offset(
                     jiff_tz,
@@ -344,18 +324,13 @@ where T: AsRef<[u8]>
                 )?))
             } else {
                 // only datetime part
-                Ok(DateTimeResType::Datetime(less_1000(dt)?))
+                Ok(DateTimeResType::Datetime(dt))
             }
         } else {
             // only date part
             if need_date {
-                Ok(DateTimeResType::Date(if d.year() < 1000 {
-                    date(1000, 1, 1)
-                } else {
-                    d
-                }))
+                Ok(DateTimeResType::Date(d))
             } else {
-                let d = if d.year() < 1000 { date(1000, 1, 1) } else { d };
                 Ok(DateTimeResType::Datetime(
                     d.to_zoned(jiff_tz.clone())
                         .map_err_to_code(ErrorCode::BadBytes, || {
