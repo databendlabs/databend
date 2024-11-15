@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::future;
-use std::io;
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -22,6 +21,7 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnReply;
@@ -74,11 +74,17 @@ impl StateMachineApi for InMemoryStateMachine {
     }
 }
 
+#[derive(Clone)]
 pub struct InMemoryMeta {
     sm: Arc<Mutex<InMemoryStateMachine>>,
 }
 
 impl InMemoryMeta {
+    pub fn new() -> Self {
+        InMemoryMeta {
+            sm: Arc::new(Mutex::new(InMemoryStateMachine::default())),
+        }
+    }
     fn non_expired<V>(seq_value: Option<SeqV<V>>, now_ms: u64) -> Option<SeqV<V>> {
         if seq_value.is_expired(now_ms) {
             None
@@ -90,7 +96,7 @@ impl InMemoryMeta {
 
 #[async_trait::async_trait]
 impl KVApi for InMemoryMeta {
-    type Error = io::Error;
+    type Error = MetaError;
 
     async fn upsert_kv(&self, upsert_kv: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
         debug!("InMemoryStateMachine::upsert_kv({})", upsert_kv);
@@ -133,7 +139,8 @@ impl KVApi for InMemoryMeta {
             .list_kv(prefix)
             .await?
             .try_filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
-            .map_ok(StreamItem::from);
+            .map_ok(StreamItem::from)
+            .map_err(|e| e.into());
 
         Ok(strm.boxed())
     }

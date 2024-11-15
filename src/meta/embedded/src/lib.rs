@@ -24,4 +24,6 @@
 mod kv_api_impl;
 mod meta_embedded;
 
+pub use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
+pub use databend_common_meta_raft_store::mem_sm::InMemoryStateMachine;
 pub use meta_embedded::MetaEmbedded;
