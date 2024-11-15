@@ -16,7 +16,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_column::bitmap::MutableBitmap;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;

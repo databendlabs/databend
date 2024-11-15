@@ -22,8 +22,8 @@ use std::ops::BitXorAssign;
 use std::ops::SubAssign;
 use std::sync::Arc;
 
-use databend_common_column::bitmap::Bitmap;
-use databend_common_column::bitmap::MutableBitmap;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;

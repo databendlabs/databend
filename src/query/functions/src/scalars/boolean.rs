@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
+use databend_common_expression::types::boolean;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
@@ -224,9 +225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             (ValueRef::Scalar(true), ValueRef::Column(other))
             | (ValueRef::Column(other), ValueRef::Scalar(true)) => Value::Column(!&other),
             (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
-            (ValueRef::Column(a), ValueRef::Column(b)) => {
-                Value::Column(databend_common_column::bitmap::xor(&a, &b))
-            }
+            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(boolean::xor(&a, &b)),
         },
     );
 
