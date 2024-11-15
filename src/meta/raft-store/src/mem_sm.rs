@@ -114,7 +114,7 @@ impl KVApi for InMemoryMeta {
 
         let (prev, result) = applier.upsert_kv(&upsert_kv).await?;
 
-        let st = Change::new(prev, result).into();
+        let st = Change::new(prev, result);
         Ok(st)
     }
 
