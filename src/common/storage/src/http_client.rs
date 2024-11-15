@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::future;
 use std::mem;
 use std::str::FromStr;
@@ -47,14 +48,14 @@ impl HttpFetch for StorageHttpClient {
         let uri = req.uri().clone();
         let is_head = req.method() == http::Method::HEAD;
 
-        let url = Url::parse(uri.to_string());
-        let host = uri.host().unwrap_or_default();
+        let url = Url::parse(&uri).expect("input request url must be valid");
+        let host = url.host_str().unwrap_or_default();
         let method = match req.method() {
             &http::Method::GET => {
-                if uri.path() == "/" {
-                    "LIST"
-                } else {
-                    "GET"
+                let query: HashMap<_, _> = url.query_pairs().collect();
+                match query.get("list-type") {
+                    Some(_) => "LIST",
+                    None => "GET",
                 }
             }
             m => m.as_str(),
