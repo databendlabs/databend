@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -121,16 +120,20 @@ impl MetaStoreProvider {
     }
 
     pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
-        if self.rpc_conf.endpoints.is_empty() {
-            return Err(MetaError::from(io::Error::new(
-                io::ErrorKind::Other,
-                "no endpoints for databend-meta is specified",
-            )));
-        }
+        if self.rpc_conf.local_mode() {
+            info!(
+                conf :? =(&self.rpc_conf);
+                "use embedded meta, data will be removed when process exits"
+            );
 
-        info!(conf :? =(&self.rpc_conf); "use remote meta");
-        let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
-        Ok(MetaStore::R(client))
+            // NOTE: This can only be used for test: data will be removed when program quit.
+            let meta_store = InMemoryMeta::default();
+            Ok(MetaStore::L(Arc::new(meta_store)))
+        } else {
+            info!(conf :? =(&self.rpc_conf); "use remote meta");
+            let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
+            Ok(MetaStore::R(client))
+        }
     }
 }
 
