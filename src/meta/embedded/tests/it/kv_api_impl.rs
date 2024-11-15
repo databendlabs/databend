@@ -15,6 +15,7 @@
 use databend_common_base::base::tokio;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_write_read() -> anyhow::Result<()> {
@@ -56,4 +57,22 @@ async fn test_kv_list() -> anyhow::Result<()> {
 async fn test_kv_mget() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
     kvapi::TestSuite {}.kv_mget(&kv).await
+}
+
+#[derive(Clone)]
+struct Builder;
+
+impl kvapi::ApiBuilder<InMemoryMeta> for Builder {
+    fn build(&self) -> InMemoryMeta {
+        InMemoryMeta::new()
+    }
+
+    fn build_cluster(&self) -> Vec<InMemoryMeta> {
+        unreachable!("InMemoryMeta does not support cluster")
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_mem_meta_kv_api() -> anyhow::Result<()> {
+    kvapi::TestSuite {}.test_single_node(&Builder).await
 }
