@@ -233,7 +233,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
 }
 
 async fn new_udf_api() -> Result<(Arc<InMemoryMeta>, UdfMgr)> {
-    let test_api = Arc::new(InMemoryMeta::new());
+    let test_api = Arc::new(InMemoryMeta::default());
     let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));
     Ok((test_api, mgr))
 }

@@ -139,7 +139,7 @@ fn create_test_stage_info() -> StageInfo {
 }
 
 async fn new_stage_api() -> Result<(Arc<InMemoryMeta>, StageMgr)> {
-    let test_api = Arc::new(InMemoryMeta::new());
+    let test_api = Arc::new(InMemoryMeta::default());
     let mgr = StageMgr::create(
         test_api.clone(),
         &Tenant::new_or_err("admin", func_name!()).unwrap(),

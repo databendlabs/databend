@@ -15,31 +15,38 @@
 use async_trait::async_trait;
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
-use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
 use test_harness::test;
 
 use crate::testing::embedded_meta_test_harness;
 
 #[derive(Clone)]
-pub struct MetaEmbeddedBuilder {}
+pub struct MemMetaBuilder {}
 
 #[async_trait]
-impl kvapi::ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
-    async fn build(&self) -> MetaEmbedded {
-        MetaEmbedded::new_temp().await.unwrap()
+impl kvapi::ApiBuilder<InMemoryMeta> for MemMetaBuilder {
+    async fn build(&self) -> InMemoryMeta {
+        InMemoryMeta::default()
     }
 
-    async fn build_cluster(&self) -> Vec<MetaEmbedded> {
+    async fn build_cluster(&self) -> Vec<InMemoryMeta> {
         unimplemented!("embedded meta does not support cluster mode")
     }
 }
 
 #[test(harness = embedded_meta_test_harness)]
 #[fastrace::trace]
-async fn test_meta_embedded() -> anyhow::Result<()> {
-    SchemaApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
-    BackgroundApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
+async fn test_mem_meta_schema_api() -> anyhow::Result<()> {
+    SchemaApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
+
+    Ok(())
+}
+
+#[test(harness = embedded_meta_test_harness)]
+#[fastrace::trace]
+async fn test_mem_meta_background_api() -> anyhow::Result<()> {
+    BackgroundApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
 
     Ok(())
 }

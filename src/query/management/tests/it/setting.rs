@@ -115,7 +115,7 @@ async fn test_set_setting() -> Result<()> {
 }
 
 async fn new_setting_api() -> Result<(Arc<InMemoryMeta>, SettingMgr)> {
-    let test_api = Arc::new(InMemoryMeta::new());
+    let test_api = Arc::new(InMemoryMeta::default());
     let mgr = SettingMgr::create(
         test_api.clone(),
         &Tenant::new_or_err("databend_query", func_name!()).unwrap(),
