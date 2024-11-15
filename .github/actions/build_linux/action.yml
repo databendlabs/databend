@@ -58,12 +58,6 @@ runs:
             flags=""
             ;;
         esac
-
-        debug_assertions=${{ inputs.debug_assertions }}
-        if [[ $debug_assertions -eq 1 ]]; then
-          flags="--cfg debug_assertions ${flags}"
-        fi
-
         if [[ ! -z "${flags}" ]]; then
           echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
         fi

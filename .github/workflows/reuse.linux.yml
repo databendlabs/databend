@@ -7,7 +7,7 @@ on:
         description: "Build profile, debug or release"
         type: string
         required: true
-        default: "release"
+        default: "debug"
       runner_provider:
         description: "Self-hosted runner provider, aws or gcp"
         type: string
@@ -60,7 +60,6 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
-          debug_assertions: 1
           artifacts: all
 
   build_udf:
