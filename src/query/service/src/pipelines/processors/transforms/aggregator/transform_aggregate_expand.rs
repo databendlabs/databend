@@ -66,7 +66,7 @@ impl Transform for TransformExpandGroupingSets {
             for i in 0..num_group_bys {
                 let entry = unsafe {
                     let offset = self.group_bys.get_unchecked(i);
-                    columns.get_unchecked_mut_release(*offset)
+                    columns.get_unchecked_mut(*offset)
                 };
                 if bits & (1 << i) == 0 {
                     // This column should be set to NULLs.

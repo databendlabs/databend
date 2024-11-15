@@ -18,7 +18,6 @@ use std::ops::Range;
 use databend_common_arrow::arrow::array::MutableBinaryViewArray;
 use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
-use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
