@@ -22,7 +22,6 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
 databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
-log = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
