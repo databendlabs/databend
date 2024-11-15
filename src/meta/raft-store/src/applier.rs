@@ -64,7 +64,7 @@ where SM: StateMachineApi + 'static
     sm: &'a mut SM,
 
     /// The context of the current applying log.
-    cmd_ctx: CmdContext,
+    pub(crate) cmd_ctx: CmdContext,
 
     /// The changes have been made by the applying one log entry
     changes: Vec<Change<Vec<u8>, String>>,
@@ -466,7 +466,7 @@ where SM: StateMachineApi + 'static
     /// All expired keys will be removed before applying a log.
     /// This is different from the sled based implementation.
     #[fastrace::trace]
-    async fn clean_expired_kvs(&mut self, log_time_ms: u64) -> Result<(), io::Error> {
+    pub(crate) async fn clean_expired_kvs(&mut self, log_time_ms: u64) -> Result<(), io::Error> {
         if log_time_ms == 0 {
             return Ok(());
         }

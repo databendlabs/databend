@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::sync::Once;
+
 use databend_common_base::base::tokio;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::Config;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_write_read() -> anyhow::Result<()> {
@@ -62,17 +67,33 @@ async fn test_kv_mget() -> anyhow::Result<()> {
 #[derive(Clone)]
 struct Builder;
 
+#[async_trait::async_trait]
 impl kvapi::ApiBuilder<InMemoryMeta> for Builder {
-    fn build(&self) -> InMemoryMeta {
+    async fn build(&self) -> InMemoryMeta {
         InMemoryMeta::new()
     }
 
-    fn build_cluster(&self) -> Vec<InMemoryMeta> {
+    async fn build_cluster(&self) -> Vec<InMemoryMeta> {
         unreachable!("InMemoryMeta does not support cluster")
     }
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_mem_meta_kv_api() -> anyhow::Result<()> {
+    setup_test();
     kvapi::TestSuite {}.test_single_node(&Builder).await
+}
+
+fn setup_test() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+        databend_common_meta_sled_store::init_temp_sled_db(t);
+
+        let mut config = Config::new_testing();
+        config.file.prefix_filter = "".to_string();
+
+        let guards = init_logging("meta_unittests", &config, BTreeMap::new());
+        Box::leak(Box::new(guards));
+    });
 }
