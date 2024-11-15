@@ -27,6 +27,7 @@ pub mod buffer;
 pub mod error;
 pub mod fmt;
 pub mod iterator;
+pub mod offset;
 pub mod types;
 
 #[macro_use]

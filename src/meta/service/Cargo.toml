@@ -14,7 +14,7 @@ test = true
 [features]
 default = ["simd"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
-simd = ["databend-common-arrow/simd"]
+simd = ["databend-common-column/simd"]
 io-uring = [
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
@@ -27,8 +27,8 @@ arrow-flight = { workspace = true }
 async-trait = { workspace = true }
 backon = { workspace = true }
 clap = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-http = { workspace = true }
 databend-common-meta-api = { workspace = true }

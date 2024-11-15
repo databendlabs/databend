@@ -18,8 +18,8 @@ use std::intrinsics::assume;
 use std::mem;
 use std::ptr;
 
-use databend_common_column::bitmap::MutableBitmap;
 use databend_common_base::runtime::drop_guard;
+use databend_common_column::bitmap::MutableBitmap;
 
 use crate::types::*;
 use crate::with_number_mapped_type;

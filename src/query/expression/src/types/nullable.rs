@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
-use std::iter::TrustedLen;
 
 use super::AnyType;
 use super::DecimalSize;

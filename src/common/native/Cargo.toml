@@ -1,0 +1,49 @@
+[package]
+name = "databend-common-native"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+test = true
+
+[features]
+
+[dependencies]
+# databend-common-column = { workspace = true }
+
+arrow = { workspace = true }
+arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
+arrow-buffer = { workspace = true }
+ahash = { workspace = true }
+bitpacking = { workspace = true }
+bytemuck = { workspace = true }
+byteorder = { workspace = true }
+bytes = { workspace = true }
+either = { workspace = true }
+ethnum = { workspace = true }
+hashbrown_v0_14 = { workspace = true }
+indexmap = { workspace = true }
+log = { workspace = true }
+lz4 = { workspace = true }
+num = { workspace = true, features = ["std"] }
+num-traits = { workspace = true }
+opendal = { workspace = true }
+ordered-float = { workspace = true }
+rand = { workspace = true }
+ringbuffer = { workspace = true }
+roaring = { workspace = true }
+serde = { workspace = true, features = ["rc"]}
+serde_derive = { workspace = true, optional = true }
+serde_json = { workspace = true }
+snap = { workspace = true }
+zstd = { workspace = true }
+
+[dev-dependencies]
+# used to test async readers
+
+[lints]
+workspace = true

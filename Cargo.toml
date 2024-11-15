@@ -9,13 +9,13 @@ edition = "2021"
 resolver = "2"
 members = [
     "src/binaries",
-    "src/common/arrow",
     "src/common/auth",
     "src/common/base",
     "src/common/building",
     "src/common/cache",
     "src/common/cloud_control",
     "src/common/column",
+    "src/common/native",
     "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
@@ -103,7 +103,6 @@ members = [
 
 # Workspace dependencies
 [workspace.dependencies]
-databend-common-arrow = { path = "src/common/arrow" }
 databend-common-column = { path = "src/common/column" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
@@ -171,6 +170,7 @@ databend-common-storages-view = { path = "src/query/storages/view" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
+databend-common-native = { path = "src/common/native" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
@@ -572,7 +572,6 @@ opt-level = "s"         ## defaults to be 3
 incremental = true
 
 # [profile.release.package]
-# databend-common-arrow = { codegen-units = 16 }
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
 

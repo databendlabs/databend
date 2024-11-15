@@ -15,8 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-pub use databend_common_column::bitmap::Bitmap;
-pub use databend_common_column::bitmap::MutableBitmap;
+pub use databend_common_column::bitmap::*;
 
 use crate::property::Domain;
 use crate::types::ArgType;

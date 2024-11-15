@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::ops::Not;
 
 use databend_common_ast::Span;
-use databend_common_column::bitmap;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
@@ -34,6 +33,7 @@ use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::boolean;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
@@ -858,7 +858,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    let validity = bitmap::and(&col.validity, &new_col.validity);
+                    let validity = boolean::and(&col.validity, &new_col.validity);
                     Ok(Value::Column(NullableColumn::new_column(
                         new_col.column,
                         validity,

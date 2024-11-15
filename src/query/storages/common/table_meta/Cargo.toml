@@ -10,7 +10,7 @@ edition = { workspace = true }
 dev = ["snap"]
 
 [dependencies]
-databend-common-arrow = { workspace = true }
+
 databend-common-base = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
