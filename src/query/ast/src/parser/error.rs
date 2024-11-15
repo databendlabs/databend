@@ -163,8 +163,8 @@ impl<'a> Error<'a> {
     }
 }
 
-impl From<fast_float::Error> for ErrorKind {
-    fn from(_: fast_float::Error) -> Self {
+impl From<fast_float2::Error> for ErrorKind {
+    fn from(_: fast_float2::Error) -> Self {
         ErrorKind::Other("unable to parse float number")
     }
 }

@@ -19,7 +19,6 @@ arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
-geos = { workspace = true }
 geozero = { workspace = true }
 gimli = { workspace = true }
 http = { workspace = true }
@@ -38,9 +37,6 @@ sqlx = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["geos"]
 
 [lints]
 workspace = true

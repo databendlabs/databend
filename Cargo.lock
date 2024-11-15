@@ -103,6 +103,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aligned-vec"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e0966165eaf052580bd70eb1b32cb3d6245774c0104d1b2793e9650bf83b52a"
+dependencies = [
+ "equator",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1772,12 +1781,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "c_vec"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdd7a427adc0135366d99db65b36dae9237130997e560ed61118041fb72be6e8"
-
-[[package]]
 name = "camino"
 version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3054,7 +3057,7 @@ dependencies = [
  "num",
  "num-traits",
  "opendal",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "proptest",
  "quanta 0.11.1",
  "rand",
@@ -3078,7 +3081,7 @@ dependencies = [
  "derive-visitor",
  "enum-as-inner 0.5.1",
  "ethnum",
- "fast-float",
+ "fast-float2",
  "fastrace",
  "goldenfile",
  "indent",
@@ -3086,7 +3089,7 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "pratt",
  "pretty",
  "pretty_assertions",
@@ -3303,7 +3306,6 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "databend-common-arrow",
  "databend-common-ast",
- "geos",
  "geozero 0.14.0",
  "gimli 0.31.1",
  "http 1.1.0",
@@ -3357,7 +3359,6 @@ dependencies = [
  "ethnum",
  "futures",
  "geo",
- "geos",
  "geozero 0.14.0",
  "goldenfile",
  "hex",
@@ -3405,7 +3406,6 @@ dependencies = [
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "geos",
  "geozero 0.14.0",
  "hex",
  "jsonb",
@@ -3447,9 +3447,7 @@ dependencies = [
  "dtparse",
  "ethnum",
  "geo",
- "geo-types",
  "geohash",
- "geos",
  "geozero 0.14.0",
  "goldenfile",
  "h3o",
@@ -3547,8 +3545,8 @@ dependencies = [
  "enumflags2",
  "ethnum",
  "geo",
- "geos",
  "geozero 0.14.0",
+ "hex",
  "lexical-core",
  "micromarshal",
  "rand",
@@ -4313,7 +4311,7 @@ dependencies = [
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "serde",
  "tokio",
  "typetag",
@@ -5143,7 +5141,7 @@ dependencies = [
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "p256 0.13.2",
  "parking_lot 0.12.3",
  "parquet",
@@ -6109,6 +6107,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "equator"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c35da53b5a021d2484a7cc49b2ac7f2d840f8236a286f84202369bd338d761ea"
+dependencies = [
+ "equator-macro",
+]
+
+[[package]]
+name = "equator-macro"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf679796c0322556351f287a51b49e48f7c4986e727b5dd78c972d30e2e16cc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6216,10 +6234,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
-name = "fast-float"
-version = "0.2.0"
+name = "fast-float2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95765f67b4b18863968b4a1bd5bb576f732b29a4a28c7cd84c09fa3e2875f33c"
+checksum = "f8eb564c5c7423d25c886fb561d1e4ee69f72354d16918afa32c08811f6b6a55"
 
 [[package]]
 name = "fastdivide"
@@ -6871,42 +6889,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "geos"
-version = "9.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "468b7ac7233c0f417b2c161d28b6d1e88c025eaf79303b69e6e1aa40a2ac1367"
-dependencies = [
- "c_vec",
- "geo-types",
- "geos-sys",
- "libc",
- "num",
- "wkt 0.10.3",
-]
-
-[[package]]
-name = "geos-src"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8f5247861370ecfcd91a239376c572021cf355cddf52a6602ebbf403d9bb99e"
-dependencies = [
- "cmake",
-]
-
-[[package]]
-name = "geos-sys"
-version = "2.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dc873d24aefc72aa94c3c1c251afb82beb7be5926002746c0e1f585fef9854c"
-dependencies = [
- "geos-src",
- "libc",
- "link-cplusplus",
- "pkg-config",
- "semver",
-]
-
-[[package]]
 name = "geozero"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6929,7 +6911,6 @@ checksum = "e5f28f34864745eb2f123c990c6ffd92c1584bd39439b3f27ff2a0f4ea5b309b"
 dependencies = [
  "geo-types",
  "geojson",
- "geos",
  "log",
  "scroll 0.11.0",
  "serde_json",
@@ -8497,7 +8478,7 @@ dependencies = [
  "num-bigint",
  "once_cell",
  "opendal",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "parquet",
  "paste",
  "rand",
@@ -9037,14 +9018,15 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.4.3"
-source = "git+https://github.com/databendlabs/jsonb?rev=ada713c#ada713c16369cd0c0b85f3bbae22183111325ee9"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acd7dc2490b13d09367f5dc4bf202a5d70958dd5b9b2758e2708ee062752a824"
 dependencies = [
  "byteorder",
- "fast-float",
+ "fast-float2",
  "itoa",
  "nom",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "rand",
  "ryu",
  "serde_json",
@@ -9394,15 +9376,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "link-cplusplus"
-version = "1.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d240c6f7e1ba3a28b0249f774e6a9dd0175054b52dfbb61b16eb8505c3785c9"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9737,7 +9710,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "863693c933db83464c52adf30809f583aae924f30fa114f303aa5360b4a399ec"
 dependencies = [
  "ethnum",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
 ]
 
 [[package]]
@@ -10754,9 +10727,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "4.2.2"
+version = "4.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a91171844676f8c7990ce64959210cd2eaef32c2612c50f9fae9f8aaa6065a6"
+checksum = "c65ee1f9701bf938026630b455d5315f490640234259037edb259798b3bcf85e"
 dependencies = [
  "num-traits",
  "rand",
@@ -11068,7 +11041,7 @@ dependencies = [
  "integer-encoding 4.0.2",
  "lazy_static",
  "linkedbytes",
- "ordered-float 4.2.2",
+ "ordered-float 4.5.0",
  "paste",
  "serde",
  "smallvec",
@@ -11305,10 +11278,11 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "pprof"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef5c97c51bd34c7e742402e216abdeb44d415fbe6ae41d56b114723e953711cb"
+checksum = "ebbe2f8898beba44815fdc9e5a4ae9c929e21c5dc29b0c774a15555f7f58d6d0"
 dependencies = [
+ "aligned-vec",
  "backtrace",
  "cfg-if",
  "findshlibs",
