@@ -211,9 +211,7 @@ impl IcebergCatalog {
                     .build();
 
                 // Due to the AWS Glue catalog creation being asynchronous, forced to run it a bit different way, so we don't have to make the outer function asynchronous.
-                let ctl = tokio::task::block_in_place(|| {
-                    databend_common_base::runtime::block_on(GlueCatalog::new(cfg))
-                })
+                let ctl = databend_common_base::runtime::block_on(GlueCatalog::new(cfg))
                 .map_err(|err| {
                     ErrorCode::BadArguments(format!(
                         "There was an error building the AWS Glue catalog: {err:?}"
