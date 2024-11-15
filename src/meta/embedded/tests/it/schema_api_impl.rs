@@ -19,7 +19,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
 use test_harness::test;
 
-use crate::testing::embedded_meta_test_harness;
+use crate::testing::mem_meta_test_harness;
 
 #[derive(Clone)]
 pub struct MemMetaBuilder {}
@@ -35,18 +35,16 @@ impl kvapi::ApiBuilder<InMemoryMeta> for MemMetaBuilder {
     }
 }
 
-#[test(harness = embedded_meta_test_harness)]
+#[test(harness = mem_meta_test_harness)]
 #[fastrace::trace]
 async fn test_mem_meta_schema_api() -> anyhow::Result<()> {
     SchemaApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
-
     Ok(())
 }
 
-#[test(harness = embedded_meta_test_harness)]
+#[test(harness = mem_meta_test_harness)]
 #[fastrace::trace]
 async fn test_mem_meta_background_api() -> anyhow::Result<()> {
     BackgroundApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
-
     Ok(())
 }

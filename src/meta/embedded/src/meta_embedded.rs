@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::state_machine::StateMachine;
-pub use databend_common_meta_sled_store::init_temp_sled_db;
 use databend_common_meta_stoerr::MetaStorageError;
-use databend_common_meta_types::anyerror::AnyError;
 use log::warn;
 
 /// Local storage that provides the API defined by `kvapi::KVApi+SchemaApi`.
@@ -67,25 +63,6 @@ impl MetaEmbedded {
         Ok(MetaEmbedded {
             inner: Arc::new(Mutex::new(sm)),
         })
-    }
-
-    /// Creates a kvapi::KVApi impl with a random and unique name.
-    pub async fn new_temp() -> Result<MetaEmbedded, MetaStorageError> {
-        let temp_dir =
-            tempfile::tempdir().map_err(|e| MetaStorageError::Damaged(AnyError::new(&e)))?;
-
-        init_temp_sled_db(temp_dir);
-
-        // generate a unique id as part of the name of sled::Tree
-
-        static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
-        let x = GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst);
-        let id = 29000_u64 + (x as u64);
-
-        let name = format!("temp-{}", id);
-
-        let m = Self::new(&name).await?;
-        Ok(m)
     }
 
     /// Initialize a sled db to store embedded meta data.
