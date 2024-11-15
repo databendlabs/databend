@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_array::Array;
-use arrow_array::ArrayRef;
-use arrow_schema::Field;
+use databend_common_expression::TableField;
 
 use crate::error::Result;
 use crate::nested::create_list;
 use crate::nested::NestedState;
 use crate::read::deserialize::DynIter;
 
-/// An iterator adapter over [`DynIter`] assumed to be encoded as List arrays
+/// An iterator adapter over [`DynIter`] assumed to be encoded as List columns
 pub struct ListIterator<'a> {
-    iter: DynIter<'a, Result<(NestedState, ArrayRef)>>,
-    field: Field,
+    iter: DynIter<'a, Result<(NestedState, Column)>>,
+    field: TableField,
 }
 
 impl<'a> ListIterator<'a> {
     /// Creates a new [`ListIterator`] with `iter` and `field`.
-    pub fn new(iter: DynIter<'a, Result<(NestedState, ArrayRef)>>, field: Field) -> Self {
+    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: Field) -> Self {
         Self { iter, field }
     }
 }
@@ -37,8 +35,8 @@ impl<'a> ListIterator<'a> {
 impl<'a> ListIterator<'a> {
     fn deserialize(
         &mut self,
-        value: Option<Result<(NestedState, ArrayRef)>>,
-    ) -> Option<Result<(NestedState, ArrayRef)>> {
+        value: Option<Result<(NestedState, Column)>>,
+    ) -> Option<Result<(NestedState, Column)>> {
         let (mut nested, values) = match value {
             Some(Ok((nested, values))) => (nested, values),
             Some(Err(err)) => return Some(Err(err)),
@@ -50,7 +48,7 @@ impl<'a> ListIterator<'a> {
 }
 
 impl<'a> Iterator for ListIterator<'a> {
-    type Item = Result<(NestedState, ArrayRef)>;
+    type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         let value = self.iter.nth(n);

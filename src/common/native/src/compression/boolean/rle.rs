@@ -14,30 +14,31 @@
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 
 use super::compress_sample_ratio;
 use super::BooleanCompression;
 use super::BooleanStats;
-use arrow_array::BooleanArray;
-use arrow_buffer::NullBufferBuilder;
-use crate::error::Result;
 use crate::compression::integer::Rle;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
+use crate::error::Result;
 
 impl BooleanCompression for Rle {
-    fn compress(&self, array: &BooleanArray, output: &mut Vec<u8>) -> Result<usize> {
+    fn compress(
+        &self,
+        array: &Bitmap,
+        validity: Option<Bitmap>,
+        output: &mut Vec<u8>,
+    ) -> Result<usize> {
         let size = output.len();
-        self.compress_integer(
-            output,
-            array.values().iter().map(|v| v as u8),
-            array.validity(),
-        )?;
+        self.compress_integer(output, array.values().iter().map(|v| v as u8), validity)?;
         Ok(output.len() - size)
     }
 
-    fn decompress(&self, mut input: &[u8], length: usize, array: &mut NullBufferBuilder) -> Result<()> {
+    fn decompress(&self, mut input: &[u8], length: usize, array: &mut MutableBitmap) -> Result<()> {
         let mut num_values = 0;
         while !input.is_empty() {
             let len: u32 = input.read_u32::<LittleEndian>()?;

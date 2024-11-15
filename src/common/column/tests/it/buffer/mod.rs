@@ -13,4 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::buffer::Buffer;
+
 mod immutable;
+
+#[test]
+fn new_basic() {
+    let mut buffer = Buffer::<i32>::new();
+    assert_eq!(buffer.len(), 0);
+    assert!(buffer.is_empty());
+
+    buffer = Buffer::<i32>::from(vec![1, 2, 3]);
+    assert_eq!(buffer.len(), 3);
+}

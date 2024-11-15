@@ -14,22 +14,19 @@
 
 use std::io::Write;
 
-use arrow_array::Array;
-use arrow_array::BinaryArray;
-use arrow_array::BinaryViewArray;
-use arrow_array::LargeBinaryArray;
-use arrow_array::LargeStringArray;
-use arrow_array::StringArray;
-use arrow_array::StringViewArray;
-use arrow_schema::DataType;
-use arrow_schema::PhysicalType;
+use databend_common_column::with_number_type;
+use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::GeographyColumn;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::with_decimal_type;
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
 
 use super::boolean::write_bitmap;
 use super::WriteOptions;
 use crate::error::Result;
 use crate::nested::Nested;
 use crate::util::encode_bool;
-use crate::with_match_primitive_type;
 use crate::write::binary::write_binary;
 use crate::write::primitive::write_primitive;
 use crate::write::view::write_view;
@@ -37,71 +34,48 @@ use crate::write::view::write_view;
 /// Writes an [`Array`] to the file
 pub fn write<W: Write>(
     w: &mut W,
-    array: &dyn Array,
+    column: &Column,
     nested: &[Nested],
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    use arrow_schema::DataType::*;
     write_nest_info::<W>(w, nested)?;
-    match array.data_type() {
-        Null => {}
-        Boolean => {
-            let array: &BooleanArray = array.as_any().downcast_ref().unwrap();
-            write_bitmap::<W>(w, array, write_options, scratch)?
-        }
-        Binary => {
-            let array: &GenericBinaryArray<i32> = array.as_any().downcast_ref().unwrap();
-            write_binary::<i32, W>(w, array, write_options, scratch)?;
-        }
-        LargeBinary => {
-            let array: &GenericBinaryArray<i64> = array.as_any().downcast_ref().unwrap();
-            write_binary::<i64, W>(w, array, write_options, scratch)?;
-        }
-        Utf8 => {
-            let binary_array: &StringArray = array.as_any().downcast_ref().unwrap();
-            let binary_array = BinaryArray::new(
-                binary_array.offsets().clone(),
-                binary_array.values().clone(),
-                binary_array.nulls().cloned(),
-            );
-            write_binary::<i32, W>(w, &binary_array, write_options, scratch)?;
-        }
-        LargeUtf8 => {
-            let binary_array: &LargeStringArray<i64> = array.as_any().downcast_ref().unwrap();
 
-            let binary_array = LargeBinaryArray::new(
-                binary_array.offsets().clone(),
-                binary_array.values().clone(),
-                binary_array.nulls().cloned(),
-            );
-            write_binary::<i64, W>(w, &binary_array, write_options, scratch)?;
-        }
-        BinaryView => {
-            let array: &BinaryViewArray = array.as_any().downcast_ref().unwrap();
-            write_view::<W>(w, array, write_options, scratch)?;
-        }
-        Utf8View => {
-            let array: &StringViewArray = array.as_any().downcast_ref().unwrap();
-            let array = array.clone().to_binary_view();
-            write_view::<W>(w, &array, write_options, scratch)?;
-        }
-        Struct => unreachable!(),
-        List => unreachable!(),
-        FixedSizeList => unreachable!(),
-        Dictionary(_, _) => unreachable!(),
-        Union => unreachable!(),
-        Map => unreachable!(),
-        other if other.is_primitive() => {
-            with_match_primitive_type!(primitive, |$T| {
-                let array: &PrimitiveArray<$T> = array.as_any().downcast_ref().unwrap();
-                write_primitive::<$T, W>(w, array, write_options, scratch)?;
+    let (_, validity) = column.validity();
+    let validity = validity.cloned();
+
+    match column.remove_nullable() {
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => OK(()),
+        Column::Number(column) => {
+            with_number_type!(|NUM_TYPE| match column {
+                NumberColumn::NUM_TYPE(column) => {
+                    write_primitive::<W>(w, &column, validity, write_options, scratch)
+                }
             })
         }
-        _ => todo!(),
-    }
+        Column::Decimal(buffer) => with_decimal_type!(|DT| {
+            DecimalColumn::DT(column, _ ) => {
+                    write_primitive::<W>(w, &column, validity, write_options, scratch)
+            }
+        }),
+        Column::Boolean(_) => todo!(),
+        Column::String(column) => write_view::<W>(w, &column.to_binview(), write_options, scratch),
+        Column::Timestamp(column) => {
+            write_primitive::<W>(w, &column, validity, write_options, scratch)
+        }
+        Column::Date(column) => write_primitive::<W>(w, &column, validity, write_options, scratch),
 
-    Ok(())
+        Column::Binary(b)
+        | Column::Bitmap(b)
+        | Column::Variant(b)
+        | Column::Geometry(b)
+        | Column::Geography(GeographyColumn(b))
+        | Column::Geometry(b) => write_binary::<W>(w, column, validity, write_options, scratch),
+
+        Column::Tuple(_) | Column::Map(_) | Column::Array(_) | Column::Nullable(_) => {
+            unreachable!()
+        }
+    }
 }
 
 fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {

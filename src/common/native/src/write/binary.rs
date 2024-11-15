@@ -14,20 +14,21 @@
 
 use std::io::Write;
 
-use arrow_array::OffsetSizeTrait;
+use databend_common_column::binary::BinaryColumn;
 
 use super::WriteOptions;
 use crate::compression::binary::compress_binary;
 use crate::error::Result;
 
-pub(crate) fn write_binary<O: OffsetSizeTrait, W: Write>(
+pub(crate) fn write_binary<W: Write>(
     w: &mut W,
-    array: &GenericBinaryArray<O>,
+    array: &BinaryColumn,
+    validity: Option<Bitmap>,
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
     scratch.clear();
-    compress_binary(array, scratch, write_options)?;
+    compress_binary(array, validity, scratch, write_options)?;
     w.write_all(scratch.as_slice())?;
     Ok(())
 }

@@ -18,7 +18,7 @@ use std::io::Write;
 use super::DoubleCompression;
 use super::DoubleStats;
 use super::DoubleType;
-use arrow_array::PrimitiveArray;
+
 use crate::error::Result;
 use crate::compression::Compression;
 use crate::write::WriteOptions;
@@ -29,7 +29,7 @@ pub struct OneValue {}
 impl<T: DoubleType> DoubleCompression<T> for OneValue {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &DoubleStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -61,7 +61,7 @@ impl OneValue {
     pub fn encode_native<T: DoubleType, W: Write>(
         &self,
         w: &mut W,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
     ) -> Result<()> {
         let val = array.iter().find(|v| v.is_some());
         let val = match val {

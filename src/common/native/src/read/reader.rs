@@ -16,21 +16,38 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 
-use arrow_schema::DataType;
-use arrow_schema::PhysicalType;
-use arrow_schema::Schema;
 use opendal::Reader;
 
 use super::read_basic::read_u32;
 use super::read_basic::read_u64;
 use super::NativeReadBuf;
 use super::PageIterator;
+use databend_common_expression::TableDataType;
+
+use databend_common_expression::TableSchema;
 use crate::error::Error;
 use crate::error::Result;
 use crate::ColumnMeta;
 use crate::PageMeta;
 
 const DEFAULT_FOOTER_SIZE: u64 = 64 * 1024;
+
+pub fn is_primitive(data_type: &DataType) -> bool {
+    matches!(
+        data_type.to_physical_type(),
+        PhysicalType::Primitive(_)
+            | PhysicalType::Null
+            | PhysicalType::Boolean
+            | PhysicalType::Utf8
+            | PhysicalType::LargeUtf8
+            | PhysicalType::Binary
+            | PhysicalType::Utf8View
+            | PhysicalType::BinaryView
+            | PhysicalType::LargeBinary
+            | PhysicalType::FixedSizeBinary
+            | PhysicalType::Dictionary(_)
+    )
+}
 
 #[derive(Debug)]
 pub struct NativeReader<R: NativeReadBuf> {
@@ -195,7 +212,7 @@ pub async fn read_meta_async(
         .await
         .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;
     if buf.len() < pre_read_len {
-        return Err(Error::SchemaError("file is too short".to_string()));
+        return Err(Error::OutOfSpec("file is too short".to_string()));
     }
 
     // EOS(8 bytes) + meta_size(4 bytes) + schema_size(4bytes) = 16 bytes
@@ -215,7 +232,7 @@ pub async fn read_meta_async(
             .await
             .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;
         if buf.len() < total_size as usize {
-            return Err(Error::SchemaError("file is too short".to_string()));
+            return Err(Error::OutOfSpec("file is too short".to_string()));
         }
         footer_reader = std::io::Cursor::new(buf.to_bytes());
     } else {

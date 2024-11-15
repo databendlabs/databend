@@ -15,18 +15,16 @@
 use std::convert::TryInto;
 use std::io::Read;
 
-use arrow_buffer::NullBuffer;
+use databend_common_expression::types::Bitmap;
 
 use super::NativeReadBuf;
-use crate::arrow::offset::Offsets;
-use crate::arrow::offset::OffsetsBuffer;
 use crate::compression::Compression;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::ListNested;
 use crate::nested::Nested;
 
-pub fn read_validity<R: NativeReadBuf>(reader: &mut R) -> Result<Option<NullBuffer>> {
+pub fn read_validity<R: NativeReadBuf>(reader: &mut R) -> Result<Option<Bitmap>> {
     let mut buf = vec![0u8; 4];
     let length = read_u32(reader, &mut buf)? as usize;
     if length > 0 {
@@ -43,7 +41,7 @@ pub fn read_nested<R: NativeReadBuf>(
     reader: &mut R,
     init: &[InitNested],
     leaf_length: usize,
-) -> Result<(Vec<Nested>, Option<NullBuffer>)> {
+) -> Result<(Vec<Nested>, Option<Bitmap>)> {
     assert!(!init.is_empty());
     let is_simple_nested = init.len() == 1;
 
@@ -72,13 +70,12 @@ pub fn read_nested<R: NativeReadBuf>(
                 InitNested::List(_) => {
                     let mut buf = vec![0u8; 4];
                     let length = read_u32(reader, &mut buf)?;
-                    let mut values = vec![0i64; length as usize];
+                    let mut values = vec![0u64; length as usize];
                     let bytes: &mut [u8] = bytemuck::cast_slice_mut(values.as_mut());
                     reader.read_exact(bytes)?;
 
-                    let offsets = Offsets::try_from(values).unwrap();
                     results.push(Nested::LargeList(ListNested::new(
-                        OffsetsBuffer::from(offsets),
+                        values.into(),
                         bitmap,
                         n.is_nullable(),
                     )))

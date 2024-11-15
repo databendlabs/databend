@@ -15,8 +15,6 @@
 use std::io::Read;
 use std::io::Write;
 
-use arrow_array::PrimitiveArray;
-use arrow_buffer::NullBuffer;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 
@@ -24,11 +22,13 @@ use super::compress_sample_ratio;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
+
+use databend_common_expression::types::Bitmap;
+use crate::error::Result;
 use crate::compression::is_valid;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
-use crate::error::Result;
 use crate::write::WriteOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,7 +37,7 @@ pub struct Rle {}
 impl<T: IntegerType> IntegerCompression<T> for Rle {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &IntegerStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -66,7 +66,7 @@ impl Rle {
         &self,
         w: &mut W,
         values: impl IntoIterator<Item = T>,
-        validity: Option<&NullBuffer>,
+        validity: Option<&Bitmap>,
     ) -> Result<()> {
         // help me generate RLE encode algorithm
         let mut seen_count: u32 = 0;

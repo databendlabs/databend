@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(iter_advance_by)]
-#![allow(clippy::unconditional_recursion)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::non_canonical_partial_ord_impl)]
-#![allow(dead_code)]
-
 #[macro_use]
-pub mod error;
+mod error;
 #[macro_use]
 mod util;
 
@@ -28,7 +22,7 @@ pub mod nested;
 pub use compression::CommonCompression;
 pub use compression::Compression;
 pub mod read;
-// pub mod stat;
+pub mod stat;
 pub mod write;
 pub use util::*;
 

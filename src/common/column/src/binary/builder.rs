@@ -20,7 +20,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::BinaryColumn;
-use crate::binview::Utf8ViewColumnBuilder;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinaryColumnBuilder {

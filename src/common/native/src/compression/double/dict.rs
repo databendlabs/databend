@@ -18,7 +18,7 @@ use byteorder::ReadBytesExt;
 use super::traits::DoubleType;
 use super::DoubleCompression;
 use super::DoubleStats;
-use arrow_array::PrimitiveArray;
+
 use crate::error::Error;
 use crate::error::Result;
 use crate::general_err;
@@ -34,7 +34,7 @@ use crate::write::WriteOptions;
 impl<T: DoubleType> DoubleCompression<T> for Dict {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &DoubleStats<T>,
         write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,

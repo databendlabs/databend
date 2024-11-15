@@ -22,9 +22,7 @@ mod traits;
 
 use std::collections::HashMap;
 
-use arrow::array::PrimitiveBuilder;
-use arrow_array::Array;
-use arrow_array::PrimitiveArray;
+use databend_common_column::bitmap::Bitmap;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -47,12 +45,13 @@ use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
 pub fn compress_integer<T: IntegerType>(
-    array: &PrimitiveArray<T>,
+    array: &Buffer<T>,
+    validity: Option<Bitmap>,
     write_options: WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {
     // choose compressor
-    let stats = gen_stats(array);
+    let stats = gen_stats(array, validity);
     let compressor = choose_compressor(array, &stats, &write_options);
 
     log::debug!(
@@ -132,7 +131,7 @@ pub fn decompress_integer<T: IntegerType, R: NativeReadBuf>(
 pub trait IntegerCompression<T: IntegerType> {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         stats: &IntegerStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -167,7 +166,7 @@ impl<T: IntegerType> IntCompressor<T> {
             Compression::Freq => Ok(Self::Extend(Box::new(Freq {}))),
             Compression::Bitpacking => Ok(Self::Extend(Box::new(Bitpacking {}))),
             Compression::DeltaBitpacking => Ok(Self::Extend(Box::new(DeltaBitpacking {}))),
-            other => Err(Error::SchemaError(format!(
+            other => Err(Error::OutOfSpec(format!(
                 "Unknown compression codec {other:?}",
             ))),
         }
@@ -176,10 +175,11 @@ impl<T: IntegerType> IntCompressor<T> {
 
 #[derive(Debug, Clone)]
 pub struct IntegerStats<T: IntegerType> {
-    pub src: PrimitiveArray<T>,
+    pub src: Buffer<T>,
     pub tuple_count: usize,
     pub total_bytes: usize,
     pub null_count: usize,
+    validity: Option<Bitmap>,
     pub average_run_length: f64,
     pub is_sorted: bool,
     pub min: T,
@@ -189,12 +189,13 @@ pub struct IntegerStats<T: IntegerType> {
     pub set_count: usize,
 }
 
-fn gen_stats<T: IntegerType>(array: &PrimitiveArray<T>) -> IntegerStats<T> {
+fn gen_stats<T: IntegerType>(array: &Buffer<T>, validity: Option<Bitmap>) -> IntegerStats<T> {
     let mut stats = IntegerStats::<T> {
         src: array.clone(),
         tuple_count: array.len(),
         total_bytes: array.len() * std::mem::size_of::<T>(),
         null_count: array.null_count(),
+        validity,
         average_run_length: 0.0,
         is_sorted: true,
         min: T::default(),
@@ -208,7 +209,7 @@ fn gen_stats<T: IntegerType>(array: &PrimitiveArray<T>) -> IntegerStats<T> {
     let mut last_value = T::default();
     let mut run_count = 0;
 
-    let validity = array.validity();
+    let validity = validity.as_ref();
     for (i, current_value) in array.values().iter().cloned().enumerate() {
         if is_valid(&validity, i) {
             if current_value < last_value {
@@ -242,7 +243,7 @@ fn gen_stats<T: IntegerType>(array: &PrimitiveArray<T>) -> IntegerStats<T> {
 }
 
 fn choose_compressor<T: IntegerType>(
-    _value: &PrimitiveArray<T>,
+    _value: &Buffer<T>,
     stats: &IntegerStats<T>,
     write_options: &WriteOptions,
 ) -> IntCompressor<T> {
@@ -334,7 +335,7 @@ fn compress_sample_ratio<T: IntegerType, C: IntegerCompression<T>>(
         let array = &stats.src;
         let separator = array.len() / sample_count;
         let remainder = array.len() % sample_count;
-        let mut builder = PrimitiveBuilder::with_capacity(sample_count * sample_size);
+        let mut builder = Vec::with_capacity(sample_count * sample_size);
         for sample_i in 0..sample_count {
             let range_end = if sample_i == sample_count - 1 {
                 separator + remainder
@@ -348,7 +349,7 @@ fn compress_sample_ratio<T: IntegerType, C: IntegerCompression<T>>(
             s.slice(partition_begin, sample_size);
             builder.extend_trusted_len(s.into_iter());
         }
-        let sample_array: PrimitiveArray<T> = builder.into();
+        let sample_array: Buffer<T> = builder.into();
         gen_stats(&sample_array)
     };
 

@@ -14,13 +14,10 @@
 
 use std::io::Write;
 
-use arrow_array::Array;
-use arrow_array::ArrayRef;
-use arrow_schema::Schema;
+use databend_common_expression::TableSchema;
 
 use super::common::write_eof;
 use super::common::WriteOptions;
-use crate::arrow::chunk::Chunk;
 use crate::error::Error;
 use crate::error::Result;
 use crate::ColumnMeta;
@@ -42,7 +39,7 @@ pub struct NativeWriter<W: Write> {
     /// pa write options
     pub(crate) options: WriteOptions,
     /// A reference to the schema, used in validating record batches
-    pub(crate) schema: Schema,
+    pub(crate) schema: TableSchema,
 
     /// Record blocks that will be written as part of the strawboat footer
     pub metas: Vec<ColumnMeta>,
@@ -54,7 +51,7 @@ pub struct NativeWriter<W: Write> {
 
 impl<W: Write> NativeWriter<W> {
     /// Creates a new [`NativeWriter`] and writes the header to `writer`
-    pub fn try_new(writer: W, schema: &Schema, options: WriteOptions) -> Result<Self> {
+    pub fn try_new(writer: W, schema: &TableSchema, options: WriteOptions) -> Result<Self> {
         let mut slf = Self::new(writer, schema.clone(), options)?;
         slf.start()?;
 
@@ -62,7 +59,7 @@ impl<W: Write> NativeWriter<W> {
     }
 
     /// Creates a new [`NativeWriter`].
-    pub fn new(writer: W, schema: Schema, options: WriteOptions) -> Result<Self> {
+    pub fn new(writer: W, schema: TableSchema, options: WriteOptions) -> Result<Self> {
         let num_cols = schema.fields.len();
         Ok(Self {
             writer: OffsetWriter {
@@ -87,7 +84,7 @@ impl<W: Write> NativeWriter<W> {
     /// Errors if the file has been started or has finished.
     pub fn start(&mut self) -> Result<()> {
         if self.state != State::None {
-            return Err(Error::SchemaError(
+            return Err(Error::OutOfSpec(
                 "The strawboat file can only be started once".to_string(),
             ));
         }
@@ -101,18 +98,18 @@ impl<W: Write> NativeWriter<W> {
     }
 
     /// Writes [`Chunk`] to the file
-    pub fn write(&mut self, chunk: &[ArrayRef]) -> Result<()> {
+    pub fn write(&mut self, chunk: &Vec<Column>) -> Result<()> {
         if self.state == State::Written {
-            return Err(Error::SchemaError(
+            return Err(Error::OutOfSpec(
                 "The strawboat file can only accept one RowGroup in a single file".to_string(),
             ));
         }
         if self.state != State::Started {
-            return Err(Error::SchemaError(
+            return Err(Error::OutOfSpec(
                 "The strawboat file must be started before it can be written to. Call `start` before `write`".to_string(),
             ));
         }
-        assert_eq!(chunk.len(), self.schema.fields.len());
+        assert_eq!(chunk.columns().len(), self.schema.fields.len());
         self.encode_chunk(chunk)?;
 
         self.state = State::Written;
@@ -122,7 +119,7 @@ impl<W: Write> NativeWriter<W> {
     /// Write footer and closing tag, then mark the writer as done
     pub fn finish(&mut self) -> Result<()> {
         if self.state != State::Written {
-            return Err(Error::SchemaError(
+            return Err(Error::OutOfSpec(
                 "The strawboat file must be written before it can be finished. Call `start` before `finish`".to_string(),
             ));
         }

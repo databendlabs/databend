@@ -135,7 +135,6 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
             debug_assert!(self.views.capacity() > self.views.len());
             self.views.push(v)
         } else {
-            self.total_buffer_len += len as usize;
             let data = buffers.get_unchecked(v.buffer_idx as usize);
             let offset = v.offset as usize;
             let bytes = data.get_unchecked(offset..offset + len as usize);
@@ -355,9 +354,8 @@ impl BinaryViewColumnBuilder<str> {
         }
 
         let value = unsafe { self.value_unchecked(self.len() - 1).to_string() };
-
+        self.total_bytes_len -= value.len();
         self.views.pop();
-
         Some(value)
     }
 }

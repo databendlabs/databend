@@ -16,9 +16,9 @@ use std::convert::TryInto;
 use std::io::Cursor;
 use std::marker::PhantomData;
 
-use arrow_array::Array;
-use arrow_array::PrimitiveArray;
-use arrow_schema::DataType;
+
+
+use databend_common_expression::TableDataType;
 use crate::error::Result;
 use crate::compression::double::decompress_double;
 use crate::compression::double::DoubleType;
@@ -69,7 +69,7 @@ where
         &mut self,
         num_values: u64,
         buffer: Vec<u8>,
-    ) -> Result<(NestedState, ArrayRef)> {
+    ) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
         let length = num_values as usize;
@@ -81,9 +81,9 @@ where
         let mut buffer = reader.into_inner().into_inner();
         self.iter.swap_buffer(&mut buffer);
 
-        let array = PrimitiveArray::<T>::try_new(self.data_type.clone(), values.into(), validity)?;
+        let array = Buffer::<T>::try_new(self.data_type.clone(), values.into(), validity)?;
 
-        Ok((nested, Arc::new(array) as ArrayRef))
+        Ok((nested, Box::new(array) as Column))
     }
 }
 
@@ -93,7 +93,7 @@ where
     T: DoubleType,
     Vec<u8>: TryInto<T::Bytes>,
 {
-    type Item = Result<(NestedState, ArrayRef)>;
+    type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         match self.iter.nth(n) {
@@ -117,7 +117,7 @@ pub fn read_nested_primitive<T: DoubleType, R: NativeReadBuf>(
     data_type: DataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
-) -> Result<Vec<(NestedState, ArrayRef)>> {
+) -> Result<Vec<(NestedState, Column)>> {
     let mut scratch = vec![];
     let mut results = Vec::with_capacity(page_metas.len());
     for page_meta in page_metas {
@@ -127,8 +127,8 @@ pub fn read_nested_primitive<T: DoubleType, R: NativeReadBuf>(
         let mut values = Vec::with_capacity(num_values);
         decompress_double(reader, num_values, &mut values, &mut scratch)?;
 
-        let array = PrimitiveArray::<T>::try_new(data_type.clone(), values.into(), validity)?;
-        results.push((nested, Arc::new(array) as ArrayRef));
+        let array = Buffer::<T>::try_new(data_type.clone(), values.into(), validity)?;
+        results.push((nested, Box::new(array) as Column));
     }
     Ok(results)
 }

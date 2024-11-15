@@ -15,10 +15,9 @@
 use std::io::Read;
 use std::io::Write;
 
-use arrow_array::PrimitiveArray;
-use arrow_buffer::NullBuffer;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_expression::types::Bitmap;
 
 use super::compress_sample_ratio;
 use super::DoubleCompression;
@@ -35,7 +34,7 @@ use crate::write::WriteOptions;
 impl<T: DoubleType> DoubleCompression<T> for Rle {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &DoubleStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -64,7 +63,7 @@ impl Rle {
         &self,
         w: &mut W,
         values: impl IntoIterator<Item = T>,
-        validity: Option<&NullBuffer>,
+        validity: Option<&Bitmap>,
     ) -> Result<()> {
         // help me generate RLE encode algorithm
         let mut seen_count: u32 = 0;

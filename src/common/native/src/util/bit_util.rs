@@ -15,7 +15,7 @@
 use std::io::Write;
 use std::mem::size_of;
 
-use arrow_buffer::ScalarBuffer;
+use databend_common_expression::types::Buffer;
 
 use crate::error::Error;
 use crate::error::Result;
@@ -119,9 +119,9 @@ pub trait AsBytes {
     fn as_bytes(&self) -> &[u8];
 }
 
-impl AsBytes for ScalarBuffer<u8> {
+impl AsBytes for Buffer<u8> {
     fn as_bytes(&self) -> &[u8] {
-        self.as_ref()
+        self.as_slice()
     }
 }
 

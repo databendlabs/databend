@@ -15,14 +15,12 @@
 use std::io::Cursor;
 use std::marker::PhantomData;
 
-use arrow_array::Array;
-use arrow_array::OffsetSizeTrait;
-use arrow_array::StringArray;
-use arrow_buffer::NullBuffer;
-use arrow_schema::DataType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableTableDataType;
 
-use crate::arrow::buffer::Buffer;
-use crate::arrow::offset::OffsetsBuffer;
 use crate::compression::binary::decompress_binary;
 use crate::error::Error;
 use crate::error::Result;
@@ -38,10 +36,10 @@ use crate::PageMeta;
 pub struct BinaryNestedIter<I, O>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: OffsetSizeTrait,
+    O: Offset,
 {
     iter: I,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
     _phantom: PhantomData<O>,
@@ -50,9 +48,9 @@ where
 impl<I, O> BinaryNestedIter<I, O>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: OffsetSizeTrait,
+    O: Offset,
 {
-    pub fn new(iter: I, data_type: DataType, init: Vec<InitNested>) -> Self {
+    pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
         Self {
             iter,
             data_type,
@@ -66,9 +64,9 @@ where
 impl<I, O> BinaryNestedIter<I, O>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: OffsetSizeTrait,
+    O: Offset,
 {
-    fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, ArrayRef)> {
+    fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let length = num_values as usize;
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
@@ -96,9 +94,9 @@ where
 impl<I, O> Iterator for BinaryNestedIter<I, O>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: OffsetSizeTrait,
+    O: Offset,
 {
-    type Item = Result<(NestedState, ArrayRef)>;
+    type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         match self.iter.nth(n) {
@@ -117,12 +115,12 @@ where
     }
 }
 
-pub fn read_nested_binary<O: OffsetSizeTrait, R: NativeReadBuf>(
+pub fn read_nested_binary<O: Offset, R: NativeReadBuf>(
     reader: &mut R,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
-) -> Result<Vec<(NestedState, ArrayRef)>> {
+) -> Result<Vec<(NestedState, Column)>> {
     let mut scratch = vec![];
 
     let mut results = Vec::with_capacity(page_metas.len());
@@ -146,27 +144,13 @@ pub fn read_nested_binary<O: OffsetSizeTrait, R: NativeReadBuf>(
     Ok(results)
 }
 
-fn try_new_binary_array<O: OffsetSizeTrait>(
-    data_type: DataType,
+fn try_new_binary_array<O: Offset>(
+    data_type: TableDataType,
     offsets: OffsetsBuffer<O>,
     values: Buffer<u8>,
-    validity: Option<NullBuffer>,
-) -> Result<ArrayRef> {
-    if matches!(data_type, DataType::Utf8 | DataType::LargeUtf8) {
-        let array =
-            StringArray::<O>::try_new(data_type, offsets, values, validity).map_err(|err| {
-                Error::External(
-                    "Encountered invalid utf8 data for string type, \
-                        if you were reading column with string type from a table, \
-                        it's recommended to alter the column type to `BINARY`.\n\
-                        Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`"
-                        .to_string(),
-                    Box::new(err),
-                )
-            })?;
-        Ok(Arc::new(array) as ArrayRef)
-    } else {
-        let array = BinaryArray::<O>::try_new(data_type, offsets, values, validity)?;
-        Ok(Arc::new(array) as ArrayRef)
-    }
+    validity: Option<Bitmap>,
+) -> Result<Column> {
+    let array = BinaryColumn::try_new(data_type, offsets, values, validity)?;
+    // TODO wrap data_type
+    Ok(Column::Binary(array))
 }

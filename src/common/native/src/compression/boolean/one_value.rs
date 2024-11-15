@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_array::BooleanArray;
-use arrow_buffer::NullBufferBuilder;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 
 use super::BooleanCompression;
 use crate::compression::integer::OneValue;
@@ -35,22 +35,22 @@ impl BooleanCompression for OneValue {
         }
     }
 
-    fn compress(&self, array: &BooleanArray, output_buf: &mut Vec<u8>) -> Result<usize> {
-        let val = array.iter().find(|v| v.is_some());
+    fn compress(
+        &self,
+        array: &Bitmap,
+        _validity: Option<Bitmap>,
+        output_buf: &mut Vec<u8>,
+    ) -> Result<usize> {
+        let val = array.iter().last();
         let val = match val {
-            Some(Some(v)) => v,
+            Some(v) => v,
             _ => false,
         };
         output_buf.push(val as u8);
         Ok(1)
     }
 
-    fn decompress(
-        &self,
-        input: &[u8],
-        length: usize,
-        output: &mut NullBufferBuilder,
-    ) -> Result<()> {
+    fn decompress(&self, input: &[u8], length: usize, output: &mut MutableBitmap) -> Result<()> {
         if input.is_empty() {
             return Err(general_err!("data size is less than {}", 1));
         }

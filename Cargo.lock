@@ -3851,14 +3851,12 @@ name = "databend-common-native"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.11",
- "arrow",
- "arrow-array",
- "arrow-buffer",
- "arrow-schema",
  "bitpacking 0.8.4",
  "bytemuck",
  "byteorder",
  "bytes",
+ "databend-common-column",
+ "databend-common-expression",
  "either",
  "ethnum",
  "hashbrown 0.14.5",

@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_array::Array;
-use arrow_array::ArrayRef;
-use arrow_array::NullArray;
-use arrow_schema::DataType;
 
+
+use databend_common_expression::TableDataType;
 use crate::error::Result;
 use crate::read::PageIterator;
 use crate::PageMeta;
@@ -40,17 +38,17 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 impl<I> NullIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    fn deserialize(&mut self, num_values: u64) -> Result<ArrayRef> {
+    fn deserialize(&mut self, num_values: u64) -> Result<Column> {
         let length = num_values as usize;
         let array = NullArray::try_new(self.data_type.clone(), length)?;
-        Ok(Arc::new(array) as ArrayRef)
+        Ok(Box::new(array) as Column)
     }
 }
 
 impl<I> Iterator for NullIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    type Item = Result<ArrayRef>;
+    type Item = Result<Column>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         match self.iter.nth(n) {
@@ -75,9 +73,9 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-pub fn read_null(data_type: DataType, page_metas: Vec<PageMeta>) -> Result<ArrayRef> {
+pub fn read_null(data_type: DataType, page_metas: Vec<PageMeta>) -> Result<Column> {
     let length = page_metas.iter().map(|p| p.num_values as usize).sum();
 
     let array = NullArray::try_new(data_type, length)?;
-    Ok(Arc::new(array) as ArrayRef)
+    Ok(Box::new(array) as Column)
 }

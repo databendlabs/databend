@@ -19,10 +19,9 @@ pub mod boolean;
 pub mod double;
 pub mod integer;
 
-use arrow_buffer::NullBuffer;
 pub use basic::CommonCompression;
+use databend_common_expression::types::Bitmap;
 
-use crate::error::Error;
 use crate::error::Result;
 
 // number of samples to take
@@ -75,7 +74,7 @@ impl Compression {
             15 => Ok(Compression::DeltaBitpacking),
             16 => Ok(Compression::Patas),
 
-            other => Err(Error::SchemaError(format!(
+            other => Err(crate::error::Error::OutOfSpec(format!(
                 "Unknown compression codec {other}",
             ))),
         }
@@ -102,9 +101,9 @@ impl Compression {
 }
 
 #[inline]
-pub(crate) fn is_valid(validity: &Option<&NullBuffer>, i: usize) -> bool {
+pub(crate) fn is_valid(validity: &Option<Bitmap>, i: usize) -> bool {
     match validity {
-        Some(v) => v.is_valid(i),
+        Some(v) => v.get_bit(i),
         None => true,
     }
 }

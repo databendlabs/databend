@@ -18,6 +18,4 @@
 
 mod binview;
 mod bitmap;
-// mod boolean;
-
-// mod buffer;
+mod buffer;

@@ -16,10 +16,9 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::Read;
 
-use arrow_array::PrimitiveArray;
-use arrow_buffer::ArrowNativeType;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::types::NativeType;
 use ringbuffer::AllocRingBuffer;
 use ringbuffer::RingBuffer;
 
@@ -39,7 +38,7 @@ pub(crate) struct Patas {}
 impl<T: DoubleType> DoubleCompression<T> for Patas {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &DoubleStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -165,7 +164,7 @@ pub fn unpack(packed_data: u16) -> (u8, u8, u8) {
 }
 
 #[inline]
-pub fn read_value_custom<T: ArrowNativeType>(input: &[u8], mut bytes: u8, trailing_zero: u8) -> T {
+pub fn read_value_custom<T: NativeType>(input: &[u8], mut bytes: u8, trailing_zero: u8) -> T {
     if (bytes > 8) && trailing_zero < 8 {
         bytes = 8;
     }

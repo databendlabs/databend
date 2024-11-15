@@ -14,7 +14,6 @@
 
 use std::io::BufRead;
 
-use arrow_array::PrimitiveArray;
 use bitpacking::BitPacker;
 use bitpacking::BitPacker4x;
 use byteorder::ReadBytesExt;
@@ -23,10 +22,11 @@ use super::compress_sample_ratio;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
+
+use crate::error::Result;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
-use crate::error::Result;
 use crate::write::WriteOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,7 +35,7 @@ pub struct DeltaBitpacking {}
 impl<T: IntegerType> IntegerCompression<T> for DeltaBitpacking {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &IntegerStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,

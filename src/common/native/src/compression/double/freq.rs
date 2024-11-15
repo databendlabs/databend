@@ -23,7 +23,7 @@ use super::compress_double;
 use super::DoubleCompression;
 use super::DoubleStats;
 use super::DoubleType;
-use arrow_array::PrimitiveArray;
+
 use crate::error::Result;
 use crate::compression::double::decompress_double;
 use crate::compression::integer::Freq;
@@ -33,7 +33,7 @@ use crate::write::WriteOptions;
 impl<T: DoubleType> DoubleCompression<T> for Freq {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         stats: &DoubleStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -81,7 +81,7 @@ impl<T: DoubleType> DoubleCompression<T> for Freq {
         let mut write_options = write_options.clone();
         write_options.forbidden_compressions.push(Compression::Freq);
 
-        let exceptions = PrimitiveArray::<T>::from_vec(exceptions);
+        let exceptions = Buffer::<T>::from_vec(exceptions);
         compress_double(&exceptions, write_options, output)?;
 
         Ok(output.len() - size)

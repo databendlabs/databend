@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_column::binview::BinaryViewColumnBuilder;
-use databend_common_column::binview::BinaryViewColumnGeneric;
 use databend_common_column::binview::Utf8ViewColumn;
 
 #[test]
@@ -29,4 +28,38 @@ fn extend_from_iter() {
         BinaryViewColumnBuilder::<str>::from_iter(vec!["a", "b", "a", "b"]).into();
 
     assert_eq!(b, c)
+}
+
+#[test]
+fn new() {
+    assert_eq!(BinaryViewColumnBuilder::<[u8]>::new().len(), 0);
+
+    let a = BinaryViewColumnBuilder::<[u8]>::with_capacity(2);
+    assert_eq!(a.len(), 0);
+    assert_eq!(a.capacity(), 2);
+}
+
+#[test]
+fn from_iter() {
+    let iter = (0..3u8).map(|x| vec![x; x as usize]);
+    let a: BinaryViewColumnBuilder<[u8]> = iter.clone().collect();
+    let mut v_iter = a.iter();
+    assert_eq!(v_iter.next(), Some(&[] as &[u8]));
+    assert_eq!(v_iter.next(), Some(&[1u8] as &[u8]));
+    assert_eq!(v_iter.next(), Some(&[2u8, 2] as &[u8]));
+
+    let b = BinaryViewColumnBuilder::<[u8]>::from_iter(iter);
+    assert_eq!(a.freeze(), b.freeze())
+}
+
+#[test]
+fn test_pop_gc() {
+    let iter = (0..1024).map(|x| format!("{}", x));
+    let mut a: BinaryViewColumnBuilder<str> = iter.clone().collect();
+    let item = a.pop();
+    assert_eq!(item, Some("1023".to_string()));
+
+    let column = a.freeze();
+    let column = column.sliced(10, 10);
+    column.gc();
 }

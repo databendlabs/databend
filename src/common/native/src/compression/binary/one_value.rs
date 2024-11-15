@@ -14,8 +14,6 @@
 
 use std::io::BufRead;
 
-use arrow_array::GenericBinaryArray;
-use arrow_array::OffsetSizeTrait;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 
@@ -28,7 +26,7 @@ use crate::error::Result;
 use crate::general_err;
 use crate::write::WriteOptions;
 
-impl<O: OffsetSizeTrait> BinaryCompression<O> for OneValue {
+impl<O: Offset> BinaryCompression<O> for OneValue {
     fn to_compression(&self) -> Compression {
         Compression::OneValue
     }
@@ -43,7 +41,7 @@ impl<O: OffsetSizeTrait> BinaryCompression<O> for OneValue {
 
     fn compress(
         &self,
-        array: &GenericBinaryArray<O>,
+        array: &BinaryColumn,
         _stats: &BinaryStats<O>,
         _write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,

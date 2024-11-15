@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use arrow_schema::ArrowError as Error;
-/// A specialized `Result` type for Arrow operations.
-pub type Result<T> = std::result::Result<T, Error>;
+pub use databend_common_column::Error;
+pub use databend_common_column::Result;
 
 #[macro_export]
 macro_rules! general_err {
-    ($fmt:expr) => (Error::SchemaError($fmt.to_owned()));
-    ($fmt:expr, $($args:expr),*) => (Error::SchemaError(format!($fmt, $($args),*)));
-    ($e:expr, $fmt:expr) => (Error::SchemaError($fmt.to_owned(), $e));
+    ($fmt:expr) => (Error::OutOfSpec($fmt.to_owned()));
+    ($fmt:expr, $($args:expr),*) => (Error::OutOfSpec(format!($fmt, $($args),*)));
+    ($e:expr, $fmt:expr) => (Error::OutOfSpec($fmt.to_owned(), $e));
     ($e:ident, $fmt:expr, $($args:tt),*) => (
-        Error::SchemaError(&format!($fmt, $($args),*), $e));
+        Error::OutOfSpec(&format!($fmt, $($args),*), $e));
 }
 
 #[macro_export]

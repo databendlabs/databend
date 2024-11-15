@@ -15,10 +15,8 @@
 mod one_value;
 mod rle;
 
-use arrow::array::BooleanBuilder;
-use arrow_array::BooleanArray;
-use arrow_buffer::NullBuffer;
-use arrow_buffer::NullBufferBuilder;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_expression::types::Bitmap;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -33,7 +31,8 @@ use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
 pub fn compress_boolean(
-    array: &BooleanArray,
+    array: &Bitmap,
+    validity: Option<Bitmap>,
     buf: &mut Vec<u8>,
     write_options: WriteOptions,
 ) -> Result<()> {
@@ -58,14 +57,14 @@ pub fn compress_boolean(
 
             let bitmap = if slice_offset != 0 {
                 // case where we can't slice the bitmap as the offsets are not multiple of 8
-                NullBuffer::from_iter(bitmap.iter())
+                Bitmap::from_trusted_len_iter(bitmap.iter())
             } else {
                 bitmap.clone()
             };
             let (slice, _, _) = bitmap.as_slice();
             c.compress(slice, buf)
         }
-        BooleanCompressor::Extend(c) => c.compress(array, buf),
+        BooleanCompressor::Extend(c) => c.compress(array, validity, buf),
     }?;
     buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
     buf[pos + 4..pos + 8].copy_from_slice(&(array.len() as u32).to_le_bytes());
@@ -75,7 +74,7 @@ pub fn compress_boolean(
 pub fn decompress_boolean<R: NativeReadBuf>(
     reader: &mut R,
     length: usize,
-    output: &mut NullBufferBuilder,
+    output: &mut MutableBitmap,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
     let (compression, compressed_size, _uncompressed_size) = read_compress_header(reader, scratch)?;
@@ -113,9 +112,13 @@ pub fn decompress_boolean<R: NativeReadBuf>(
 }
 
 pub trait BooleanCompression {
-    fn compress(&self, array: &BooleanArray, output: &mut Vec<u8>) -> Result<usize>;
-    fn decompress(&self, input: &[u8], length: usize, output: &mut NullBufferBuilder)
-    -> Result<()>;
+    fn compress(
+        &self,
+        array: &Bitmap,
+        validity: Option<Bitmap>,
+        output: &mut Vec<u8>,
+    ) -> Result<usize>;
+    fn decompress(&self, input: &[u8], length: usize, output: &mut MutableBitmap) -> Result<()>;
     fn to_compression(&self) -> Compression;
 
     fn compress_ratio(&self, stats: &BooleanStats) -> f64;
@@ -141,7 +144,7 @@ impl BooleanCompressor {
         match compression {
             Compression::OneValue => Ok(Self::Extend(Box::new(OneValue {}))),
             Compression::Rle => Ok(Self::Extend(Box::new(Rle {}))),
-            other => Err(Error::SchemaError(format!(
+            other => Err(Error::OutOfSpec(format!(
                 "Unknown compression codec {other:?}",
             ))),
         }
@@ -151,7 +154,7 @@ impl BooleanCompressor {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct BooleanStats {
-    pub src: BooleanArray,
+    pub src: Bitmap,
     pub total_bytes: usize,
     pub rows: usize,
     pub null_count: usize,
@@ -160,7 +163,7 @@ pub struct BooleanStats {
     pub average_run_length: f64,
 }
 
-fn gen_stats(array: &BooleanArray) -> BooleanStats {
+fn gen_stats(array: &Bitmap) -> BooleanStats {
     let mut null_count = 0;
     let mut false_count = 0;
     let mut true_count = 0;
@@ -204,7 +207,7 @@ fn gen_stats(array: &BooleanArray) -> BooleanStats {
 }
 
 fn choose_compressor(
-    _array: &BooleanArray,
+    _array: &Bitmap,
     stats: &BooleanStats,
     write_options: &WriteOptions,
 ) -> BooleanCompressor {
@@ -264,7 +267,7 @@ fn compress_sample_ratio<C: BooleanCompression>(
         let array = &stats.src;
         let separator = array.len() / sample_count;
         let remainder = array.len() % sample_count;
-        let mut builder = BooleanBuilder::with_capacity(sample_count * sample_size);
+        let mut builder = MutableBitmap::with_capacity(sample_count * sample_size);
         for sample_i in 0..sample_count {
             let range_end = if sample_i == sample_count - 1 {
                 separator + remainder
@@ -278,7 +281,7 @@ fn compress_sample_ratio<C: BooleanCompression>(
             s.slice(partition_begin, sample_size);
             builder.extend_trusted_len(s.into_iter());
         }
-        let sample_array: BooleanArray = builder.into();
+        let sample_array: Bitmap = builder.into();
         gen_stats(&sample_array)
     };
 

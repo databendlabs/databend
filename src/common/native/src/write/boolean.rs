@@ -14,15 +14,14 @@
 
 use std::io::Write;
 
-use arrow_array::BooleanArray;
-
 use super::WriteOptions;
-use crate::compression::boolean::compress_boolean;
+
 use crate::error::Result;
+use crate::compression::boolean::compress_boolean;
 
 pub(crate) fn write_bitmap<W: Write>(
     w: &mut W,
-    array: &BooleanArray,
+    array: &Bitmap,
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {

@@ -39,7 +39,7 @@ impl TryFrom<&Compression> for CommonCompression {
             Compression::Lz4 => Ok(CommonCompression::Lz4),
             Compression::Zstd => Ok(CommonCompression::Zstd),
             Compression::Snappy => Ok(CommonCompression::Snappy),
-            other => Err(Error::SchemaError(format!(
+            other => Err(Error::OutOfSpec(format!(
                 "Unknown compression codec {other:?}",
             ))),
         }
@@ -97,7 +97,9 @@ pub fn decompress_snappy(input_buf: &[u8], output_buf: &mut [u8]) -> Result<()> 
     snap::raw::Decoder::new()
         .decompress(input_buf, output_buf)
         .map(|_| {})
-        .map_err(|e| Error::External("decompress snappy failed".to_owned(), Box::new(e)))
+        .map_err(|e| {
+            crate::error::Error::External("decompress snappy failed".to_owned(), Box::new(e))
+        })
 }
 
 pub fn compress_lz4(input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<usize> {
@@ -107,8 +109,9 @@ pub fn compress_lz4(input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<usize>
 
     let s = unsafe { core::slice::from_raw_parts_mut(output_buf.as_mut_ptr().add(len), bound) };
 
-    let size = lz4::block::compress_to_buffer(input_buf, None, false, s)
-        .map_err(|e| Error::External("Compress lz4 failed".to_owned(), Box::new(e)))?;
+    let size = lz4::block::compress_to_buffer(input_buf, None, false, s).map_err(|e| {
+        crate::error::Error::External("Compress lz4 failed".to_owned(), Box::new(e))
+    })?;
 
     unsafe { output_buf.set_len(size + len) };
     Ok(size)
@@ -121,8 +124,9 @@ pub fn compress_zstd(input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<usize
 
     let s = unsafe { core::slice::from_raw_parts_mut(output_buf.as_mut_ptr().add(len), bound) };
 
-    let size = zstd::bulk::compress_to_buffer(input_buf, s, 0)
-        .map_err(|e| Error::External("Compress zstd failed".to_owned(), Box::new(e)))?;
+    let size = zstd::bulk::compress_to_buffer(input_buf, s, 0).map_err(|e| {
+        crate::error::Error::External("Compress zstd failed".to_owned(), Box::new(e))
+    })?;
 
     unsafe { output_buf.set_len(size + len) };
     Ok(size)
@@ -137,7 +141,9 @@ pub fn compress_snappy(input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<usi
 
     let size = snap::raw::Encoder::new()
         .compress(input_buf, s)
-        .map_err(|e| Error::External("Compress snappy failed".to_owned(), Box::new(e)))?;
+        .map_err(|e| {
+            crate::error::Error::External("Compress snappy failed".to_owned(), Box::new(e))
+        })?;
 
     unsafe { output_buf.set_len(size + len) };
     Ok(size)

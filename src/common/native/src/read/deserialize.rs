@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_array::ArrayRef;
-use arrow_schema::DataType;
-use arrow_schema::Field;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 
 use super::array::*;
 use super::PageIterator;
@@ -49,19 +48,19 @@ impl<'a, V> DynIter<'a, V> {
     }
 }
 
-pub type ArrayIter<'a> = DynIter<'a, Result<ArrayRef>>;
+pub type ArrayIter<'a> = DynIter<'a, Result<Column>>;
 
 /// [`NestedIter`] is a wrapper iterator used to remove the `NestedState` from inner iterator
-/// and return only the `ArrayRef`
+/// and return only the `Column`
 #[derive(Debug)]
 pub struct NestedIter<I>
-where I: Iterator<Item = Result<(NestedState, ArrayRef)>> + Send + Sync
+where I: Iterator<Item = Result<(NestedState, Column)>> + Send + Sync
 {
     iter: I,
 }
 
 impl<I> NestedIter<I>
-where I: Iterator<Item = Result<(NestedState, ArrayRef)>> + Send + Sync
+where I: Iterator<Item = Result<(NestedState, Column)>> + Send + Sync
 {
     pub fn new(iter: I) -> Self {
         Self { iter }
@@ -69,9 +68,9 @@ where I: Iterator<Item = Result<(NestedState, ArrayRef)>> + Send + Sync
 }
 
 impl<I> Iterator for NestedIter<I>
-where I: Iterator<Item = Result<(NestedState, ArrayRef)>> + Send + Sync
+where I: Iterator<Item = Result<(NestedState, Column)>> + Send + Sync
 {
-    type Item = Result<ArrayRef>;
+    type Item = Result<Column>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.iter.next() {
@@ -90,17 +89,18 @@ where I: Iterator<Item = Result<(NestedState, ArrayRef)>> + Send + Sync
     }
 }
 
-pub type NestedIters<'a> = DynIter<'a, Result<(NestedState, ArrayRef)>>;
+pub type NestedIters<'a> = DynIter<'a, Result<(NestedState, Column)>>;
 
 fn deserialize_nested<'a, I>(
     mut readers: Vec<I>,
-    field: Field,
+    field: TableField,
     mut init: Vec<InitNested>,
 ) -> Result<NestedIters<'a>>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
-    Ok(match field.data_type() {
+    let is_nullable = matches!(field.data_type(), &TableDataType::Nullable(_));
+    Ok(match field.data_type().to_physical_type() {
         Null => unimplemented!(),
         Boolean => {
             init.push(InitNested::Primitive(field.is_nullable));
@@ -180,7 +180,7 @@ where
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let columns = columns.into_iter().rev().collect();
-                DynIter::new(StructIterator::new(columns, fields.clone()))
+                DynIter::new(StructIterator::new(is_nullable, columns, fields.clone()))
             }
             _ => unreachable!(),
         },
@@ -188,9 +188,9 @@ where
 }
 
 /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
-pub fn column_iter_to_arrays<'a, I>(
+pub fn column_iter_to_columns<'a, I>(
     readers: Vec<I>,
-    field: Field,
+    field: TableField,
     init: Vec<InitNested>,
 ) -> Result<ArrayIter<'a>>
 where

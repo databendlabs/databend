@@ -14,8 +14,6 @@
 
 use std::io::BufRead;
 
-use arrow_array::GenericBinaryArray;
-use arrow_array::OffsetSizeTrait;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 
@@ -34,7 +32,7 @@ use crate::general_err;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 
-impl<O: OffsetSizeTrait> BinaryCompression<O> for Dict {
+impl<O: Offset> BinaryCompression<O> for Dict {
     fn to_compression(&self) -> Compression {
         Compression::Dict
     }
@@ -53,8 +51,8 @@ impl<O: OffsetSizeTrait> BinaryCompression<O> for Dict {
 
     fn compress(
         &self,
-        array: &GenericBinaryArray<O>,
-        _stats: &BinaryStats<O>,
+        array: &BinaryColumn,
+        stats: &BinaryStats<O>,
         write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,
     ) -> Result<usize> {
@@ -62,7 +60,7 @@ impl<O: OffsetSizeTrait> BinaryCompression<O> for Dict {
         let mut encoder = DictEncoder::with_capacity(array.len());
 
         for (i, range) in array.offsets().buffer().windows(2).enumerate() {
-            if !is_valid(&array.validity(), i) && !encoder.is_empty() {
+            if !is_valid(&(stats.validity.as_ref()), i) && !encoder.is_empty() {
                 encoder.push_last_index();
             } else {
                 let data = array.values().clone().sliced(

@@ -14,14 +14,12 @@
 
 use std::io::Cursor;
 
-use arrow_array::Array;
-use arrow_array::BinaryViewArray;
-use arrow_buffer::NullBuffer;
-use arrow_schema::DataType;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 
-use crate::arrow::buffer::Buffer;
+use databend_common_expression::TableDataType;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
@@ -58,7 +56,11 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 impl<I> ViewArrayNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, ArrayRef)> {
+    fn deserialize(
+        &mut self,
+        num_values: u64,
+        buffer: Vec<u8>,
+    ) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
         let length = num_values as usize;
@@ -71,7 +73,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 impl<I> Iterator for ViewArrayNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    type Item = Result<(NestedState, ArrayRef)>;
+    type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         match self.iter.nth(n) {
@@ -95,7 +97,7 @@ pub fn read_nested_view_array<R: NativeReadBuf>(
     data_type: DataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
-) -> Result<Vec<(NestedState, ArrayRef)>> {
+) -> Result<Vec<(NestedState, Column)>> {
     let mut results = Vec::with_capacity(page_metas.len());
 
     for page_meta in page_metas {
@@ -111,8 +113,8 @@ fn read_view_array<R: NativeReadBuf>(
     reader: &mut R,
     length: usize,
     data_type: DataType,
-    validity: Option<NullBuffer>,
-) -> Result<ArrayRef> {
+    validity: Option<Bitmap>,
+) -> Result<Column> {
     let mut scratch = vec![0; 9];
     let (_c, _compressed_size, _uncompressed_size) = read_compress_header(reader, &mut scratch)?;
 
@@ -142,7 +144,7 @@ fn read_view_array<R: NativeReadBuf>(
     }
 
     let array = unsafe {
-        BinaryViewArray::new_unchecked_unknown_md(
+        BinaryViewColumn::new_unchecked_unknown_md(
             data_type.clone(),
             views,
             buffers.into(),
@@ -154,6 +156,6 @@ fn read_view_array<R: NativeReadBuf>(
     if matches!(data_type, DataType::Utf8View) {
         Ok(Box::new(array.to_utf8view()?))
     } else {
-        Ok(Arc::new(array))
+        Ok(Box::new(array))
     }
 }

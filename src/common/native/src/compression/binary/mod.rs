@@ -20,9 +20,8 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use arrow_array::GenericBinaryArray;
-use arrow_array::OffsetSizeTrait;
-use arrow_buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_expression::types::Buffer;
 
 use super::basic::CommonCompression;
 use super::integer::Dict;
@@ -35,13 +34,14 @@ use crate::read::read_basic::read_compress_header;
 use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
-pub fn compress_binary<O: OffsetSizeTrait>(
-    array: &GenericBinaryArray<O>,
+pub fn compress_binary<O: Offset>(
+    array: &BinaryColumn,
+    validity: Option<Bitmap>,
     buf: &mut Vec<u8>,
     write_options: WriteOptions,
 ) -> Result<()> {
     // choose compressor
-    let stats = gen_stats(array);
+    let stats = gen_stats(array, validity);
     let compressor = choose_compressor(array, &stats, &write_options);
 
     log::debug!(
@@ -78,9 +78,9 @@ pub fn compress_binary<O: OffsetSizeTrait>(
 
             // values
             let mut values = array.values().clone();
-            values = values.slice_with_length(
-                array.offsets().first().as_usize(),
-                array.offsets().last().as_usize() - array.offsets().first().as_usize(),
+            values.slice(
+                array.offsets().first().to_usize(),
+                array.offsets().last().to_usize() - array.offsets().first().to_usize(),
             );
             let input_buf = bytemuck::cast_slice(&values);
             buf.extend_from_slice(&codec.to_le_bytes());
@@ -104,7 +104,7 @@ pub fn compress_binary<O: OffsetSizeTrait>(
     Ok(())
 }
 
-pub fn decompress_binary<O: OffsetSizeTrait, R: NativeReadBuf>(
+pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
     reader: &mut R,
     length: usize,
     offsets: &mut Vec<O>,
@@ -179,10 +179,10 @@ pub fn decompress_binary<O: OffsetSizeTrait, R: NativeReadBuf>(
     Ok(())
 }
 
-pub trait BinaryCompression<O: OffsetSizeTrait> {
+pub trait BinaryCompression<O: Offset> {
     fn compress(
         &self,
-        array: &GenericBinaryArray<O>,
+        array: &BinaryColumn,
         stats: &BinaryStats<O>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -200,12 +200,12 @@ pub trait BinaryCompression<O: OffsetSizeTrait> {
     fn to_compression(&self) -> Compression;
 }
 
-enum BinaryCompressor<O: OffsetSizeTrait> {
+enum BinaryCompressor<O: Offset> {
     Basic(CommonCompression),
     Extend(Box<dyn BinaryCompression<O>>),
 }
 
-impl<O: OffsetSizeTrait> BinaryCompressor<O> {
+impl<O: Offset> BinaryCompressor<O> {
     fn to_compression(&self) -> Compression {
         match self {
             Self::Basic(c) => c.to_compression(),
@@ -221,7 +221,7 @@ impl<O: OffsetSizeTrait> BinaryCompressor<O> {
             Compression::OneValue => Ok(Self::Extend(Box::new(OneValue {}))),
             Compression::Freq => Ok(Self::Extend(Box::new(Freq {}))),
             Compression::Dict => Ok(Self::Extend(Box::new(Dict {}))),
-            other => Err(Error::SchemaError(format!(
+            other => Err(Error::OutOfSpec(format!(
                 "Unknown compression codec {other:?}",
             ))),
         }
@@ -229,7 +229,7 @@ impl<O: OffsetSizeTrait> BinaryCompressor<O> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct U8Buffer(pub(crate) Buffer);
+pub struct U8Buffer(pub(crate) Buffer<u8>);
 
 impl Hash for U8Buffer {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -254,25 +254,27 @@ pub struct BinaryStats<O> {
     total_bytes: usize,
     unique_count: usize,
     total_unique_size: usize,
+    validity: Option<Bitmap>,
     null_count: usize,
     distinct_values: HashMap<U8Buffer, usize>,
     _data: PhantomData<O>,
 }
 
-fn gen_stats<O: OffsetSizeTrait>(array: &GenericBinaryArray<O>) -> BinaryStats<O> {
+fn gen_stats<O: Offset>(array: &BinaryColumn, validity: Option<Bitmap>) -> BinaryStats<O> {
     let mut stats = BinaryStats {
         tuple_count: array.len(),
         total_bytes: array.values().len() + (array.len() + 1) * std::mem::size_of::<O>(),
         unique_count: 0,
         total_unique_size: 0,
-        null_count: array.validity().map(|v| v.unset_bits()).unwrap_or_default(),
+        null_count: validity.map(|v| v.unset_bits()).unwrap_or_default(),
+        validity,
         distinct_values: HashMap::new(),
         _data: PhantomData,
     };
 
     for o in array.offsets().windows(2) {
         let mut values = array.values().clone();
-        values = values.slice_with_length(o[0].as_usize(), o[1].as_usize() - o[0].as_usize());
+        values.slice(o[0].to_usize(), o[1].to_usize() - o[0].to_usize());
 
         *stats.distinct_values.entry(U8Buffer(values)).or_insert(0) += 1;
     }
@@ -287,8 +289,8 @@ fn gen_stats<O: OffsetSizeTrait>(array: &GenericBinaryArray<O>) -> BinaryStats<O
     stats
 }
 
-fn choose_compressor<O: OffsetSizeTrait>(
-    _value: &GenericBinaryArray<O>,
+fn choose_compressor<O: Offset>(
+    _value: &BinaryColumn,
     stats: &BinaryStats<O>,
     write_options: &WriteOptions,
 ) -> BinaryCompressor<O> {

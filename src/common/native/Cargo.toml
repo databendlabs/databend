@@ -12,12 +12,9 @@ test = true
 [features]
 
 [dependencies]
-# databend-common-column = { workspace = true }
+databend-common-column = { workspace = true }
+databend-common-expression = { workspace = true }
 
-arrow = { workspace = true }
-arrow-array = { workspace = true }
-arrow-schema = { workspace = true }
-arrow-buffer = { workspace = true }
 ahash = { workspace = true }
 bitpacking = { workspace = true }
 bytemuck = { workspace = true }

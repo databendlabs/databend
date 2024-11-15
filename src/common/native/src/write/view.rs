@@ -14,15 +14,14 @@
 
 use std::io::Write;
 
-use arrow::datatypes::ByteViewType;
-use arrow_array::BinaryViewArray;
+use databend_common_column::binview::BinaryViewColumn;
 
 use super::WriteOptions;
 use crate::error::Result;
 
 pub(crate) fn write_view<W: Write>(
     w: &mut W,
-    array: &BinaryViewArray,
+    array: &BinaryViewColumn,
     write_options: WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {

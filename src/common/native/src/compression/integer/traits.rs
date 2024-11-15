@@ -14,10 +14,10 @@
 
 use std::hash::Hash;
 
-use arrow_buffer::i256;
-use arrow_buffer::ArrowNativeType;
+use databend_common_column::types::i256
+use databend_common_column::types::NativeType;
 
-pub trait IntegerType: ArrowNativeType + Hash + Eq {
+pub trait IntegerType: NativeType + PartialOrd + Hash + Eq {
     fn as_i64(&self) -> i64;
 }
 

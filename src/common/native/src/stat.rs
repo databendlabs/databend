@@ -14,8 +14,8 @@
 
 use std::io::BufRead;
 
-use arrow_buffer::ArrowNativeType;
-use arrow_schema::Field;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableField;
 
 use crate::compression::Compression;
 use crate::error::Result;
@@ -24,7 +24,7 @@ use crate::CommonCompression;
 
 #[derive(Debug)]
 pub struct ColumnInfo {
-    pub field: Field,
+    pub field: TableField,
     pub pages: Vec<PageInfo>,
 }
 
@@ -153,23 +153,23 @@ fn stat_dict_body(mut buffer: &[u8], physical_type: PhysicalType) -> Result<Page
     }))
 }
 
-fn size_of_primitive(p: ArrowNativeType) -> usize {
+fn size_of_primitive(p: PrimitiveType) -> usize {
     match p {
-        ArrowNativeType::Int8 => 1,
-        ArrowNativeType::Int16 => 2,
-        ArrowNativeType::Int32 => 4,
-        ArrowNativeType::Int64 => 8,
-        ArrowNativeType::Int128 | ArrowNativeType::UInt128 => 16,
-        ArrowNativeType::Int256 => 32,
-        ArrowNativeType::UInt8 => 1,
-        ArrowNativeType::UInt16 => 2,
-        ArrowNativeType::UInt32 => 4,
-        ArrowNativeType::UInt64 => 8,
-        ArrowNativeType::Float16 => unimplemented!(),
-        ArrowNativeType::Float32 => 4,
-        ArrowNativeType::Float64 => 8,
-        ArrowNativeType::DaysMs => unimplemented!(),
-        ArrowNativeType::MonthDayNano => unimplemented!(),
+        PrimitiveType::Int8 => 1,
+        PrimitiveType::Int16 => 2,
+        PrimitiveType::Int32 => 4,
+        PrimitiveType::Int64 => 8,
+        PrimitiveType::Int128 | PrimitiveType::UInt128 => 16,
+        PrimitiveType::Int256 => 32,
+        PrimitiveType::UInt8 => 1,
+        PrimitiveType::UInt16 => 2,
+        PrimitiveType::UInt32 => 4,
+        PrimitiveType::UInt64 => 8,
+        PrimitiveType::Float16 => unimplemented!(),
+        PrimitiveType::Float32 => 4,
+        PrimitiveType::Float64 => 8,
+        PrimitiveType::DaysMs => unimplemented!(),
+        PrimitiveType::MonthDayNano => unimplemented!(),
     }
 }
 
@@ -177,13 +177,12 @@ fn size_of_primitive(p: ArrowNativeType) -> usize {
 mod test {
     use std::io::BufRead;
 
-    use arrow_array::Array;
-    use arrow_array::PrimitiveArray;
-    use arrow_schema::Field;
-    use arrow_schema::Schema;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
 
     use super::stat_simple;
     use super::ColumnInfo;
+    use crate::read::reader::is_primitive;
     use crate::read::reader::NativeReader;
     use crate::stat::PageBody;
     use crate::util::env::remove_all_env;
@@ -197,8 +196,8 @@ mod test {
     const PAGE_PER_COLUMN: usize = 10;
     const COLUMN_SIZE: usize = PAGE_SIZE * PAGE_PER_COLUMN;
 
-    fn write_and_stat_simple_column(array: ArrayRef) -> ColumnInfo {
-        assert!(array.data_type().is_primitive());
+    fn write_and_stat_simple_column(array: Column) -> ColumnInfo {
+        assert!(is_primitive(array.data_type()));
         let options = WriteOptions {
             default_compression: CommonCompression::Lz4,
             max_page_size: Some(PAGE_SIZE),
@@ -216,7 +215,7 @@ mod test {
         let mut writer = NativeWriter::new(&mut bytes, schema, options).unwrap();
 
         writer.start().unwrap();
-        writer.write(&Chunk::new(vec![array])).unwrap();
+        writer.write(&vec![array]).unwrap();
         writer.finish().unwrap();
 
         let meta = writer.metas[0].clone();
@@ -235,7 +234,7 @@ mod test {
         let values: Vec<Option<i64>> = (0..COLUMN_SIZE)
             .map(|d| if d % 3 == 0 { None } else { Some(d as i64) })
             .collect();
-        let array = Box::new(PrimitiveArray::<i64>::from_iter(values));
+        let array = Box::new(Buffer::<i64>::from_iter(values));
         let column_info = write_and_stat_simple_column(array.clone());
 
         assert_eq!(column_info.pages.len(), 10);
@@ -243,7 +242,7 @@ mod test {
             assert_eq!(p.validity_size, Some(PAGE_SIZE as u32));
         }
 
-        let array = Box::new(BinaryArray::<i64>::from_iter_values(
+        let array = Box::new(BinaryColumn::<i64>::from_iter_values(
             ["a"; COLUMN_SIZE].iter(),
         ));
         let column_info = write_and_stat_simple_column(array.clone());

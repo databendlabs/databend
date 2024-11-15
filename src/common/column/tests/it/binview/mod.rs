@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// mod mutable;
-mod mutable_values;
-// mod to_mutable;
-
-use std::sync::Arc;
+mod builder;
 
 use databend_common_column::binview::BinaryViewColumn;
 use databend_common_column::binview::Utf8ViewColumn;
-use databend_common_column::bitmap::Bitmap;
-use databend_common_column::buffer::Buffer;
 
 #[test]
 fn basics_string_view() {

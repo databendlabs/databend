@@ -14,81 +14,79 @@
 
 use std::io::Write;
 
-use arrow_array::Array;
-use arrow_array::PrimitiveArray;
-use arrow_buffer::i256;
-use arrow_buffer::ArrowNativeType;
-use arrow_schema::DataType;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
+use databend_common_column::types::i256;
+use databend_common_column::types::NativeType;
+use databend_common_column::types::PrimitiveType;
 
 use super::WriteOptions;
 use crate::compression::double::compress_double;
 use crate::compression::integer::compress_integer;
 use crate::error::Result;
 
-pub(crate) fn write_primitive<T: ArrowNativeType, W: Write>(
+pub(crate) fn write_primitive<T: NativeType, W: Write>(
     w: &mut W,
-    array: &PrimitiveArray<T>,
+    array: &Buffer<T>,
+    validity: Option<Bitmap>,
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
     scratch.clear();
-    // compress_integer(array, write_options, scratch)?;
-    match array.data_type() {
-        DataType::Int8 => {
-            let array: &PrimitiveArray<i8> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+    match T::PRIMITIVE {
+        PrimitiveType::Int8 => {
+            let array: &Buffer<i8> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::Int16 => {
-            let array: &PrimitiveArray<i16> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::Int16 => {
+            let array: &Buffer<i16> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::Int32 => {
-            let array: &PrimitiveArray<i32> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::Int32 => {
+            let array: &Buffer<i32> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::Int64 => {
-            let array: &PrimitiveArray<i64> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::Int64 => {
+            let array: &Buffer<i64> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::UInt8 => {
-            let array: &PrimitiveArray<u8> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::UInt8 => {
+            let array: &Buffer<u8> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::UInt16 => {
-            let array: &PrimitiveArray<u16> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::UInt16 => {
+            let array: &Buffer<u16> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::UInt32 => {
-            let array: &PrimitiveArray<u32> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::UInt32 => {
+            let array: &Buffer<u32> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::UInt64 => {
-            let array: &PrimitiveArray<u64> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::UInt64 => {
+            let array: &Buffer<u64> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::Int128 => {
-            let array: &PrimitiveArray<i128> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::Int128 => {
+            let array: &Buffer<i128> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::Int256 => {
-            let array: &PrimitiveArray<i256> = array.as_any().downcast_ref().unwrap();
-            compress_integer(array, write_options, scratch)?;
+        PrimitiveType::Int256 => {
+            let array: &Buffer<i256> = array.as_any().downcast_ref().unwrap();
+            compress_integer(array, validity, write_options, scratch)?;
         }
-        DataType::Float32 => {
-            let array: &PrimitiveArray<f32> = array.as_any().downcast_ref().unwrap();
-
-            compress_double(array, write_options, scratch)?;
+        PrimitiveType::Float32 => {
+            let array: &Buffer<f32> = array.as_any().downcast_ref().unwrap();
+            compress_double(array, validity, write_options, scratch)?;
         }
-        DataType::Float64 => {
-            let array: &PrimitiveArray<f64> = array.as_any().downcast_ref().unwrap();
-
-            compress_double(array, write_options, scratch)?;
+        PrimitiveType::Float64 => {
+            let array: &Buffer<f64> = array.as_any().downcast_ref().unwrap();
+            compress_double(array, validity, write_options, scratch)?;
         }
 
-        DataType::Float16 => unimplemented!(),
-        DataType::DaysMs => unimplemented!(),
-        DataType::MonthDayNano => unimplemented!(),
-        DataType::UInt128 => unimplemented!(),
+        PrimitiveType::Float16 => unimplemented!(),
+        PrimitiveType::DaysMs => unimplemented!(),
+        PrimitiveType::MonthDayNano => unimplemented!(),
+        PrimitiveType::UInt128 => unimplemented!(),
     }
     w.write_all(scratch.as_slice())?;
     Ok(())

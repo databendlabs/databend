@@ -15,17 +15,16 @@
 mod array;
 pub mod batch_read;
 pub mod deserialize;
-use arrow_array::Array;
-use arrow_array::ArrayRef;
-use arrow_schema::Field;
-use arrow_schema::Schema;
 use batch_read::batch_read_array;
-pub use deserialize::column_iter_to_arrays;
+use databend_common_expression::TableField;
+pub use deserialize::column_iter_to_columns;
 pub use deserialize::ArrayIter;
 
 use crate::error::Result;
 pub(crate) mod read_basic;
 use std::io::BufReader;
+
+use databend_common_expression::TableSchema;
 
 use super::nested::InitNested;
 use super::PageMeta;
@@ -81,25 +80,25 @@ impl NativeColumnsReader {
     }
 
     /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
-    pub fn column_iter_to_arrays<'a, I>(
+    pub fn column_iter_to_columns<'a, I>(
         &self,
         readers: Vec<I>,
-        field: Field,
+        field: TableField,
         init: Vec<InitNested>,
     ) -> Result<ArrayIter<'a>>
     where
         I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
     {
-        column_iter_to_arrays(readers, field, init)
+        column_iter_to_columns(readers, field, init)
     }
 
     /// Read all pages of column at once.
     pub fn batch_read_array<R: NativeReadBuf>(
         &self,
         readers: Vec<R>,
-        field: Field,
+        field: TableField,
         page_metas: Vec<Vec<PageMeta>>,
-    ) -> Result<ArrayRef> {
+    ) -> Result<Column> {
         batch_read_array(readers, field, page_metas)
     }
 }

@@ -19,7 +19,7 @@ use std::ops::ShlAssign;
 use std::ops::Shr;
 use std::ops::ShrAssign;
 
-use arrow_buffer::ArrowNativeType;
+use databend_common_column::types::NativeType;
 use num::Float;
 use ordered_float::OrderedFloat;
 

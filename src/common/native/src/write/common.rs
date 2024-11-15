@@ -14,8 +14,6 @@
 
 use std::io::Write;
 
-use arrow_array::ArrayRef;
-
 use super::write;
 use super::NativeWriter;
 use crate::compression::CommonCompression;
@@ -41,21 +39,21 @@ pub struct WriteOptions {
 }
 
 impl<W: Write> NativeWriter<W> {
-    /// Encode and write a [`Chunk`] to the file
-    pub fn encode_chunk(&mut self, chunk: &[ArrayRef]) -> Result<()> {
+    /// Encode and write columns to the file
+    pub fn encode_chunk(&mut self, chunk: &Vec<Column>) -> Result<()> {
         let page_size = self
             .options
             .max_page_size
             .unwrap_or(chunk.len())
             .min(chunk.len());
 
-        for (array, field) in chunk.iter().zip(self.schema.fields.iter()) {
+        for (array, field) in chunk.columns().iter().zip(self.schema.fields.iter()) {
             let length = array.len();
 
             let nested = to_nested(array.as_ref(), field)?;
-            let leaf_arrays = to_leaves(array.as_ref());
+            let leaf_columns = to_leaves(array.as_ref());
 
-            for (leaf_array, nested) in leaf_arrays.iter().zip(nested.into_iter()) {
+            for (leaf_array, nested) in leaf_columns.iter().zip(nested.into_iter()) {
                 let leaf_array = leaf_array.to_boxed();
                 let mut page_metas = Vec::with_capacity((length + 1) / page_size + 1);
                 let start = self.writer.offset;

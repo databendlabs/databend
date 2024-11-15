@@ -15,15 +15,12 @@
 use std::io::BufRead;
 use std::ops::Deref;
 
-use arrow_array::GenericBinaryArray;
-use arrow_array::OffsetSizeTrait;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use roaring::RoaringBitmap;
 
 use super::BinaryCompression;
 use super::BinaryStats;
-
 use crate::compression::integer::Freq;
 use crate::compression::Compression;
 use crate::error::Error;
@@ -31,14 +28,14 @@ use crate::error::Result;
 use crate::general_err;
 use crate::write::WriteOptions;
 
-impl<O: OffsetSizeTrait> BinaryCompression<O> for Freq {
+impl<O: Offset> BinaryCompression<O> for Freq {
     fn to_compression(&self) -> Compression {
         Compression::Freq
     }
 
     fn compress(
         &self,
-        array: &GenericBinaryArray<O>,
+        array: &BinaryColumn,
         stats: &BinaryStats<O>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,

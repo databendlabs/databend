@@ -12,49 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableTableDataType;
 
-use arrow_array::Array;
-use arrow_array::ArrayRef;
-use arrow_array::FixedSizeListArray;
-use arrow_array::LargeListArray;
-use arrow_array::ListArray;
-use arrow_array::MapArray;
-use arrow_array::OffsetSizeTrait;
-use arrow_array::StructArray;
-use arrow_buffer::NullBuffer;
-use arrow_buffer::OffsetBuffer;
-use arrow_schema::DataType;
-use arrow_schema::Field;
-
+use crate::error::Error;
 use crate::error::Result;
 
 /// Descriptor of nested information of a field
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Nested {
-    /// A primitive array
-    Primitive(usize, bool, Option<NullBuffer>),
+    /// A primitive column
+    Primitive(usize, bool, Option<Bitmap>),
     /// a list
-    List(ListNested<i32>),
-    /// a list
-    LargeList(ListNested<i64>),
-    /// A struct array
-    Struct(usize, bool, Option<NullBuffer>),
+    LargeList(ListNested),
+    /// A struct column
+    Struct(usize, bool, Option<Bitmap>),
 }
 
-#[derive(Debug, Clone)]
-pub struct ListNested<O: OffsetSizeTrait> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListNested {
     pub is_nullable: bool,
-    pub offsets: OffsetBuffer<O>,
-    pub nulls: Option<NullBuffer>,
+    pub offsets: Buffer<u64>,
+    pub validity: Option<Bitmap>,
 }
 
-impl<O: OffsetSizeTrait> ListNested<O> {
-    pub fn new(offsets: OffsetBuffer<O>, nulls: Option<NullBuffer>, is_nullable: bool) -> Self {
+impl ListNested {
+    pub fn new(offsets: Buffer<u64>, validity: Option<Bitmap>, is_nullable: bool) -> Self {
         Self {
             is_nullable,
             offsets,
-            nulls,
+            validity,
         }
     }
 }
@@ -65,8 +58,7 @@ impl Nested {
     pub fn length(&self) -> usize {
         match self {
             Nested::Primitive(len, _, _) => *len,
-            Nested::List(l) => l.offsets.len(),
-            Nested::LargeList(l) => l.offsets.len(),
+            Nested::LargeList(l) => l.offsets.len_proxy(),
             Nested::Struct(len, _, _) => *len,
         }
     }
@@ -74,66 +66,61 @@ impl Nested {
     pub fn is_nullable(&self) -> bool {
         match self {
             Nested::Primitive(_, b, _) => *b,
-            Nested::List(l) => l.is_nullable,
             Nested::LargeList(l) => l.is_nullable,
             Nested::Struct(_, b, _) => *b,
         }
     }
 
-    pub fn inner(&self) -> (OffsetBuffer<i64>, &Option<NullBuffer>) {
+    pub fn inner(&self) -> (Buffer<u64>, &Option<Bitmap>) {
         match self {
-            Nested::Primitive(_, _, v) => (OffsetBuffer::new_empty(), v),
-            Nested::List(l) => {
-                let start = *l.offsets.first().unwrap();
-                let buffer =
-                    OffsetBuffer::from_lengths(l.offsets.iter().map(|x| (*x - start) as usize));
-                (buffer, &l.nulls)
-            }
+            Nested::Primitive(_, _, v) => (Buffer::new(), v),
             Nested::LargeList(l) => {
-                let start = *l.offsets.first().unwrap();
-                let buffer = if start == 0 {
-                    l.offsets.clone()
+                let start = l.offsets.first();
+                let buffer = if *start == 0 {
+                    l.offsets.buffer().clone()
                 } else {
-                    OffsetBuffer::from_lengths(l.offsets.iter().map(|x| (*x - start) as usize))
+                    l.offsets.buffer().iter().map(|x| *x - start).collect()
                 };
-                (buffer, &l.nulls)
+                (buffer, &l.validity)
             }
-            Nested::Struct(_, _, v) => (OffsetBuffer::new_empty(), v),
+            Nested::Struct(_, _, v) => (Buffer::new(), v),
         }
     }
 
-    pub fn nulls(&self) -> &Option<NullBuffer> {
+    pub fn validity(&self) -> &Option<Bitmap> {
         match self {
             Nested::Primitive(_, _, v) => v,
-            Nested::List(l) => &l.nulls,
-            Nested::LargeList(l) => &l.nulls,
+            Nested::LargeList(l) => &l.validity,
             Nested::Struct(_, _, v) => v,
         }
     }
 
     pub fn is_list(&self) -> bool {
-        matches!(self, Nested::List(_) | Nested::LargeList(_))
+        matches!(self, Nested::LargeList(_))
     }
 }
 
-/// Constructs the necessary `Vec<Vec<Nested>>` to write the rep and def levels of `array` to parquet
-pub fn to_nested(array: &dyn Array, f: &Field) -> Result<Vec<Vec<Nested>>> {
+/// Constructs the necessary `Vec<Vec<Nested>>` to write the rep and def levels of `column` to parquet
+pub fn to_nested(column: &Column) -> Result<Vec<Vec<Nested>>> {
     let mut nested = vec![];
 
-    to_nested_recursive(array, f, &mut nested, vec![])?;
+    to_nested_recursive(column, &mut nested, vec![])?;
     Ok(nested)
 }
 
-pub fn is_nested_type(t: &DataType) -> bool {
+pub fn is_nested_type(t: &TableDataType) -> bool {
     matches!(
         t,
-        DataType::Struct(_) | DataType::List(_) | DataType::LargeList(_) | DataType::Map(_, _)
+        TableDataType::Struct(_)
+            | TableDataType::List(_)
+            | TableDataType::LargeList(_)
+            | TableDataType::Map(_, _)
     )
 }
 
-/// Slices the [`Array`] to `ArrayRef` and `Vec<Nested>`.
-pub fn slice_nest_array(
-    primitive_array: &mut ArrayRef,
+/// Slices the [`column`] to `Column` and `Vec<Nested>`.
+pub fn slice_nest_column(
+    primitive_column: &mut dyn column,
     nested: &mut [Nested],
     mut current_offset: usize,
     mut current_length: usize,
@@ -142,136 +129,90 @@ pub fn slice_nest_array(
         match nested {
             Nested::LargeList(l_nested) => {
                 l_nested.offsets.slice(current_offset, current_length + 1);
-                if let Some(nulls) = l_nested.nulls.as_mut() {
-                    *nulls = nulls.slice(current_offset, current_length);
+                if let Some(validity) = l_nested.validity.as_mut() {
+                    validity.slice(current_offset, current_length)
                 };
 
-                current_length = (*l_nested.offsets.last().unwrap()
-                    - *l_nested.offsets.first().unwrap()) as usize;
-                current_offset = *l_nested.offsets.first().unwrap() as usize;
+                current_length = l_nested.offsets.range() as usize;
+                current_offset = *l_nested.offsets.first() as usize;
             }
-            Nested::List(l_nested) => {
-                l_nested.offsets.slice(current_offset, current_length + 1);
-                if let Some(nulls) = l_nested.nulls.as_mut() {
-                    *nulls = nulls.slice(current_offset, current_length);
-                };
-
-                current_length = (*l_nested.offsets.last().unwrap()
-                    - *l_nested.offsets.first().unwrap()) as usize;
-                current_offset = *l_nested.offsets.first().unwrap() as usize;
-            }
-            Nested::Struct(length, _, nulls) => {
+            Nested::Struct(length, _, validity) => {
                 *length = current_length;
-                if let Some(nulls) = nulls.as_mut() {
-                    *nulls = nulls.slice(current_offset, current_length);
+                if let Some(validity) = validity.as_mut() {
+                    validity.slice(current_offset, current_length)
                 };
             }
-            Nested::Primitive(length, _, nulls) => {
+            Nested::Primitive(length, _, validity) => {
                 *length = current_length;
-                if let Some(nulls) = nulls.as_mut() {
-                    *nulls = nulls.slice(current_offset, current_length);
+                if let Some(validity) = validity.as_mut() {
+                    validity.slice(current_offset, current_length)
                 };
-                *primitive_array = primitive_array.slice(current_offset, current_length);
+                primitive_column.slice(current_offset, current_length);
             }
         }
     }
 }
 
 fn to_nested_recursive(
-    array: &dyn Array,
-    f: &Field,
+    column: &Column,
     nested: &mut Vec<Vec<Nested>>,
     mut parents: Vec<Nested>,
 ) -> Result<()> {
-    let nullable = f.is_nullable();
-    match array.data_type() {
-        DataType::Struct(_) => {
-            let array = array.as_any().downcast_ref::<StructArray>().unwrap();
-            parents.push(Nested::Struct(
-                array.len(),
-                nullable,
-                array.nulls().cloned(),
-            ));
+    let nullable = column.as_nullable().is_some();
+    let validity = column.validity().1.cloned();
 
-            for (array, f) in array.columns().iter().zip(array.fields().iter()) {
-                to_nested_recursive(array.as_ref(), f, nested, parents.clone())?;
+    match column.remove_nullable() {
+        Column::Tuple(values) => {
+            parents.push(Nested::Struct(column.len(), nullable, validity));
+            for column in values {
+                to_nested_recursive(column.as_ref(), nested, parents.clone())?;
             }
         }
-        DataType::List(fs) => {
-            let array = array.as_any().downcast_ref::<ListArray>().unwrap();
-            parents.push(Nested::List(ListNested::new(
-                array.offsets().clone(),
-                array.nulls().cloned(),
-                nullable,
-            )));
-            to_nested_recursive(array.values().as_ref(), fs.as_ref(), nested, parents)?;
+        Column::Array(inner) => {
+            parents.push(Nested::LargeList(ListNested {
+                is_nullable: nullable,
+                offsets: inner.offsets.clone(),
+                validity,
+            }));
+            to_nested_recursive(inner.as_ref(), nested, parents)?;
         }
-        DataType::LargeList(fs) => {
-            let array = array.as_any().downcast_ref::<LargeListArray>().unwrap();
-            parents.push(Nested::LargeList(ListNested::<i64>::new(
-                array.offsets().clone(),
-                array.nulls().cloned(),
-                nullable,
-            )));
-            to_nested_recursive(array.values().as_ref(), fs.as_ref(), nested, parents)?;
-        }
-        DataType::Map(fs, _) => {
-            let array = array.as_any().downcast_ref::<MapArray>().unwrap();
-            parents.push(Nested::List(ListNested::new(
-                array.offsets().clone(),
-                array.nulls().cloned(),
-                nullable,
-            )));
-            to_nested_recursive(array.entries(), fs.as_ref(), nested, parents)?;
-        }
-        _ => {
-            parents.push(Nested::Primitive(
-                array.len(),
-                nullable,
-                array.nulls().cloned(),
-            ));
+        other => {
+            parents.push(Nested::Primitive(column.len(), nullable, validity));
             nested.push(parents);
         }
     }
+
     Ok(())
 }
 
-/// Convert [`Array`] to `Vec<&dyn Array>` leaves in DFS order.
-pub fn to_leaves(array: &dyn Array) -> Vec<&dyn Array> {
+/// Convert [`column`] to `Vec<Column>` leaves in DFS order.
+pub fn to_leaves(column: &Column) -> Vec<Column> {
     let mut leaves = vec![];
-    to_leaves_recursive(array, &mut leaves);
+    to_leaves_recursive(column, &mut leaves);
     leaves
 }
 
-fn to_leaves_recursive<'a>(array: &'a dyn Array, leaves: &mut Vec<&'a dyn Array>) {
-    use arrow_schema::DataType::*;
-    match array.data_type() {
-        Struct(_) => {
-            let array = array.as_any().downcast_ref::<StructArray>().unwrap();
-            array
-                .columns()
-                .iter()
-                .for_each(|a| to_leaves_recursive(a, leaves));
+fn to_leaves_recursive(column: &Column, leaves: &mut Vec<Column>) {
+    match column {
+        Column::Tuple(cs) => {
+            cs.iter().for_each(|a| to_leaves_recursive(a, leaves));
         }
-        List(_) => {
-            let array = array.as_any().downcast_ref::<ListArray>().unwrap();
-            to_leaves_recursive(array.values(), leaves);
+        Column::Array(col) => {
+            to_leaves_recursive(&col.values, leaves);
         }
-        LargeList(_) => {
-            let array = array.as_any().downcast_ref::<LargeListArray>().unwrap();
-            to_leaves_recursive(array.values(), leaves);
+        Column::Map(col) => {
+            to_leaves_recursive(&col.values, leaves);
         }
-        Map(_, _) => {
-            let array = array.as_any().downcast_ref::<MapArray>().unwrap();
-            to_leaves_recursive(array.entries(), leaves);
-        }
-        _ => leaves.push(array),
+        // Handle nullable columns by recursing into their inner value
+        Column::Nullable(inner) => to_leaves_recursive(&inner.column, leaves),
+        // All primitive/leaf types
+        _ => leaves.push(column.clone()),
     }
 }
 
 /// The initial info of nested data types.
 /// The initial info of nested data types.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitNested {
     /// Primitive data types
     Primitive(bool),
@@ -291,61 +232,45 @@ impl InitNested {
     }
 }
 
-/// Creates a new [`ListArray`] or [`FixedSizeListArray`].
-pub fn create_list(data_type: DataType, nested: &mut NestedState, values: ArrayRef) -> ArrayRef {
+/// Creates a new [`Listcolumn`] or [`FixedSizeListcolumn`].
+pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
-    let (offsets, nulls) = n.inner();
-    match data_type {
-        DataType::List(f) => {
-            let offsets = offsets.iter().map(|x| *x as i32).collect::<Vec<_>>();
-            Arc::new(ListArray::new(
-                f,
-                unsafe { OffsetBuffer::new_unchecked(offsets.into()) },
-                values,
-                nulls.clone(),
-            ))
-        }
-        DataType::LargeList(f) => Arc::new(LargeListArray::new(f, offsets, values, nulls.clone())),
-        DataType::FixedSizeList(f, s) => {
-            Arc::new(FixedSizeListArray::new(f, s, values, nulls.clone()))
-        }
-        _ => unreachable!(),
+    let (offsets, validity) = n.inner();
+    let col = Column::Map(Box::new(ArrayColumn::<AnyType> { values, offsets }));
+
+    if data_type.is_nullable() {
+        col.wrap_nullable(validity.clone())
+    } else {
+        col
     }
 }
 
-/// Creates a new [`MapArray`].
-pub fn create_map(data_type: DataType, nested: &mut NestedState, values: ArrayRef) -> ArrayRef {
+/// Creates a new [`Mapcolumn`].
+pub fn create_map(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
-    let (offsets, nulls) = n.inner();
-    match data_type {
-        DataType::Map(fs, _) => {
-            let offsets = offsets.iter().map(|x| *x as i32).collect::<Vec<_>>();
-            let offsets = unsafe { OffsetBuffer::new_unchecked(offsets.into()) };
-
-            let values = values.as_any().downcast_ref::<StructArray>().unwrap();
-            Arc::new(MapArray::new(
-                fs,
-                offsets,
-                values.clone(),
-                nulls.clone(),
-                false,
-            ))
-        }
-        _ => unreachable!(),
+    let (offsets, validity) = n.inner();
+    let col = Column::Map(Box::new(ArrayColumn::<AnyType> { values, offsets }));
+    if data_type.is_nullable() {
+        col.wrap_nullable(validity.clone())
+    } else {
+        col
     }
 }
 
 pub fn create_struct(
+    is_nullable: bool,
     fields: Vec<Field>,
     nested: &mut Vec<NestedState>,
-    values: Vec<ArrayRef>,
-) -> (NestedState, ArrayRef) {
+    values: Vec<Column>,
+) -> (NestedState, Column) {
     let mut nest = nested.pop().unwrap();
     let n = nest.pop().unwrap();
-    let (_, nulls) = n.inner();
+    let (_, validity) = n.inner();
 
-    (
-        nest,
-        Arc::new(StructArray::new(fields.into(), values, nulls.clone())),
-    )
+    let col = Column::Tuple(values);
+    if is_nullable {
+        (nest, col.wrap_nullable(validity.clone()))
+    } else {
+        (nest, col)
+    }
 }

@@ -14,8 +14,6 @@
 
 use std::hash::Hash;
 
-use arrow_array::PrimitiveArray;
-use arrow_buffer::ArrowNativeType;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 
@@ -24,8 +22,10 @@ use super::decompress_integer;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
+
 use crate::error::Error;
 use crate::error::Result;
+use databend_common_column::types::NativeType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Dict {}
@@ -33,7 +33,7 @@ pub struct Dict {}
 impl<T: IntegerType> IntegerCompression<T> for Dict {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         _stats: &IntegerStats<T>,
         write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,
@@ -162,18 +162,18 @@ where T: AsBytes + PartialEq + Clone
         &self.interner.sets
     }
 
-    pub fn take_indices(&mut self) -> PrimitiveArray<u32> {
+    pub fn take_indices(&mut self) -> Buffer<u32> {
         let indices = std::mem::take(&mut self.indices);
-        PrimitiveArray::<u32>::from_vec(indices)
+        Buffer::<u32>::from_vec(indices)
     }
 }
 
 use hashbrown_v0_14::hash_map::RawEntryMut;
 use hashbrown_v0_14::HashMap;
 
+use crate::general_err;
 use crate::compression::get_bits_needed;
 use crate::compression::Compression;
-use crate::general_err;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 
@@ -222,11 +222,11 @@ where T: AsBytes + PartialEq + Clone
 
 #[repr(C)]
 #[derive(Clone, PartialEq)]
-pub struct RawNative<T: ArrowNativeType> {
+pub struct RawNative<T: NativeType> {
     pub(crate) inner: T,
 }
 
-impl<T: ArrowNativeType> AsBytes for RawNative<T> {
+impl<T: NativeType> AsBytes for RawNative<T> {
     fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(

@@ -21,9 +21,9 @@ mod traits;
 
 use std::collections::HashMap;
 
-use arrow::array::PrimitiveBuilder;
-use arrow_array::Array;
-use arrow_array::PrimitiveArray;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -43,12 +43,13 @@ use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
 pub fn compress_double<T: DoubleType>(
-    array: &PrimitiveArray<T>,
+    array: &Buffer<T>,
+    validity: Option<Bitmap>,
     write_options: WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {
     // choose compressor
-    let stats = gen_stats(array);
+    let stats = gen_stats(array, validity);
     let compressor = choose_compressor(array, &stats, &write_options);
 
     log::debug!(
@@ -128,7 +129,7 @@ pub fn decompress_double<T: DoubleType, R: NativeReadBuf>(
 pub trait DoubleCompression<T: DoubleType> {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         stats: &DoubleStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -163,7 +164,7 @@ impl<T: DoubleType> DoubleCompressor<T> {
             Compression::Rle => Ok(Self::Extend(Box::new(Rle {}))),
             Compression::Patas => Ok(Self::Extend(Box::new(Patas {}))),
 
-            other => Err(Error::SchemaError(format!(
+            other => Err(Error::OutOfSpec(format!(
                 "Unknown compression codec {other:?}",
             ))),
         }
@@ -172,10 +173,11 @@ impl<T: DoubleType> DoubleCompressor<T> {
 
 #[derive(Debug, Clone)]
 pub struct DoubleStats<T: DoubleType> {
-    pub src: PrimitiveArray<T>,
+    pub src: Buffer<T>,
     pub tuple_count: usize,
     pub total_bytes: usize,
     pub null_count: usize,
+    pub validity: Option<Bitmap>,
 
     pub is_sorted: bool,
     pub min: T::OrderType,
@@ -187,12 +189,13 @@ pub struct DoubleStats<T: DoubleType> {
     pub set_count: usize,
 }
 
-fn gen_stats<T: DoubleType>(array: &PrimitiveArray<T>) -> DoubleStats<T> {
+fn gen_stats<T: DoubleType>(array: &Bufferr<T>, validity: Option<Bitmap>) -> DoubleStats<T> {
     let mut stats = DoubleStats::<T> {
         src: array.clone(),
         tuple_count: array.len(),
         total_bytes: array.len() * std::mem::size_of::<T>(),
         null_count: array.null_count(),
+        validity,
         is_sorted: true,
         min: T::default().as_order(),
         max: T::default().as_order(),
@@ -206,7 +209,7 @@ fn gen_stats<T: DoubleType>(array: &PrimitiveArray<T>) -> DoubleStats<T> {
     let mut last_value = T::default().as_order();
     let mut run_count = 0;
 
-    let validity = array.validity();
+    let validity = validity.as_ref();
     for (i, current_value) in array.values().iter().cloned().enumerate() {
         let current_value = current_value.as_order();
         if is_valid(&validity, i) {
@@ -241,7 +244,7 @@ fn gen_stats<T: DoubleType>(array: &PrimitiveArray<T>) -> DoubleStats<T> {
 }
 
 fn choose_compressor<T: DoubleType>(
-    _value: &PrimitiveArray<T>,
+    _value: &Buffer<T>,
     stats: &DoubleStats<T>,
     write_options: &WriteOptions,
 ) -> DoubleCompressor<T> {
@@ -332,7 +335,12 @@ fn compress_sample_ratio<T: DoubleType, C: DoubleCompression<T>>(
         let array = &stats.src;
         let separator = array.len() / sample_count;
         let remainder = array.len() % sample_count;
-        let mut builder = PrimitiveBuilder::with_capacity(sample_count * sample_size);
+        let mut builder = Vec::with_capacity(sample_count * sample_size);
+        let mut validity = if stats.null_count > 0 {
+            Some(MutableBitmap::with_capacity(sample_count * sample_size))
+        } else {
+            None
+        };
 
         for sample_i in 0..sample_count {
             let range_end = if sample_i == sample_count - 1 {
@@ -345,10 +353,19 @@ fn compress_sample_ratio<T: DoubleType, C: DoubleCompression<T>>(
 
             let mut s = array.clone();
             s.slice(partition_begin, sample_size);
-            builder.extend_trusted_len(s.into_iter());
+
+            match (&mut validity, stats.validity) {
+                (Some(b), Some(validity)) => {
+                    let mut v = validity.clone();
+                    v.slice(partition_begin, sample_size);
+                    b.extend_from_trusted_len_iter(v.into_iter());
+                }
+                (_, _) => {}
+            }
+            builder.extend(s);
         }
-        let sample_array: PrimitiveArray<T> = builder.into();
-        gen_stats(&sample_array)
+        let sample_array: Buffer<T> = builder.into();
+        gen_stats(&sample_array, validity.map(|x| x.into()))
     };
 
     let size = c

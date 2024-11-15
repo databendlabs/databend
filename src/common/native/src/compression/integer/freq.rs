@@ -24,7 +24,7 @@ use super::decompress_integer;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
-use arrow_array::PrimitiveArray;
+
 use crate::error::Result;
 use crate::compression::Compression;
 use crate::write::WriteOptions;
@@ -35,7 +35,7 @@ pub struct Freq {}
 impl<T: IntegerType> IntegerCompression<T> for Freq {
     fn compress(
         &self,
-        array: &PrimitiveArray<T>,
+        array: &Buffer<T>,
         stats: &IntegerStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -81,7 +81,7 @@ impl<T: IntegerType> IntegerCompression<T> for Freq {
         let mut write_options = write_options.clone();
         write_options.forbidden_compressions.push(Compression::Freq);
 
-        let exceptions = PrimitiveArray::<T>::from_vec(exceptions);
+        let exceptions = Buffer::<T>::from_vec(exceptions);
         compress_integer(&exceptions, write_options, output)?;
 
         Ok(output.len() - size)
