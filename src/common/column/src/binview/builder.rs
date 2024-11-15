@@ -194,16 +194,12 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
 
     pub fn extend_constant<V: AsRef<T>>(&mut self, additional: usize, value: V) {
         let old_bytes_len = self.total_bytes_len;
-        let old_buffer_len = self.total_buffer_len;
 
         self.push_value(value);
         let value = self.views.pop().unwrap();
 
         self.total_bytes_len +=
             (self.total_bytes_len - old_bytes_len) * additional.saturating_sub(1);
-        self.total_buffer_len +=
-            (self.total_buffer_len - old_buffer_len) * additional.saturating_sub(1);
-
         self.views.extend(std::iter::repeat(value).take(additional));
     }
 
