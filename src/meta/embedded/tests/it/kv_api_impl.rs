@@ -16,53 +16,10 @@ use std::collections::BTreeMap;
 use std::sync::Once;
 
 use databend_common_base::base::tokio;
-use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_write_read() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_write_read(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_delete() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_delete(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_update() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_update(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_timeout() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_timeout(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_meta() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_meta(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_list() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_list(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_mget() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_mget(&kv).await
-}
 
 #[derive(Clone)]
 struct Builder;
@@ -70,7 +27,7 @@ struct Builder;
 #[async_trait::async_trait]
 impl kvapi::ApiBuilder<InMemoryMeta> for Builder {
     async fn build(&self) -> InMemoryMeta {
-        InMemoryMeta::new()
+        InMemoryMeta::default()
     }
 
     async fn build_cluster(&self) -> Vec<InMemoryMeta> {
