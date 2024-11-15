@@ -7,6 +7,10 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 
+[lib]
+doctest = false
+test = true
+
 [features]
 default = ["column-default"]
 serde_types = ["serde", "serde_derive"]
@@ -40,7 +44,7 @@ serde_json  = { workspace = true }
 
 
 [dev-dependencies]
-
+proptest = {workspace = true}
 
 [lints]
 workspace = true

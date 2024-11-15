@@ -130,8 +130,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     #[inline]
     pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
         let len = v.length;
-        self.total_bytes_len += len as usize;
         if len <= 12 {
+            self.total_bytes_len += len as usize;
             debug_assert!(self.views.capacity() > self.views.len());
             self.views.push(v)
         } else {

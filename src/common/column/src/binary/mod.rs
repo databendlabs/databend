@@ -26,6 +26,7 @@ pub use builder::BinaryColumnBuilder;
 pub use iterator::BinaryColumnBuilderIter;
 pub use iterator::BinaryColumnIter;
 
+use crate::binview::BinaryViewColumnGeneric;
 use crate::buffer::Buffer;
 use crate::error::Error;
 use crate::error::Result;
