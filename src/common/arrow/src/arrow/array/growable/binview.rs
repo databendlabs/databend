@@ -74,7 +74,6 @@ impl<'a, T: ViewType + ?Sized> GrowableBinaryViewArray<'a, T> {
         capacity: usize,
     ) -> Self {
         let data_type = arrays[0].data_type().clone();
-
         // if any of the arrays has nulls, insertions from any array requires setting bits
         // as there is at least one array with nulls.
         if !use_validity & arrays.iter().any(|array| array.null_count() > 0) {
@@ -91,11 +90,8 @@ impl<'a, T: ViewType + ?Sized> GrowableBinaryViewArray<'a, T> {
                     .map(|buf| BufferKey { inner: buf })
             })
             .collect::<ArrowIndexSet<_>>();
-        let total_buffer_len = arrays
-            .iter()
-            .map(|arr| arr.data_buffers().len())
-            .sum::<usize>();
 
+        let total_buffer_len = buffers.iter().map(|v| v.inner.len()).sum();
         Self {
             arrays,
             data_type,
