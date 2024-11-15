@@ -31,17 +31,6 @@ pub(crate) struct GlobalSledDb {
 }
 
 impl GlobalSledDb {
-    pub(crate) fn new_temp(temp_dir: TempDir) -> Self {
-        let temp_path = temp_dir.path().to_str().unwrap().to_string();
-
-        GlobalSledDb {
-            temp_dir: Some(temp_dir),
-            path: temp_path.clone(),
-            db: sled::open(temp_path.clone())
-                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", temp_path, e)),
-        }
-    }
-
     pub(crate) fn new(path: String, cache_size: u64) -> Self {
         let db = sled::Config::default()
             .path(&path)
@@ -60,28 +49,6 @@ impl GlobalSledDb {
 
 static GLOBAL_SLED: LazyLock<Arc<Mutex<Option<GlobalSledDb>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
-
-/// Open a db at a temp dir. For test purpose only.
-pub fn init_temp_sled_db(temp_dir: TempDir) {
-    let temp_path = temp_dir.path().to_str().unwrap().to_string();
-
-    let (inited_as_temp, curr_path) = {
-        let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
-        if let Some(gdb) = g.as_ref() {
-            (gdb.temp_dir.is_some(), gdb.path.clone())
-        } else {
-            *g = Some(GlobalSledDb::new_temp(temp_dir));
-            return;
-        }
-    };
-
-    if !inited_as_temp {
-        panic!(
-            "sled db is already initialized with specified path: {}, can not re-init with temp path {}",
-            curr_path, temp_path
-        );
-    }
-}
 
 pub fn init_sled_db(path: String, cache_size: u64) {
     let (inited_as_temp, curr_path) = {
