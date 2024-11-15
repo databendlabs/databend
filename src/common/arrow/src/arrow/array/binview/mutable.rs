@@ -424,7 +424,7 @@ impl MutableBinaryViewArray<str> {
         let value = unsafe { self.value_unchecked(self.len() - 1).to_string() };
 
         self.views.pop();
-
+        self.total_bytes_len -= value.len();
         Some(value)
     }
 }
