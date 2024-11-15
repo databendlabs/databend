@@ -3693,7 +3693,6 @@ dependencies = [
  "databend-common-tracing",
  "fastrace",
  "log",
- "tempfile",
  "test-harness",
 ]
 
@@ -3788,7 +3787,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
- "databend-common-tracing",
  "fastrace",
  "log",
  "openraft",
