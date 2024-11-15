@@ -17,7 +17,7 @@ use std::sync::Once;
 
 use databend_common_base::base::tokio;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_raft_store::mem_sm::MemMeta;
+use databend_common_meta_raft_store::mem_meta::MemMeta;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
 
