@@ -1,0 +1,7 @@
+statement ok
+set enable_experimental_aggregate_hashtable = 0;
+
+include ./03_0003_select_group_by.test
+
+statement ok
+unset enable_experimental_aggregate_hashtable;
