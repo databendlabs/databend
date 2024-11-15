@@ -160,7 +160,6 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
             debug_assert!(self.views.capacity() > self.views.len());
             self.views.push(v)
         } else {
-            self.total_buffer_len += len as usize;
             let data = buffers.get_unchecked(v.buffer_idx as usize);
             let offset = v.offset as usize;
             let bytes = data.get_unchecked(offset..offset + len as usize);
