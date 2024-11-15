@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_raft_store::mem_sm::InMemoryMeta;
+use databend_common_meta_raft_store::mem_sm::MemMeta;
 use test_harness::test;
 
 use crate::testing::mem_meta_test_harness;
@@ -25,12 +25,12 @@ use crate::testing::mem_meta_test_harness;
 pub struct MemMetaBuilder {}
 
 #[async_trait]
-impl kvapi::ApiBuilder<InMemoryMeta> for MemMetaBuilder {
-    async fn build(&self) -> InMemoryMeta {
-        InMemoryMeta::default()
+impl kvapi::ApiBuilder<MemMeta> for MemMetaBuilder {
+    async fn build(&self) -> MemMeta {
+        MemMeta::default()
     }
 
-    async fn build_cluster(&self) -> Vec<InMemoryMeta> {
+    async fn build_cluster(&self) -> Vec<MemMeta> {
         unimplemented!("embedded meta does not support cluster mode")
     }
 }

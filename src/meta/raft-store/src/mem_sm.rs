@@ -43,12 +43,12 @@ use crate::state_machine_api_ext::StateMachineApiExt;
 
 /// A pure in-memory state machine as mock for testing.
 #[derive(Debug, Default)]
-pub struct InMemoryStateMachine {
+pub struct MemStateMachine {
     level: Level,
     expire_cursor: ExpireKey,
 }
 
-impl StateMachineApi for InMemoryStateMachine {
+impl StateMachineApi for MemStateMachine {
     type Map = Level;
 
     fn get_expire_cursor(&self) -> ExpireKey {
@@ -77,14 +77,14 @@ impl StateMachineApi for InMemoryStateMachine {
 }
 
 #[derive(Clone, Default)]
-pub struct InMemoryMeta {
-    sm: Arc<Mutex<InMemoryStateMachine>>,
+pub struct MemMeta {
+    sm: Arc<Mutex<MemStateMachine>>,
 }
 
-impl InMemoryMeta {
+impl MemMeta {
     async fn init_applier<'a>(
         &self,
-        a: &mut Applier<'a, InMemoryStateMachine>,
+        a: &mut Applier<'a, MemStateMachine>,
     ) -> Result<(), io::Error> {
         let now = SeqV::<()>::now_ms();
         a.cmd_ctx = CmdContext::from_millis(now);
@@ -102,7 +102,7 @@ impl InMemoryMeta {
 }
 
 #[async_trait::async_trait]
-impl KVApi for InMemoryMeta {
+impl KVApi for MemMeta {
     type Error = MetaError;
 
     async fn upsert_kv(&self, upsert_kv: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
