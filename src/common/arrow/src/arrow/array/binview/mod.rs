@@ -174,7 +174,7 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
             }
 
             if total_buffer_len != UNKNOWN_LEN as usize {
-                let total = buffers.iter().map(|v| v.len() as usize).sum::<usize>();
+                let total = buffers.iter().map(|v| v.len()).sum::<usize>();
                 assert_eq!(total, total_buffer_len);
             }
         }
