@@ -271,6 +271,7 @@ impl kvapi::TestSuite {
         info!("---get unexpired");
         {
             let res = kv.get_kv("k1").await?;
+            // dbg!("got k1:{:?}", &res);
             // dbg!("got non expired k1", &res);
             assert!(res.is_some(), "got unexpired");
         }
