@@ -41,6 +41,7 @@ impl<C> ErrorCode<C> {
             name: self.name,
             display_text: self.display_text,
             detail: self.detail,
+            is_retryable: self.is_retryable,
             span: self.span,
             cause: self.cause,
             backtrace: self.backtrace,

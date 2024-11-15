@@ -941,6 +941,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=1024*1024)),
                 }),
+                ("query_max_failures", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the query maximum failure retry times.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=5)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -1012,7 +1018,8 @@ impl DefaultSettings {
     }
 
     fn max_memory_usage() -> Result<u64> {
-        let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
+        let memory_info =
+            sys_info::mem_info().map_err(|err| ErrorCode::from_std_error(err, false))?;
 
         Ok(match GlobalConfig::try_get_instance() {
             None => 1024 * memory_info.total * 80 / 100,

@@ -809,4 +809,12 @@ impl Settings {
     pub fn set_short_sql_max_length(&self, val: u64) -> Result<()> {
         self.try_set_u64("short_sql_max_length", val)
     }
+
+    pub fn get_query_max_failures(&self) -> Result<u64> {
+        self.try_get_u64("query_max_failures")
+    }
+
+    pub fn set_query_max_failures(&self, val: u64) -> Result<()> {
+        self.try_set_u64("query_max_failures", val)
+    }
 }

@@ -83,7 +83,8 @@ impl OrcTable {
         let arrow_schema = Self::prepare_metas(first_file, operator.clone()).await?;
 
         let table_schema = Arc::new(
-            TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
+            TableSchema::try_from(arrow_schema.as_ref())
+                .map_err(|err| ErrorCode::from_std_error(err, false))?,
         );
 
         let table_info = create_orc_table_info(table_schema.clone(), stage_info)?;

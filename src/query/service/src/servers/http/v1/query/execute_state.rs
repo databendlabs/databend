@@ -409,39 +409,48 @@ async fn execute(
     executor: Arc<RwLock<Executor>>,
 ) -> Result<(), ExecutionError> {
     let make_error = || format!("failed to execute {}", interpreter.name());
-
-    let mut data_stream = interpreter
-        .execute(ctx.clone())
-        .await
-        .with_context(make_error)?;
-    match data_stream.next().await {
-        None => {
-            let block = DataBlock::empty_with_schema(schema);
-            block_sender.send(block, 0).await;
-            Executor::stop::<()>(&executor, Ok(())).await;
-            block_sender.close();
-        }
-        Some(Err(err)) => {
-            Executor::stop(&executor, Err(err)).await;
-            block_sender.close();
-        }
-        Some(Ok(block)) => {
-            let size = block.num_rows();
-            block_sender.send(block, size).await;
-            while let Some(block_r) = data_stream.next().await {
-                match block_r {
-                    Ok(block) => {
-                        block_sender.send(block.clone(), block.num_rows()).await;
-                    }
-                    Err(err) => {
-                        block_sender.close();
-                        return Err(err.with_context(make_error()));
-                    }
-                };
+    let settings = ctx.get_settings();
+    let mut query_max_failures = settings.get_query_max_failures().unwrap_or(0);
+    loop {
+        let mut data_stream = interpreter
+            .execute(ctx.clone())
+            .await
+            .with_context(make_error)?;
+        match data_stream.next().await {
+            None => {
+                let block = DataBlock::empty_with_schema(schema);
+                block_sender.send(block, 0).await;
+                Executor::stop::<()>(&executor, Ok(())).await;
+                block_sender.close();
             }
-            Executor::stop::<()>(&executor, Ok(())).await;
-            block_sender.close();
+            Some(Err(err)) => {
+                // If the error is retryable, such as network error, we can retry multiple times
+                if err.is_retryable() && query_max_failures > 0 {
+                    query_max_failures -= 1;
+                    continue;
+                }
+                Executor::stop(&executor, Err(err)).await;
+                block_sender.close();
+            }
+            Some(Ok(block)) => {
+                let size = block.num_rows();
+                block_sender.send(block, size).await;
+                while let Some(block_r) = data_stream.next().await {
+                    match block_r {
+                        Ok(block) => {
+                            block_sender.send(block.clone(), block.num_rows()).await;
+                        }
+                        Err(err) => {
+                            block_sender.close();
+                            return Err(err.with_context(make_error()));
+                        }
+                    };
+                }
+                Executor::stop::<()>(&executor, Ok(())).await;
+                block_sender.close();
+            }
         }
+        break;
     }
     Ok(())
 }

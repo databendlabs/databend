@@ -50,5 +50,5 @@ pub(crate) fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema>
         .map(|f| Arc::new(lower_field_name(f)))
         .collect::<Vec<_>>();
     let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
-    TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
+    TableSchema::try_from(&schema).map_err(|err| ErrorCode::from_std_error(err, false))
 }

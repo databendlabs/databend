@@ -24,6 +24,7 @@ fn test_serialize() -> Result<()> {
         "test_name",
         String::from("test_message"),
         String::new(),
+        false,
         None,
         StackTrace::capture(),
     )

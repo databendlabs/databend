@@ -33,6 +33,7 @@ pub struct ErrorCode<C = ()> {
     pub(crate) name: String,
     pub(crate) display_text: String,
     pub(crate) detail: String,
+    pub(crate) is_retryable: bool,
     pub(crate) span: Span,
     // cause is only used to contain an `anyhow::Error`.
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
@@ -118,6 +119,17 @@ impl<C> ErrorCode<C> {
         }
     }
 
+    pub fn is_retryable(&self) -> bool {
+        self.is_retryable
+    }
+
+    pub fn set_is_retryable(self, is_retryable: bool) -> Self {
+        Self {
+            is_retryable,
+            ..self
+        }
+    }
+
     pub fn span(&self) -> Span {
         self.span
     }
@@ -193,12 +205,13 @@ impl<C> Display for ErrorCode<C> {
 impl<C> ErrorCode<C> {
     /// All std error will be converted to InternalError
     #[track_caller]
-    pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
+    pub fn from_std_error<T: std::error::Error>(error: T, is_retryable: bool) -> Self {
         ErrorCode {
             code: 1001,
             name: String::from("FromStdError"),
             display_text: error.to_string(),
             detail: String::new(),
+            is_retryable,
             span: None,
             cause: None,
             backtrace: capture(),
@@ -214,6 +227,7 @@ impl<C> ErrorCode<C> {
             name: String::from("Internal"),
             display_text: error.clone(),
             detail: String::new(),
+            is_retryable: false,
             span: None,
             cause: None,
             backtrace: capture(),
@@ -229,6 +243,7 @@ impl<C> ErrorCode<C> {
             name: String::from("Internal"),
             display_text: error,
             detail: String::new(),
+            is_retryable: false,
             span: None,
             cause: None,
             stacks: vec![],
@@ -242,6 +257,7 @@ impl<C> ErrorCode<C> {
         name: impl ToString,
         display_text: String,
         detail: String,
+        is_retryable: bool,
         cause: Option<Box<dyn std::error::Error + Sync + Send>>,
         backtrace: StackTrace,
     ) -> Self {
@@ -249,6 +265,7 @@ impl<C> ErrorCode<C> {
             code,
             display_text: display_text.clone(),
             detail,
+            is_retryable,
             span: None,
             cause,
             backtrace,
@@ -313,6 +330,7 @@ impl<C> Clone for ErrorCode<C> {
             &self.name,
             self.display_text(),
             self.detail.clone(),
+            self.is_retryable,
             None,
             self.backtrace(),
         )

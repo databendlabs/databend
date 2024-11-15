@@ -65,6 +65,7 @@ impl From<anyhow::Error> for ErrorCode {
             "anyhow",
             format!("{}, source: {:?}", error, error.source()),
             String::new(),
+            false,
             Some(Box::new(OtherErrors::AnyHow { error })),
             capture(),
         )
@@ -79,13 +80,13 @@ impl From<&str> for ErrorCode {
 
 impl From<std::num::ParseIntError> for ErrorCode {
     fn from(error: std::num::ParseIntError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
 impl From<std::str::ParseBoolError> for ErrorCode {
     fn from(error: std::str::ParseBoolError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
@@ -97,13 +98,13 @@ impl From<String> for ErrorCode {
 
 impl From<std::num::ParseFloatError> for ErrorCode {
     fn from(error: std::num::ParseFloatError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
 impl From<std::num::TryFromIntError> for ErrorCode {
     fn from(error: std::num::TryFromIntError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
@@ -112,7 +113,7 @@ impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
         use databend_common_arrow::arrow::error::Error;
         match error {
             Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
-            v => ErrorCode::from_std_error(v),
+            v => ErrorCode::from_std_error(v, false),
         }
     }
 }
@@ -123,26 +124,26 @@ impl From<arrow_schema::ArrowError> for ErrorCode {
             arrow_schema::ArrowError::NotYetImplemented(v) => {
                 ErrorCode::Unimplemented(format!("arrow: {v}"))
             }
-            v => ErrorCode::from_std_error(v),
+            v => ErrorCode::from_std_error(v, false),
         }
     }
 }
 
 impl From<parquet::errors::ParquetError> for ErrorCode {
     fn from(error: parquet::errors::ParquetError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
 impl From<bincode::error::EncodeError> for ErrorCode {
     fn from(error: bincode::error::EncodeError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
 impl From<bincode::error::DecodeError> for ErrorCode {
     fn from(error: bincode::error::DecodeError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
@@ -153,6 +154,7 @@ impl From<bincode::serde::EncodeError> for ErrorCode {
             "EncodeError",
             format!("{error:?}"),
             String::new(),
+            false,
             None,
             capture(),
         )
@@ -166,6 +168,7 @@ impl From<bincode::serde::DecodeError> for ErrorCode {
             "DecodeError",
             format!("{error:?}"),
             String::new(),
+            false,
             None,
             capture(),
         )
@@ -174,13 +177,13 @@ impl From<bincode::serde::DecodeError> for ErrorCode {
 
 impl From<serde_json::Error> for ErrorCode {
     fn from(error: serde_json::Error) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, false)
     }
 }
 
 impl From<std::convert::Infallible> for ErrorCode {
     fn from(v: std::convert::Infallible) -> Self {
-        ErrorCode::from_std_error(v)
+        ErrorCode::from_std_error(v, false)
     }
 }
 
@@ -198,7 +201,7 @@ impl From<opendal::Error> for ErrorCode {
 
 impl From<http::Error> for ErrorCode {
     fn from(error: http::Error) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::from_std_error(error, true)
     }
 }
 
@@ -303,6 +306,7 @@ impl From<&SerializedError> for ErrorCode {
             se.name.clone(),
             se.message.clone(),
             String::new(),
+            false,
             None,
             se.backtrace.clone(),
         )
@@ -376,6 +380,7 @@ impl From<tonic::Status> for ErrorCode {
                         serialized_error.name,
                         serialized_error.message,
                         String::new(),
+                        false,
                         None,
                         serialized_error.backtrace,
                     )

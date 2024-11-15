@@ -296,7 +296,9 @@ where
     T: Send + 'static,
 {
     match databend_common_base::runtime::try_spawn_blocking(f) {
-        Ok(handler) => handler.await.map_err(ErrorCode::from_std_error)?,
+        Ok(handler) => handler
+            .await
+            .map_err(|err| ErrorCode::from_std_error(err, true))?,
         Err(f) => f(),
     }
 }
