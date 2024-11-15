@@ -293,8 +293,8 @@ impl StringColumn {
     }
 
     pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> Ordering {
-        let view_i = unsafe { col_i.data.views().as_slice().get_unchecked_release(i) };
-        let view_j = unsafe { col_j.data.views().as_slice().get_unchecked_release(j) };
+        let view_i = unsafe { col_i.data.views().as_slice().get_unchecked(i) };
+        let view_j = unsafe { col_j.data.views().as_slice().get_unchecked(j) };
 
         if view_i.prefix == view_j.prefix {
             unsafe {
@@ -311,7 +311,7 @@ impl StringColumn {
     }
 
     pub fn compare_str(col: &Self, i: usize, value: &str) -> Ordering {
-        let view = unsafe { col.data.views().as_slice().get_unchecked_release(i) };
+        let view = unsafe { col.data.views().as_slice().get_unchecked(i) };
         let prefix = load_prefix(value.as_bytes());
 
         if view.prefix == prefix {
