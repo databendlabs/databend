@@ -232,11 +232,7 @@ impl<'a> TakeRangeVisitor<'a> {
     fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
         let new_views = self.take_primitive_types(col.views().clone());
         unsafe {
-            StringColumn::new_unchecked_unknown_md(
-                new_views,
-                col.data_buffers().clone(),
-                Some(col.total_buffer_len()),
-            )
+            StringColumn::new_unchecked_unknown_md(new_views, col.data_buffers().clone(), None)
         }
     }
 }

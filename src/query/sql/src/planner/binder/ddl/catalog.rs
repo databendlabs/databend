@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
@@ -231,6 +232,10 @@ fn parse_iceberg_rest_catalog(
         }),
         "hive" => IcebergCatalogOption::Hms(IcebergHmsCatalogOption {
             address,
+            warehouse,
+            props: HashMap::from_iter(options),
+        }),
+        "glue" => IcebergCatalogOption::Glue(IcebergGlueCatalogOption {
             warehouse,
             props: HashMap::from_iter(options),
         }),

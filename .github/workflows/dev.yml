@@ -50,7 +50,7 @@ jobs:
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
-      build_profile: release
+      build_profile: ci
       runner_provider: aws
       license_type: trial
 
@@ -60,7 +60,7 @@ jobs:
     uses: ./.github/workflows/reuse.linux.hive.yml
     secrets: inherit
     with:
-      build_profile: release
+      build_profile: ci
       runner_provider: aws
 
   ready:

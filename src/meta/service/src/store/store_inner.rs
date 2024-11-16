@@ -104,7 +104,7 @@ impl StoreInner {
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);
-            let store_err = MetaStorageError::Damaged(ae);
+            let store_err = MetaStorageError(ae);
             MetaStartupError::StoreOpenError(store_err)
         }
 
@@ -303,7 +303,7 @@ impl StoreInner {
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
         sm.install_snapshot_v003(db).await.map_err(|e| {
-            MetaStorageError::Damaged(
+            MetaStorageError(
                 AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
             )
         })?;

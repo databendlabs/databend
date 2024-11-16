@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
-use databend_common_base::slice_ext::GetSaferUnchecked;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
@@ -256,7 +255,7 @@ where I: databend_common_column::types::Index
         let result: Vec<T> = self
             .indices
             .iter()
-            .map(|index| unsafe { *col.get_unchecked_release(index.to_usize()) })
+            .map(|index| unsafe { *col.get_unchecked(index.to_usize()) })
             .collect();
         result.into()
     }
@@ -285,11 +284,7 @@ where I: databend_common_column::types::Index
         } else {
             let new_views = self.take_primitive_types(col.views().clone());
             unsafe {
-                StringColumn::new_unchecked_unknown_md(
-                    new_views,
-                    col.data_buffers().clone(),
-                    Some(col.total_buffer_len()),
-                )
+                StringColumn::new_unchecked_unknown_md(new_views, col.data_buffers().clone(), None)
             }
         }
     }

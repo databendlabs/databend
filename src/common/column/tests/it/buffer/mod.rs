@@ -26,3 +26,17 @@ fn new_basic() {
     buffer = Buffer::<i32>::from(vec![1, 2, 3]);
     assert_eq!(buffer.len(), 3);
 }
+
+#[test]
+fn extend_from_repeats() {
+    let mut b = MutableBinaryViewArray::<str>::new();
+    b.extend_constant(4, Some("databend"));
+
+    let a = b.clone();
+    b.extend_trusted_len_values(a.values_iter());
+
+    assert_eq!(
+        b.as_box(),
+        MutableBinaryViewArray::<str>::from_values_iter(vec!["databend"; 8].into_iter()).as_box()
+    )
+}

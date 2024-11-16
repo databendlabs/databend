@@ -20,10 +20,7 @@ jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
-    # "databend-common-meta-embedded/io-uring",
     "databend-common-meta-store/io-uring",
-    # "databend-common-meta-sled-store/io-uring",
-    # "databend-common-meta-raft-store/io-uring",
 ]
 
 enable_queries_executor = []
@@ -74,7 +71,6 @@ databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-embedded = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -169,7 +165,6 @@ sqlx = { workspace = true }
 strength_reduce = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
-time = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
 toml = { workspace = true, default-features = false }

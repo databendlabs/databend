@@ -354,7 +354,7 @@ impl<'a> FilterVisitor<'a> {
                     StringColumn::new_unchecked_unknown_md(
                         new_views,
                         values.data_buffers().clone(),
-                        Some(values.total_buffer_len()),
+                        None,
                     )
                 }
             }
