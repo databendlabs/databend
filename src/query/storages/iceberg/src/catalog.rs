@@ -103,6 +103,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use iceberg_catalog_glue::GlueCatalog;
+use iceberg_catalog_glue::GlueCatalogConfig;
 use iceberg_catalog_hms::HmsCatalog;
 use iceberg_catalog_hms::HmsCatalogConfig;
 use iceberg_catalog_hms::HmsThriftTransport;
@@ -194,6 +196,28 @@ impl IcebergCatalog {
                     )
                     .build();
                 let ctl = RestCatalog::new(cfg);
+                Arc::new(ctl)
+            }
+            IcebergCatalogOption::Glue(glue) => {
+                let cfg = GlueCatalogConfig::builder()
+                    .warehouse(glue.warehouse.clone())
+                    .props(
+                        glue.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
+                    .build();
+
+                // Due to the AWS Glue catalog creation being asynchronous, forced to run it a bit different way, so we don't have to make the outer function asynchronous.
+                let ctl = databend_common_base::runtime::block_on(GlueCatalog::new(cfg)).map_err(
+                    |err| {
+                        ErrorCode::BadArguments(format!(
+                            "There was an error building the AWS Glue catalog: {err:?}"
+                        ))
+                    },
+                )?;
                 Arc::new(ctl)
             }
         };
