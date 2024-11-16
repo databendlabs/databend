@@ -17,18 +17,12 @@ use std::io;
 
 use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
-use sled::transaction::UnabortableTransactionError;
 
 /// Storage level error that is raised by meta service.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
     #[error("Data damaged: {0}")]
     Damaged(AnyError),
-
-    // TODO(1): remove this error
-    /// An internal error that inform txn to retry.
-    #[error("Conflict when execute transaction, just retry")]
-    TransactionConflict,
 }
 
 impl MetaStorageError {
@@ -42,7 +36,6 @@ impl MetaStorageError {
     pub fn name(&self) -> &'static str {
         match self {
             MetaStorageError::Damaged(_) => "Damaged",
-            MetaStorageError::TransactionConflict => "TransactionConflict",
         }
     }
 }
@@ -65,17 +58,6 @@ impl From<sled::Error> for MetaStorageError {
     }
 }
 
-impl From<UnabortableTransactionError> for MetaStorageError {
-    fn from(error: UnabortableTransactionError) -> Self {
-        match error {
-            UnabortableTransactionError::Storage(error) => {
-                MetaStorageError::Damaged(AnyError::new(&error))
-            }
-            UnabortableTransactionError::Conflict => MetaStorageError::TransactionConflict,
-        }
-    }
-}
-
 impl From<io::Error> for MetaStorageError {
     fn from(error: io::Error) -> Self {
         MetaStorageError::Damaged(AnyError::new(&error))
@@ -90,6 +72,6 @@ impl From<MetaStorageError> for io::Error {
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
-        ErrorCode::MetaServiceError(e.to_string())
+        ErrorCode::MetaStorageError(e.to_string())
     }
 }

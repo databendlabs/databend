@@ -26,12 +26,10 @@ pub use openraft;
 pub use sled;
 pub use sled_key_space::SledKeySpace;
 pub use sled_serde::SledOrderedSerde;
-pub use sled_serde::SledRangeSerde;
 pub use sled_serde::SledSerde;
 pub use sled_tree::AsKeySpace;
 pub use sled_tree::SledItem;
 pub use sled_tree::SledTree;
-pub use store::Store;
 
 mod bytes_error;
 mod db;
@@ -39,4 +37,3 @@ mod sled_key_space;
 mod sled_serde;
 mod sled_serde_impl;
 mod sled_tree;
-mod store;

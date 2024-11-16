@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::mem::size_of_val;
-use std::ops::Bound;
-use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
@@ -51,49 +49,6 @@ pub trait SledOrderedSerde: Serialize + DeserializeOwned {
     /// (de)serialize a value from `sled::IVec`.
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
     where Self: Sized;
-}
-
-/// Serialize/deserialize(ser/de) to/from range to sled IVec range.
-/// The type must impl SledOrderedSerde so that after serialization the order is preserved.
-pub trait SledRangeSerde<SD, V, R>
-where
-    SD: SledOrderedSerde,
-    V: RangeBounds<SD>,
-    R: RangeBounds<IVec>,
-{
-    /// (ser)ialize a range to range of `sled::IVec`.
-    fn ser(&self) -> Result<R, SledBytesError>;
-
-    // TODO(xp): do we need this?
-    // /// (de)serialize a value from `sled::IVec`.
-    // fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
-    //     where Self: Sized;
-}
-
-/// Impl ser/de for range of value that can be ser/de to `sled::IVec`
-impl<SD, V> SledRangeSerde<SD, V, (Bound<IVec>, Bound<IVec>)> for V
-where
-    SD: SledOrderedSerde,
-    V: RangeBounds<SD>,
-{
-    fn ser(&self) -> Result<(Bound<IVec>, Bound<IVec>), SledBytesError> {
-        let s = self.start_bound();
-        let e = self.end_bound();
-
-        let s = bound_ser(s)?;
-        let e = bound_ser(e)?;
-
-        Ok((s, e))
-    }
-}
-
-fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, SledBytesError> {
-    let res = match v {
-        Bound::Included(v) => Bound::Included(v.ser()?),
-        Bound::Excluded(v) => Bound::Excluded(v.ser()?),
-        Bound::Unbounded => Bound::Unbounded,
-    };
-    Ok(res)
 }
 
 /// NodeId, LogIndex and Term need to be serialized with order preserved, for listing items.
