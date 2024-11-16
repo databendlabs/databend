@@ -76,7 +76,7 @@ impl OnDisk {
 
         let last_snapshot = loader.load_last_snapshot().await.map_err(|e| {
             let ae = AnyError::new(&e).add_context(|| "load last snapshot");
-            MetaStorageError::Damaged(ae)
+            MetaStorageError(ae)
         })?;
 
         if last_snapshot.is_some() {

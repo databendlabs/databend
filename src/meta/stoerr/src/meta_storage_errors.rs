@@ -20,47 +20,43 @@ use databend_common_exception::ErrorCode;
 
 /// Storage level error that is raised by meta service.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum MetaStorageError {
-    #[error("Data damaged: {0}")]
-    Damaged(AnyError),
-}
+#[error("{0}")]
+pub struct MetaStorageError(pub AnyError);
 
 impl MetaStorageError {
     pub fn damaged<D: fmt::Display, F: FnOnce() -> D>(
         error: &(impl std::error::Error + 'static),
         context: F,
     ) -> Self {
-        MetaStorageError::Damaged(AnyError::new(error).add_context(context))
+        MetaStorageError(AnyError::new(error).add_context(context))
     }
 
     pub fn name(&self) -> &'static str {
-        match self {
-            MetaStorageError::Damaged(_) => "Damaged",
-        }
+        "MetaStorageError"
     }
 }
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaStorageError::Damaged(AnyError::new(&error))
+        MetaStorageError(AnyError::new(&error))
     }
 }
 
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
-        MetaStorageError::Damaged(AnyError::new(&error))
+        MetaStorageError(AnyError::new(&error))
     }
 }
 
 impl From<sled::Error> for MetaStorageError {
     fn from(error: sled::Error) -> MetaStorageError {
-        MetaStorageError::Damaged(AnyError::new(&error))
+        MetaStorageError(AnyError::new(&error))
     }
 }
 
 impl From<io::Error> for MetaStorageError {
     fn from(error: io::Error) -> Self {
-        MetaStorageError::Damaged(AnyError::new(&error))
+        MetaStorageError(AnyError::new(&error))
     }
 }
 
