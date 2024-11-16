@@ -29,7 +29,6 @@ use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_embedded::MetaEmbedded;
 
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
@@ -48,11 +47,6 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: path.join("_data").to_str().unwrap().to_owned(),
     });
-
-    let meta_dir = path.join("_meta");
-    MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
-        .await
-        .unwrap();
 
     GlobalServices::init(&conf).await?;
     // init oss license manager
