@@ -29,11 +29,8 @@ pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledRangeSerde;
 pub use sled_serde::SledSerde;
 pub use sled_tree::AsKeySpace;
-pub use sled_tree::SledAsRef;
 pub use sled_tree::SledItem;
 pub use sled_tree::SledTree;
-pub use sled_tree::TransactionSledTree;
-pub use sled_tree::TxnKeySpace;
 pub use store::Store;
 
 mod bytes_error;

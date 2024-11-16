@@ -18,12 +18,10 @@ use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use databend_common_meta_types::raft_types::Entry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::SledAsRef;
 use crate::SledBytesError;
 
 /// Serialize/deserialize(ser/de) to/from sled values.
@@ -98,17 +96,6 @@ fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, S
     Ok(res)
 }
 
-/// Extract log index from log entry
-impl SledAsRef<u64, Entry> for Entry {
-    fn as_key(&self) -> &u64 {
-        &self.log_id.index
-    }
-
-    fn as_value(&self) -> &Entry {
-        self
-    }
-}
-
 /// NodeId, LogIndex and Term need to be serialized with order preserved, for listing items.
 impl SledOrderedSerde for u64 {
     fn ser(&self) -> Result<IVec, SledBytesError> {
@@ -138,5 +125,3 @@ impl SledOrderedSerde for String {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
     }
 }
-
-// impl<T> SledSerde for T where T: Serialize + DeserializeOwned {}
