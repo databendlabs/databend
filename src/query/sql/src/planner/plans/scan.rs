@@ -148,7 +148,7 @@ impl Scan {
             inverted_index: self.inverted_index.clone(),
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
-            scan_id: self.scan_id.clone(),
+            scan_id: self.scan_id,
         }
     }
 
