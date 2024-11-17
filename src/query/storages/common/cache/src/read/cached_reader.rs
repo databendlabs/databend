@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
-use log::info;
 
 use super::loader::LoadParams;
 use crate::caches::CacheValue;
@@ -41,7 +40,6 @@ where L: Loader<V> + Sync
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     #[async_backtrace::framed]
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<V>> {
-        info!("CachedReader params: {:?}", params);
         match &self.cache {
             None => Ok(Arc::new(self.loader.load(params).await?)),
             Some(cache) => {
