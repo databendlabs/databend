@@ -808,6 +808,22 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
+        todo!()
+    }
+
+    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        todo!()
+    }
+
+    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool) {
+        todo!()
+    }
+
+    fn get_wait_runtime_filter(&self, table_index: usize) -> bool {
+        todo!()
+    }
+
     fn clear_runtime_filter(&self) {
         todo!()
     }

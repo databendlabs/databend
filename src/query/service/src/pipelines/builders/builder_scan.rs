@@ -41,6 +41,8 @@ impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
+        self.ctx
+            .set_wait_runtime_filter(scan.source.table_index, self.contain_sink_processor);
         table.read_data(
             self.ctx.clone(),
             &scan.source,

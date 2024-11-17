@@ -74,6 +74,7 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
+use crate::runtime_filter_info::RuntimeFilterReady;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
@@ -316,6 +317,14 @@ pub trait TableContext: Send + Sync {
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
+
+    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
+
+    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool);
+
+    fn get_wait_runtime_filter(&self, table_index: usize) -> bool;
 
     fn clear_runtime_filter(&self);
 

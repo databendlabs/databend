@@ -23,6 +23,7 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -848,7 +849,52 @@ impl HashJoinBuildState {
         Ok(())
     }
 
+    pub fn add_runtime_filter_ready(&self) {
+        if self.ctx.get_cluster().is_empty() {
+            return;
+        }
+
+        let mut wait_runtime_filter_table_indexes = HashSet::new();
+        for (build_key, probe_key, table_index) in self
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
+            .filter_map(|(b, p)| p.as_ref().map(|(p, index)| (b, p, index)))
+        {
+            if !build_key.data_type().remove_nullable().is_numeric()
+                && !build_key.data_type().remove_nullable().is_string()
+            {
+                continue;
+            }
+            if let Expr::ColumnRef { .. } = probe_key {
+                wait_runtime_filter_table_indexes.insert(*table_index);
+            }
+        }
+
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let runtime_filter_ready = &mut build_state.runtime_filter_ready;
+        for table_index in wait_runtime_filter_table_indexes.into_iter() {
+            let ready = Arc::new(RuntimeFilterReady::default());
+            runtime_filter_ready.push(ready.clone());
+            self.ctx.set_runtime_filter_ready(table_index, ready);
+        }
+    }
+
+    pub fn set_bloom_filter_ready(&self, ready: bool) -> Result<()> {
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        for runtime_filter_ready in build_state.runtime_filter_ready.iter() {
+            runtime_filter_ready
+                .runtime_filter_watcher
+                .send(Some(ready))
+                .map_err(|_| ErrorCode::TokioError("watcher channel is closed"))?;
+        }
+        Ok(())
+    }
+
     fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
+        let mut bloom_filter_ready = false;
         for (build_key, probe_key, table_index) in self
             .hash_join_state
             .hash_join_desc
@@ -879,9 +925,11 @@ impl HashJoinBuildState {
                 )?;
             }
             if !runtime_filter.is_empty() {
+                bloom_filter_ready = bloom_filter_ready | !runtime_filter.is_blooms_empty();
                 self.ctx.set_runtime_filter((*table_index, runtime_filter));
             }
         }
+        self.set_bloom_filter_ready(bloom_filter_ready)?;
         Ok(())
     }
 
