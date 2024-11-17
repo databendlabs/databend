@@ -925,7 +925,7 @@ impl HashJoinBuildState {
                 )?;
             }
             if !runtime_filter.is_empty() {
-                bloom_filter_ready = bloom_filter_ready | !runtime_filter.is_blooms_empty();
+                bloom_filter_ready |= !runtime_filter.is_blooms_empty();
                 self.ctx.set_runtime_filter((*table_index, runtime_filter));
             }
         }
