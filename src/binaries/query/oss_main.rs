@@ -65,6 +65,7 @@ fn main() {
 async fn main_entrypoint() -> Result<(), MainError> {
     let make_error = || "an fatal error occurred in query";
 
+
     let conf: InnerConfig = InnerConfig::load().await.with_context(make_error)?;
     if run_cmd(&conf).await.with_context(make_error)? {
         return Ok(());

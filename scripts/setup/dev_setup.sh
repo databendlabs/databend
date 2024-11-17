@@ -393,6 +393,34 @@ function install_libtiff {
 	esac
 }
 
+function install_binutils {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing libtiff..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg binutils "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		# skip
+		;;
+	apk)
+		# skip
+		;;
+	yum | dnf)
+		install_pkg binutils "$PACKAGE_MANAGER"
+		;;
+	brew)
+		# skip
+		;;
+	*)
+		echo "Unable to install libtiff with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
 function install_rustup {
 	RUST_TOOLCHAIN=$1
 
@@ -624,6 +652,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_python3 "$PACKAGE_MANAGER"
 	install_sqlite3 "$PACKAGE_MANAGER"
 	install_libtiff "$PACKAGE_MANAGER"
+	install_binutils "$PACKAGE_MANAGER"
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version

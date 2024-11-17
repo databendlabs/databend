@@ -92,6 +92,13 @@ runs:
         readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
         ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
+    - name: Spilt Binary Symbols
+      shell: bash
+      run: |
+        objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact.debug
+        chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact.debug
+        strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
+
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
     #   uses: crazy-max/ghaction-upx@v2
