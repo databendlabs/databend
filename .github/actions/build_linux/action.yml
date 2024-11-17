@@ -95,9 +95,9 @@ runs:
     - name: Spilt Binary Symbols
       shell: bash
       run: |
-        objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact.debug
-        chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact.debug
-        strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
+        objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+        chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+        strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
