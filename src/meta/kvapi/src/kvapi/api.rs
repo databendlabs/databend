@@ -18,8 +18,10 @@ use async_trait::async_trait;
 use databend_common_meta_types::errors;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -56,7 +58,7 @@ pub trait KVApi: Send + Sync {
     type Error: std::error::Error + From<errors::IncompleteStream> + Send + Sync + 'static;
 
     /// Update or insert a key-value record.
-    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error>;
+    async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error>;
 
     /// Get a key-value record by key.
     // TODO: #[deprecated(note = "use get_kv_stream() instead")]

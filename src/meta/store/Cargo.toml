@@ -12,7 +12,7 @@ doctest = false
 test = true
 
 [features]
-io-uring = ["databend-common-meta-embedded/io-uring"]
+io-uring = []
 
 [dependencies]
 async-trait = { workspace = true }

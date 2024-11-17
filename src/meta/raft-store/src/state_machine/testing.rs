@@ -24,9 +24,6 @@ use maplit::btreeset;
 use openraft::entry::RaftEntry;
 use openraft::Membership;
 
-use crate::key_spaces::RaftStoreEntry;
-use crate::state_machine::SnapshotKeyValue;
-
 /// Logs and the expected snapshot for testing snapshot.
 pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
     let logs = vec![
@@ -81,29 +78,6 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
     .collect::<Vec<_>>();
 
     (logs, want)
-}
-
-pub fn pretty_snapshot(snap: &[SnapshotKeyValue]) -> Vec<String> {
-    let mut res = vec![];
-    for kv in snap.iter() {
-        let k = kv[0].clone();
-        let v = kv[1].clone();
-        let line = format!("{:?}:{}", k, String::from_utf8(v.to_vec()).unwrap());
-        res.push(line);
-    }
-    res
-}
-
-pub fn pretty_snapshot_entries<'a>(
-    snap: impl IntoIterator<Item = &'a RaftStoreEntry>,
-) -> Vec<String> {
-    let mut res = vec![];
-
-    for kv in snap.into_iter() {
-        let line = serde_json::to_string(kv).unwrap();
-        res.push(line);
-    }
-    res
 }
 
 // test cases fro Cmd::IncrSeq:
