@@ -332,6 +332,7 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
+                self.set_bloom_filter_ready(false)?;
                 return Ok(());
             }
 
@@ -349,6 +350,8 @@ impl HashJoinBuildState {
             // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
             if self.hash_join_state.spilled_partitions.read().is_empty() {
                 self.add_runtime_filter(&build_chunks, build_num_rows)?;
+            } else {
+                self.set_bloom_filter_ready(false)?;
             }
 
             // Divide the finalize phase into multiple tasks.

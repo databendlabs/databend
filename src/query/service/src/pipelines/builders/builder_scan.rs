@@ -42,7 +42,7 @@ impl PipelineBuilder {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
         self.ctx
-            .set_wait_runtime_filter(scan.source.table_index, self.contain_sink_processor);
+            .set_wait_runtime_filter(scan.scan_id, self.contain_sink_processor);
         table.read_data(
             self.ctx.clone(),
             &scan.source,

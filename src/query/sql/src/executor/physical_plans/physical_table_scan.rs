@@ -71,6 +71,7 @@ use crate::DUMMY_TABLE_INDEX;
 pub struct TableScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    pub scan_id: usize,
     pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
@@ -283,6 +284,7 @@ impl PhysicalPlanBuilder {
 
         let mut plan = PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
+            scan_id: scan.scan_id,
             name_mapping,
             source: Box::new(source),
             table_index: Some(scan.table_index),
@@ -319,6 +321,7 @@ impl PhysicalPlanBuilder {
             .await?;
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
+            scan_id: DUMMY_TABLE_INDEX,
             name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
             source: Box::new(source),
             table_index: Some(DUMMY_TABLE_INDEX),

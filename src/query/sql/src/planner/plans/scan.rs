@@ -107,6 +107,7 @@ pub struct Scan {
     // Lazy row fetch.
     pub is_lazy_table: bool,
     pub sample: Option<SampleConfig>,
+    pub scan_id: usize,
 
     pub statistics: Arc<Statistics>,
 }
@@ -147,6 +148,7 @@ impl Scan {
             inverted_index: self.inverted_index.clone(),
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
+            scan_id: self.scan_id.clone(),
         }
     }
 
