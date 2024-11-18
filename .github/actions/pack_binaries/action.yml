@@ -24,6 +24,7 @@ runs:
         path: distro/bin
         artifacts: metactl,meta,query
     - name: Pack Binaries
+      shell: bash
       run: |
         target=${{ inputs.target }}
         version=${{ inputs.version }}
@@ -56,6 +57,7 @@ runs:
         path: ${pkg_name}.tar.gz
         retention-days: 1
     - name: Pack DBG Binaries
+      shell: bash
       run: |
         target=${{ inputs.target }}
         version=${{ inputs.version }}
