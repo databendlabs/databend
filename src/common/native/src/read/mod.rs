@@ -19,7 +19,7 @@ use batch_read::batch_read_column;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-pub use deserialize::column_iter_to_columns;
+pub use deserialize::column_iters;
 pub use deserialize::ColumnIter;
 
 use crate::error::Result;
@@ -78,7 +78,7 @@ impl NativeColumnsReader {
     }
 
     /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
-    pub fn column_iter_to_columns<'a, I>(
+    pub fn column_iters<'a, I>(
         &self,
         readers: Vec<I>,
         field: TableField,
@@ -87,7 +87,7 @@ impl NativeColumnsReader {
     where
         I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
     {
-        column_iter_to_columns(readers, field, init)
+        column_iters(readers, field, init)
     }
 
     /// Read all pages of column at once.

@@ -19,12 +19,12 @@ use std::iter::once;
 
 use ahash::HashSet;
 use ahash::HashSetExt;
-use databend_common_column::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;

@@ -14,6 +14,7 @@ test = true
 
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
+databend-common-native = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }

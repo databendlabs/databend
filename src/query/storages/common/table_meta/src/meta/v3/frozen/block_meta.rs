@@ -105,7 +105,7 @@ pub struct NativeColumnMeta {
     pub pages: Vec<PageMeta>,
 }
 
-impl From<NativeColumnMeta> for databend_common_arrow::native::ColumnMeta {
+impl From<NativeColumnMeta> for databend_common_native::ColumnMeta {
     fn from(value: NativeColumnMeta) -> Self {
         Self {
             offset: value.offset,
@@ -114,7 +114,7 @@ impl From<NativeColumnMeta> for databend_common_arrow::native::ColumnMeta {
     }
 }
 
-impl From<PageMeta> for databend_common_arrow::native::PageMeta {
+impl From<PageMeta> for databend_common_native::PageMeta {
     fn from(value: PageMeta) -> Self {
         Self {
             length: value.length,

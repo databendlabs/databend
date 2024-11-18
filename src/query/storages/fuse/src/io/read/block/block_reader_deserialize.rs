@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::array::Array;
+use arrow_array::ArrayRef;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -34,8 +34,8 @@ use crate::FuseStorageFormat;
 
 pub enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),
-    Deserialized((ColumnId, Box<dyn Array>, usize)),
-    NoNeedToCache(Box<dyn Array>),
+    Deserialized((ColumnId, ArrayRef, usize)),
+    NoNeedToCache(ArrayRef),
 }
 
 pub struct FieldDeserializationContext<'a> {

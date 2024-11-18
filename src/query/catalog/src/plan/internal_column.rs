@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::F32;
@@ -21,6 +20,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;

@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;

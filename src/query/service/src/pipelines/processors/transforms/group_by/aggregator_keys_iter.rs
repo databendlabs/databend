@@ -17,7 +17,7 @@ use std::slice::Iter;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnIter;

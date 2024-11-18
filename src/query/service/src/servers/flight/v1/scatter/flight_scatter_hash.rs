@@ -15,12 +15,12 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;

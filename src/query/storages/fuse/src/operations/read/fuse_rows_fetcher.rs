@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_column::bitmap::Bitmap;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;

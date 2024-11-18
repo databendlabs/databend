@@ -223,7 +223,7 @@ where
 }
 
 /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
-pub fn column_iter_to_columns<'a, I>(
+pub fn column_iters<'a, I>(
     readers: Vec<I>,
     field: TableField,
     init: Vec<InitNested>,

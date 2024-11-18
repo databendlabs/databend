@@ -23,7 +23,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_native::n_columns;
 use databend_common_native::read::batch_read::batch_read_column;
-use databend_common_native::read::deserialize::column_iter_to_columns;
+use databend_common_native::read::deserialize::column_iters;
 use databend_common_native::read::reader::NativeReader;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
@@ -175,7 +175,7 @@ fn test_write_read_with_options(chunk: Vec<Column>, options: WriteOptions) {
             native_readers.push(native_reader);
         }
 
-        let mut col_iter = column_iter_to_columns(native_readers, field.clone(), vec![]).unwrap();
+        let mut col_iter = column_iters(native_readers, field.clone(), vec![]).unwrap();
 
         let mut cols = vec![];
         for col in col_iter.by_ref() {

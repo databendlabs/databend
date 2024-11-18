@@ -18,8 +18,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use databend_common_arrow::native::write::NativeWriter;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -41,6 +39,7 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_mil
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
+use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::ReadSettings;
@@ -76,7 +75,6 @@ pub fn serialize_block(
             Ok(meta)
         }
         FuseStorageFormat::Native => {
-            let arrow_schema = schema.as_ref().into();
             let leaf_column_ids = schema.to_leaf_column_ids();
 
             let mut default_compress_ratio = Some(2.10f64);
@@ -86,8 +84,8 @@ pub fn serialize_block(
 
             let mut writer = NativeWriter::new(
                 buf,
-                arrow_schema,
-                databend_common_arrow::native::write::WriteOptions {
+                schema.as_ref().clone(),
+                databend_common_native::write::WriteOptions {
                     default_compression: write_settings.table_compression.into(),
                     max_page_size: Some(write_settings.max_page_size),
                     default_compress_ratio,
@@ -95,7 +93,11 @@ pub fn serialize_block(
                 },
             )?;
 
-            let batch = ArrowChunk::try_from(block)?;
+            let batch = block
+                .columns()
+                .iter()
+                .map(|x| x.value.as_column().unwrap().clone())
+                .collect();
 
             writer.start()?;
             writer.write(&batch)?;

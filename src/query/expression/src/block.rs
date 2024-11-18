@@ -452,6 +452,41 @@ impl DataBlock {
         self.meta
     }
 
+    // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
+    // Else, DataBlock.column[i] = self.column.
+    // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],
+    // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
+    pub fn create_with_opt_default_value(
+        &self,
+        schema: &DataSchema,
+        default_vals: &[Option<Scalar>],
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        let mut chunk_idx: usize = 0;
+        let schema_fields = schema.fields();
+        let entries = self.columns();
+
+        let mut columns = Vec::with_capacity(default_vals.len());
+        for (i, default_val) in default_vals.iter().enumerate() {
+            let field = &schema_fields[i];
+            let data_type = field.data_type();
+
+            let column = match default_val {
+                Some(default_val) => {
+                    BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
+                }
+                None => {
+                    chunk_idx += 1;
+                    entries[chunk_idx].clone()
+                }
+            };
+
+            columns.push(column);
+        }
+
+        Ok(DataBlock::new(columns, num_rows))
+    }
+
     pub fn create_with_default_value(
         schema: &DataSchema,
         default_vals: &[Scalar],

@@ -14,9 +14,9 @@
 
 use std::ops::Not;
 
-use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 

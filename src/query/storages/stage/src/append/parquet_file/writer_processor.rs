@@ -22,7 +22,6 @@ use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
@@ -107,7 +106,7 @@ impl ParquetFileWriter {
         let unload_output =
             UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
 
-        let arrow_schema = Arc::new(table_schema_to_arrow_schema(&table_info.schema));
+        let arrow_schema = Arc::new(Schema::from(&table_info.schema));
         let writer = create_writer(arrow_schema.clone(), targe_file_size)?;
 
         Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {

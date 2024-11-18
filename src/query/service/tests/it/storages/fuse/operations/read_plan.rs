@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::sync::Arc;
 
+use arrow_schema::DataType as ArrowType;
+use arrow_schema::Field;
 use chrono::Utc;
-use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
-use databend_common_arrow::arrow::datatypes::Field as ArrowField;
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
@@ -61,13 +61,16 @@ fn test_to_partitions() -> Result<()> {
         })
     };
 
-    let col_nodes_gen = |field_index| ColumnNode {
-        field: ArrowField::new("".to_string(), ArrowType::Int64, false),
-        is_nested: false,
-        init: vec![],
-        leaf_indices: vec![field_index],
-        leaf_column_ids: vec![field_index as ColumnId],
-        children: None,
+    let col_nodes_gen = |field_index| {
+        let mut n = ColumnNode::new(
+            Field::new("".to_string(), ArrowType::Int64, false),
+            false,
+            vec![],
+            vec![field_index],
+            Bone,
+        );
+        n.leaf_column_ids = vec![field_index as ColumnId];
+        n
     };
 
     // generates fake data.

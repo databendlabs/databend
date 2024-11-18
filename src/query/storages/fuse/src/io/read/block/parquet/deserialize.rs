@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;

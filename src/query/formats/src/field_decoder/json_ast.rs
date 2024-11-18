@@ -16,7 +16,7 @@ use std::any::Any;
 use std::io::Cursor;
 
 use chrono_tz::Tz;
-use databend_common_column::bitmap::MutableBitmap;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_from_json;

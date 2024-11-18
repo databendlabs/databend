@@ -496,6 +496,10 @@ impl Bitmap {
             bytes: Arc::new(crate::buffer::to_bytes(value.buffer().clone())),
         }
     }
+
+    pub fn into_array_data(&self) -> ArrayData {
+        ArrayData::from(self)
+    }
 }
 
 impl<'a> IntoIterator for &'a Bitmap {

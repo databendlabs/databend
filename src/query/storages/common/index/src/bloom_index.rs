@@ -17,8 +17,6 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_column::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,6 +25,8 @@ use databend_common_expression::eval_function;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullableType;
