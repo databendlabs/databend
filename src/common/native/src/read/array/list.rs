@@ -23,13 +23,13 @@ use crate::read::deserialize::DynIter;
 /// An iterator adapter over [`DynIter`] assumed to be encoded as List columns
 pub struct ListIterator<'a> {
     iter: DynIter<'a, Result<(NestedState, Column)>>,
-    field: TableDataType,
+    data_type: TableDataType,
 }
 
 impl<'a> ListIterator<'a> {
-    /// Creates a new [`ListIterator`] with `iter` and `field`.
-    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: TableDataType) -> Self {
-        Self { iter, field }
+    /// Creates a new [`ListIterator`] with `iter` and `data_type`.
+    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, data_type: TableDataType) -> Self {
+        Self { iter, data_type }
     }
 }
 
@@ -43,7 +43,7 @@ impl<'a> ListIterator<'a> {
             Some(Err(err)) => return Some(Err(err)),
             None => return None,
         };
-        let array = create_list(self.field.data_type().clone(), &mut nested, values);
+        let array = create_list(self.data_type.clone(), &mut nested, values);
         Some(Ok((nested, array)))
     }
 }

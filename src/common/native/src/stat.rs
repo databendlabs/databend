@@ -18,7 +18,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use serde_json::Number;
 
 use crate::compression::Compression;
 use crate::error::Result;
@@ -72,7 +71,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 
 
         let mut buffer = buffer.as_slice();
         let mut opt_validity_size = None;
-        if field.is_nullable() {
+        if field.data_type().is_nullable() {
             let validity_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
             debug_assert!(validity_size == 0 || validity_size as u64 == num_values);
             let consume_validity_size = 4 + ((validity_size + 7) / 8) as usize;
@@ -131,11 +130,21 @@ fn stat_freq_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBo
                 exceptions_bitmap_size,
             }))
         }
-        TableDataType::Decimal(decimal_size) if decimal_size.scale() > MAX_DECIMAL128_PRECISION => {
-            32
+        TableDataType::Decimal(decimal_size) => {
+            let top_value_size = if decimal_size.scale() > MAX_DECIMAL128_PRECISION {
+                32
+            } else {
+                16
+            };
+            buffer = &buffer[top_value_size..];
+            let exceptions_bitmap_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
+            buffer = &buffer[4 + exceptions_bitmap_size as usize..];
+            let exceptions = stat_body(&mut buffer, None, data_type)?;
+            Ok(PageBody::Freq(FreqPageBody {
+                exceptions: Some(Box::new(exceptions)),
+                exceptions_bitmap_size,
+            }))
         }
-        TableDataType::Decimal(decimal_size) => 16,
-
         TableDataType::Binary | TableDataType::String => {
             let len = u64::from_le_bytes(buffer[0..8].try_into().unwrap());
             buffer = &buffer[8 + len as usize..];
@@ -158,7 +167,7 @@ fn stat_dict_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBo
     }))
 }
 
-fn size_of_primitive(p: NumberDataType) -> usize {
+fn size_of_primitive(p: &NumberDataType) -> usize {
     match p {
         NumberDataType::Int8 => 1,
         NumberDataType::Int16 => 2,

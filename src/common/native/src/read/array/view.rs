@@ -16,7 +16,7 @@ use std::io::Cursor;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
-use databend_common_column::binview::BinaryViewColumn;
+use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::binview::View;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
@@ -143,10 +143,10 @@ fn read_view_col<R: NativeReadBuf>(
     }
 
     let col = unsafe {
-        Column::String(BinaryViewColumn::new_unchecked_unknown_md(
-            data_type.clone(),
+        Column::String(Utf8ViewColumn::new_unchecked_unknown_md(
             views,
             buffers.into(),
+            None,
         ))
     };
 

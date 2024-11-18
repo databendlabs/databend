@@ -21,7 +21,7 @@ use super::NativeWriter;
 use crate::compression::CommonCompression;
 use crate::compression::Compression;
 use crate::error::Result;
-use crate::nested::slice_nest_array;
+use crate::nested::slice_nest_column;
 use crate::nested::to_leaves;
 use crate::nested::to_nested;
 use crate::ColumnMeta;
@@ -49,14 +49,14 @@ impl<W: Write> NativeWriter<W> {
             .unwrap_or(chunk.len())
             .min(chunk.len());
 
-        for (array, field) in chunk.iter().zip(self.schema.fields.iter()) {
-            let length = array.len();
+        for column in chunk.iter() {
+            let length = column.len();
 
-            let nested = to_nested(array)?;
-            let leaf_columns = to_leaves(array);
+            let nested = to_nested(column)?;
+            let leaf_columns = to_leaves(column);
 
-            for (leaf_array, nested) in leaf_columns.iter().zip(nested.into_iter()) {
-                let leaf_array = leaf_array.to_boxed();
+            for (leaf_column, nested) in leaf_columns.iter().zip(nested.into_iter()) {
+                let leaf_column = leaf_column.clone();
                 let mut page_metas = Vec::with_capacity((length + 1) / page_size + 1);
                 let start = self.writer.offset;
 
@@ -67,15 +67,15 @@ impl<W: Write> NativeWriter<W> {
                         page_size
                     };
 
-                    let mut sub_array = leaf_array.clone();
+                    let mut sub_column = leaf_column.clone();
                     let mut sub_nested = nested.clone();
-                    slice_nest_array(sub_array.as_mut(), &mut sub_nested, offset, length);
+                    slice_nest_column(&mut sub_column, &mut sub_nested, offset, length);
 
                     {
                         let page_start = self.writer.offset;
                         write(
                             &mut self.writer,
-                            sub_array,
+                            &sub_column,
                             &sub_nested,
                             self.options.clone(),
                             &mut self.scratch,
@@ -85,7 +85,7 @@ impl<W: Write> NativeWriter<W> {
                         let page_end = self.writer.offset;
                         page_metas.push(PageMeta {
                             length: (page_end - page_start),
-                            num_values: sub_array.len() as u64,
+                            num_values: sub_column.len() as u64,
                         });
                     }
                 }

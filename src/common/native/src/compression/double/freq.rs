@@ -41,7 +41,7 @@ impl<T: DoubleType> DoubleCompression<T> for Freq {
         let size = output.len();
 
         let mut top_value_is_null = false;
-        let mut top_value = T::default().as_order();
+        let mut top_value = T::default();
         let mut max_count = 0;
 
         if stats.null_count as f64 / stats.tuple_count as f64 >= 0.9 {
@@ -59,14 +59,14 @@ impl<T: DoubleType> DoubleCompression<T> for Freq {
         let mut exceptions = Vec::with_capacity(stats.tuple_count - max_count);
 
         for (i, val) in col.iter().enumerate() {
-            if top_value_is_null || val.as_order() != top_value {
+            if top_value_is_null || *val != top_value {
                 exceptions_bitmap.insert(i as u32);
                 exceptions.push(*val);
             }
         }
 
         // Write TopValue
-        output.extend_from_slice(T::from_order(top_value).to_le_bytes().as_ref());
+        output.extend_from_slice(top_value.to_le_bytes().as_ref());
 
         // Write exceptions bitmap
         output.extend_from_slice(&(exceptions_bitmap.serialized_size() as u32).to_le_bytes());

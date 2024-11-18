@@ -14,15 +14,14 @@
 
 use std::io::Write;
 
-use databend_common_column::with_number_type;
+use databend_common_column::buffer::Buffer;
+use databend_common_column::types::i256;
 use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
-use databend_common_expression::TableDataType;
 
 use super::boolean::write_bitmap;
 use super::WriteOptions;
@@ -32,7 +31,6 @@ use crate::util::encode_bool;
 use crate::write::binary::write_binary;
 use crate::write::primitive::write_primitive;
 use crate::write::view::write_view;
-
 /// Writes an [`Array`] to the file
 pub fn write<W: Write>(
     w: &mut W,
@@ -55,12 +53,13 @@ pub fn write<W: Write>(
                 }
             })
         }
-        Column::Decimal(buffer) => with_decimal_mapped_type!(|DT| {
-            DecimalColumn::DT(column, _ ) => {
-                    write_primitive::<DT, W>(w, &column, validity, write_options, scratch)
+        Column::Decimal(column) => with_decimal_mapped_type!(|DT| match column {
+            DecimalColumn::DT(column, _) => {
+                let column: Buffer<DT> = unsafe { std::mem::transmute(column) };
+                write_primitive::<DT, W>(w, &column, validity, write_options, scratch)
             }
         }),
-        Column::Boolean(_) => todo!(),
+        Column::Boolean(column) => write_bitmap(w, &column, validity, write_options, scratch),
         Column::String(column) => write_view::<W>(w, &column.to_binview(), write_options, scratch),
         Column::Timestamp(column) => {
             write_primitive::<i64, W>(w, &column, validity, write_options, scratch)
@@ -72,7 +71,6 @@ pub fn write<W: Write>(
         Column::Binary(b)
         | Column::Bitmap(b)
         | Column::Variant(b)
-        | Column::Geometry(b)
         | Column::Geography(GeographyColumn(b))
         | Column::Geometry(b) => write_binary::<W>(w, &b, validity, write_options, scratch),
 
@@ -80,7 +78,6 @@ pub fn write<W: Write>(
             unreachable!()
         }
     }
-    Ok(())
 }
 
 fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {

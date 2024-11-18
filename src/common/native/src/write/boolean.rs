@@ -22,12 +22,13 @@ use crate::error::Result;
 
 pub(crate) fn write_bitmap<W: Write>(
     w: &mut W,
-    array: &Bitmap,
+    column: &Bitmap,
+    validity: Option<Bitmap>,
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
     scratch.clear();
-    compress_boolean(array, scratch, write_options)?;
+    compress_boolean(column, validity, scratch, write_options)?;
     w.write_all(scratch)?;
     Ok(())
 }

@@ -14,7 +14,6 @@
 
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableTableDataType;
 
 use crate::error::Result;
 use crate::read::PageIterator;

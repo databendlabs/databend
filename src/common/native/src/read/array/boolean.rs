@@ -65,9 +65,9 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 
         let values: Bitmap = bitmap_builder.into();
         let col = if self.data_type.is_nullable() {
-            Column::Bitmap(values).wrap_nullable(validity)
+            Column::Boolean(values).wrap_nullable(validity)
         } else {
-            Column::Bitmap(values)
+            Column::Boolean(values)
         };
         Ok((nested, col))
     }
@@ -113,9 +113,9 @@ pub fn read_nested_boolean<R: NativeReadBuf>(
 
         let values: Bitmap = bitmap_builder.into();
         let col = if data_type.is_nullable() {
-            Column::Bitmap(values).wrap_nullable(validity)
+            Column::Boolean(values).wrap_nullable(validity)
         } else {
-            Column::Bitmap(values)
+            Column::Boolean(values)
         };
         results.push((nested, col));
     }

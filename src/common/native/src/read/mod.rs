@@ -15,8 +15,9 @@
 mod array;
 pub mod batch_read;
 pub mod deserialize;
-use batch_read::batch_read_array;
+use batch_read::batch_read_column;
 use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 pub use deserialize::column_iter_to_columns;
 pub use deserialize::ColumnIter;
@@ -94,12 +95,12 @@ impl NativeColumnsReader {
     }
 
     /// Read all pages of column at once.
-    pub fn batch_read_array<R: NativeReadBuf>(
+    pub fn batch_read_column<R: NativeReadBuf>(
         &self,
         readers: Vec<R>,
-        field: TableField,
+        data_type: TableDataType,
         page_metas: Vec<Vec<PageMeta>>,
     ) -> Result<Column> {
-        batch_read_array(readers, field, page_metas)
+        batch_read_column(readers, data_type, page_metas)
     }
 }

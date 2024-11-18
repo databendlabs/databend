@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::Column;
-use databend_common_expression::TableField;
+use databend_common_expression::TableDataType;
 
 use crate::error::Result;
 use crate::nested::create_map;
@@ -23,13 +23,13 @@ use crate::read::deserialize::DynIter;
 /// An iterator adapter over [`DynIter`] assumed to be encoded as Map columns
 pub struct MapIterator<'a> {
     iter: DynIter<'a, Result<(NestedState, Column)>>,
-    field: TableField,
+    data_type: TableDataType,
 }
 
 impl<'a> MapIterator<'a> {
     /// Creates a new [`MapIterator`] with `iter` and `field`.
-    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: TableField) -> Self {
-        Self { iter, field }
+    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, data_type: TableDataType) -> Self {
+        Self { iter, data_type }
     }
 }
 
@@ -43,7 +43,7 @@ impl<'a> MapIterator<'a> {
             Some(Err(err)) => return Some(Err(err)),
             None => return None,
         };
-        let array = create_map(self.field.data_type().clone(), &mut nested, values);
+        let array = create_map(self.data_type.clone(), &mut nested, values);
         Some(Ok((nested, array)))
     }
 }

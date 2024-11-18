@@ -16,6 +16,8 @@ use std::io::Write;
 use std::mem::size_of;
 
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
 
 use crate::error::Error;
 use crate::error::Result;
@@ -179,8 +181,28 @@ gen_as_bytes!(u8);
 gen_as_bytes!(u16);
 gen_as_bytes!(u32);
 gen_as_bytes!(u64);
-gen_as_bytes!(f32);
-gen_as_bytes!(f64);
+
+impl AsBytes for F32 {
+    fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                &self.0 as *const f32 as *const u8,
+                std::mem::size_of::<u32>(),
+            )
+        }
+    }
+}
+
+impl AsBytes for F64 {
+    fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                &self.0 as *const f64 as *const u8,
+                std::mem::size_of::<u64>(),
+            )
+        }
+    }
+}
 
 /// Reads `size` of bytes from `src`, and reinterprets them as type `ty`, in
 /// little-endian order.

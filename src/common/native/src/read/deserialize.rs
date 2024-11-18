@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::types::i256;
-use databend_common_expression::types::NumberType;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -96,69 +94,69 @@ pub type NestedIters<'a> = DynIter<'a, Result<(NestedState, Column)>>;
 
 fn deserialize_nested<'a, I>(
     mut readers: Vec<I>,
-    field: TableField,
+    data_type: TableDataType,
     mut init: Vec<InitNested>,
 ) -> Result<NestedIters<'a>>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
-    let is_nullable = matches!(field.data_type(), &TableDataType::Nullable(_));
-    Ok(match field.data_type().remove_nullable() {
-        Null => unimplemented!(),
-        Boolean => {
-            init.push(InitNested::Primitive(field.is_nullable()));
+    let is_nullable = matches!(data_type, TableDataType::Nullable(_));
+    Ok(match data_type.remove_nullable() {
+        TableDataType::Null => unimplemented!(),
+        TableDataType::Boolean => {
+            init.push(InitNested::Primitive(data_type.is_nullable()));
             DynIter::new(BooleanNestedIter::new(
                 readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
             ))
         }
         TableDataType::Number(number) => with_match_integer_double_type!(number,
         |$I| {
-            init.push(InitNested::Primitive(field.is_nullable()));
-            DynIter::new(IntegerNestedIter::<_, NumberType<$I>>::new(
+            init.push(InitNested::Primitive(data_type.is_nullable()));
+            DynIter::new(IntegerNestedIter::<_, $I>::new(
                readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
             ))
         },
         |$T| {
-             init.push(InitNested::Primitive(field.is_nullable()));
-             DynIter::new(DoubleNestedIter::<_, NumberType<$T>>::new(
+             init.push(InitNested::Primitive(data_type.is_nullable()));
+             DynIter::new(DoubleNestedIter::<_, $T>::new(
                 readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
             ))
         }
         ),
         TableDataType::Binary => {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(data_type.is_nullable()));
             DynIter::new(BinaryNestedIter::<_>::new(
                 readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
             ))
         }
         TableDataType::String => {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(data_type.is_nullable()));
             DynIter::new(ViewColNestedIter::<_>::new(
                 readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
             ))
         }
-        TableDataType::Array(field) => {
-            init.push(InitNested::List(field.is_nullable()));
-            let iter = deserialize_nested(readers, field.as_ref().clone(), init)?;
-            DynIter::new(ListIterator::new(iter, field.clone()))
+        TableDataType::Array(inner) => {
+            init.push(InitNested::List(inner.is_nullable()));
+            let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
+            DynIter::new(ListIterator::new(iter, inner.as_ref().clone()))
         }
-        TableDataType::Map(field) => {
-            init.push(InitNested::List(field.is_nullable()));
-            let iter = deserialize_nested(readers, field.as_ref().clone(), init)?;
-            DynIter::new(MapIterator::new(iter, field.clone()))
+        TableDataType::Map(inner) => {
+            init.push(InitNested::List(inner.is_nullable()));
+            let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
+            DynIter::new(MapIterator::new(iter, inner.as_ref().clone()))
         }
         TableDataType::Tuple {
-            fields_name,
+            fields_name: _,
             fields_type,
         } => {
             let columns = fields_type
@@ -166,8 +164,8 @@ where
                 .rev()
                 .map(|f| {
                     let mut init = init.clone();
-                    init.push(InitNested::Struct(field.is_nullable()));
-                    let n = n_columns(&f.data_type);
+                    init.push(InitNested::Struct(data_type.is_nullable()));
+                    let n = n_columns(f);
                     let readers = readers.drain(readers.len() - n..).collect();
                     deserialize_nested(readers, f.clone(), init)
                 })
@@ -192,7 +190,7 @@ pub fn column_iter_to_columns<'a, I>(
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
-    let iter = deserialize_nested(readers, field, init)?;
+    let iter = deserialize_nested(readers, field.data_type().clone(), init)?;
     let nested_iter = NestedIter::new(iter);
     Ok(DynIter::new(nested_iter))
 }

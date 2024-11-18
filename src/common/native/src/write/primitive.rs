@@ -19,6 +19,8 @@ use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
 use databend_common_column::types::NativeType;
 use databend_common_column::types::PrimitiveType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
 
 use super::WriteOptions;
 use crate::compression::double::compress_double;
@@ -75,11 +77,11 @@ pub(crate) fn write_primitive<T: NativeType, W: Write>(
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Float32 => {
-            let array: &Buffer<f32> = unsafe { std::mem::transmute(col) };
+            let array: &Buffer<F32> = unsafe { std::mem::transmute(col) };
             compress_double(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Float64 => {
-            let array: &Buffer<f64> = unsafe { std::mem::transmute(col) };
+            let array: &Buffer<F64> = unsafe { std::mem::transmute(col) };
             compress_double(array, validity, write_options, scratch)?;
         }
 

@@ -19,6 +19,7 @@ use std::panic::RefUnwindSafe;
 
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use databend_common_base::base::OrderedFloat;
 
 use super::PrimitiveType;
 
@@ -91,6 +92,9 @@ macro_rules! native_type {
     };
 }
 
+type F32 = OrderedFloat<f32>;
+type F64 = OrderedFloat<f64>;
+
 native_type!(u8, PrimitiveType::UInt8);
 native_type!(u16, PrimitiveType::UInt16);
 native_type!(u32, PrimitiveType::UInt32);
@@ -102,6 +106,49 @@ native_type!(i64, PrimitiveType::Int64);
 native_type!(f32, PrimitiveType::Float32);
 native_type!(f64, PrimitiveType::Float64);
 native_type!(i128, PrimitiveType::Int128);
+
+impl NativeType for F32 {
+    const PRIMITIVE: PrimitiveType = (PrimitiveType::Float32);
+    type Bytes = [u8; std::mem::size_of::<Self>()];
+    #[inline]
+    fn to_le_bytes(&self) -> Self::Bytes {
+        self.0.to_le_bytes()
+    }
+    #[inline]
+    fn to_be_bytes(&self) -> Self::Bytes {
+        self.0.to_be_bytes()
+    }
+    #[inline]
+    fn from_le_bytes(bytes: Self::Bytes) -> Self {
+        Self(f32::from_le_bytes(bytes))
+    }
+    #[inline]
+    fn from_be_bytes(bytes: Self::Bytes) -> Self {
+        Self(f32::from_be_bytes(bytes))
+    }
+}
+
+impl NativeType for F64 {
+    const PRIMITIVE: PrimitiveType = (PrimitiveType::Float64);
+    type Bytes = [u8; std::mem::size_of::<Self>()];
+
+    #[inline]
+    fn to_le_bytes(&self) -> Self::Bytes {
+        self.0.to_le_bytes()
+    }
+    #[inline]
+    fn to_be_bytes(&self) -> Self::Bytes {
+        self.0.to_be_bytes()
+    }
+    #[inline]
+    fn from_le_bytes(bytes: Self::Bytes) -> Self {
+        Self(f64::from_le_bytes(bytes))
+    }
+    #[inline]
+    fn from_be_bytes(bytes: Self::Bytes) -> Self {
+        Self(f64::from_be_bytes(bytes))
+    }
+}
 
 /// The in-memory representation of the DayMillisecond variant of arrow's "Interval" logical type.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash, Zeroable, Pod)]

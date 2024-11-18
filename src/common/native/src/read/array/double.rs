@@ -25,7 +25,6 @@ use databend_common_expression::TableDataType;
 
 use crate::compression::double::decompress_double;
 use crate::compression::double::DoubleType;
-use crate::compression::double::Number;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;

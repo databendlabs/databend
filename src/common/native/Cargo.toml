@@ -29,7 +29,6 @@ lz4 = { workspace = true }
 num = { workspace = true, features = ["std"] }
 num-traits = { workspace = true }
 opendal = { workspace = true }
-ordered-float = { workspace = true }
 rand = { workspace = true }
 ringbuffer = { workspace = true }
 roaring = { workspace = true }

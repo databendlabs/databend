@@ -17,7 +17,6 @@ use std::io::Seek;
 use std::io::SeekFrom;
 
 use databend_common_expression::types::DataType;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use opendal::Reader;
 

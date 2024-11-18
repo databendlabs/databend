@@ -38,7 +38,6 @@ pub use self::one_value::OneValue;
 pub use self::rle::Rle;
 pub use self::traits::IntegerType;
 use super::basic::CommonCompression;
-use super::is_valid;
 use super::Compression;
 use crate::error::Error;
 use crate::error::Result;
@@ -213,7 +212,7 @@ fn gen_stats<T: IntegerType>(col: &Buffer<T>, validity: Option<Bitmap>) -> Integ
     let mut last_value = T::default();
     let mut run_count = 0;
 
-    for (i, current_value) in col.option_iter(stats.validity.as_ref()).enumerate() {
+    for current_value in col.option_iter(stats.validity.as_ref()) {
         if let Some(current_value) = current_value {
             if current_value < last_value {
                 stats.is_sorted = false;

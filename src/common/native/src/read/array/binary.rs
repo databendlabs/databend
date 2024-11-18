@@ -13,17 +13,14 @@
 // limitations under the License.
 
 use std::io::Cursor;
-use std::marker::PhantomData;
 
 use databend_common_column::binary::BinaryColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableTableDataType;
 
 use crate::compression::binary::decompress_binary;
-use crate::error::Error;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
@@ -63,7 +60,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let length = num_values as usize;
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
-        let mut offsets: Vec<i64> = Vec::with_capacity(length + 1);
+        let mut offsets: Vec<u64> = Vec::with_capacity(length + 1);
         let mut values = Vec::with_capacity(0);
 
         decompress_binary(

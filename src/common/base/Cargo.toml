@@ -25,6 +25,7 @@ databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+bytemuck = {workspace = true}
 borsh = { workspace = true }
 bytes = { workspace = true }
 bytesize = { workspace = true }

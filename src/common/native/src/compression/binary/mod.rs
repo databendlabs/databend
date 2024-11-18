@@ -18,7 +18,6 @@ mod one_value;
 
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::marker::PhantomData;
 
 use databend_common_column::binary::BinaryColumn;
 use databend_common_column::bitmap::Bitmap;

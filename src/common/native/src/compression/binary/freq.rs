@@ -18,8 +18,6 @@ use std::ops::Deref;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use databend_common_column::binary::BinaryColumn;
-use databend_common_column::bitmap::utils::ZipValidity;
-use databend_common_column::bitmap::utils::ZipValidityIter;
 use roaring::RoaringBitmap;
 
 use super::BinaryCompression;

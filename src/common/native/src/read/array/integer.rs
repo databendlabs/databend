@@ -135,7 +135,7 @@ pub fn read_nested_integer<T: Number + IntegerType, R: NativeReadBuf>(
         if data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }
-        Ok((nested, col))
+        results.push((nested, col));
     }
     Ok(results)
 }

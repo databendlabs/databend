@@ -90,6 +90,8 @@ pub enum PrimitiveType {
 }
 
 mod private {
+    use databend_common_base::base::OrderedFloat;
+
     use crate::binview::View;
 
     pub trait Sealed {}
@@ -109,6 +111,8 @@ mod private {
     impl Sealed for super::f16 {}
     impl Sealed for f32 {}
     impl Sealed for f64 {}
+    impl Sealed for OrderedFloat<f32> {}
+    impl Sealed for OrderedFloat<f64> {}
     impl Sealed for super::days_ms {}
     impl Sealed for super::months_days_ns {}
     impl Sealed for View {}

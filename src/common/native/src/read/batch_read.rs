@@ -14,7 +14,6 @@
 
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 
 use super::array::*;
 use super::NativeReadBuf;
@@ -29,92 +28,93 @@ use crate::PageMeta;
 
 pub fn read_nested<R: NativeReadBuf>(
     mut readers: Vec<R>,
-    field: TableField,
+    data_type: TableDataType,
     mut init: Vec<InitNested>,
     mut page_metas: Vec<Vec<PageMeta>>,
 ) -> Result<Vec<(NestedState, Column)>> {
-    let is_nullable = matches!(field.data_type(), &TableDataType::Nullable(_));
+    let is_nullable = data_type.is_nullable();
     use TableDataType::*;
-    let column = match field.data_type().remove_nullable() {
-        Null => read_null(field.data_type(), page_metas.pop().unwrap())?,
+    let result = match data_type.remove_nullable() {
+        Null => unimplemented!("null"),
         Boolean => {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             read_nested_boolean(
                 &mut readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
                 page_metas.pop().unwrap(),
             )?
         }
-        Primitive(primitive) => with_match_integer_double_type!(primitive,
+        Number(number) => with_match_integer_double_type!(number,
         |$T| {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             read_nested_integer::<$T, _>(
                 &mut readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
                 page_metas.pop().unwrap(),
             )?
         },
         |$T| {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             read_nested_primitive::<$T, _>(
                 &mut readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
                 page_metas.pop().unwrap(),
             )?
         }
         ),
+        Decimal(_) => todo!(),
         Binary => {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             read_nested_binary::<_>(
                 &mut readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
                 page_metas.pop().unwrap(),
             )?
         }
 
         String => {
-            init.push(InitNested::Primitive(field.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             read_nested_view_col::<_>(
                 &mut readers.pop().unwrap(),
-                field.data_type().clone(),
+                data_type.clone(),
                 init,
                 page_metas.pop().unwrap(),
             )?
         }
         Array(inner) => {
-            init.push(InitNested::List(field.is_nullable()));
+            init.push(InitNested::List(is_nullable));
             let results = read_nested(readers, inner.as_ref().clone(), init, page_metas)?;
             let mut columns = Vec::with_capacity(results.len());
             for (mut nested, values) in results {
-                let array = create_list(field.data_type().clone(), &mut nested, values);
+                let array = create_list(data_type.clone(), &mut nested, values);
                 columns.push((nested, array));
             }
             columns
         }
         Map(inner) => {
-            init.push(InitNested::List(field.is_nullable()));
+            init.push(InitNested::List(is_nullable));
             let results = read_nested(readers, inner.as_ref().clone(), init, page_metas)?;
             let mut columns = Vec::with_capacity(results.len());
             for (mut nested, values) in results {
-                let array = create_map(field.data_type().clone(), &mut nested, values);
+                let array = create_map(data_type.clone(), &mut nested, values);
                 columns.push((nested, array));
             }
             columns
         }
         Tuple {
-            fields_name,
+            fields_name: _,
             fields_type,
         } => {
             let mut results = fields_type
                 .iter()
                 .map(|f| {
                     let mut init = init.clone();
-                    init.push(InitNested::Struct(field.is_nullable()));
-                    let n = n_columns(&f.data_type);
+                    init.push(InitNested::Struct(is_nullable));
+                    let n = n_columns(&data_type);
                     let readers = readers.drain(..n).collect();
                     let page_metas = page_metas.drain(..n).collect();
                     read_nested(readers, f.clone(), init, page_metas)
@@ -135,18 +135,19 @@ pub fn read_nested<R: NativeReadBuf>(
             columns.reverse();
             columns
         }
+        _ => todo!("xxx"),
     };
-    Ok(column)
+    Ok(result)
 }
 
 /// Read all pages of column at once.
-pub fn batch_read_array<R: NativeReadBuf>(
+pub fn batch_read_column<R: NativeReadBuf>(
     readers: Vec<R>,
-    field: TableField,
+    data_type: TableDataType,
     page_metas: Vec<Vec<PageMeta>>,
 ) -> Result<Column> {
-    let results = read_nested(readers, field, vec![], page_metas)?;
-    let columns: Vec<Column> = results.iter().map(|(_, v)| v.as_ref()).collect();
+    let results = read_nested(readers, data_type, vec![], page_metas)?;
+    let columns: Vec<Column> = results.iter().map(|(_, v)| v.clone()).collect();
     let column = Column::concat_columns(columns.into_iter()).unwrap();
     Ok(column)
 }

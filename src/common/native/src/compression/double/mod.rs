@@ -180,11 +180,11 @@ pub struct DoubleStats<T: DoubleType> {
     pub validity: Option<Bitmap>,
 
     pub is_sorted: bool,
-    pub min: T::OrderType,
-    pub max: T::OrderType,
+    pub min: T,
+    pub max: T,
 
     pub average_run_length: f64,
-    pub distinct_values: HashMap<T::OrderType, usize>,
+    pub distinct_values: HashMap<T, usize>,
     pub unique_count: usize,
     pub set_count: usize,
 }
@@ -198,8 +198,8 @@ fn gen_stats<T: DoubleType>(col: &Buffer<T>, validity: Option<Bitmap>) -> Double
         null_count,
         validity,
         is_sorted: true,
-        min: T::default().as_order(),
-        max: T::default().as_order(),
+        min: T::default(),
+        max: T::default(),
         average_run_length: 0.0,
         distinct_values: HashMap::new(),
         unique_count: 0,
@@ -207,11 +207,10 @@ fn gen_stats<T: DoubleType>(col: &Buffer<T>, validity: Option<Bitmap>) -> Double
     };
 
     let mut is_init_value_initialized = false;
-    let mut last_value = T::default().as_order();
+    let mut last_value = T::default();
     let mut run_count = 0;
 
     for (i, current_value) in col.iter().cloned().enumerate() {
-        let current_value = current_value.as_order();
         if is_valid(stats.validity.as_ref(), i) {
             if current_value < last_value {
                 stats.is_sorted = false;

@@ -68,12 +68,10 @@ impl Rle {
     ) -> Result<()> {
         // help me generate RLE encode algorithm
         let mut seen_count: u32 = 0;
-        let mut last_value = T::default().as_order();
+        let mut last_value = T::default();
         let mut all_null = true;
 
         for (i, item) in values.into_iter().enumerate() {
-            let item = item.as_order();
-
             if is_valid(validity.as_ref(), i) {
                 if all_null {
                     all_null = false;
@@ -83,7 +81,7 @@ impl Rle {
                 } else if last_value != item {
                     // flush  u32 cnt , value
                     w.write_all(&seen_count.to_le_bytes())?;
-                    w.write_all(T::from_order(last_value).to_le_bytes().as_ref())?;
+                    w.write_all(last_value.to_le_bytes().as_ref())?;
 
                     last_value = item;
                     seen_count = 1;
@@ -98,7 +96,7 @@ impl Rle {
 
         if seen_count != 0 {
             w.write_all(&seen_count.to_le_bytes())?;
-            w.write_all(T::from_order(last_value).to_le_bytes().as_ref())?;
+            w.write_all(last_value.to_le_bytes().as_ref())?;
         }
 
         Ok(())

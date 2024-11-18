@@ -20,20 +20,16 @@ use std::ops::Shr;
 use std::ops::ShrAssign;
 
 use databend_common_column::types::NativeType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
 use num::Float;
-use ordered_float::OrderedFloat;
 
 use crate::util::AsBytes;
 
-pub trait DoubleType: AsBytes + Copy + Clone + NativeType + Float {
-    type OrderType: std::fmt::Debug
-        + std::fmt::Display
-        + Eq
-        + Hash
-        + PartialOrd
-        + Hash
-        + Copy
-        + Clone;
+pub trait DoubleType:
+    AsBytes + Copy + Clone + NativeType + Float + Ord + Hash + PartialOrd
+{
+    type RawType: std::fmt::Debug + std::fmt::Display + Copy + Clone;
 
     type BitType: Eq
         + NativeType
@@ -47,10 +43,6 @@ pub trait DoubleType: AsBytes + Copy + Clone + NativeType + Float {
         + Shr<usize, Output = Self::BitType>
         + ShrAssign;
 
-    fn as_order(&self) -> Self::OrderType;
-
-    fn from_order(order: Self::OrderType) -> Self;
-
     fn as_bits(&self) -> Self::BitType;
     fn from_bits_val(bits: Self::BitType) -> Self;
 
@@ -59,25 +51,17 @@ pub trait DoubleType: AsBytes + Copy + Clone + NativeType + Float {
 }
 
 macro_rules! double_type {
-    ($type:ty, $order_type: ty,  $bit_type: ty) => {
+    ($type:ty, $raw_type: ty,  $bit_type: ty) => {
         impl DoubleType for $type {
-            type OrderType = $order_type;
+            type RawType = $raw_type;
             type BitType = $bit_type;
 
-            fn as_order(&self) -> Self::OrderType {
-                OrderedFloat(*self)
-            }
-
-            fn from_order(order: Self::OrderType) -> Self {
-                order.0
-            }
-
             fn as_bits(&self) -> Self::BitType {
-                self.to_bits()
+                self.0.to_bits()
             }
 
             fn from_bits_val(bits: Self::BitType) -> Self {
-                Self::from_bits(bits)
+                Self::from(Self::RawType::from_bits(bits))
             }
 
             fn leading_zeros(bit_value: &Self::BitType) -> u32 {
@@ -91,8 +75,5 @@ macro_rules! double_type {
     };
 }
 
-type F32 = OrderedFloat<f32>;
-type F64 = OrderedFloat<f64>;
-
-double_type!(f32, F32, u32);
-double_type!(f64, F64, u64);
+double_type!(F32, f32, u32);
+double_type!(F64, f64, u64);

@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
+
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableTableDataType;
 
-use crate::error::Error;
 use crate::error::Result;
 
 /// Descriptor of nested information of a field
@@ -58,7 +57,7 @@ impl Nested {
     pub fn length(&self) -> usize {
         match self {
             Nested::Primitive(len, _, _) => *len,
-            Nested::LargeList(l) => l.offsets.len_proxy(),
+            Nested::LargeList(l) => l.offsets.len(),
             Nested::Struct(len, _, _) => *len,
         }
     }
@@ -75,11 +74,11 @@ impl Nested {
         match self {
             Nested::Primitive(_, _, v) => (Buffer::new(), v),
             Nested::LargeList(l) => {
-                let start = l.offsets.first();
-                let buffer = if *start == 0 {
-                    l.offsets.buffer().clone()
+                let start = *l.offsets.first().unwrap();
+                let buffer = if start == 0 {
+                    l.offsets.clone()
                 } else {
-                    l.offsets.buffer().iter().map(|x| *x - start).collect()
+                    l.offsets.iter().map(|x| *x - start).collect()
                 };
                 (buffer, &l.validity)
             }
@@ -111,10 +110,7 @@ pub fn to_nested(column: &Column) -> Result<Vec<Vec<Nested>>> {
 pub fn is_nested_type(t: &TableDataType) -> bool {
     matches!(
         t,
-        TableDataType::Struct(_)
-            | TableDataType::List(_)
-            | TableDataType::LargeList(_)
-            | TableDataType::Map(_)
+        TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_)
     )
 }
 
@@ -133,8 +129,9 @@ pub fn slice_nest_column(
                     validity.slice(current_offset, current_length)
                 };
 
-                current_length = l_nested.offsets.range() as usize;
-                current_offset = *l_nested.offsets.first() as usize;
+                let r = *l_nested.offsets.last().unwrap() - *l_nested.offsets.first().unwrap();
+                current_length = r as usize;
+                current_offset = *l_nested.offsets.first().unwrap() as usize;
             }
             Nested::Struct(length, _, validity) => {
                 *length = current_length;
@@ -147,7 +144,10 @@ pub fn slice_nest_column(
                 if let Some(validity) = validity.as_mut() {
                     validity.slice(current_offset, current_length)
                 };
-                primitive_column.slice(current_offset, current_length);
+                primitive_column.slice(Range {
+                    start: current_offset,
+                    end: current_offset + current_length,
+                });
             }
         }
     }
@@ -165,7 +165,7 @@ fn to_nested_recursive(
         Column::Tuple(values) => {
             parents.push(Nested::Struct(column.len(), nullable, validity));
             for column in values {
-                to_nested_recursive(column.as_ref(), nested, parents.clone())?;
+                to_nested_recursive(&column, nested, parents.clone())?;
             }
         }
         Column::Array(inner) => {
@@ -174,7 +174,7 @@ fn to_nested_recursive(
                 offsets: inner.offsets.clone(),
                 validity,
             }));
-            to_nested_recursive(inner.as_ref(), nested, parents)?;
+            to_nested_recursive(&inner.values, nested, parents)?;
         }
         other => {
             parents.push(Nested::Primitive(column.len(), nullable, validity));
