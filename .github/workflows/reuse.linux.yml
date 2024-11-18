@@ -339,6 +339,7 @@ jobs:
 
   test_publish:
     needs: [build]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/pack_binaries
