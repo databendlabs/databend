@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
@@ -455,6 +456,8 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let columns = self.metadata.read().columns_by_table_index(table_index);
+        let scan_id = self.metadata.write().next_scan_id();
+        let mut base_column_scan_id = HashMap::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -484,6 +487,7 @@ impl Binder {
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
                     bind_context.add_column_binding(column_binding);
+                    base_column_scan_id.insert(*column_index, scan_id);
                 }
                 other => {
                     return Err(ErrorCode::Internal(format!(
@@ -494,6 +498,9 @@ impl Binder {
                 }
             }
         }
+        self.metadata
+            .write()
+            .add_base_column_scan_id(base_column_scan_id);
 
         Ok((
             SExpr::create_leaf(Arc::new(
@@ -503,6 +510,7 @@ impl Binder {
                     statistics: Arc::new(Statistics::default()),
                     change_type,
                     sample: sample.clone(),
+                    scan_id,
                     ..Default::default()
                 }
                 .into(),

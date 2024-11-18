@@ -55,7 +55,7 @@ pub fn get_layout(format: &str) -> Layout {
 }
 
 fn identical_layout() -> Layout {
-    CustomLayout::new(|record: &Record| Ok(format!("{}\n", record.args()).into_bytes())).into()
+    CustomLayout::new(|record: &Record| Ok(format!("{}", record.args()).into_bytes())).into()
 }
 
 fn text_layout() -> Layout {

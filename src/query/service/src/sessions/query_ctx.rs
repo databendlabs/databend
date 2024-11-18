@@ -50,6 +50,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -1174,6 +1175,39 @@ impl TableContext for QueryContext {
                     v.get_mut().add_bloom(filter);
                 }
             }
+        }
+    }
+
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
+        let mut runtime_filter_ready = self.shared.runtime_filter_ready.write();
+        match runtime_filter_ready.entry(table_index) {
+            Entry::Vacant(v) => {
+                v.insert(vec![ready]);
+            }
+            Entry::Occupied(mut v) => {
+                v.get_mut().push(ready);
+            }
+        }
+    }
+
+    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        let runtime_filter_ready = self.shared.runtime_filter_ready.read();
+        match runtime_filter_ready.get(&table_index) {
+            Some(v) => v.to_vec(),
+            None => vec![],
+        }
+    }
+
+    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool) {
+        let mut wait_runtime_filter = self.shared.wait_runtime_filter.write();
+        wait_runtime_filter.insert(table_index, need_to_wait);
+    }
+
+    fn get_wait_runtime_filter(&self, table_index: usize) -> bool {
+        let wait_runtime_filter = self.shared.wait_runtime_filter.read();
+        match wait_runtime_filter.get(&table_index) {
+            Some(v) => *v,
+            None => false,
         }
     }
 
