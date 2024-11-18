@@ -45,7 +45,7 @@ runs:
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
         tar -C ./distro --exclude='*.debug' -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
         sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
-        echo "pkg_name=pkg_name" >> $GITHUB_OUTPUT
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: post sha256
       uses: actions/upload-artifact@v4
       with:
@@ -80,7 +80,7 @@ runs:
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
         tar -C ./distro -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
         sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
-        echo "pkg_name=pkg_name" >> $GITHUB_OUTPUT
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: post dbg sha256
       uses: actions/upload-artifact@v4
       with:
