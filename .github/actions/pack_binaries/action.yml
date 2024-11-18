@@ -22,7 +22,7 @@ runs:
         target: ${{ inputs.target }}
         category: ${{ inputs.category }}
         path: distro/bin
-        artifacts: metactl,meta,query
+        artifacts: metactl,meta,query,query.debug
     - name: Pack Binaries
       id: pack_binaries
       shell: bash
