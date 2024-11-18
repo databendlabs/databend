@@ -264,6 +264,7 @@ impl PhysicalPlanBuilder {
             }
         }
         source.table_index = scan.table_index;
+        source.scan_id = scan.scan_id;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();

@@ -58,6 +58,7 @@ use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_fi
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
     table_index: IndexType,
+    scan_id: usize,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
 
@@ -94,7 +95,7 @@ impl DeserializeDataTransform {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let need_wait_runtime_filter =
-            !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.table_index);
+            !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
@@ -116,6 +117,7 @@ impl DeserializeDataTransform {
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,
+            scan_id: plan.scan_id,
             scan_progress,
             block_reader,
             input,
@@ -183,7 +185,7 @@ impl DeserializeDataTransform {
             return false;
         }
         self.need_wait_runtime_filter = false;
-        let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.table_index);
+        let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
         if runtime_filter_ready.len() == 1 {
             self.runtime_filter_ready = Some(runtime_filter_ready[0].clone());
             true
