@@ -61,6 +61,7 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
@@ -86,7 +87,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if !dry_run && snapshot.segments.len() > nodes_num {
+                if !dry_run && snapshot.segments.len() > nodes_num && distributed_pruning {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
