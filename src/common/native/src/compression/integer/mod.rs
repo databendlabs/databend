@@ -187,7 +187,6 @@ pub struct IntegerStats<T: IntegerType> {
     pub max: T,
     pub distinct_values: HashMap<T, usize>,
     pub unique_count: usize,
-    pub set_count: usize,
 }
 
 fn gen_stats<T: IntegerType>(col: &Buffer<T>, validity: Option<Bitmap>) -> IntegerStats<T> {
@@ -205,7 +204,6 @@ fn gen_stats<T: IntegerType>(col: &Buffer<T>, validity: Option<Bitmap>) -> Integ
         max: T::default(),
         distinct_values: HashMap::new(),
         unique_count: 0,
-        set_count: col.len() - null_count,
     };
 
     let mut is_init_value_initialized = false;

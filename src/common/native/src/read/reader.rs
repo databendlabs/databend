@@ -16,7 +16,6 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 
-use databend_common_expression::types::DataType;
 use databend_common_expression::TableSchema;
 use opendal::Reader;
 
@@ -30,13 +29,6 @@ use crate::ColumnMeta;
 use crate::PageMeta;
 
 const DEFAULT_FOOTER_SIZE: u64 = 64 * 1024;
-
-pub fn is_primitive(data_type: &DataType) -> bool {
-    matches!(
-        data_type,
-        DataType::Number(_) | DataType::Decimal(_) | DataType::Timestamp | DataType::Date
-    )
-}
 
 #[derive(Debug)]
 pub struct NativeReader<R: NativeReadBuf> {

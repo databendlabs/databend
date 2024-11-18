@@ -17,9 +17,8 @@ use std::io::Cursor;
 use std::marker::PhantomData;
 
 use databend_common_column::buffer::Buffer;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -35,22 +34,27 @@ use crate::read::PageIterator;
 use crate::PageMeta;
 
 #[derive(Debug)]
-pub struct IntegerNestedIter<I, T>
+pub struct IntegerNestedIter<I, V, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    V: ArgType<Column = Buffer<T>, Scalar = T>,
     T: Number + IntegerType,
+    Vec<u8>: TryInto<T::Bytes>,
 {
     iter: I,
     data_type: TableDataType,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
-    _phantom: PhantomData<T>,
+    _phantom: PhantomData<V>,
+    _phantom2: PhantomData<T>,
 }
 
-impl<I, T> IntegerNestedIter<I, T>
+impl<I, V, T> IntegerNestedIter<I, V, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    V: ArgType<Column = Buffer<T>, Scalar = T>,
     T: Number + IntegerType,
+    Vec<u8>: TryInto<T::Bytes>,
 {
     pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
         Self {
@@ -59,13 +63,15 @@ where
             init,
             scratch: vec![],
             _phantom: PhantomData,
+            _phantom2: PhantomData,
         }
     }
 }
 
-impl<I, T> IntegerNestedIter<I, T>
+impl<I, V, T> IntegerNestedIter<I, V, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    V: ArgType<Column = Buffer<T>, Scalar = T>,
     T: Number + IntegerType,
     Vec<u8>: TryInto<T::Bytes>,
 {
@@ -82,7 +88,7 @@ where
         self.iter.swap_buffer(&mut buffer);
 
         let column: Buffer<T> = values.into();
-        let mut col = NumberType::<T>::upcast_column(column);
+        let mut col = V::upcast_column(column);
         if self.data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }
@@ -90,9 +96,10 @@ where
     }
 }
 
-impl<I, T> Iterator for IntegerNestedIter<I, T>
+impl<I, V, T> Iterator for IntegerNestedIter<I, V, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    V: ArgType<Column = Buffer<T>, Scalar = T>,
     T: Number + IntegerType,
     Vec<u8>: TryInto<T::Bytes>,
 {
@@ -115,12 +122,16 @@ where
     }
 }
 
-pub fn read_nested_integer<T: Number + IntegerType, R: NativeReadBuf>(
+pub fn read_nested_integer<V, T, R: NativeReadBuf>(
     reader: &mut R,
     data_type: TableDataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
-) -> Result<Vec<(NestedState, Column)>> {
+) -> Result<Vec<(NestedState, Column)>>
+where
+    V: ArgType<Column = Buffer<T>, Scalar = T>,
+    T: Number + IntegerType,
+{
     let mut scratch = vec![];
     let mut results = Vec::with_capacity(page_metas.len());
     for page_meta in page_metas {
@@ -131,7 +142,7 @@ pub fn read_nested_integer<T: Number + IntegerType, R: NativeReadBuf>(
         decompress_integer(reader, num_values, &mut values, &mut scratch)?;
 
         let column: Buffer<T> = values.into();
-        let mut col = NumberType::<T>::upcast_column(column);
+        let mut col = V::upcast_column(column);
         if data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }

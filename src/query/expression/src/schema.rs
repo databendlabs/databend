@@ -1313,6 +1313,17 @@ impl TableDataType {
             _ => 1,
         }
     }
+
+    pub fn is_physical_binary(&self) -> bool {
+        matches!(
+            self,
+            TableDataType::Binary
+                | TableDataType::Bitmap
+                | TableDataType::Variant
+                | TableDataType::Geometry
+                | TableDataType::Geography
+        )
+    }
 }
 
 // for merge into not matched clauses, when there are multi inserts, they maybe

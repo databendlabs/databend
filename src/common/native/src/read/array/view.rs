@@ -40,7 +40,6 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     iter: I,
     data_type: TableDataType,
     init: Vec<InitNested>,
-    scratch: Vec<u8>,
 }
 
 impl<I> ViewColNestedIter<I>
@@ -51,7 +50,6 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
             iter,
             data_type,
             init,
-            scratch: vec![],
         }
     }
 }

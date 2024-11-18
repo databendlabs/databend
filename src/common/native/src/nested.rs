@@ -144,7 +144,7 @@ pub fn slice_nest_column(
                 if let Some(validity) = validity.as_mut() {
                     validity.slice(current_offset, current_length)
                 };
-                primitive_column.slice(Range {
+                *primitive_column = primitive_column.slice(Range {
                     start: current_offset,
                     end: current_offset + current_length,
                 });
@@ -176,7 +176,15 @@ fn to_nested_recursive(
             }));
             to_nested_recursive(&inner.values, nested, parents)?;
         }
-        other => {
+        Column::Map(inner) => {
+            parents.push(Nested::LargeList(ListNested {
+                is_nullable: nullable,
+                offsets: inner.offsets.clone(),
+                validity,
+            }));
+            to_nested_recursive(&inner.values, nested, parents)?;
+        }
+        _ => {
             parents.push(Nested::Primitive(column.len(), nullable, validity));
             nested.push(parents);
         }
@@ -235,7 +243,7 @@ impl InitNested {
 pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
     let (offsets, validity) = n.inner();
-    let col = Column::Map(Box::new(ArrayColumn::<AnyType> { values, offsets }));
+    let col = Column::Array(Box::new(ArrayColumn::<AnyType> { values, offsets }));
 
     if data_type.is_nullable() {
         col.wrap_nullable(validity.clone())

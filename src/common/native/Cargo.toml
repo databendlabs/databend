@@ -15,6 +15,7 @@ test = true
 databend-common-column = { workspace = true }
 databend-common-expression = { workspace = true }
 
+env_logger = { workspace = true }
 ahash = { workspace = true }
 bitpacking = { workspace = true }
 bytemuck = { workspace = true }

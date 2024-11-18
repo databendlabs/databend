@@ -158,3 +158,9 @@ impl From<ArrayData> for BinaryColumn {
         BinaryColumn::new(values.into(), offsets.into())
     }
 }
+
+impl<P: AsRef<[u8]>> FromIterator<P> for BinaryColumn {
+    fn from_iter<I: IntoIterator<Item = P>>(iter: I) -> Self {
+        BinaryColumnBuilder::from_iter(iter).into()
+    }
+}

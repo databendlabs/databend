@@ -26,18 +26,16 @@ type StructValues = Vec<Option<Result<(NestedState, Column)>>>;
 pub struct StructIterator<'a> {
     iters: Vec<NestedIters<'a>>,
     is_nullable: bool,
-    fields: Vec<TableDataType>,
 }
 
 impl<'a> StructIterator<'a> {
     /// Creates a new [`StructIterator`] with `iters` and `fields`.
-    pub fn new(is_nullable: bool, iters: Vec<NestedIters<'a>>, fields: Vec<TableDataType>) -> Self {
-        assert_eq!(iters.len(), fields.len());
-        Self {
-            iters,
-            fields,
-            is_nullable,
-        }
+    pub fn new(
+        is_nullable: bool,
+        iters: Vec<NestedIters<'a>>,
+        _fields: Vec<TableDataType>,
+    ) -> Self {
+        Self { iters, is_nullable }
     }
 }
 

@@ -43,18 +43,14 @@ pub struct WriteOptions {
 impl<W: Write> NativeWriter<W> {
     /// Encode and write columns to the file
     pub fn encode_chunk(&mut self, chunk: &Vec<Column>) -> Result<()> {
-        let page_size = self
-            .options
-            .max_page_size
-            .unwrap_or(chunk.len())
-            .min(chunk.len());
+        assert!(!chunk.is_empty());
+        let rows = chunk.first().map(|c| c.len()).unwrap();
+        let page_size = self.options.max_page_size.unwrap_or(rows).min(rows);
 
         for column in chunk.iter() {
             let length = column.len();
-
             let nested = to_nested(column)?;
             let leaf_columns = to_leaves(column);
-
             for (leaf_column, nested) in leaf_columns.iter().zip(nested.into_iter()) {
                 let leaf_column = leaf_column.clone();
                 let mut page_metas = Vec::with_capacity((length + 1) / page_size + 1);

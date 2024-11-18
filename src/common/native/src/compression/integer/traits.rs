@@ -39,8 +39,6 @@ integer_type!(i8);
 integer_type!(i16);
 integer_type!(i32);
 integer_type!(i64);
-// integer_type!(days_ms);
-// integer_type!(months_days_ns);
 
 impl IntegerType for i128 {
     fn as_i64(&self) -> i64 {

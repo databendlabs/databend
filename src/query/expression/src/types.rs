@@ -316,6 +316,17 @@ impl DataType {
             _ => None,
         }
     }
+
+    pub fn is_physical_binary(&self) -> bool {
+        matches!(
+            self,
+            DataType::Binary
+                | DataType::Bitmap
+                | DataType::Variant
+                | DataType::Geometry
+                | DataType::Geography
+        )
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {

@@ -26,8 +26,6 @@ use crate::error::Result;
 pub(crate) mod read_basic;
 use std::io::BufReader;
 
-use databend_common_expression::TableSchema;
-
 use super::nested::InitNested;
 use super::PageMeta;
 pub mod reader;
@@ -72,13 +70,11 @@ pub trait PageIterator {
 }
 
 #[derive(Clone)]
-pub struct NativeColumnsReader {
-    schema: TableSchema,
-}
+pub struct NativeColumnsReader {}
 
 impl NativeColumnsReader {
-    pub fn new(schema: TableSchema) -> Result<Self> {
-        Ok(Self { schema })
+    pub fn new() -> Result<Self> {
+        Ok(Self {})
     }
 
     /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.

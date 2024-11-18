@@ -17,6 +17,7 @@ use std::io::Cursor;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -71,13 +72,9 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
             &mut self.scratch,
         )?;
 
-        let array = try_new_binary_array(
-            self.data_type.clone(),
-            offsets.into(),
-            values.into(),
-            validity,
-        )?;
-        Ok((nested, array))
+        let column =
+            try_new_binary_column(&self.data_type, offsets.into(), values.into(), validity)?;
+        Ok((nested, column))
     }
 }
 
@@ -121,20 +118,38 @@ pub fn read_nested_binary<R: NativeReadBuf>(
 
         decompress_binary(reader, num_values, &mut offsets, &mut values, &mut scratch)?;
 
-        let array =
-            try_new_binary_array(data_type.clone(), offsets.into(), values.into(), validity)?;
-        results.push((nested, array));
+        let column = try_new_binary_column(&data_type, offsets.into(), values.into(), validity)?;
+        results.push((nested, column));
     }
     Ok(results)
 }
 
-fn try_new_binary_array(
-    data_type: TableDataType,
+fn try_new_binary_column(
+    data_type: &TableDataType,
     offsets: Buffer<u64>,
     values: Buffer<u8>,
     validity: Option<Bitmap>,
 ) -> Result<Column> {
-    let array = BinaryColumn::new(values, offsets);
-    // TODO: match data_type
-    Ok(Column::Binary(array))
+    let column = BinaryColumn::new(values, offsets);
+    Ok(binary_column_to_column(data_type, column, validity))
+}
+
+fn binary_column_to_column(
+    data_type: &TableDataType,
+    column: BinaryColumn,
+    validity: Option<Bitmap>,
+) -> Column {
+    let col = match data_type.remove_nullable() {
+        TableDataType::Binary => Column::Binary(column),
+        TableDataType::Bitmap => Column::Bitmap(column),
+        TableDataType::Variant => Column::Variant(column),
+        TableDataType::Geometry => Column::Geometry(column),
+        TableDataType::Geography => Column::Geography(GeographyColumn(column)),
+        _ => unreachable!(),
+    };
+    if data_type.is_nullable() {
+        col.wrap_nullable(validity)
+    } else {
+        col
+    }
 }

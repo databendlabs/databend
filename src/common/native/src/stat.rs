@@ -131,7 +131,7 @@ fn stat_freq_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBo
             }))
         }
         TableDataType::Decimal(decimal_size) => {
-            let top_value_size = if decimal_size.scale() > MAX_DECIMAL128_PRECISION {
+            let top_value_size = if decimal_size.precision() > MAX_DECIMAL128_PRECISION {
                 32
             } else {
                 16
@@ -187,16 +187,20 @@ fn size_of_primitive(p: &NumberDataType) -> usize {
 mod test {
     use std::io::BufRead;
 
-    use databend_common_expression::infer_table_schema;
+    use databend_common_column::binary::BinaryColumn;
+    use databend_common_expression::infer_schema_type;
+    
+    use databend_common_expression::types::Int64Type;
+    
     use databend_common_expression::Column;
-    use databend_common_expression::DataField;
-    use databend_common_expression::DataSchema;
+    
+    
+    use databend_common_expression::FromData;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
 
     use super::stat_simple;
     use super::ColumnInfo;
-    use crate::read::reader::is_primitive;
     use crate::read::reader::NativeReader;
     use crate::stat::PageBody;
     use crate::util::env::remove_all_env;
@@ -211,7 +215,6 @@ mod test {
     const COLUMN_SIZE: usize = PAGE_SIZE * PAGE_PER_COLUMN;
 
     fn write_and_stat_simple_column(column: Column) -> ColumnInfo {
-        assert!(is_primitive(&column.data_type()));
         let options = WriteOptions {
             default_compression: CommonCompression::Lz4,
             max_page_size: Some(PAGE_SIZE),
@@ -220,10 +223,9 @@ mod test {
         };
 
         let mut bytes = Vec::new();
-        let field = DataField::new("name", column.data_type().clone());
-        let schema = DataSchema::new(vec![field.clone()]);
-        let table_schema = infer_table_schema(&schema).unwrap();
-        let mut writer = NativeWriter::new(&mut bytes, schema, options).unwrap();
+        let field = TableField::new("name", infer_schema_type(&column.data_type()).unwrap());
+        let table_schema = TableSchema::new(vec![field.clone()]);
+        let mut writer = NativeWriter::new(&mut bytes, table_schema, options).unwrap();
 
         writer.start().unwrap();
         writer.write(&vec![column]).unwrap();
@@ -245,7 +247,7 @@ mod test {
         let values: Vec<Option<i64>> = (0..COLUMN_SIZE)
             .map(|d| if d % 3 == 0 { None } else { Some(d as i64) })
             .collect();
-        let column = Box::new(Buffer::<i64>::from_iter(values));
+        let column = Int64Type::from_opt_data(values);
         let column_info = write_and_stat_simple_column(column.clone());
 
         assert_eq!(column_info.pages.len(), 10);
@@ -253,9 +255,7 @@ mod test {
             assert_eq!(p.validity_size, Some(PAGE_SIZE as u32));
         }
 
-        let column = Box::new(BinaryColumn::<i64>::from_iter_values(
-            ["a"; COLUMN_SIZE].iter(),
-        ));
+        let column = Column::Binary(BinaryColumn::from_iter(["a"; COLUMN_SIZE].iter()));
         let column_info = write_and_stat_simple_column(column.clone());
         assert_eq!(column_info.pages.len(), 10);
         for p in column_info.pages {

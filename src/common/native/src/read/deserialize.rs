@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -102,9 +106,11 @@ where
 {
     let is_nullable = matches!(data_type, TableDataType::Nullable(_));
     Ok(match data_type.remove_nullable() {
-        TableDataType::Null => unimplemented!(),
+        TableDataType::Null | TableDataType::EmptyArray | TableDataType::EmptyMap => {
+            unimplemented!("Can't store pure nulls")
+        }
         TableDataType::Boolean => {
-            init.push(InitNested::Primitive(data_type.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             DynIter::new(BooleanNestedIter::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
@@ -113,15 +119,15 @@ where
         }
         TableDataType::Number(number) => with_match_integer_double_type!(number,
         |$I| {
-            init.push(InitNested::Primitive(data_type.is_nullable()));
-            DynIter::new(IntegerNestedIter::<_, $I>::new(
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(IntegerNestedIter::<_, NumberType<$I>, $I>::new(
                readers.pop().unwrap(),
                 data_type.clone(),
                 init,
             ))
         },
         |$T| {
-             init.push(InitNested::Primitive(data_type.is_nullable()));
+             init.push(InitNested::Primitive(is_nullable));
              DynIter::new(DoubleNestedIter::<_, $T>::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
@@ -129,16 +135,51 @@ where
             ))
         }
         ),
-        TableDataType::Binary => {
-            init.push(InitNested::Primitive(data_type.is_nullable()));
-            DynIter::new(BinaryNestedIter::<_>::new(
+        TableDataType::Timestamp => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(IntegerNestedIter::<_, TimestampType, i64>::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
                 init,
             ))
         }
+        TableDataType::Date => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(IntegerNestedIter::<_, DateType, i32>::new(
+                readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+            ))
+        }
+        TableDataType::Decimal(t) if t.precision() > MAX_DECIMAL128_PRECISION => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(DecimalNestedIter::<
+                _,
+                databend_common_column::types::i256,
+                ethnum::i256,
+            >::new(
+                readers.pop().unwrap(), data_type.clone(), t.size(), init
+            ))
+        }
+        TableDataType::Decimal(t) => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(DecimalNestedIter::<_, i128, i128>::new(
+                readers.pop().unwrap(),
+                data_type.clone(),
+                t.size(),
+                init,
+            ))
+        }
+        t if t.is_physical_binary() => {
+            init.push(InitNested::Primitive(t.is_nullable()));
+            DynIter::new(BinaryNestedIter::<_>::new(
+                readers.pop().unwrap(),
+                t.clone(),
+                init,
+            ))
+        }
         TableDataType::String => {
-            init.push(InitNested::Primitive(data_type.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             DynIter::new(ViewColNestedIter::<_>::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
@@ -164,7 +205,7 @@ where
                 .rev()
                 .map(|f| {
                     let mut init = init.clone();
-                    init.push(InitNested::Struct(data_type.is_nullable()));
+                    init.push(InitNested::Struct(is_nullable));
                     let n = n_columns(f);
                     let readers = readers.drain(readers.len() - n..).collect();
                     deserialize_nested(readers, f.clone(), init)
@@ -177,7 +218,7 @@ where
                 fields_type.clone(),
             ))
         }
-        _ => unreachable!(),
+        other => unimplemented!("read datatype {} is not supported", other),
     })
 }
 

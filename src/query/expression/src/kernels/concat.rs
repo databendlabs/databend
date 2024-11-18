@@ -181,7 +181,7 @@ impl Column {
                 );
                 let (key_builder, val_builder) = match builder {
                     ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
-                    _ => unreachable!(),
+                    ty => unreachable!("ty: {}", ty.data_type()),
                 };
                 let builder = KvColumnBuilder {
                     keys: key_builder,

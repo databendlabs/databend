@@ -12,27 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::arrow::datatypes::Schema;
-use databend_common_arrow::arrow::error::Result;
-use databend_common_arrow::native::read::reader::read_meta;
-use databend_common_arrow::native::write::NativeWriter;
-use databend_common_arrow::native::write::WriteOptions;
-use databend_common_arrow::native::ColumnMeta;
-use databend_common_arrow::native::CommonCompression;
+use databend_common_expression::infer_schema_type;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_native::read::reader::read_meta;
+use databend_common_native::write::NativeWriter;
+use databend_common_native::write::WriteOptions;
+use databend_common_native::ColumnMeta;
+use databend_common_native::CommonCompression;
 
-use crate::io::new_test_chunk;
-use crate::io::WRITE_PAGE;
+use super::io::new_test_column;
+use super::io::WRITE_PAGE;
 
 fn write_data(dest: &mut Vec<u8>) -> Vec<ColumnMeta> {
-    let chunk = new_test_chunk();
+    let chunk = new_test_column();
     let fields: Vec<TableField> = chunk
         .iter()
-        .map(|col| TableField::new("name", col.data_type().clone(), col.validity().is_some()))
+        .map(|col| TableField::new("name", infer_schema_type(&col.data_type()).unwrap()))
         .collect();
 
-    let mut writer = NativeWriter::new(dest, Schema::from(fields), WriteOptions {
+    let mut writer = NativeWriter::new(dest, TableSchema::new(fields), WriteOptions {
         default_compression: CommonCompression::Lz4,
         max_page_size: Some(WRITE_PAGE),
         ..Default::default()
@@ -47,12 +46,12 @@ fn write_data(dest: &mut Vec<u8>) -> Vec<ColumnMeta> {
 }
 
 #[test]
-fn test_read_meta() -> Result<()> {
+fn test_read_meta() -> std::io::Result<()> {
     let mut buf = Vec::new();
     let expected_meta = write_data(&mut buf);
 
     let mut reader = std::io::Cursor::new(buf);
-    let meta = read_meta(&mut reader)?;
+    let meta = read_meta(&mut reader).unwrap();
 
     assert_eq!(expected_meta, meta);
 

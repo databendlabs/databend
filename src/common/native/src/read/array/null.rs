@@ -16,6 +16,10 @@ use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
 use crate::error::Result;
+use crate::nested::InitNested;
+use crate::nested::NestedState;
+use crate::read::read_basic::read_nested;
+use crate::read::NativeReadBuf;
 use crate::read::PageIterator;
 use crate::PageMeta;
 
@@ -40,7 +44,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     fn deserialize(&mut self, num_values: u64) -> Result<Column> {
         let length = num_values as usize;
-        Ok(Column::Null { len: length })
+        Ok(null_column(&self.data_type, length))
     }
 }
 
@@ -72,8 +76,28 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-pub fn read_null(data_type: &TableDataType, page_metas: Vec<PageMeta>) -> Result<Column> {
-    let length = page_metas.iter().map(|p| p.num_values as usize).sum();
-    // TODO: match type
-    Ok(Column::Null { len: length })
+pub fn read_nested_null<R: NativeReadBuf>(
+    reader: &mut R,
+    data_type: &TableDataType,
+    init: Vec<InitNested>,
+    page_metas: Vec<PageMeta>,
+) -> Result<Vec<(NestedState, Column)>> {
+    let mut results = Vec::with_capacity(page_metas.len());
+    for page_meta in page_metas {
+        let length = page_meta.num_values as usize;
+        let (nested, _) = read_nested(reader, &init, length)?;
+
+        let col = null_column(data_type, length);
+        results.push((nested, col));
+    }
+    Ok(results)
+}
+
+fn null_column(data_type: &TableDataType, length: usize) -> Column {
+    match data_type {
+        TableDataType::Null => Column::Null { len: length },
+        TableDataType::EmptyArray => Column::EmptyArray { len: length },
+        TableDataType::EmptyMap => Column::EmptyMap { len: length },
+        _ => unreachable!(),
+    }
 }

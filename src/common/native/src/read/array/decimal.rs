@@ -17,14 +17,13 @@ use std::io::Cursor;
 use std::marker::PhantomData;
 
 use databend_common_column::buffer::Buffer;
-use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ValueType;
+use databend_common_expression::types::Decimal;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
-use crate::compression::double::decompress_double;
-use crate::compression::double::DoubleType;
+use crate::compression::integer::decompress_integer;
+use crate::compression::integer::IntegerType;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
@@ -35,38 +34,50 @@ use crate::read::PageIterator;
 use crate::PageMeta;
 
 #[derive(Debug)]
-pub struct DoubleNestedIter<I, T>
+pub struct DecimalNestedIter<I, T, F>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: Number + DoubleType,
+    T: IntegerType,
+    F: Decimal,
 {
     iter: I,
     data_type: TableDataType,
+    decimal_size: DecimalSize,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
     _phantom: PhantomData<T>,
+    _phantom2: PhantomData<F>,
 }
 
-impl<I, T> DoubleNestedIter<I, T>
+impl<I, T, F> DecimalNestedIter<I, T, F>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: Number + DoubleType,
+    T: IntegerType,
+    F: Decimal,
 {
-    pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
+    pub fn new(
+        iter: I,
+        data_type: TableDataType,
+        decimal_size: DecimalSize,
+        init: Vec<InitNested>,
+    ) -> Self {
         Self {
             iter,
             data_type,
+            decimal_size,
             init,
             scratch: vec![],
             _phantom: PhantomData,
+            _phantom2: PhantomData,
         }
     }
 }
 
-impl<I, T> DoubleNestedIter<I, T>
+impl<I, T, F> DecimalNestedIter<I, T, F>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: Number + DoubleType,
+    T: IntegerType,
+    F: Decimal,
     Vec<u8>: TryInto<T::Bytes>,
 {
     fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
@@ -75,26 +86,27 @@ where
         let length = num_values as usize;
 
         let mut values = Vec::with_capacity(length);
-        decompress_double(&mut reader, length, &mut values, &mut self.scratch)?;
+        decompress_integer(&mut reader, length, &mut values, &mut self.scratch)?;
         assert_eq!(values.len(), length);
 
         let mut buffer = reader.into_inner().into_inner();
         self.iter.swap_buffer(&mut buffer);
 
         let column: Buffer<T> = values.into();
-        let mut col = NumberType::<T>::upcast_column(column);
+        let column: Buffer<F> = unsafe { std::mem::transmute(column) };
+        let mut col = F::upcast_column(column, self.decimal_size);
         if self.data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }
-
         Ok((nested, col))
     }
 }
 
-impl<I, T> Iterator for DoubleNestedIter<I, T>
+impl<I, T, F> Iterator for DecimalNestedIter<I, T, F>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: Number + DoubleType,
+    T: IntegerType,
+    F: Decimal,
     Vec<u8>: TryInto<T::Bytes>,
 {
     type Item = Result<(NestedState, Column)>;
@@ -116,9 +128,10 @@ where
     }
 }
 
-pub fn read_nested_primitive<T: Number + DoubleType, R: NativeReadBuf>(
+pub fn read_nested_decimal<T: IntegerType, F: Decimal, R: NativeReadBuf>(
     reader: &mut R,
     data_type: TableDataType,
+    decimal_size: DecimalSize,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
 ) -> Result<Vec<(NestedState, Column)>> {
@@ -129,10 +142,11 @@ pub fn read_nested_primitive<T: Number + DoubleType, R: NativeReadBuf>(
         let (nested, validity) = read_nested(reader, &init, num_values)?;
 
         let mut values = Vec::with_capacity(num_values);
-        decompress_double(reader, num_values, &mut values, &mut scratch)?;
+        decompress_integer(reader, num_values, &mut values, &mut scratch)?;
 
         let column: Buffer<T> = values.into();
-        let mut col = NumberType::<T>::upcast_column(column);
+        let column: Buffer<F> = unsafe { std::mem::transmute(column) };
+        let mut col = F::upcast_column(column, decimal_size);
         if data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }

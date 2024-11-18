@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -26,7 +30,7 @@ use crate::nested::NestedState;
 use crate::util::n_columns;
 use crate::PageMeta;
 
-pub fn read_nested<R: NativeReadBuf>(
+pub fn read_nested_column<R: NativeReadBuf>(
     mut readers: Vec<R>,
     data_type: TableDataType,
     mut init: Vec<InitNested>,
@@ -35,7 +39,9 @@ pub fn read_nested<R: NativeReadBuf>(
     let is_nullable = data_type.is_nullable();
     use TableDataType::*;
     let result = match data_type.remove_nullable() {
-        Null => unimplemented!("null"),
+        Null | EmptyArray | EmptyMap => {
+            unimplemented!("Can't store pure nulls")
+        }
         Boolean => {
             init.push(InitNested::Primitive(is_nullable));
             read_nested_boolean(
@@ -48,7 +54,7 @@ pub fn read_nested<R: NativeReadBuf>(
         Number(number) => with_match_integer_double_type!(number,
         |$T| {
             init.push(InitNested::Primitive(is_nullable));
-            read_nested_integer::<$T, _>(
+            read_nested_integer::<NumberType<$T>, $T, _>(
                 &mut readers.pop().unwrap(),
                 data_type.clone(),
                 init,
@@ -65,8 +71,46 @@ pub fn read_nested<R: NativeReadBuf>(
             )?
         }
         ),
-        Decimal(_) => todo!(),
-        Binary => {
+        Decimal(decimal) if decimal.precision() > MAX_DECIMAL128_PRECISION => {
+            init.push(InitNested::Primitive(is_nullable));
+            read_nested_decimal::<databend_common_column::types::i256, ethnum::i256, _>(
+                &mut readers.pop().unwrap(),
+                data_type.clone(),
+                decimal.size(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
+        Decimal(decimal) => {
+            init.push(InitNested::Primitive(is_nullable));
+
+            read_nested_decimal::<i128, i128, _>(
+                &mut readers.pop().unwrap(),
+                data_type.clone(),
+                decimal.size(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
+        Timestamp => {
+            init.push(InitNested::Primitive(is_nullable));
+            read_nested_integer::<TimestampType, _, _>(
+                &mut readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
+        Date => {
+            init.push(InitNested::Primitive(is_nullable));
+            read_nested_integer::<DateType, _, _>(
+                &mut readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
+        t if t.is_physical_binary() => {
             init.push(InitNested::Primitive(is_nullable));
             read_nested_binary::<_>(
                 &mut readers.pop().unwrap(),
@@ -87,7 +131,7 @@ pub fn read_nested<R: NativeReadBuf>(
         }
         Array(inner) => {
             init.push(InitNested::List(is_nullable));
-            let results = read_nested(readers, inner.as_ref().clone(), init, page_metas)?;
+            let results = read_nested_column(readers, inner.as_ref().clone(), init, page_metas)?;
             let mut columns = Vec::with_capacity(results.len());
             for (mut nested, values) in results {
                 let array = create_list(data_type.clone(), &mut nested, values);
@@ -97,7 +141,7 @@ pub fn read_nested<R: NativeReadBuf>(
         }
         Map(inner) => {
             init.push(InitNested::List(is_nullable));
-            let results = read_nested(readers, inner.as_ref().clone(), init, page_metas)?;
+            let results = read_nested_column(readers, inner.as_ref().clone(), init, page_metas)?;
             let mut columns = Vec::with_capacity(results.len());
             for (mut nested, values) in results {
                 let array = create_map(data_type.clone(), &mut nested, values);
@@ -114,10 +158,10 @@ pub fn read_nested<R: NativeReadBuf>(
                 .map(|f| {
                     let mut init = init.clone();
                     init.push(InitNested::Struct(is_nullable));
-                    let n = n_columns(&data_type);
+                    let n = n_columns(f);
                     let readers = readers.drain(..n).collect();
                     let page_metas = page_metas.drain(..n).collect();
-                    read_nested(readers, f.clone(), init, page_metas)
+                    read_nested_column(readers, f.clone(), init, page_metas)
                 })
                 .collect::<Result<Vec<_>>>()?;
             let mut columns = Vec::with_capacity(results[0].len());
@@ -135,7 +179,7 @@ pub fn read_nested<R: NativeReadBuf>(
             columns.reverse();
             columns
         }
-        _ => todo!("xxx"),
+        other => unimplemented!("read datatype {} is not supported", other),
     };
     Ok(result)
 }
@@ -146,7 +190,7 @@ pub fn batch_read_column<R: NativeReadBuf>(
     data_type: TableDataType,
     page_metas: Vec<Vec<PageMeta>>,
 ) -> Result<Column> {
-    let results = read_nested(readers, data_type, vec![], page_metas)?;
+    let results = read_nested_column(readers, data_type, vec![], page_metas)?;
     let columns: Vec<Column> = results.iter().map(|(_, v)| v.clone()).collect();
     let column = Column::concat_columns(columns.into_iter()).unwrap();
     Ok(column)

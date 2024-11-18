@@ -186,7 +186,6 @@ pub struct DoubleStats<T: DoubleType> {
     pub average_run_length: f64,
     pub distinct_values: HashMap<T, usize>,
     pub unique_count: usize,
-    pub set_count: usize,
 }
 
 fn gen_stats<T: DoubleType>(col: &Buffer<T>, validity: Option<Bitmap>) -> DoubleStats<T> {
@@ -203,7 +202,6 @@ fn gen_stats<T: DoubleType>(col: &Buffer<T>, validity: Option<Bitmap>) -> Double
         average_run_length: 0.0,
         distinct_values: HashMap::new(),
         unique_count: 0,
-        set_count: col.len() - null_count,
     };
 
     let mut is_init_value_initialized = false;
