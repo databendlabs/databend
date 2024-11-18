@@ -25,7 +25,9 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -56,6 +58,7 @@ use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_fi
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
     table_index: IndexType,
+    scan_id: usize,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
 
@@ -74,6 +77,8 @@ pub struct DeserializeDataTransform {
     cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
     // for merge_into target build.
     need_reserve_block_info: bool,
+    need_wait_runtime_filter: bool,
+    runtime_filter_ready: Option<Arc<RuntimeFilterReady>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -89,6 +94,8 @@ impl DeserializeDataTransform {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let need_wait_runtime_filter =
+            !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
@@ -110,6 +117,7 @@ impl DeserializeDataTransform {
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,
+            scan_id: plan.scan_id,
             scan_progress,
             block_reader,
             input,
@@ -124,6 +132,8 @@ impl DeserializeDataTransform {
             base_block_ids: plan.base_block_ids.clone(),
             cached_runtime_filter: None,
             need_reserve_block_info,
+            need_wait_runtime_filter,
+            runtime_filter_ready: None,
         })))
     }
 
@@ -169,6 +179,20 @@ impl DeserializeDataTransform {
             Ok(None)
         }
     }
+
+    fn need_wait_runtime_filter(&mut self) -> bool {
+        if !self.need_wait_runtime_filter {
+            return false;
+        }
+        self.need_wait_runtime_filter = false;
+        let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
+        if runtime_filter_ready.len() == 1 {
+            self.runtime_filter_ready = Some(runtime_filter_ready[0].clone());
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -182,6 +206,10 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if self.need_wait_runtime_filter() {
+            return Ok(Event::Async);
+        }
+
         if self.output.is_finished() {
             self.input.finish();
             return Ok(Event::Finished);
@@ -324,6 +352,19 @@ impl Processor for DeserializeDataTransform {
             }
         }
 
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        let runtime_filter_ready = self.runtime_filter_ready.as_mut().unwrap();
+        let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
+        if (*rx.borrow()).is_some() {
+            return Ok(());
+        }
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
         Ok(())
     }
 }

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::tokio::sync::watch;
+use databend_common_base::base::tokio::sync::watch::Receiver;
+use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_expression::Expr;
 use xorf::BinaryFuse16;
 
@@ -61,5 +64,25 @@ impl RuntimeFilterInfo {
 
     pub fn is_empty(&self) -> bool {
         self.inlist.is_empty() && self.bloom.is_empty() && self.min_max.is_empty()
+    }
+
+    pub fn is_blooms_empty(&self) -> bool {
+        self.bloom.is_empty()
+    }
+}
+
+pub struct RuntimeFilterReady {
+    pub runtime_filter_watcher: Sender<Option<bool>>,
+    /// A dummy receiver to make runtime_filter_watcher channel open.
+    pub _runtime_filter_dummy_receiver: Receiver<Option<bool>>,
+}
+
+impl Default for RuntimeFilterReady {
+    fn default() -> Self {
+        let (watcher, dummy_receiver) = watch::channel(None);
+        Self {
+            runtime_filter_watcher: watcher,
+            _runtime_filter_dummy_receiver: dummy_receiver,
+        }
     }
 }
