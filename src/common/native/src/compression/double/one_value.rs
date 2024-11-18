@@ -15,12 +15,13 @@
 use std::io::Read;
 use std::io::Write;
 
+use databend_common_column::buffer::Buffer;
+
 use super::DoubleCompression;
 use super::DoubleStats;
 use super::DoubleType;
-
-use crate::error::Result;
 use crate::compression::Compression;
+use crate::error::Result;
 use crate::write::WriteOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,11 +64,7 @@ impl OneValue {
         w: &mut W,
         array: &Buffer<T>,
     ) -> Result<()> {
-        let val = array.iter().find(|v| v.is_some());
-        let val = match val {
-            Some(Some(v)) => *v,
-            _ => T::default(),
-        };
+        let val = array.iter().cloned().next().unwrap_or_default();
         let _ = w.write(val.to_le_bytes().as_ref())?;
         Ok(())
     }

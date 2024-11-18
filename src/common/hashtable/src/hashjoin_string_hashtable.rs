@@ -97,12 +97,12 @@ where A: Allocator + Clone + 'static
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 hashes.iter_mut().for_each(|hash| {
                     *hash = 0;
                 });
                 return 0;
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -149,7 +149,7 @@ where A: Allocator + Clone + 'static
     ) -> (usize, usize) {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 unmatched_selection
                     .iter_mut()
                     .enumerate()
@@ -157,7 +157,7 @@ where A: Allocator + Clone + 'static
                         *val = idx as u32;
                     });
                 return (0, hashes.len());
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -216,9 +216,9 @@ where A: Allocator + Clone + 'static
     ) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 return 0;
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }

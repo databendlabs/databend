@@ -17,6 +17,7 @@ use std::io::Read;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
 use roaring::RoaringBitmap;
 
 use super::compress_integer;
@@ -24,9 +25,8 @@ use super::decompress_integer;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
-
-use crate::error::Result;
 use crate::compression::Compression;
+use crate::error::Result;
 use crate::write::WriteOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,7 +35,7 @@ pub struct Freq {}
 impl<T: IntegerType> IntegerCompression<T> for Freq {
     fn compress(
         &self,
-        array: &Buffer<T>,
+        col: &Buffer<T>,
         stats: &IntegerStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -60,11 +60,11 @@ impl<T: IntegerType> IntegerCompression<T> for Freq {
         let mut exceptions_bitmap = RoaringBitmap::new();
         let mut exceptions = Vec::with_capacity(stats.tuple_count - max_count);
 
-        for (i, val) in array.iter().enumerate() {
+        for (i, val) in col.option_iter(stats.validity.as_ref()).enumerate() {
             if let Some(val) = val {
-                if top_value_is_null || *val != top_value {
+                if top_value_is_null || val != top_value {
                     exceptions_bitmap.insert(i as u32);
-                    exceptions.push(*val);
+                    exceptions.push(val);
                 }
             }
         }
@@ -81,8 +81,8 @@ impl<T: IntegerType> IntegerCompression<T> for Freq {
         let mut write_options = write_options.clone();
         write_options.forbidden_compressions.push(Compression::Freq);
 
-        let exceptions = Buffer::<T>::from_vec(exceptions);
-        compress_integer(&exceptions, write_options, output)?;
+        let exceptions = exceptions.into();
+        compress_integer(&exceptions, stats.validity.clone(), write_options, output)?;
 
         Ok(output.len() - size)
     }

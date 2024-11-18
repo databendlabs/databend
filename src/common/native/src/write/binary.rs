@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use databend_common_column::binary::BinaryColumn;
+use databend_common_column::bitmap::Bitmap;
 
 use super::WriteOptions;
 use crate::compression::binary::compress_binary;

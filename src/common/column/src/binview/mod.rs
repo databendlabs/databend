@@ -37,6 +37,9 @@ pub use view::View;
 
 use crate::binary::BinaryColumn;
 use crate::binary::BinaryColumnBuilder;
+use crate::bitmap::utils::BitmapIter;
+use crate::bitmap::utils::ZipValidity;
+use crate::bitmap::Bitmap;
 use crate::buffer::Buffer;
 use crate::error::Result;
 use crate::impl_sliced;
@@ -273,6 +276,14 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     /// Returns an iterator of `&[u8]` over every element of this array, ignoring the validity
     pub fn iter(&self) -> BinaryViewColumnIter<T> {
         BinaryViewColumnIter::new(self)
+    }
+
+    pub fn option_iter<'a>(
+        &'a self,
+        validity: Option<&'a Bitmap>,
+    ) -> ZipValidity<&'a T, BinaryViewColumnIter<T>, BitmapIter<'a>> {
+        let bitmap_iter = validity.as_ref().map(|v| v.iter());
+        ZipValidity::new(self.iter(), bitmap_iter)
     }
 
     pub fn len_iter(&self) -> impl Iterator<Item = u32> + '_ {

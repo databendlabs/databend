@@ -114,13 +114,13 @@ pub fn is_nested_type(t: &TableDataType) -> bool {
         TableDataType::Struct(_)
             | TableDataType::List(_)
             | TableDataType::LargeList(_)
-            | TableDataType::Map(_, _)
+            | TableDataType::Map(_)
     )
 }
 
 /// Slices the [`column`] to `Column` and `Vec<Nested>`.
 pub fn slice_nest_column(
-    primitive_column: &mut dyn column,
+    primitive_column: &mut Column,
     nested: &mut [Nested],
     mut current_offset: usize,
     mut current_length: usize,
@@ -232,7 +232,6 @@ impl InitNested {
     }
 }
 
-/// Creates a new [`Listcolumn`] or [`FixedSizeListcolumn`].
 pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
     let (offsets, validity) = n.inner();
@@ -259,7 +258,6 @@ pub fn create_map(data_type: TableDataType, nested: &mut NestedState, values: Co
 
 pub fn create_struct(
     is_nullable: bool,
-    fields: Vec<Field>,
     nested: &mut Vec<NestedState>,
     values: Vec<Column>,
 ) -> (NestedState, Column) {

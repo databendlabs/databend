@@ -15,7 +15,10 @@
 use std::io::BufRead;
 
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use serde_json::Number;
 
 use crate::compression::Compression;
 use crate::error::Result;
@@ -60,7 +63,7 @@ pub struct DictPageBody {
     pub unique_num: u32,
 }
 
-pub fn stat_simple<'a, I>(reader: I, field: Field) -> Result<ColumnInfo>
+pub fn stat_simple<'a, I>(reader: I, field: TableField) -> Result<ColumnInfo>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a {
     let mut pages = vec![];
 
@@ -69,7 +72,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 
 
         let mut buffer = buffer.as_slice();
         let mut opt_validity_size = None;
-        if field.is_nullable {
+        if field.is_nullable() {
             let validity_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
             debug_assert!(validity_size == 0 || validity_size as u64 == num_values);
             let consume_validity_size = 4 + ((validity_size + 7) / 8) as usize;
@@ -79,8 +82,8 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 
             }
         };
 
-        let physical_type = field.data_type.to_physical_type();
-        let page = stat_body(&mut buffer, opt_validity_size, physical_type)?;
+        let data_type = field.data_type();
+        let page = stat_body(&mut buffer, opt_validity_size, data_type)?;
         pages.push(page);
     }
     Ok(ColumnInfo { field, pages })
@@ -89,7 +92,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 
 fn stat_body(
     buffer: &mut &[u8],
     opt_validity_size: Option<u32>,
-    physical_type: PhysicalType,
+    data_type: &TableDataType,
 ) -> Result<PageInfo> {
     let codec = Compression::from_codec(buffer[0])?;
     let compressed_size = u32::from_le_bytes(buffer[1..5].try_into().unwrap());
@@ -98,9 +101,9 @@ fn stat_body(
 
     let body = match codec {
         Compression::Rle => PageBody::Rle,
-        Compression::Dict => stat_dict_body(buffer, physical_type)?,
+        Compression::Dict => stat_dict_body(buffer, data_type)?,
         Compression::OneValue => PageBody::OneValue,
-        Compression::Freq => stat_freq_body(buffer, physical_type)?,
+        Compression::Freq => stat_freq_body(buffer, data_type)?,
         Compression::Bitpacking => PageBody::Bitpack,
         Compression::DeltaBitpacking => PageBody::DeltaBitpack,
         Compression::Patas => PageBody::Patas,
@@ -115,23 +118,25 @@ fn stat_body(
     })
 }
 
-fn stat_freq_body(mut buffer: &[u8], physical_type: PhysicalType) -> Result<PageBody> {
-    match physical_type {
-        PhysicalType::Primitive(p) => {
+fn stat_freq_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBody> {
+    match data_type {
+        TableDataType::Number(p) => {
             let top_value_size = size_of_primitive(p);
             buffer = &buffer[top_value_size..];
             let exceptions_bitmap_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
             buffer = &buffer[4 + exceptions_bitmap_size as usize..];
-            let exceptions = stat_body(&mut buffer, None, physical_type)?;
+            let exceptions = stat_body(&mut buffer, None, data_type)?;
             Ok(PageBody::Freq(FreqPageBody {
                 exceptions: Some(Box::new(exceptions)),
                 exceptions_bitmap_size,
             }))
         }
-        PhysicalType::Binary
-        | PhysicalType::LargeBinary
-        | PhysicalType::Utf8
-        | PhysicalType::LargeUtf8 => {
+        TableDataType::Decimal(decimal_size) if decimal_size.scale() > MAX_DECIMAL128_PRECISION => {
+            32
+        }
+        TableDataType::Decimal(decimal_size) => 16,
+
+        TableDataType::Binary | TableDataType::String => {
             let len = u64::from_le_bytes(buffer[0..8].try_into().unwrap());
             buffer = &buffer[8 + len as usize..];
             let exceptions_bitmap_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
@@ -140,12 +145,12 @@ fn stat_freq_body(mut buffer: &[u8], physical_type: PhysicalType) -> Result<Page
                 exceptions_bitmap_size,
             }))
         }
-        _ => unreachable!("type {:?} not supported", physical_type),
+        _ => unreachable!("type {:?} not supported", data_type),
     }
 }
 
-fn stat_dict_body(mut buffer: &[u8], physical_type: PhysicalType) -> Result<PageBody> {
-    let indices = stat_body(&mut buffer, None, physical_type)?;
+fn stat_dict_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBody> {
+    let indices = stat_body(&mut buffer, None, data_type)?;
     let unique_num = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
     Ok(PageBody::Dict(DictPageBody {
         indices: Box::new(indices),
@@ -153,23 +158,19 @@ fn stat_dict_body(mut buffer: &[u8], physical_type: PhysicalType) -> Result<Page
     }))
 }
 
-fn size_of_primitive(p: PrimitiveType) -> usize {
+fn size_of_primitive(p: NumberDataType) -> usize {
     match p {
-        PrimitiveType::Int8 => 1,
-        PrimitiveType::Int16 => 2,
-        PrimitiveType::Int32 => 4,
-        PrimitiveType::Int64 => 8,
-        PrimitiveType::Int128 | PrimitiveType::UInt128 => 16,
-        PrimitiveType::Int256 => 32,
-        PrimitiveType::UInt8 => 1,
-        PrimitiveType::UInt16 => 2,
-        PrimitiveType::UInt32 => 4,
-        PrimitiveType::UInt64 => 8,
-        PrimitiveType::Float16 => unimplemented!(),
-        PrimitiveType::Float32 => 4,
-        PrimitiveType::Float64 => 8,
-        PrimitiveType::DaysMs => unimplemented!(),
-        PrimitiveType::MonthDayNano => unimplemented!(),
+        NumberDataType::Int8 => 1,
+        NumberDataType::Int16 => 2,
+        NumberDataType::Int32 => 4,
+        NumberDataType::Int64 => 8,
+
+        NumberDataType::UInt8 => 1,
+        NumberDataType::UInt16 => 2,
+        NumberDataType::UInt32 => 4,
+        NumberDataType::UInt64 => 8,
+        NumberDataType::Float32 => 4,
+        NumberDataType::Float64 => 8,
     }
 }
 
@@ -177,6 +178,10 @@ fn size_of_primitive(p: PrimitiveType) -> usize {
 mod test {
     use std::io::BufRead;
 
+    use databend_common_expression::infer_table_schema;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
 
@@ -196,8 +201,8 @@ mod test {
     const PAGE_PER_COLUMN: usize = 10;
     const COLUMN_SIZE: usize = PAGE_SIZE * PAGE_PER_COLUMN;
 
-    fn write_and_stat_simple_column(array: Column) -> ColumnInfo {
-        assert!(is_primitive(array.data_type()));
+    fn write_and_stat_simple_column(column: Column) -> ColumnInfo {
+        assert!(is_primitive(&column.data_type()));
         let options = WriteOptions {
             default_compression: CommonCompression::Lz4,
             max_page_size: Some(PAGE_SIZE),
@@ -206,16 +211,13 @@ mod test {
         };
 
         let mut bytes = Vec::new();
-        let field = Field::new(
-            "name",
-            array.data_type().clone(),
-            array.validity().is_some(),
-        );
-        let schema = Schema::from(vec![field.clone()]);
+        let field = DataField::new("name", column.data_type().clone());
+        let schema = DataSchema::new(vec![field.clone()]);
+        let table_schema = infer_table_schema(&schema).unwrap();
         let mut writer = NativeWriter::new(&mut bytes, schema, options).unwrap();
 
         writer.start().unwrap();
-        writer.write(&vec![array]).unwrap();
+        writer.write(&vec![column]).unwrap();
         writer.finish().unwrap();
 
         let meta = writer.metas[0].clone();
@@ -234,18 +236,18 @@ mod test {
         let values: Vec<Option<i64>> = (0..COLUMN_SIZE)
             .map(|d| if d % 3 == 0 { None } else { Some(d as i64) })
             .collect();
-        let array = Box::new(Buffer::<i64>::from_iter(values));
-        let column_info = write_and_stat_simple_column(array.clone());
+        let column = Box::new(Buffer::<i64>::from_iter(values));
+        let column_info = write_and_stat_simple_column(column.clone());
 
         assert_eq!(column_info.pages.len(), 10);
         for p in column_info.pages {
             assert_eq!(p.validity_size, Some(PAGE_SIZE as u32));
         }
 
-        let array = Box::new(BinaryColumn::<i64>::from_iter_values(
+        let column = Box::new(BinaryColumn::<i64>::from_iter_values(
             ["a"; COLUMN_SIZE].iter(),
         ));
-        let column_info = write_and_stat_simple_column(array.clone());
+        let column_info = write_and_stat_simple_column(column.clone());
         assert_eq!(column_info.pages.len(), 10);
         for p in column_info.pages {
             assert_eq!(p.validity_size, None);
@@ -253,7 +255,7 @@ mod test {
         }
 
         set_dict_env();
-        let column_info = write_and_stat_simple_column(array.clone());
+        let column_info = write_and_stat_simple_column(column.clone());
         assert_eq!(column_info.pages.len(), 10);
         for p in column_info.pages {
             assert_eq!(p.validity_size, None);
@@ -269,7 +271,7 @@ mod test {
         remove_all_env();
 
         set_freq_env();
-        let column_info = write_and_stat_simple_column(array);
+        let column_info = write_and_stat_simple_column(column);
         assert_eq!(column_info.pages.len(), 10);
         for p in column_info.pages {
             assert_eq!(p.validity_size, None);

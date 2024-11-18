@@ -15,43 +15,44 @@
 use std::io::BufRead;
 use std::io::BufReader;
 
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::BinaryArray;
-use databend_common_arrow::arrow::array::BinaryViewArray;
-use databend_common_arrow::arrow::array::BooleanArray;
-use databend_common_arrow::arrow::array::Float32Array;
-use databend_common_arrow::arrow::array::Float64Array;
-use databend_common_arrow::arrow::array::Int16Array;
-use databend_common_arrow::arrow::array::Int32Array;
-use databend_common_arrow::arrow::array::Int64Array;
-use databend_common_arrow::arrow::array::Int8Array;
-use databend_common_arrow::arrow::array::ListArray;
-use databend_common_arrow::arrow::array::MapArray;
-use databend_common_arrow::arrow::array::PrimitiveArray;
-use databend_common_arrow::arrow::array::StructArray;
-use databend_common_arrow::arrow::array::UInt16Array;
-use databend_common_arrow::arrow::array::UInt32Array;
-use databend_common_arrow::arrow::array::UInt64Array;
-use databend_common_arrow::arrow::array::UInt8Array;
-use databend_common_arrow::arrow::array::Utf8Array;
-use databend_common_arrow::arrow::array::Utf8ViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::NullBufferBuilder;
 use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::col::col;
+use databend_common_arrow::arrow::col::BinaryViewcol;
+use databend_common_arrow::arrow::col::Binarycol;
+use databend_common_arrow::arrow::col::Booleancol;
+use databend_common_arrow::arrow::col::Float32col;
+use databend_common_arrow::arrow::col::Float64col;
+use databend_common_arrow::arrow::col::Int16col;
+use databend_common_arrow::arrow::col::Int32col;
+use databend_common_arrow::arrow::col::Int64col;
+use databend_common_arrow::arrow::col::Int8col;
+use databend_common_arrow::arrow::col::Listcol;
+use databend_common_arrow::arrow::col::Mapcol;
+use databend_common_arrow::arrow::col::Primitivecol;
+use databend_common_arrow::arrow::col::Structcol;
+use databend_common_arrow::arrow::col::UInt16col;
+use databend_common_arrow::arrow::col::UInt32col;
+use databend_common_arrow::arrow::col::UInt64col;
+use databend_common_arrow::arrow::col::UInt8col;
+use databend_common_arrow::arrow::col::Utf8Viewcol;
+use databend_common_arrow::arrow::col::Utf8col;
 use databend_common_arrow::arrow::compute;
 use databend_common_arrow::arrow::datatypes::DataType;
 use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Schema;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use databend_common_arrow::native::n_columns;
-use databend_common_arrow::native::read::batch_read::batch_read_array;
-use databend_common_arrow::native::read::deserialize::column_iter_to_arrays;
+use databend_common_arrow::native::read::batch_read::batch_read_col;
+use databend_common_arrow::native::read::deserialize::column_iter_to_cols;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::write::NativeWriter;
 use databend_common_arrow::native::write::WriteOptions;
 use databend_common_arrow::native::ColumnMeta;
 use databend_common_arrow::native::CommonCompression;
 use databend_common_arrow::native::PageMeta;
+use databend_common_expression::Column;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -59,31 +60,31 @@ use rand::SeedableRng;
 pub const WRITE_PAGE: usize = 2048;
 pub const SMALL_WRITE_PAGE: usize = 2;
 
-pub fn new_test_chunk() -> Vec<ArrayRef> {
+pub fn new_test_chunk() -> Vec<Column> {
     Chunk::new(vec![
-        Box::new(BooleanArray::from_slice([
+        Box::new(Booleancol::from_slice([
             true, true, true, false, false, false,
         ])) as _,
-        Box::new(UInt8Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(UInt16Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(UInt32Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(UInt64Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(Int8Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(Int16Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(Int32Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(Int64Array::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
-        Box::new(Float32Array::from_vec(vec![1.1, 2.2, 3.3, 4.4, 5.5, 6.6])) as _,
-        Box::new(Float64Array::from_vec(vec![1.1, 2.2, 3.3, 4.4, 5.5, 6.6])) as _,
-        Box::new(Utf8Array::<i32>::from_iter_values(
+        Box::new(UInt8col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(UInt16col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(UInt32col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(UInt64col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(Int8col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(Int16col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(Int32col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(Int64col::from_vec(vec![1, 2, 3, 4, 5, 6])) as _,
+        Box::new(Float32col::from_vec(vec![1.1, 2.2, 3.3, 4.4, 5.5, 6.6])) as _,
+        Box::new(Float64col::from_vec(vec![1.1, 2.2, 3.3, 4.4, 5.5, 6.6])) as _,
+        Box::new(Utf8col::<i32>::from_iter_values(
             ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
-        Box::new(BinaryArray::<i64>::from_iter_values(
+        Box::new(Binarycol::<i64>::from_iter_values(
             ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
-        Box::new(Utf8ViewArray::from_slice_values(
+        Box::new(Utf8Viewcol::from_slice_values(
             ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
-        Box::new(BinaryViewArray::from_slice_values(
+        Box::new(BinaryViewcol::from_slice_values(
             ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
     ])
@@ -150,7 +151,7 @@ fn test_freq() {
         values.push(10000);
     }
 
-    let chunk = Chunk::new(vec![Box::new(UInt32Array::from_vec(values)) as _]);
+    let chunk = Chunk::new(vec![Box::new(UInt32col::from_vec(values)) as _]);
     test_write_read(chunk);
 }
 
@@ -168,8 +169,8 @@ fn test_bitpacking() {
 fn test_deleta_bitpacking() {
     let size = WRITE_PAGE * 5;
     let chunk = Chunk::new(vec![
-        Box::new(UInt32Array::from_vec((0..size as u32).collect())) as _,
-        Box::new(Int32Array::from_vec((0..size as i32).collect())) as _,
+        Box::new(UInt32col::from_vec((0..size as u32).collect())) as _,
+        Box::new(Int32col::from_vec((0..size as i32).collect())) as _,
     ]);
     test_write_read(chunk);
 }
@@ -178,9 +179,9 @@ fn test_deleta_bitpacking() {
 fn test_onevalue() {
     let size = 10000;
     let chunk = Chunk::new(vec![
-        Box::new(BooleanArray::from_iter((0..size).map(|_| Some(true)))) as _,
-        Box::new(BooleanArray::from_iter((0..size).map(|_| Some(false)))) as _,
-        Box::new(UInt32Array::from_vec(vec![3; size])) as _,
+        Box::new(Booleancol::from_iter((0..size).map(|_| Some(true)))) as _,
+        Box::new(Booleancol::from_iter((0..size).map(|_| Some(false)))) as _,
+        Box::new(UInt32col::from_vec(vec![3; size])) as _,
         Box::new(create_random_index(size, 0.3, 1)) as _,
         Box::new(create_random_string(size, 0.4, 1)) as _,
     ]);
@@ -189,8 +190,8 @@ fn test_onevalue() {
 
 #[test]
 fn test_struct() {
-    let struct_array = create_struct(1000, 0.2, 1000);
-    let chunk = Chunk::new(vec![Box::new(struct_array) as _]);
+    let struct_col = create_struct(1000, 0.2, 1000);
+    let chunk = Chunk::new(vec![Box::new(struct_col) as _]);
     test_write_read(chunk);
 }
 
@@ -203,15 +204,15 @@ fn test_float() {
 
 #[test]
 fn test_list() {
-    let list_array = create_list(1000, 0.2);
-    let chunk = Chunk::new(vec![Box::new(list_array) as _]);
+    let list_col = create_list(1000, 0.2);
+    let chunk = Chunk::new(vec![Box::new(list_col) as _]);
     test_write_read(chunk);
 }
 
 #[test]
 fn test_map() {
-    let map_array = create_map(1000, 0.2);
-    let chunk = Chunk::new(vec![Box::new(map_array) as _]);
+    let map_col = create_map(1000, 0.2);
+    let chunk = Chunk::new(vec![Box::new(map_col) as _]);
     test_write_read(chunk);
 }
 
@@ -223,7 +224,7 @@ fn test_list_list() {
     for i in (0..=1000).step_by(2) {
         offsets.push(i);
     }
-    let list_array = ListArray::try_new(
+    let list_col = Listcol::try_new(
         DataType::List(Box::new(Field::new("item", l1.data_type().clone(), true))),
         OffsetsBuffer::try_from(offsets).unwrap(),
         l1.boxed(),
@@ -231,7 +232,7 @@ fn test_list_list() {
     )
     .unwrap();
 
-    let chunk = Chunk::new(vec![Box::new(list_array) as _]);
+    let chunk = Chunk::new(vec![Box::new(list_col) as _]);
     test_write_read(chunk);
 }
 
@@ -243,7 +244,7 @@ fn test_list_struct() {
     for i in (0..=1000).step_by(2) {
         offsets.push(i);
     }
-    let list_array = ListArray::try_new(
+    let list_col = Listcol::try_new(
         DataType::List(Box::new(Field::new("item", s1.data_type().clone(), true))),
         OffsetsBuffer::try_from(offsets).unwrap(),
         s1.boxed(),
@@ -251,7 +252,7 @@ fn test_list_struct() {
     )
     .unwrap();
 
-    let chunk = Chunk::new(vec![Box::new(list_array) as _]);
+    let chunk = Chunk::new(vec![Box::new(list_col) as _]);
     test_write_read(chunk);
 }
 
@@ -263,7 +264,7 @@ fn test_list_map() {
     for i in (0..=1000).step_by(2) {
         offsets.push(i);
     }
-    let list_array = ListArray::try_new(
+    let list_col = Listcol::try_new(
         DataType::List(Box::new(Field::new("item", m1.data_type().clone(), true))),
         OffsetsBuffer::try_from(offsets).unwrap(),
         m1.boxed(),
@@ -271,7 +272,7 @@ fn test_list_map() {
     )
     .unwrap();
 
-    let chunk = Chunk::new(vec![Box::new(list_array) as _]);
+    let chunk = Chunk::new(vec![Box::new(list_col) as _]);
     test_write_read(chunk);
 }
 
@@ -287,7 +288,7 @@ fn test_struct_list() {
             true,
         ),
     ]);
-    let struct_array = StructArray::try_new(
+    let struct_col = Structcol::try_new(
         dt,
         vec![
             Box::new(create_random_string(size, null_density, size)) as _,
@@ -296,16 +297,16 @@ fn test_struct_list() {
         None,
     )
     .unwrap();
-    let chunk = Chunk::new(vec![Box::new(struct_array) as _]);
+    let chunk = Chunk::new(vec![Box::new(struct_col) as _]);
     test_write_read(chunk);
 }
 
-fn create_list(size: usize, null_density: f32) -> ListArray<i32> {
+fn create_list(size: usize, null_density: f32) -> Listcol<i32> {
     let (offsets, bitmap) = create_random_offsets(size, 0.1);
     let length = *offsets.last().unwrap() as usize;
     let l1 = create_random_index(length, null_density, length);
 
-    ListArray::try_new(
+    Listcol::try_new(
         DataType::List(Box::new(Field::new("item", l1.data_type().clone(), true))),
         OffsetsBuffer::try_from(offsets).unwrap(),
         l1.boxed(),
@@ -314,14 +315,14 @@ fn create_list(size: usize, null_density: f32) -> ListArray<i32> {
     .unwrap()
 }
 
-fn create_map(size: usize, null_density: f32) -> MapArray {
+fn create_map(size: usize, null_density: f32) -> Mapcol {
     let (offsets, bitmap) = create_random_offsets(size, 0.1);
     let length = *offsets.last().unwrap() as usize;
     let dt = DataType::Struct(vec![
         Field::new("key", DataType::Int32, false),
         Field::new("value", DataType::LargeBinary, true),
     ]);
-    let struct_array = StructArray::try_new(
+    let struct_col = Structcol::try_new(
         dt,
         vec![
             Box::new(create_random_index(length, 0.0, length)) as _,
@@ -331,29 +332,25 @@ fn create_map(size: usize, null_density: f32) -> MapArray {
     )
     .unwrap();
 
-    MapArray::try_new(
+    Mapcol::try_new(
         DataType::Map(
-            Box::new(Field::new(
-                "entries",
-                struct_array.data_type().clone(),
-                false,
-            )),
+            Box::new(Field::new("entries", struct_col.data_type().clone(), false)),
             false,
         ),
         OffsetsBuffer::try_from(offsets).unwrap(),
-        struct_array.boxed(),
+        struct_col.boxed(),
         bitmap,
     )
     .unwrap()
 }
 
-fn create_struct(size: usize, null_density: f32, uniq: usize) -> StructArray {
+fn create_struct(size: usize, null_density: f32, uniq: usize) -> Structcol {
     let dt = DataType::Struct(vec![
         Field::new("age", DataType::Int32, true),
         Field::new("name", DataType::Utf8View, true),
         Field::new("name2", DataType::LargeBinary, true),
     ]);
-    StructArray::try_new(
+    Structcol::try_new(
         dt,
         vec![
             Box::new(create_random_index(size, null_density, uniq)) as _,
@@ -365,7 +362,7 @@ fn create_struct(size: usize, null_density: f32, uniq: usize) -> StructArray {
     .unwrap()
 }
 
-fn create_random_bool(size: usize, null_density: f32) -> BooleanArray {
+fn create_random_bool(size: usize, null_density: f32) -> Booleancol {
     let mut rng = StdRng::seed_from_u64(42);
     (0..size)
         .map(|_| {
@@ -376,10 +373,10 @@ fn create_random_bool(size: usize, null_density: f32) -> BooleanArray {
                 None
             }
         })
-        .collect::<BooleanArray>()
+        .collect::<Booleancol>()
 }
 
-fn create_random_index(size: usize, null_density: f32, uniq: usize) -> PrimitiveArray<i32> {
+fn create_random_index(size: usize, null_density: f32, uniq: usize) -> Primitivecol<i32> {
     let mut rng = StdRng::seed_from_u64(42);
     (0..size)
         .map(|_| {
@@ -390,10 +387,10 @@ fn create_random_index(size: usize, null_density: f32, uniq: usize) -> Primitive
                 None
             }
         })
-        .collect::<PrimitiveArray<i32>>()
+        .collect::<Primitivecol<i32>>()
 }
 
-fn create_random_double(size: usize, null_density: f32, uniq: usize) -> PrimitiveArray<f64> {
+fn create_random_double(size: usize, null_density: f32, uniq: usize) -> Primitivecol<f64> {
     let mut rng = StdRng::seed_from_u64(42);
     (0..size)
         .map(|_| {
@@ -404,10 +401,10 @@ fn create_random_double(size: usize, null_density: f32, uniq: usize) -> Primitiv
                 None
             }
         })
-        .collect::<PrimitiveArray<f64>>()
+        .collect::<Primitivecol<f64>>()
 }
 
-fn create_random_string(size: usize, null_density: f32, uniq: usize) -> BinaryArray<i64> {
+fn create_random_string(size: usize, null_density: f32, uniq: usize) -> Binarycol<i64> {
     let mut rng = StdRng::seed_from_u64(42);
     (0..size)
         .map(|_| {
@@ -418,10 +415,10 @@ fn create_random_string(size: usize, null_density: f32, uniq: usize) -> BinaryAr
                 None
             }
         })
-        .collect::<BinaryArray<i64>>()
+        .collect::<Binarycol<i64>>()
 }
 
-fn create_random_view(size: usize, null_density: f32, uniq: usize) -> Utf8ViewArray {
+fn create_random_view(size: usize, null_density: f32, uniq: usize) -> Utf8Viewcol {
     let mut rng = StdRng::seed_from_u64(42);
     (0..size)
         .map(|_| {
@@ -432,7 +429,7 @@ fn create_random_view(size: usize, null_density: f32, uniq: usize) -> Utf8ViewAr
                 None
             }
         })
-        .collect::<Utf8ViewArray>()
+        .collect::<Utf8Viewcol>()
 }
 
 fn create_random_offsets(size: usize, null_density: f32) -> (Vec<i32>, Option<NullBuffer>) {
@@ -453,7 +450,7 @@ fn create_random_offsets(size: usize, null_density: f32) -> (Vec<i32>, Option<Nu
     (offsets, builder.into())
 }
 
-fn test_write_read(chunk: Vec<ArrayRef>) {
+fn test_write_read(chunk: Vec<Column>) {
     let _ = env_logger::try_init();
 
     let compressions = vec![
@@ -476,17 +473,11 @@ fn test_write_read(chunk: Vec<ArrayRef>) {
     }
 }
 
-fn test_write_read_with_options(chunk: Vec<ArrayRef>, options: WriteOptions) {
+fn test_write_read_with_options(chunk: Vec<Column>, options: WriteOptions) {
     let mut bytes = Vec::new();
     let fields: Vec<Field> = chunk
         .iter()
-        .map(|array| {
-            Field::new(
-                "name",
-                array.data_type().clone(),
-                array.validity().is_some(),
-            )
-        })
+        .map(|col| Field::new("name", col.data_type().clone(), col.validity().is_some()))
         .collect();
 
     let schema = Schema::from(fields);
@@ -515,14 +506,14 @@ fn test_write_read_with_options(chunk: Vec<ArrayRef>, options: WriteOptions) {
             native_readers.push(native_reader);
         }
 
-        let mut array_iter = column_iter_to_arrays(native_readers, field.clone(), vec![]).unwrap();
+        let mut col_iter = column_iter_to_cols(native_readers, field.clone(), vec![]).unwrap();
 
-        let mut arrays = vec![];
-        for array in array_iter.by_ref() {
-            arrays.push(array.unwrap().to_boxed());
+        let mut cols = vec![];
+        for col in col_iter.by_ref() {
+            cols.push(col.unwrap().to_boxed());
         }
-        let arrays: Vec<&dyn Array> = arrays.iter().map(|v| v.as_ref()).collect();
-        let result = compute::concatenate::concatenate(&arrays).unwrap();
+        let cols: Vec<&dyn col> = cols.iter().map(|v| v.as_ref()).collect();
+        let result = compute::concatenate::concatenate(&cols).unwrap();
         results.push(result);
     }
     let result_chunk = Chunk::new(results);
@@ -548,7 +539,7 @@ fn test_write_read_with_options(chunk: Vec<ArrayRef>, options: WriteOptions) {
 
             readers.push(reader);
         }
-        let batch_result = batch_read_array(readers, field.clone(), pages).unwrap();
+        let batch_result = batch_read_col(readers, field.clone(), pages).unwrap();
         batch_results.push(batch_result);
     }
     let batch_result_chunk = Chunk::new(batch_results);

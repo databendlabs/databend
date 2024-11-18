@@ -16,12 +16,17 @@ use std::convert::TryInto;
 use std::io::Cursor;
 use std::marker::PhantomData;
 
-
-
+use databend_common_column::buffer::Buffer;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
-use crate::error::Result;
+
 use crate::compression::double::decompress_double;
 use crate::compression::double::DoubleType;
+use crate::compression::double::Number;
+use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
 use crate::read::read_basic::*;
@@ -34,10 +39,10 @@ use crate::PageMeta;
 pub struct DoubleNestedIter<I, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: DoubleType,
+    T: Number + DoubleType,
 {
     iter: I,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
     _phantom: PhantomData<T>,
@@ -46,9 +51,9 @@ where
 impl<I, T> DoubleNestedIter<I, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: DoubleType,
+    T: Number + DoubleType,
 {
-    pub fn new(iter: I, data_type: DataType, init: Vec<InitNested>) -> Self {
+    pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
         Self {
             iter,
             data_type,
@@ -62,14 +67,10 @@ where
 impl<I, T> DoubleNestedIter<I, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: DoubleType,
+    T: Number + DoubleType,
     Vec<u8>: TryInto<T::Bytes>,
 {
-    fn deserialize(
-        &mut self,
-        num_values: u64,
-        buffer: Vec<u8>,
-    ) -> Result<(NestedState, Column)> {
+    fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
         let length = num_values as usize;
@@ -81,16 +82,16 @@ where
         let mut buffer = reader.into_inner().into_inner();
         self.iter.swap_buffer(&mut buffer);
 
-        let array = Buffer::<T>::try_new(self.data_type.clone(), values.into(), validity)?;
+        let column: Buffer<T> = values.into();
 
-        Ok((nested, Box::new(array) as Column))
+        Ok((nested, NumberType::<T>::upcast_column(column)))
     }
 }
 
 impl<I, T> Iterator for DoubleNestedIter<I, T>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    T: DoubleType,
+    T: Number + DoubleType,
     Vec<u8>: TryInto<T::Bytes>,
 {
     type Item = Result<(NestedState, Column)>;
@@ -112,9 +113,9 @@ where
     }
 }
 
-pub fn read_nested_primitive<T: DoubleType, R: NativeReadBuf>(
+pub fn read_nested_primitive<T: Number + DoubleType, R: NativeReadBuf>(
     reader: &mut R,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
 ) -> Result<Vec<(NestedState, Column)>> {
@@ -127,8 +128,12 @@ pub fn read_nested_primitive<T: DoubleType, R: NativeReadBuf>(
         let mut values = Vec::with_capacity(num_values);
         decompress_double(reader, num_values, &mut values, &mut scratch)?;
 
-        let array = Buffer::<T>::try_new(data_type.clone(), values.into(), validity)?;
-        results.push((nested, Box::new(array) as Column));
+        let column: Buffer<T> = values.into();
+        let mut col = NumberType::<T>::upcast_column(column);
+        if data_type.is_nullable() {
+            col = col.wrap_nullable(validity);
+        }
+        results.push((nested, col));
     }
     Ok(results)
 }

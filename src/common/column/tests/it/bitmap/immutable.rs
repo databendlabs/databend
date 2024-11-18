@@ -55,7 +55,7 @@ fn new_constant() {
     assert!((slice[1] & 0b00000001) > 0);
     assert_eq!(offset, 0);
     assert_eq!(length, 9);
-    assert_eq!(b.unset_bits(), 0);
+    assert_eq!(b.null_count(), 0);
 
     let b = Bitmap::new_constant(false, 9);
     let (slice, offset, length) = b.as_slice();
@@ -63,7 +63,7 @@ fn new_constant() {
     assert!((slice[1] & 0b00000001) == 0);
     assert_eq!(offset, 0);
     assert_eq!(length, 9);
-    assert_eq!(b.unset_bits(), 9);
+    assert_eq!(b.null_count(), 9);
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn from_arrow() {
     assert_eq!(nulls.null_count(), 3);
 
     let bitmap = Bitmap::from_null_buffer(nulls.clone());
-    assert_eq!(nulls.null_count(), bitmap.unset_bits());
+    assert_eq!(nulls.null_count(), bitmap.null_count());
     assert_eq!(nulls.len(), bitmap.len());
     let back = NullBuffer::from(bitmap);
     assert_eq!(nulls, back);
@@ -94,7 +94,7 @@ fn from_arrow() {
     assert_eq!(nulls.len(), 3);
 
     let bitmap = Bitmap::from_null_buffer(nulls.clone());
-    assert_eq!(nulls.null_count(), bitmap.unset_bits());
+    assert_eq!(nulls.null_count(), bitmap.null_count());
     assert_eq!(nulls.len(), bitmap.len());
     let back = NullBuffer::from(bitmap);
     assert_eq!(nulls, back);

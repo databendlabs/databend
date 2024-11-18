@@ -16,15 +16,15 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 
+use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use opendal::Reader;
 
 use super::read_basic::read_u32;
 use super::read_basic::read_u64;
 use super::NativeReadBuf;
 use super::PageIterator;
-use databend_common_expression::TableDataType;
-
-use databend_common_expression::TableSchema;
 use crate::error::Error;
 use crate::error::Result;
 use crate::ColumnMeta;
@@ -34,18 +34,8 @@ const DEFAULT_FOOTER_SIZE: u64 = 64 * 1024;
 
 pub fn is_primitive(data_type: &DataType) -> bool {
     matches!(
-        data_type.to_physical_type(),
-        PhysicalType::Primitive(_)
-            | PhysicalType::Null
-            | PhysicalType::Boolean
-            | PhysicalType::Utf8
-            | PhysicalType::LargeUtf8
-            | PhysicalType::Binary
-            | PhysicalType::Utf8View
-            | PhysicalType::BinaryView
-            | PhysicalType::LargeBinary
-            | PhysicalType::FixedSizeBinary
-            | PhysicalType::Dictionary(_)
+        data_type,
+        DataType::Number(_) | DataType::Decimal(_) | DataType::Timestamp | DataType::Date
     )
 }
 
@@ -184,7 +174,7 @@ pub fn read_meta<Reader: Read + Seek>(reader: &mut Reader) -> Result<Vec<ColumnM
     deserialize_meta(meta_buf)
 }
 
-pub fn infer_schema<Reader: Read + Seek>(reader: &mut Reader) -> Result<Schema> {
+pub fn infer_schema<Reader: Read + Seek>(reader: &mut Reader) -> Result<TableSchema> {
     // EOS(8 bytes) + meta_size(4 bytes) + schema_size(4bytes) = 16 bytes
     reader.seek(SeekFrom::End(-16))?;
     let mut buf = vec![0u8; 4];
@@ -203,7 +193,7 @@ pub fn infer_schema<Reader: Read + Seek>(reader: &mut Reader) -> Result<Schema> 
 pub async fn read_meta_async(
     reader: Reader,
     total_len: usize,
-) -> Result<(Vec<ColumnMeta>, Schema)> {
+) -> Result<(Vec<ColumnMeta>, TableSchema)> {
     // Pre-read footer data to reduce IO.
     let pre_read_len = total_len.min(DEFAULT_FOOTER_SIZE as usize);
 

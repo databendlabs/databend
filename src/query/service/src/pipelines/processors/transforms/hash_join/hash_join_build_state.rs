@@ -448,7 +448,7 @@ impl HashJoinBuildState {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let valid_num = match &$valids {
-                    Some(valids) => valids.len() - valids.unset_bits(),
+                    Some(valids) => valids.len() - valids.null_count(),
                     None => $chunk.num_rows(),
                 };
                 let mut local_space: Vec<u8> = Vec::with_capacity(valid_num * entry_size);
@@ -522,7 +522,7 @@ impl HashJoinBuildState {
                     _ => unreachable!(),
                 };
                 let valid_num = match &$valids {
-                    Some(valids) => valids.len() - valids.unset_bits(),
+                    Some(valids) => valids.len() - valids.null_count(),
                     None => $chunk.num_rows(),
                 };
                 let mut entry_local_space: Vec<u8> = Vec::with_capacity(valid_num * entry_size);
@@ -688,10 +688,10 @@ impl HashJoinBuildState {
                 });
             match valids {
                 ControlFlow::Continue(Some(valids)) | ControlFlow::Break(Some(valids)) => {
-                    if valids.unset_bits() == valids.len() {
+                    if valids.null_count() == valids.len() {
                         return Ok(());
                     }
-                    if valids.unset_bits() != 0 {
+                    if valids.null_count() != 0 {
                         Some(valids)
                     } else {
                         None
@@ -713,7 +713,7 @@ impl HashJoinBuildState {
             JoinType::RightMark => {
                 if !_has_null && !keys_columns.is_empty() {
                     if let Some(validity) = keys_columns[0].validity().1 {
-                        if validity.unset_bits() > 0 {
+                        if validity.null_count() > 0 {
                             _has_null = true;
                             let mut has_null_ref = self
                                 .hash_join_state

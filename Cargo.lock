@@ -3878,6 +3878,7 @@ dependencies = [
  "indexmap 2.6.0",
  "log",
  "lz4",
+ "match-template",
  "num",
  "num-traits",
  "opendal",

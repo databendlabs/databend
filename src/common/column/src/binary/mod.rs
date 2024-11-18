@@ -26,6 +26,9 @@ pub use builder::BinaryColumnBuilder;
 pub use iterator::BinaryColumnBuilderIter;
 pub use iterator::BinaryColumnIter;
 
+use crate::bitmap::utils::BitmapIter;
+use crate::bitmap::utils::ZipValidity;
+use crate::bitmap::Bitmap;
 use crate::buffer::Buffer;
 use crate::error::Error;
 use crate::error::Result;
@@ -101,6 +104,14 @@ impl BinaryColumn {
 
     pub fn iter(&self) -> BinaryColumnIter {
         BinaryColumnIter::new(self)
+    }
+
+    pub fn option_iter<'a>(
+        &'a self,
+        validity: Option<&'a Bitmap>,
+    ) -> ZipValidity<&'a [u8], BinaryColumnIter, BitmapIter<'a>> {
+        let bitmap_iter = validity.as_ref().map(|v| v.iter());
+        ZipValidity::new(self.iter(), bitmap_iter)
     }
 
     pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {

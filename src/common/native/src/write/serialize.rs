@@ -18,7 +18,9 @@ use databend_common_column::with_number_type;
 use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_decimal_type;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -45,37 +47,40 @@ pub fn write<W: Write>(
     let validity = validity.cloned();
 
     match column.remove_nullable() {
-        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => OK(()),
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => Ok(()),
         Column::Number(column) => {
-            with_number_type!(|NUM_TYPE| match column {
+            with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(column) => {
-                    write_primitive::<W>(w, &column, validity, write_options, scratch)
+                    write_primitive::<NUM_TYPE, W>(w, &column, validity, write_options, scratch)
                 }
             })
         }
-        Column::Decimal(buffer) => with_decimal_type!(|DT| {
+        Column::Decimal(buffer) => with_decimal_mapped_type!(|DT| {
             DecimalColumn::DT(column, _ ) => {
-                    write_primitive::<W>(w, &column, validity, write_options, scratch)
+                    write_primitive::<DT, W>(w, &column, validity, write_options, scratch)
             }
         }),
         Column::Boolean(_) => todo!(),
         Column::String(column) => write_view::<W>(w, &column.to_binview(), write_options, scratch),
         Column::Timestamp(column) => {
-            write_primitive::<W>(w, &column, validity, write_options, scratch)
+            write_primitive::<i64, W>(w, &column, validity, write_options, scratch)
         }
-        Column::Date(column) => write_primitive::<W>(w, &column, validity, write_options, scratch),
+        Column::Date(column) => {
+            write_primitive::<i32, W>(w, &column, validity, write_options, scratch)
+        }
 
         Column::Binary(b)
         | Column::Bitmap(b)
         | Column::Variant(b)
         | Column::Geometry(b)
         | Column::Geography(GeographyColumn(b))
-        | Column::Geometry(b) => write_binary::<W>(w, column, validity, write_options, scratch),
+        | Column::Geometry(b) => write_binary::<W>(w, &b, validity, write_options, scratch),
 
         Column::Tuple(_) | Column::Map(_) | Column::Array(_) | Column::Nullable(_) => {
             unreachable!()
         }
     }
+    Ok(())
 }
 
 fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {

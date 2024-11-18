@@ -89,7 +89,7 @@ where
     TSum: Number + std::ops::AddAssign,
 {
     match validity {
-        Some(v) if v.unset_bits() > 0 => {
+        Some(v) if v.null_count() > 0 => {
             let mut sum = TSum::default();
             inner.iter().zip(v.iter()).for_each(|(t, b)| {
                 if b {

@@ -101,7 +101,7 @@ impl Compression {
 }
 
 #[inline]
-pub(crate) fn is_valid(validity: &Option<Bitmap>, i: usize) -> bool {
+pub(crate) fn is_valid(validity: Option<&Bitmap>, i: usize) -> bool {
     match validity {
         Some(v) => v.get_bit(i),
         None => true,

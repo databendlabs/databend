@@ -23,6 +23,8 @@ mod traits;
 use std::collections::HashMap;
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -45,14 +47,14 @@ use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
 pub fn compress_integer<T: IntegerType>(
-    array: &Buffer<T>,
+    col: &Buffer<T>,
     validity: Option<Bitmap>,
     write_options: WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {
     // choose compressor
-    let stats = gen_stats(array, validity);
-    let compressor = choose_compressor(array, &stats, &write_options);
+    let stats = gen_stats(col, validity);
+    let compressor = choose_compressor(col, &stats, &write_options);
 
     log::debug!(
         "choose integer compression : {:?}",
@@ -66,14 +68,14 @@ pub fn compress_integer<T: IntegerType>(
 
     let compressed_size = match compressor {
         IntCompressor::Basic(c) => {
-            let input_buf = bytemuck::cast_slice(array.values());
+            let input_buf = bytemuck::cast_slice(col.as_slice());
             c.compress(input_buf, buf)
         }
-        IntCompressor::Extend(c) => c.compress(array, &stats, &write_options, buf),
+        IntCompressor::Extend(c) => c.compress(col, &stats, &write_options, buf),
     }?;
     buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
     buf[pos + 4..pos + 8]
-        .copy_from_slice(&((array.len() * std::mem::size_of::<T>()) as u32).to_le_bytes());
+        .copy_from_slice(&((col.len() * std::mem::size_of::<T>()) as u32).to_le_bytes());
 
     log::debug!(
         "integer compress ratio {}",
@@ -131,7 +133,7 @@ pub fn decompress_integer<T: IntegerType, R: NativeReadBuf>(
 pub trait IntegerCompression<T: IntegerType> {
     fn compress(
         &self,
-        array: &Buffer<T>,
+        col: &Buffer<T>,
         stats: &IntegerStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -189,12 +191,14 @@ pub struct IntegerStats<T: IntegerType> {
     pub set_count: usize,
 }
 
-fn gen_stats<T: IntegerType>(array: &Buffer<T>, validity: Option<Bitmap>) -> IntegerStats<T> {
+fn gen_stats<T: IntegerType>(col: &Buffer<T>, validity: Option<Bitmap>) -> IntegerStats<T> {
+    let null_count = validity.as_ref().map(|x| x.null_count()).unwrap_or(0);
+
     let mut stats = IntegerStats::<T> {
-        src: array.clone(),
-        tuple_count: array.len(),
-        total_bytes: array.len() * std::mem::size_of::<T>(),
-        null_count: array.null_count(),
+        src: col.clone(),
+        tuple_count: col.len(),
+        total_bytes: col.len() * std::mem::size_of::<T>(),
+        null_count,
         validity,
         average_run_length: 0.0,
         is_sorted: true,
@@ -202,16 +206,15 @@ fn gen_stats<T: IntegerType>(array: &Buffer<T>, validity: Option<Bitmap>) -> Int
         max: T::default(),
         distinct_values: HashMap::new(),
         unique_count: 0,
-        set_count: array.len() - array.null_count(),
+        set_count: col.len() - null_count,
     };
 
     let mut is_init_value_initialized = false;
     let mut last_value = T::default();
     let mut run_count = 0;
 
-    let validity = validity.as_ref();
-    for (i, current_value) in array.values().iter().cloned().enumerate() {
-        if is_valid(&validity, i) {
+    for (i, current_value) in col.option_iter(stats.validity.as_ref()).enumerate() {
+        if let Some(current_value) = current_value {
             if current_value < last_value {
                 stats.is_sorted = false;
             }
@@ -220,24 +223,23 @@ fn gen_stats<T: IntegerType>(array: &Buffer<T>, validity: Option<Bitmap>) -> Int
                 run_count += 1;
                 last_value = current_value;
             }
-        }
 
-        *stats.distinct_values.entry(current_value).or_insert(0) += 1;
+            if !is_init_value_initialized {
+                is_init_value_initialized = true;
+                stats.min = current_value;
+                stats.max = current_value;
+            }
 
-        if !is_init_value_initialized {
-            is_init_value_initialized = true;
-            stats.min = current_value;
-            stats.max = current_value;
-        }
-
-        if current_value > stats.max {
-            stats.max = current_value;
-        } else if current_value < stats.min {
-            stats.min = current_value;
+            if current_value > stats.max {
+                stats.max = current_value;
+            } else if current_value < stats.min {
+                stats.min = current_value;
+            }
+            *stats.distinct_values.entry(current_value).or_insert(0) += 1;
         }
     }
     stats.unique_count = stats.distinct_values.len();
-    stats.average_run_length = array.len() as f64 / run_count as f64;
+    stats.average_run_length = col.len() as f64 / run_count as f64;
 
     stats
 }
@@ -332,10 +334,17 @@ fn compress_sample_ratio<T: IntegerType, C: IntegerCompression<T>>(
     let stats = if stats.src.len() / sample_count <= sample_size {
         stats.clone()
     } else {
-        let array = &stats.src;
-        let separator = array.len() / sample_count;
-        let remainder = array.len() % sample_count;
+        let col = &stats.src;
+        let separator = col.len() / sample_count;
+        let remainder = col.len() % sample_count;
         let mut builder = Vec::with_capacity(sample_count * sample_size);
+
+        let mut validity = if stats.null_count > 0 {
+            Some(MutableBitmap::with_capacity(sample_count * sample_size))
+        } else {
+            None
+        };
+
         for sample_i in 0..sample_count {
             let range_end = if sample_i == sample_count - 1 {
                 separator + remainder
@@ -345,12 +354,22 @@ fn compress_sample_ratio<T: IntegerType, C: IntegerCompression<T>>(
 
             let partition_begin = sample_i * separator + rng.gen_range(0..range_end);
 
-            let mut s = array.clone();
+            let mut s = col.clone();
             s.slice(partition_begin, sample_size);
-            builder.extend_trusted_len(s.into_iter());
+
+            match (&mut validity, &stats.validity) {
+                (Some(b), Some(validity)) => {
+                    let mut v = validity.clone();
+                    v.slice(partition_begin, sample_size);
+                    b.extend_from_trusted_len_iter(v.into_iter());
+                }
+                (_, _) => {}
+            }
+
+            builder.extend(s.into_iter());
         }
-        let sample_array: Buffer<T> = builder.into();
-        gen_stats(&sample_array)
+        let sample_col: Buffer<T> = builder.into();
+        gen_stats(&sample_col, validity.map(|x| x.into()))
     };
 
     let size = c

@@ -14,6 +14,8 @@
 
 use std::io::Write;
 
+use databend_common_expression::Column;
+
 use super::write;
 use super::NativeWriter;
 use crate::compression::CommonCompression;
@@ -47,11 +49,11 @@ impl<W: Write> NativeWriter<W> {
             .unwrap_or(chunk.len())
             .min(chunk.len());
 
-        for (array, field) in chunk.columns().iter().zip(self.schema.fields.iter()) {
+        for (array, field) in chunk.iter().zip(self.schema.fields.iter()) {
             let length = array.len();
 
-            let nested = to_nested(array.as_ref(), field)?;
-            let leaf_columns = to_leaves(array.as_ref());
+            let nested = to_nested(array)?;
+            let leaf_columns = to_leaves(array);
 
             for (leaf_array, nested) in leaf_columns.iter().zip(nested.into_iter()) {
                 let leaf_array = leaf_array.to_boxed();
@@ -73,7 +75,7 @@ impl<W: Write> NativeWriter<W> {
                         let page_start = self.writer.offset;
                         write(
                             &mut self.writer,
-                            sub_array.as_ref(),
+                            sub_array,
                             &sub_nested,
                             self.options.clone(),
                             &mut self.scratch,

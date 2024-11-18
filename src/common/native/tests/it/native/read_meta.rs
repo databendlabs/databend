@@ -20,21 +20,16 @@ use databend_common_arrow::native::write::NativeWriter;
 use databend_common_arrow::native::write::WriteOptions;
 use databend_common_arrow::native::ColumnMeta;
 use databend_common_arrow::native::CommonCompression;
+use databend_common_expression::TableField;
 
 use crate::io::new_test_chunk;
 use crate::io::WRITE_PAGE;
 
 fn write_data(dest: &mut Vec<u8>) -> Vec<ColumnMeta> {
     let chunk = new_test_chunk();
-    let fields: Vec<Field> = chunk
+    let fields: Vec<TableField> = chunk
         .iter()
-        .map(|array| {
-            Field::new(
-                "name",
-                array.data_type().clone(),
-                array.validity().is_some(),
-            )
-        })
+        .map(|col| TableField::new("name", col.data_type().clone(), col.validity().is_some()))
         .collect();
 
     let mut writer = NativeWriter::new(dest, Schema::from(fields), WriteOptions {

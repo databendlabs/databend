@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::Bitmap;
-use std::iter::TrustedLen;
 
 /// An [`Iterator`] over validity and values.
 #[derive(Debug, Clone)]
@@ -142,7 +143,7 @@ where I: Iterator<Item = T>
     /// are valid.
     pub fn new_with_validity(values: I, validity: Option<&'a Bitmap>) -> Self {
         // only if the validity has nulls we take the optional branch.
-        match validity.and_then(|validity| (validity.unset_bits() > 0).then(|| validity.iter())) {
+        match validity.and_then(|validity| (validity.null_count() > 0).then(|| validity.iter())) {
             Some(validity) => Self::Optional(ZipValidityIter::new(values, validity)),
             _ => Self::Required(values),
         }

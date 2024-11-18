@@ -16,9 +16,10 @@ mod array;
 pub mod batch_read;
 pub mod deserialize;
 use batch_read::batch_read_array;
+use databend_common_expression::Column;
 use databend_common_expression::TableField;
 pub use deserialize::column_iter_to_columns;
-pub use deserialize::ArrayIter;
+pub use deserialize::ColumnIter;
 
 use crate::error::Result;
 pub(crate) mod read_basic;
@@ -71,11 +72,11 @@ pub trait PageIterator {
 
 #[derive(Clone)]
 pub struct NativeColumnsReader {
-    schema: Schema,
+    schema: TableSchema,
 }
 
 impl NativeColumnsReader {
-    pub fn new(schema: Schema) -> Result<Self> {
+    pub fn new(schema: TableSchema) -> Result<Self> {
         Ok(Self { schema })
     }
 
@@ -85,7 +86,7 @@ impl NativeColumnsReader {
         readers: Vec<I>,
         field: TableField,
         init: Vec<InitNested>,
-    ) -> Result<ArrayIter<'a>>
+    ) -> Result<ColumnIter<'a>>
     where
         I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
     {

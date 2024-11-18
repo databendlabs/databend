@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
+use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableTableDataType;
+
 use crate::error::Result;
 use crate::read::PageIterator;
 use crate::PageMeta;
@@ -24,13 +25,13 @@ pub struct NullIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     iter: I,
-    data_type: DataType,
+    data_type: TableDataType,
 }
 
 impl<I> NullIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    pub fn new(iter: I, data_type: DataType) -> Self {
+    pub fn new(iter: I, data_type: TableDataType) -> Self {
         Self { iter, data_type }
     }
 }
@@ -40,8 +41,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     fn deserialize(&mut self, num_values: u64) -> Result<Column> {
         let length = num_values as usize;
-        let array = NullArray::try_new(self.data_type.clone(), length)?;
-        Ok(Box::new(array) as Column)
+        Ok(Column::Null { len: length })
     }
 }
 
@@ -73,9 +73,8 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-pub fn read_null(data_type: DataType, page_metas: Vec<PageMeta>) -> Result<Column> {
+pub fn read_null(data_type: &TableDataType, page_metas: Vec<PageMeta>) -> Result<Column> {
     let length = page_metas.iter().map(|p| p.num_values as usize).sum();
-
-    let array = NullArray::try_new(data_type, length)?;
-    Ok(Box::new(array) as Column)
+    // TODO: match type
+    Ok(Column::Null { len: length })
 }

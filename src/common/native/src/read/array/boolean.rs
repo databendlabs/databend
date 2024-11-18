@@ -14,8 +14,11 @@
 
 use std::io::Cursor;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
+use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
+
 use crate::compression::boolean::decompress_boolean;
 use crate::error::Result;
 use crate::nested::InitNested;
@@ -31,7 +34,7 @@ pub struct BooleanNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     iter: I,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
 }
@@ -39,7 +42,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 impl<I> BooleanNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    pub fn new(iter: I, data_type: DataType, init: Vec<InitNested>) -> Self {
+    pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
         Self {
             iter,
             data_type,
@@ -52,11 +55,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 impl<I> BooleanNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    fn deserialize(
-        &mut self,
-        length: u64,
-        buffer: Vec<u8>,
-    ) -> Result<(NestedState, Column)> {
+    fn deserialize(&mut self, length: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let length = length as usize;
         let (nested, validity) = read_nested(&mut reader, &self.init, length)?;
@@ -64,12 +63,13 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
         let mut bitmap_builder = MutableBitmap::with_capacity(length);
         decompress_boolean(&mut reader, length, &mut bitmap_builder, &mut self.scratch)?;
 
-        let values = std::mem::take(&mut bitmap_builder).into();
-        let mut buffer = reader.into_inner().into_inner();
-        self.iter.swap_buffer(&mut buffer);
-
-        let array = Bitmap::try_new(self.data_type.clone(), values, validity)?;
-        Ok((nested, Box::new(array) as Column))
+        let values: Bitmap = bitmap_builder.into();
+        let col = if self.data_type.is_nullable() {
+            Column::Bitmap(values).wrap_nullable(validity)
+        } else {
+            Column::Bitmap(values)
+        };
+        Ok((nested, col))
     }
 }
 
@@ -97,7 +97,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 
 pub fn read_nested_boolean<R: NativeReadBuf>(
     reader: &mut R,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
 ) -> Result<Vec<(NestedState, Column)>> {
@@ -111,9 +111,13 @@ pub fn read_nested_boolean<R: NativeReadBuf>(
 
         decompress_boolean(reader, num_values, &mut bitmap_builder, &mut scratch)?;
 
-        let values = std::mem::take(&mut bitmap_builder).into();
-        let array = Bitmap::try_new(data_type.clone(), values, validity)?;
-        results.push((nested, Box::new(array) as Column));
+        let values: Bitmap = bitmap_builder.into();
+        let col = if data_type.is_nullable() {
+            Column::Bitmap(values).wrap_nullable(validity)
+        } else {
+            Column::Bitmap(values)
+        };
+        results.push((nested, col));
     }
     Ok(results)
 }

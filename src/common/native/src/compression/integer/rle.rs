@@ -17,18 +17,18 @@ use std::io::Write;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
+use databend_common_expression::types::Bitmap;
 
 use super::compress_sample_ratio;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
-
-use databend_common_expression::types::Bitmap;
-use crate::error::Result;
 use crate::compression::is_valid;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
+use crate::error::Result;
 use crate::write::WriteOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -38,12 +38,12 @@ impl<T: IntegerType> IntegerCompression<T> for Rle {
     fn compress(
         &self,
         array: &Buffer<T>,
-        _stats: &IntegerStats<T>,
+        stats: &IntegerStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,
     ) -> Result<usize> {
         let size = output.len();
-        self.compress_integer(output, array.values().clone(), array.validity())?;
+        self.compress_integer(output, array.clone(), stats.validity.clone())?;
         Ok(output.len() - size)
     }
 
@@ -66,7 +66,7 @@ impl Rle {
         &self,
         w: &mut W,
         values: impl IntoIterator<Item = T>,
-        validity: Option<&Bitmap>,
+        validity: Option<Bitmap>,
     ) -> Result<()> {
         // help me generate RLE encode algorithm
         let mut seen_count: u32 = 0;
@@ -74,7 +74,7 @@ impl Rle {
         let mut all_null = true;
 
         for (i, item) in values.into_iter().enumerate() {
-            if is_valid(&validity, i) {
+            if is_valid(validity.as_ref(), i) {
                 if all_null {
                     all_null = false;
                     last_value = item;

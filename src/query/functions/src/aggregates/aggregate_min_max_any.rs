@@ -98,7 +98,7 @@ where C: ChangeIf<StringType> + Default
 
         let column_iter = 0..other.len();
         if let Some(validity) = validity {
-            if validity.unset_bits() == column_len {
+            if validity.null_count() == column_len {
                 return Ok(());
             }
             let v = column_iter
@@ -213,7 +213,7 @@ where
 
         let column_iter = T::iter_column(&other);
         if let Some(validity) = validity {
-            if validity.unset_bits() == column_len {
+            if validity.null_count() == column_len {
                 return Ok(());
             }
             for (data, valid) in column_iter.zip(validity.iter()) {

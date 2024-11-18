@@ -245,9 +245,9 @@ fn get_hash_values(
                 NullableType::<NumberType<u64>>::try_downcast_column(&c)
             {
                 let null_map = column.validity;
-                if null_map.unset_bits() == 0 {
+                if null_map.null_count() == 0 {
                     Ok(column.column)
-                } else if null_map.unset_bits() == null_map.len() {
+                } else if null_map.null_count() == null_map.len() {
                     Ok(vec![default_scatter_index; rows].into())
                 } else {
                     let mut need_new_vec = true;

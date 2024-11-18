@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 
 use crate::error::Result;
@@ -25,14 +27,18 @@ type StructValues = Vec<Option<Result<(NestedState, Column)>>>;
 pub struct StructIterator<'a> {
     iters: Vec<NestedIters<'a>>,
     is_nullable: bool,
-    fields: Vec<Field>,
+    fields: Vec<TableDataType>,
 }
 
 impl<'a> StructIterator<'a> {
     /// Creates a new [`StructIterator`] with `iters` and `fields`.
-    pub fn new(is_nullable: bool, iters: Vec<NestedIters<'a>>, fields: Vec<Field>) -> Self {
+    pub fn new(is_nullable: bool, iters: Vec<NestedIters<'a>>, fields: Vec<TableDataType>) -> Self {
         assert_eq!(iters.len(), fields.len());
-        Self { iters, fields }
+        Self {
+            iters,
+            fields,
+            is_nullable,
+        }
     }
 }
 
@@ -57,12 +63,7 @@ impl<'a> StructIterator<'a> {
             }
         }
 
-        let array = create_struct(
-            self.is_nullable,
-            self.fields.clone(),
-            &mut nested,
-            new_values,
-        );
+        let array = create_struct(self.is_nullable, &mut nested, new_values);
         Some(Ok(array))
     }
 }

@@ -35,7 +35,7 @@ impl<'a> TrueIdxIter<'a> {
                 mask: BitMask::from_bitmap(bitmap),
                 first_unknown: 0,
                 i: 0,
-                remaining: bitmap.len() - bitmap.unset_bits(),
+                remaining: bitmap.len() - bitmap.null_count(),
                 len,
             }
         } else {

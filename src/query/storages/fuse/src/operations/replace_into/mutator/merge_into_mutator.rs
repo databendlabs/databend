@@ -451,7 +451,7 @@ impl AggregationContext {
             }
         }
 
-        let delete_nums = bitmap.unset_bits();
+        let delete_nums = bitmap.null_count();
         info!("number of row deleted: {}", delete_nums);
 
         // shortcut: nothing to be deleted

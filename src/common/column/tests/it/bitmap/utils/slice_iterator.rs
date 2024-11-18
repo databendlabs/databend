@@ -31,7 +31,7 @@ proptest! {
 
         let slots = iter.slots();
 
-        assert_eq!(bitmap.len() - bitmap.unset_bits(), slots);
+        assert_eq!(bitmap.len() - bitmap.null_count(), slots);
 
         let slices = iter.collect::<Vec<_>>();
         let mut sum = 0;
@@ -124,7 +124,7 @@ fn bla() {
         .collect::<Bitmap>();
     let iter = SlicesIterator::new(&values);
     let count = iter.slots();
-    assert_eq!(values.unset_bits() + iter.slots(), values.len());
+    assert_eq!(values.null_count() + iter.slots(), values.len());
 
     let total = iter.into_iter().fold(0, |acc, x| acc + x.1);
 
@@ -136,7 +136,7 @@ fn past_end_should_not_be_returned() {
     let values = Bitmap::from_u8_slice([0b11111010], 3);
     let iter = SlicesIterator::new(&values);
     let count = iter.slots();
-    assert_eq!(values.unset_bits() + iter.slots(), values.len());
+    assert_eq!(values.null_count() + iter.slots(), values.len());
 
     let total = iter.into_iter().fold(0, |acc, x| acc + x.1);
 

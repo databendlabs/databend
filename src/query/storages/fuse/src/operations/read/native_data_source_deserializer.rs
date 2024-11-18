@@ -850,7 +850,7 @@ impl NativeDeserializeDataTransform {
                 let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
                 let probe_column = probe_block.get_last_column().clone();
                 update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
-                let unset_bits = bitmap.unset_bits();
+                let unset_bits = bitmap.null_count();
                 if unset_bits == bitmap.len() {
                     // skip current page.
                     return Ok(false);

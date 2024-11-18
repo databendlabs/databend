@@ -14,14 +14,11 @@
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
 
 use super::traits::DoubleType;
 use super::DoubleCompression;
 use super::DoubleStats;
-
-use crate::error::Error;
-use crate::error::Result;
-use crate::general_err;
 use crate::compression::get_bits_needed;
 use crate::compression::integer::compress_integer;
 use crate::compression::integer::decompress_integer;
@@ -29,21 +26,24 @@ use crate::compression::integer::Dict;
 use crate::compression::integer::DictEncoder;
 use crate::compression::integer::RawNative;
 use crate::compression::Compression;
+use crate::error::Error;
+use crate::error::Result;
+use crate::general_err;
 use crate::write::WriteOptions;
 
 impl<T: DoubleType> DoubleCompression<T> for Dict {
     fn compress(
         &self,
-        array: &Buffer<T>,
-        _stats: &DoubleStats<T>,
+        col: &Buffer<T>,
+        stats: &DoubleStats<T>,
         write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,
     ) -> Result<usize> {
         let start = output_buf.len();
-        let mut encoder = DictEncoder::with_capacity(array.len());
-        for val in array.iter() {
+        let mut encoder = DictEncoder::with_capacity(col.len());
+        for val in col.option_iter(stats.validity.as_ref()) {
             match val {
-                Some(val) => encoder.push(&RawNative { inner: *val }),
+                Some(val) => encoder.push(&RawNative { inner: val }),
                 None => {
                     if encoder.is_empty() {
                         encoder.push(&RawNative {
@@ -60,7 +60,7 @@ impl<T: DoubleType> DoubleCompression<T> for Dict {
         // dict data use custom encoding
         let mut write_options = write_options.clone();
         write_options.forbidden_compressions.push(Compression::Dict);
-        compress_integer(&indices, write_options, output_buf)?;
+        compress_integer(&indices, stats.validity.clone(), write_options, output_buf)?;
 
         let sets = encoder.get_sets();
         output_buf.extend_from_slice(&(sets.len() as u32).to_le_bytes());

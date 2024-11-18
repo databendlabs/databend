@@ -196,13 +196,13 @@ impl AggregateIfCombinator {
             .map(|c| c.filter(predicate))
             .collect::<Vec<_>>();
 
-        let rows = predicate.len() - predicate.unset_bits();
+        let rows = predicate.len() - predicate.null_count();
 
         (columns, rows)
     }
 
     fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
-        if predicate.unset_bits() == 0 {
+        if predicate.null_count() == 0 {
             return places.to_vec();
         }
         let it = predicate

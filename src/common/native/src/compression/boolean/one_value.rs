@@ -37,11 +37,11 @@ impl BooleanCompression for OneValue {
 
     fn compress(
         &self,
-        array: &Bitmap,
+        col: &Bitmap,
         _validity: Option<Bitmap>,
         output_buf: &mut Vec<u8>,
     ) -> Result<usize> {
-        let val = array.iter().last();
+        let val = col.iter().last();
         let val = match val {
             Some(v) => v,
             _ => false,

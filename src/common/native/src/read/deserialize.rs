@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::types::i256;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 
@@ -48,7 +51,7 @@ impl<'a, V> DynIter<'a, V> {
     }
 }
 
-pub type ArrayIter<'a> = DynIter<'a, Result<Column>>;
+pub type ColumnIter<'a> = DynIter<'a, Result<Column>>;
 
 /// [`NestedIter`] is a wrapper iterator used to remove the `NestedState` from inner iterator
 /// and return only the `Column`
@@ -100,90 +103,83 @@ where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
     let is_nullable = matches!(field.data_type(), &TableDataType::Nullable(_));
-    Ok(match field.data_type().to_physical_type() {
+    Ok(match field.data_type().remove_nullable() {
         Null => unimplemented!(),
         Boolean => {
-            init.push(InitNested::Primitive(field.is_nullable));
+            init.push(InitNested::Primitive(field.is_nullable()));
             DynIter::new(BooleanNestedIter::new(
                 readers.pop().unwrap(),
                 field.data_type().clone(),
                 init,
             ))
         }
-        Primitive(primitive) => with_match_integer_double_type!(primitive,
+        TableDataType::Number(number) => with_match_integer_double_type!(number,
         |$I| {
-            init.push(InitNested::Primitive(field.is_nullable));
-            DynIter::new(IntegerNestedIter::<_, $I>::new(
+            init.push(InitNested::Primitive(field.is_nullable()));
+            DynIter::new(IntegerNestedIter::<_, NumberType<$I>>::new(
                readers.pop().unwrap(),
                 field.data_type().clone(),
                 init,
             ))
         },
         |$T| {
-             init.push(InitNested::Primitive(field.is_nullable));
-             DynIter::new(DoubleNestedIter::<_, $T>::new(
+             init.push(InitNested::Primitive(field.is_nullable()));
+             DynIter::new(DoubleNestedIter::<_, NumberType<$T>>::new(
                 readers.pop().unwrap(),
                 field.data_type().clone(),
                 init,
             ))
         }
         ),
-        Binary | Utf8 => {
-            init.push(InitNested::Primitive(field.is_nullable));
-            DynIter::new(BinaryNestedIter::<_, i32>::new(
+        TableDataType::Binary => {
+            init.push(InitNested::Primitive(field.is_nullable()));
+            DynIter::new(BinaryNestedIter::<_>::new(
                 readers.pop().unwrap(),
                 field.data_type().clone(),
                 init,
             ))
         }
-        BinaryView | Utf8View => {
-            init.push(InitNested::Primitive(field.is_nullable));
-            DynIter::new(ViewArrayNestedIter::<_>::new(
+        TableDataType::String => {
+            init.push(InitNested::Primitive(field.is_nullable()));
+            DynIter::new(ViewColNestedIter::<_>::new(
                 readers.pop().unwrap(),
                 field.data_type().clone(),
                 init,
             ))
         }
-        LargeBinary | LargeUtf8 => {
-            init.push(InitNested::Primitive(field.is_nullable));
-            DynIter::new(BinaryNestedIter::<_, i64>::new(
-                readers.pop().unwrap(),
-                field.data_type().clone(),
-                init,
+        TableDataType::Array(field) => {
+            init.push(InitNested::List(field.is_nullable()));
+            let iter = deserialize_nested(readers, field.as_ref().clone(), init)?;
+            DynIter::new(ListIterator::new(iter, field.clone()))
+        }
+        TableDataType::Map(field) => {
+            init.push(InitNested::List(field.is_nullable()));
+            let iter = deserialize_nested(readers, field.as_ref().clone(), init)?;
+            DynIter::new(MapIterator::new(iter, field.clone()))
+        }
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => {
+            let columns = fields_type
+                .iter()
+                .rev()
+                .map(|f| {
+                    let mut init = init.clone();
+                    init.push(InitNested::Struct(field.is_nullable()));
+                    let n = n_columns(&f.data_type);
+                    let readers = readers.drain(readers.len() - n..).collect();
+                    deserialize_nested(readers, f.clone(), init)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let columns = columns.into_iter().rev().collect();
+            DynIter::new(StructIterator::new(
+                is_nullable,
+                columns,
+                fields_type.clone(),
             ))
         }
-
-        FixedSizeBinary => unimplemented!(),
-        _ => match field.data_type() {
-            DataType::List(inner)
-            | DataType::LargeList(inner)
-            | DataType::FixedSizeList(inner, _) => {
-                init.push(InitNested::List(field.is_nullable));
-                let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
-                DynIter::new(ListIterator::new(iter, field.clone()))
-            }
-            DataType::Map(inner, _) => {
-                init.push(InitNested::List(field.is_nullable));
-                let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
-                DynIter::new(MapIterator::new(iter, field.clone()))
-            }
-            DataType::Struct(fields) => {
-                let columns = fields
-                    .iter()
-                    .rev()
-                    .map(|f| {
-                        let mut init = init.clone();
-                        init.push(InitNested::Struct(field.is_nullable));
-                        let n = n_columns(&f.data_type);
-                        let readers = readers.drain(readers.len() - n..).collect();
-                        deserialize_nested(readers, f.clone(), init)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let columns = columns.into_iter().rev().collect();
-                DynIter::new(StructIterator::new(is_nullable, columns, fields.clone()))
-            }
-            _ => unreachable!(),
-        },
+        _ => unreachable!(),
     })
 }
 
@@ -192,7 +188,7 @@ pub fn column_iter_to_columns<'a, I>(
     readers: Vec<I>,
     field: TableField,
     init: Vec<InitNested>,
-) -> Result<ArrayIter<'a>>
+) -> Result<ColumnIter<'a>>
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {

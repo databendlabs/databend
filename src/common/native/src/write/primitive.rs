@@ -27,7 +27,7 @@ use crate::error::Result;
 
 pub(crate) fn write_primitive<T: NativeType, W: Write>(
     w: &mut W,
-    array: &Buffer<T>,
+    col: &Buffer<T>,
     validity: Option<Bitmap>,
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
@@ -35,51 +35,51 @@ pub(crate) fn write_primitive<T: NativeType, W: Write>(
     scratch.clear();
     match T::PRIMITIVE {
         PrimitiveType::Int8 => {
-            let array: &Buffer<i8> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<i8> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Int16 => {
-            let array: &Buffer<i16> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<i16> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Int32 => {
-            let array: &Buffer<i32> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<i32> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Int64 => {
-            let array: &Buffer<i64> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<i64> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::UInt8 => {
-            let array: &Buffer<u8> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<u8> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::UInt16 => {
-            let array: &Buffer<u16> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<u16> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::UInt32 => {
-            let array: &Buffer<u32> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<u32> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::UInt64 => {
-            let array: &Buffer<u64> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<u64> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Int128 => {
-            let array: &Buffer<i128> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<i128> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Int256 => {
-            let array: &Buffer<i256> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<i256> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Float32 => {
-            let array: &Buffer<f32> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<f32> = unsafe { std::mem::transmute(col) };
             compress_double(array, validity, write_options, scratch)?;
         }
         PrimitiveType::Float64 => {
-            let array: &Buffer<f64> = array.as_any().downcast_ref().unwrap();
+            let array: &Buffer<f64> = unsafe { std::mem::transmute(col) };
             compress_double(array, validity, write_options, scratch)?;
         }
 

@@ -175,7 +175,7 @@ where F: RowsFetcher + Send + Sync + 'static
         } else {
             // From merge into matched data, the row id column is nullable but has no null value.
             let value = *value.into_nullable().unwrap();
-            debug_assert!(value.validity.unset_bits() == 0);
+            debug_assert!(value.validity.null_count() == 0);
             value.column.into_number().unwrap().into_u_int64().unwrap()
         };
 

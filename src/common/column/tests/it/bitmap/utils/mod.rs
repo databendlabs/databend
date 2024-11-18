@@ -93,6 +93,6 @@ proptest! {
     #[cfg_attr(miri, ignore)] // miri and proptest do not work well :(
     fn null_count(bitmap in bitmap_strategy()) {
         let sum_of_sets: usize = (0..bitmap.len()).map(|x| (!bitmap.get_bit(x)) as usize).sum();
-        assert_eq!(bitmap.unset_bits(), sum_of_sets);
+        assert_eq!(bitmap.null_count(), sum_of_sets);
     }
 }

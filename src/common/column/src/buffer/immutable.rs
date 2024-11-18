@@ -24,6 +24,9 @@ use either::Either;
 use num_traits::Zero;
 
 use super::Bytes;
+use crate::bitmap::utils::BitmapIter;
+use crate::bitmap::utils::ZipValidity;
+use crate::bitmap::Bitmap;
 use crate::types::NativeType;
 
 /// [`Buffer`] is a contiguous memory region that can be shared across
@@ -350,6 +353,17 @@ impl<T: Copy> IntoIterator for Buffer<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         super::iterator::IntoIter::new(self)
+    }
+}
+
+impl<T: Copy> Buffer<T> {
+    pub fn option_iter<'a>(
+        &self,
+        validity: Option<&'a Bitmap>,
+    ) -> ZipValidity<T, super::iterator::IntoIter<T>, BitmapIter<'a>> {
+        let iter = IntoIterator::into_iter(self.clone());
+        let bitmap_iter = validity.as_ref().map(|v| v.iter());
+        ZipValidity::new(iter, bitmap_iter)
     }
 }
 

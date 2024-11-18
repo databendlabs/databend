@@ -187,7 +187,7 @@ where I: databend_common_column::types::Index
         // Fast path: avoid iterating column to generate a new bitmap.
         // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
         // we can just slice it.
-        if num_rows <= col.len() && (col.unset_bits() == 0 || col.unset_bits() == col.len()) {
+        if num_rows <= col.len() && (col.null_count() == 0 || col.null_count() == col.len()) {
             self.result = Some(Value::Column(BooleanType::upcast_column(
                 col.sliced(0, num_rows),
             )));

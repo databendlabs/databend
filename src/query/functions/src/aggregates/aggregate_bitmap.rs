@@ -238,7 +238,7 @@ where
         let state = place.get::<BitmapAggState>();
 
         if let Some(validity) = validity {
-            if validity.unset_bits() == column.len() {
+            if validity.null_count() == column.len() {
                 return Ok(());
             }
 
@@ -406,7 +406,7 @@ where
     }
 
     fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
-        if predicate.unset_bits() == 0 {
+        if predicate.null_count() == 0 {
             return places.to_vec();
         }
         let it = predicate
@@ -468,7 +468,7 @@ where
 
         let new_places = Self::filter_place(places, &predicate);
         let new_places_slice = new_places.as_slice();
-        let row_size = predicate.len() - predicate.unset_bits();
+        let row_size = predicate.len() - predicate.null_count();
 
         let input = [column];
         self.inner

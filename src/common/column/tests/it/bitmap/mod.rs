@@ -127,13 +127,13 @@ fn not() {
 #[test]
 fn subslicing_gives_correct_null_count() {
     let base = Bitmap::from([false, true, true, false, false, true, true, true]);
-    assert_eq!(base.unset_bits(), 3);
+    assert_eq!(base.null_count(), 3);
 
     let view1 = base.clone().sliced(0, 1);
     let view2 = base.sliced(1, 7);
-    assert_eq!(view1.unset_bits(), 1);
-    assert_eq!(view2.unset_bits(), 2);
+    assert_eq!(view1.null_count(), 1);
+    assert_eq!(view2.null_count(), 2);
 
     let view3 = view2.sliced(0, 1);
-    assert_eq!(view3.unset_bits(), 0);
+    assert_eq!(view3.null_count(), 0);
 }

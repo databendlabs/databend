@@ -17,6 +17,9 @@ use std::ops::Deref;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::binary::BinaryColumn;
+use databend_common_column::bitmap::utils::ZipValidity;
+use databend_common_column::bitmap::utils::ZipValidityIter;
 use roaring::RoaringBitmap;
 
 use super::BinaryCompression;
@@ -28,15 +31,15 @@ use crate::error::Result;
 use crate::general_err;
 use crate::write::WriteOptions;
 
-impl<O: Offset> BinaryCompression<O> for Freq {
+impl BinaryCompression for Freq {
     fn to_compression(&self) -> Compression {
         Compression::Freq
     }
 
     fn compress(
         &self,
-        array: &BinaryColumn,
-        stats: &BinaryStats<O>,
+        col: &BinaryColumn,
+        stats: &BinaryStats,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
     ) -> Result<usize> {
@@ -61,7 +64,7 @@ impl<O: Offset> BinaryCompression<O> for Freq {
         let mut exceptions_bitmap = RoaringBitmap::new();
         let mut exceptions = Vec::with_capacity(stats.tuple_count - max_count);
 
-        for (i, val) in array.iter().enumerate() {
+        for (i, val) in col.option_iter(stats.validity.as_ref()).enumerate() {
             if let Some(val) = val {
                 if top_value_is_null || val != top_value {
                     exceptions_bitmap.insert(i as u32);
@@ -95,7 +98,7 @@ impl<O: Offset> BinaryCompression<O> for Freq {
         &self,
         mut input: &[u8],
         length: usize,
-        offsets: &mut Vec<O>,
+        offsets: &mut Vec<u64>,
         values: &mut Vec<u8>,
     ) -> Result<()> {
         let len = input.read_u64::<LittleEndian>()? as usize;
@@ -112,7 +115,7 @@ impl<O: Offset> BinaryCompression<O> for Freq {
         input.consume(exceptions_bitmap_size as usize);
 
         if offsets.is_empty() {
-            offsets.push(O::default());
+            offsets.push(0);
         }
 
         offsets.reserve(length);
@@ -126,17 +129,17 @@ impl<O: Offset> BinaryCompression<O> for Freq {
                 input.consume(len);
 
                 values.extend_from_slice(val);
-                offsets.push(O::from_usize(values.len()).unwrap());
+                offsets.push(values.len() as u64);
             } else {
                 values.extend_from_slice(top_value);
-                offsets.push(O::from_usize(values.len()).unwrap());
+                offsets.push(values.len() as u64);
             }
         }
 
         Ok(())
     }
 
-    fn compress_ratio(&self, stats: &super::BinaryStats<O>) -> f64 {
+    fn compress_ratio(&self, stats: &super::BinaryStats) -> f64 {
         if stats.unique_count <= 1 {
             return 0.0f64;
         }

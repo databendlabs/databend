@@ -317,7 +317,7 @@ impl ValueVisitor for SortCompare {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        if column.validity.unset_bits() > 0 {
+        if column.validity.null_count() > 0 {
             self.validity = Some(column.validity.clone());
         }
         self.visit_column(column.column.clone())

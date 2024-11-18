@@ -14,7 +14,7 @@
 
 use std::hash::Hash;
 
-use databend_common_column::types::i256
+use databend_common_column::types::i256;
 use databend_common_column::types::NativeType;
 
 pub trait IntegerType: NativeType + PartialOrd + Hash + Eq {

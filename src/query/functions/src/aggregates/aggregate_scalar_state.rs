@@ -206,7 +206,7 @@ where
         }
 
         if let Some(validity) = validity {
-            if validity.unset_bits() == column_len {
+            if validity.null_count() == column_len {
                 return Ok(());
             }
 

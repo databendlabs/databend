@@ -679,7 +679,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             // If the original value is NULL, we can ignore the error.
             let rhs: Bitmap = bitmap.clone().not().into();
             let res = error_bitmap.clone().bitor(&rhs);
-            if res.unset_bits() == 0 {
+            if res.null_count() == 0 {
                 ctx.errors = None;
             } else {
                 *error_bitmap = res;

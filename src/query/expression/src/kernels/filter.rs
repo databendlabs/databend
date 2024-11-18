@@ -38,7 +38,7 @@ impl DataBlock {
             return Ok(self);
         }
 
-        let count_zeros = bitmap.unset_bits();
+        let count_zeros = bitmap.null_count();
         match count_zeros {
             0 => Ok(self),
             _ => {
@@ -143,7 +143,7 @@ pub struct FilterVisitor<'a> {
 
 impl<'a> FilterVisitor<'a> {
     pub fn new(filter: &'a Bitmap) -> Self {
-        let filter_rows = filter.len() - filter.unset_bits();
+        let filter_rows = filter.len() - filter.null_count();
         let strategy = IterationStrategy::default_strategy(filter.len(), filter_rows);
         Self {
             filter,
@@ -266,7 +266,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
 
     fn visit_boolean(&mut self, mut bitmap: Bitmap) -> Result<()> {
         // faster path for all bits set
-        if bitmap.unset_bits() == 0 {
+        if bitmap.null_count() == 0 {
             bitmap.slice(0, self.filter_rows);
             self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
             return Ok(());

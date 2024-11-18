@@ -117,7 +117,7 @@ where
             return Ok(());
         }
         let acc = if let Some(bit) = validity {
-            if bit.unset_bits() == column_len {
+            if bit.null_count() == column_len {
                 return Ok(());
             }
 

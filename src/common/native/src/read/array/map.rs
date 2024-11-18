@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
 use databend_common_expression::TableField;
 
 use crate::error::Result;
@@ -27,7 +28,7 @@ pub struct MapIterator<'a> {
 
 impl<'a> MapIterator<'a> {
     /// Creates a new [`MapIterator`] with `iter` and `field`.
-    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: Field) -> Self {
+    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: TableField) -> Self {
         Self { iter, field }
     }
 }

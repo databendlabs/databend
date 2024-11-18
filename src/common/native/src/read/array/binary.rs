@@ -15,6 +15,7 @@
 use std::io::Cursor;
 use std::marker::PhantomData;
 
+use databend_common_column::binary::BinaryColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::Column;
@@ -33,22 +34,17 @@ use crate::read::PageIterator;
 use crate::PageMeta;
 
 #[derive(Debug)]
-pub struct BinaryNestedIter<I, O>
-where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: Offset,
+pub struct BinaryNestedIter<I>
+where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     iter: I,
     data_type: TableDataType,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
-    _phantom: PhantomData<O>,
 }
 
-impl<I, O> BinaryNestedIter<I, O>
-where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: Offset,
+impl<I> BinaryNestedIter<I>
+where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
         Self {
@@ -56,21 +52,18 @@ where
             data_type,
             init,
             scratch: vec![],
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<I, O> BinaryNestedIter<I, O>
-where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: Offset,
+impl<I> BinaryNestedIter<I>
+where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let length = num_values as usize;
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
-        let mut offsets: Vec<O> = Vec::with_capacity(length + 1);
+        let mut offsets: Vec<i64> = Vec::with_capacity(length + 1);
         let mut values = Vec::with_capacity(0);
 
         decompress_binary(
@@ -83,7 +76,7 @@ where
 
         let array = try_new_binary_array(
             self.data_type.clone(),
-            unsafe { OffsetsBuffer::new_unchecked(offsets.into()) },
+            offsets.into(),
             values.into(),
             validity,
         )?;
@@ -91,10 +84,8 @@ where
     }
 }
 
-impl<I, O> Iterator for BinaryNestedIter<I, O>
-where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
-    O: Offset,
+impl<I> Iterator for BinaryNestedIter<I>
+where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     type Item = Result<(NestedState, Column)>;
 
@@ -115,7 +106,7 @@ where
     }
 }
 
-pub fn read_nested_binary<O: Offset, R: NativeReadBuf>(
+pub fn read_nested_binary<R: NativeReadBuf>(
     reader: &mut R,
     data_type: TableDataType,
     init: Vec<InitNested>,
@@ -128,29 +119,25 @@ pub fn read_nested_binary<O: Offset, R: NativeReadBuf>(
     for page_meta in page_metas {
         let num_values = page_meta.num_values as usize;
         let (nested, validity) = read_nested(reader, &init, num_values)?;
-        let mut offsets: Vec<O> = Vec::with_capacity(num_values + 1);
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_values + 1);
         let mut values = Vec::with_capacity(0);
 
         decompress_binary(reader, num_values, &mut offsets, &mut values, &mut scratch)?;
 
-        let array = try_new_binary_array(
-            data_type.clone(),
-            unsafe { OffsetsBuffer::new_unchecked(offsets.into()) },
-            values.into(),
-            validity,
-        )?;
+        let array =
+            try_new_binary_array(data_type.clone(), offsets.into(), values.into(), validity)?;
         results.push((nested, array));
     }
     Ok(results)
 }
 
-fn try_new_binary_array<O: Offset>(
+fn try_new_binary_array(
     data_type: TableDataType,
-    offsets: OffsetsBuffer<O>,
+    offsets: Buffer<u64>,
     values: Buffer<u8>,
     validity: Option<Bitmap>,
 ) -> Result<Column> {
-    let array = BinaryColumn::try_new(data_type, offsets, values, validity)?;
-    // TODO wrap data_type
+    let array = BinaryColumn::new(values, offsets);
+    // TODO: match data_type
     Ok(Column::Binary(array))
 }

@@ -27,14 +27,14 @@ fn from_slice() {
 fn from_len_zeroed() {
     let a = MutableBitmap::from_len_zeroed(10);
     assert_eq!(a.len(), 10);
-    assert_eq!(a.unset_bits(), 10);
+    assert_eq!(a.null_count(), 10);
 }
 
 #[test]
 fn from_len_set() {
     let a = MutableBitmap::from_len_set(10);
     assert_eq!(a.len(), 10);
-    assert_eq!(a.unset_bits(), 0);
+    assert_eq!(a.null_count(), 0);
 }
 
 #[test]

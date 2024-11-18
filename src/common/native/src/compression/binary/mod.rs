@@ -20,7 +20,9 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
+use databend_common_column::binary::BinaryColumn;
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::types::Index;
 use databend_common_expression::types::Buffer;
 
 use super::basic::CommonCompression;
@@ -34,15 +36,15 @@ use crate::read::read_basic::read_compress_header;
 use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
-pub fn compress_binary<O: Offset>(
-    array: &BinaryColumn,
+pub fn compress_binary(
+    col: &BinaryColumn,
     validity: Option<Bitmap>,
     buf: &mut Vec<u8>,
     write_options: WriteOptions,
 ) -> Result<()> {
     // choose compressor
-    let stats = gen_stats(array, validity);
-    let compressor = choose_compressor(array, &stats, &write_options);
+    let stats = gen_stats(col, validity);
+    let compressor = choose_compressor(col, &stats, &write_options);
 
     log::debug!(
         "choose binary compression : {:?}",
@@ -54,11 +56,11 @@ pub fn compress_binary<O: Offset>(
     match compressor {
         BinaryCompressor::Basic(c) => {
             // offsets
-            let offsets = array.offsets();
-            let offsets = if offsets.first().is_zero() {
-                offsets.buffer().clone()
+            let offsets = col.offsets();
+            let offsets = if *offsets.first().unwrap() == 0 {
+                offsets.clone()
             } else {
-                let first = offsets.first();
+                let first = offsets.first().unwrap();
                 let mut zero_offsets = Vec::with_capacity(offsets.len());
                 for offset in offsets.iter() {
                     zero_offsets.push(*offset - *first);
@@ -77,10 +79,11 @@ pub fn compress_binary<O: Offset>(
             buf[pos + 4..pos + 8].copy_from_slice(&(input_buf.len() as u32).to_le_bytes());
 
             // values
-            let mut values = array.values().clone();
+            let mut values = col.data().clone();
             values.slice(
-                array.offsets().first().to_usize(),
-                array.offsets().last().to_usize() - array.offsets().first().to_usize(),
+                col.offsets().first().unwrap().to_usize(),
+                col.offsets().last().unwrap().to_usize()
+                    - col.offsets().first().unwrap().to_usize(),
             );
             let input_buf = bytemuck::cast_slice(&values);
             buf.extend_from_slice(&codec.to_le_bytes());
@@ -95,19 +98,19 @@ pub fn compress_binary<O: Offset>(
             buf.extend_from_slice(&codec.to_le_bytes());
             let pos = buf.len();
             buf.extend_from_slice(&[0u8; 8]);
-            let compressed_size = c.compress(array, &stats, &write_options, buf)?;
+            let compressed_size = c.compress(col, &stats, &write_options, buf)?;
             buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
-            buf[pos + 4..pos + 8].copy_from_slice(&(array.values().len() as u32).to_le_bytes());
+            buf[pos + 4..pos + 8].copy_from_slice(&(col.data().len() as u32).to_le_bytes());
         }
     }
 
     Ok(())
 }
 
-pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
+pub fn decompress_binary<R: NativeReadBuf>(
     reader: &mut R,
     length: usize,
-    offsets: &mut Vec<O>,
+    offsets: &mut Vec<u64>,
     values: &mut Vec<u8>,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
@@ -125,7 +128,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
         scratch.as_slice()
     };
 
-    let encoder = BinaryCompressor::<O>::from_compression(compression)?;
+    let encoder = BinaryCompressor::from_compression(compression)?;
 
     match encoder {
         BinaryCompressor::Basic(c) => {
@@ -134,7 +137,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
             let out_slice = unsafe {
                 core::slice::from_raw_parts_mut(
                     offsets.as_mut_ptr().add(offsets.len()) as *mut u8,
-                    (length + 1) * std::mem::size_of::<O>(),
+                    (length + 1) * std::mem::size_of::<u64>(),
                 )
             };
             c.decompress(&input[..compressed_size], out_slice)?;
@@ -179,11 +182,11 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
     Ok(())
 }
 
-pub trait BinaryCompression<O: Offset> {
+pub trait BinaryCompression {
     fn compress(
         &self,
-        array: &BinaryColumn,
-        stats: &BinaryStats<O>,
+        col: &BinaryColumn,
+        stats: &BinaryStats,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
     ) -> Result<usize>;
@@ -192,20 +195,20 @@ pub trait BinaryCompression<O: Offset> {
         &self,
         input: &[u8],
         length: usize,
-        offsets: &mut Vec<O>,
+        offsets: &mut Vec<u64>,
         values: &mut Vec<u8>,
     ) -> Result<()>;
 
-    fn compress_ratio(&self, stats: &BinaryStats<O>) -> f64;
+    fn compress_ratio(&self, stats: &BinaryStats) -> f64;
     fn to_compression(&self) -> Compression;
 }
 
-enum BinaryCompressor<O: Offset> {
+enum BinaryCompressor {
     Basic(CommonCompression),
-    Extend(Box<dyn BinaryCompression<O>>),
+    Extend(Box<dyn BinaryCompression>),
 }
 
-impl<O: Offset> BinaryCompressor<O> {
+impl BinaryCompressor {
     fn to_compression(&self) -> Compression {
         match self {
             Self::Basic(c) => c.to_compression(),
@@ -249,7 +252,7 @@ impl std::ops::Deref for U8Buffer {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct BinaryStats<O> {
+pub struct BinaryStats {
     tuple_count: usize,
     total_bytes: usize,
     unique_count: usize,
@@ -257,23 +260,24 @@ pub struct BinaryStats<O> {
     validity: Option<Bitmap>,
     null_count: usize,
     distinct_values: HashMap<U8Buffer, usize>,
-    _data: PhantomData<O>,
 }
 
-fn gen_stats<O: Offset>(array: &BinaryColumn, validity: Option<Bitmap>) -> BinaryStats<O> {
+fn gen_stats(col: &BinaryColumn, validity: Option<Bitmap>) -> BinaryStats {
     let mut stats = BinaryStats {
-        tuple_count: array.len(),
-        total_bytes: array.values().len() + (array.len() + 1) * std::mem::size_of::<O>(),
+        tuple_count: col.len(),
+        total_bytes: col.data().len() + (col.len() + 1) * std::mem::size_of::<u64>(),
         unique_count: 0,
         total_unique_size: 0,
-        null_count: validity.map(|v| v.unset_bits()).unwrap_or_default(),
+        null_count: validity
+            .as_ref()
+            .map(|v| v.null_count())
+            .unwrap_or_default(),
         validity,
         distinct_values: HashMap::new(),
-        _data: PhantomData,
     };
 
-    for o in array.offsets().windows(2) {
-        let mut values = array.values().clone();
+    for o in col.offsets().windows(2) {
+        let mut values = col.data().clone();
         values.slice(o[0].to_usize(), o[1].to_usize() - o[0].to_usize());
 
         *stats.distinct_values.entry(U8Buffer(values)).or_insert(0) += 1;
@@ -289,11 +293,11 @@ fn gen_stats<O: Offset>(array: &BinaryColumn, validity: Option<Bitmap>) -> Binar
     stats
 }
 
-fn choose_compressor<O: Offset>(
+fn choose_compressor(
     _value: &BinaryColumn,
-    stats: &BinaryStats<O>,
+    stats: &BinaryStats,
     write_options: &WriteOptions,
-) -> BinaryCompressor<O> {
+) -> BinaryCompressor {
     #[cfg(debug_assertions)]
     {
         if crate::util::env::check_freq_env()
@@ -317,7 +321,7 @@ fn choose_compressor<O: Offset>(
         let mut max_ratio = ratio;
         let mut result = basic;
 
-        let compressors: Vec<Box<dyn BinaryCompression<O>>> = vec![
+        let compressors: Vec<Box<dyn BinaryCompression>> = vec![
             Box::new(OneValue {}) as _,
             Box::new(Freq {}) as _,
             Box::new(Dict {}) as _,

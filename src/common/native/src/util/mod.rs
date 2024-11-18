@@ -38,8 +38,8 @@ macro_rules! with_match_integer_double_type {
                 $body_primitive
             };
         }
-        use $crate::types::PrimitiveType::*;
-        use $databend_common_column::types::i256
+        use databend_common_expression::types::NumberDataType::*;
+        use ethnum::i256;
         match $key_type {
             Int8 => __with_ty__! { i8 },
             Int16 => __with_ty__! { i16 },
@@ -54,10 +54,6 @@ macro_rules! with_match_integer_double_type {
 
             Float32 => __with_ty_double__! { f32 },
             Float64 => __with_ty_double__! { f64 },
-            Float16 => unreachable! {},
-            DaysMs => unreachable!(),
-            MonthDayNano => unreachable!(),
-            UInt128 => unimplemented!(),
         }
     }};
 }

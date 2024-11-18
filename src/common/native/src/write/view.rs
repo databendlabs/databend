@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use databend_common_column::binview::BinaryViewColumn;
+use databend_common_column::binview::View;
 
 use super::WriteOptions;
 use crate::error::Result;

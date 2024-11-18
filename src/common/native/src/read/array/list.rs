@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::TableField;
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
 
 use crate::error::Result;
 use crate::nested::create_list;
@@ -22,12 +23,12 @@ use crate::read::deserialize::DynIter;
 /// An iterator adapter over [`DynIter`] assumed to be encoded as List columns
 pub struct ListIterator<'a> {
     iter: DynIter<'a, Result<(NestedState, Column)>>,
-    field: TableField,
+    field: TableDataType,
 }
 
 impl<'a> ListIterator<'a> {
     /// Creates a new [`ListIterator`] with `iter` and `field`.
-    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: Field) -> Self {
+    pub fn new(iter: DynIter<'a, Result<(NestedState, Column)>>, field: TableDataType) -> Self {
         Self { iter, field }
     }
 }

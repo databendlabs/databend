@@ -14,10 +14,11 @@
 
 use std::io::Write;
 
-use super::WriteOptions;
+use databend_common_column::bitmap::Bitmap;
 
-use crate::error::Result;
+use super::WriteOptions;
 use crate::compression::boolean::compress_boolean;
+use crate::error::Result;
 
 pub(crate) fn write_bitmap<W: Write>(
     w: &mut W,

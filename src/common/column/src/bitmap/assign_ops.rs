@@ -122,11 +122,11 @@ where F: Fn(T, T) -> T {
 #[inline]
 /// Compute bitwise OR operation in-place
 fn or_assign<T: BitChunk>(lhs: &mut MutableBitmap, rhs: &Bitmap) {
-    if rhs.unset_bits() == 0 {
+    if rhs.null_count() == 0 {
         assert_eq!(lhs.len(), rhs.len());
         lhs.clear();
         lhs.extend_constant(rhs.len(), true);
-    } else if rhs.unset_bits() == rhs.len() {
+    } else if rhs.null_count() == rhs.len() {
         // bitmap remains
     } else {
         binary_assign(lhs, rhs, |x: T, y| x | y)
@@ -153,10 +153,10 @@ impl<'a> std::ops::BitOr<&'a Bitmap> for MutableBitmap {
 #[inline]
 /// Compute bitwise `&` between `lhs` and `rhs`, assigning it to `lhs`
 fn and_assign<T: BitChunk>(lhs: &mut MutableBitmap, rhs: &Bitmap) {
-    if rhs.unset_bits() == 0 {
+    if rhs.null_count() == 0 {
         // bitmap remains
     }
-    if rhs.unset_bits() == rhs.len() {
+    if rhs.null_count() == rhs.len() {
         assert_eq!(lhs.len(), rhs.len());
         lhs.clear();
         lhs.extend_constant(rhs.len(), false);

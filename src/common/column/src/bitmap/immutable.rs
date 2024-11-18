@@ -30,6 +30,7 @@ use super::utils::get_bit_unchecked;
 use super::utils::BitChunk;
 use super::utils::BitChunks;
 use super::utils::BitmapIter;
+use super::utils::ZipValidity;
 use super::IntoIter;
 use super::MutableBitmap;
 use crate::buffer::Bytes;
@@ -146,6 +147,14 @@ impl Bitmap {
         BitmapIter::new(&self.bytes, self.offset, self.length)
     }
 
+    pub fn option_iter<'a>(
+        &'a self,
+        validity: Option<&'a Bitmap>,
+    ) -> ZipValidity<bool, BitmapIter<'a>, BitmapIter<'a>> {
+        let bitmap_iter = validity.as_ref().map(|v| v.iter());
+        ZipValidity::new(self.iter(), bitmap_iter)
+    }
+
     /// Returns an iterator over bits in bit chunks [`BitChunk`].
     ///
     /// This iterator is useful to operate over multiple bits via e.g. bitwise.
@@ -177,14 +186,7 @@ impl Bitmap {
     /// # Implementation
     /// This function is `O(1)` - the number of unset bits is computed when the bitmap is
     /// created
-    pub const fn unset_bits(&self) -> usize {
-        self.unset_bits
-    }
-
-    /// Returns the number of unset bits on this [`Bitmap`].
-    #[inline]
-    #[deprecated(since = "0.13.0", note = "use `unset_bits` instead")]
-    pub fn null_count(&self) -> usize {
+    pub const fn null_count(&self) -> usize {
         self.unset_bits
     }
 

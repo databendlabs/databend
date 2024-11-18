@@ -379,7 +379,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => {
                     let has_valid = validity
-                        .map(|validity| validity.unset_bits() < validity.len())
+                        .map(|validity| validity.null_count() < validity.len())
                         .unwrap_or(true);
                     if has_valid {
                         Err(ErrorCode::BadArguments(format!(
@@ -397,9 +397,9 @@ impl<'a> Evaluator<'a> {
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
-                            (validity & (&col.validity)).unset_bits() > validity.unset_bits()
+                            (validity & (&col.validity)).null_count() > validity.null_count()
                         })
-                        .unwrap_or_else(|| col.validity.unset_bits() > 0);
+                        .unwrap_or_else(|| col.validity.null_count() > 0);
                     if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
@@ -465,7 +465,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -710,7 +710,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(

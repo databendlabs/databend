@@ -43,14 +43,14 @@ use crate::read::NativeReadBuf;
 use crate::write::WriteOptions;
 
 pub fn compress_double<T: DoubleType>(
-    array: &Buffer<T>,
+    col: &Buffer<T>,
     validity: Option<Bitmap>,
     write_options: WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {
     // choose compressor
-    let stats = gen_stats(array, validity);
-    let compressor = choose_compressor(array, &stats, &write_options);
+    let stats = gen_stats(col, validity);
+    let compressor = choose_compressor(col, &stats, &write_options);
 
     log::debug!(
         "choose double compression : {:?}",
@@ -64,14 +64,14 @@ pub fn compress_double<T: DoubleType>(
 
     let compressed_size = match compressor {
         DoubleCompressor::Basic(c) => {
-            let input_buf = bytemuck::cast_slice(array.values());
+            let input_buf = bytemuck::cast_slice(col.as_slice());
             c.compress(input_buf, buf)
         }
-        DoubleCompressor::Extend(c) => c.compress(array, &stats, &write_options, buf),
+        DoubleCompressor::Extend(c) => c.compress(col, &stats, &write_options, buf),
     }?;
     buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
     buf[pos + 4..pos + 8]
-        .copy_from_slice(&((array.len() * std::mem::size_of::<T>()) as u32).to_le_bytes());
+        .copy_from_slice(&((col.len() * std::mem::size_of::<T>()) as u32).to_le_bytes());
 
     log::debug!(
         "double compress ratio {}",
@@ -129,7 +129,7 @@ pub fn decompress_double<T: DoubleType, R: NativeReadBuf>(
 pub trait DoubleCompression<T: DoubleType> {
     fn compress(
         &self,
-        array: &Buffer<T>,
+        col: &Buffer<T>,
         stats: &DoubleStats<T>,
         write_options: &WriteOptions,
         output: &mut Vec<u8>,
@@ -189,12 +189,13 @@ pub struct DoubleStats<T: DoubleType> {
     pub set_count: usize,
 }
 
-fn gen_stats<T: DoubleType>(array: &Bufferr<T>, validity: Option<Bitmap>) -> DoubleStats<T> {
+fn gen_stats<T: DoubleType>(col: &Buffer<T>, validity: Option<Bitmap>) -> DoubleStats<T> {
+    let null_count = validity.as_ref().map(|x| x.null_count()).unwrap_or(0);
     let mut stats = DoubleStats::<T> {
-        src: array.clone(),
-        tuple_count: array.len(),
-        total_bytes: array.len() * std::mem::size_of::<T>(),
-        null_count: array.null_count(),
+        src: col.clone(),
+        tuple_count: col.len(),
+        total_bytes: col.len() * std::mem::size_of::<T>(),
+        null_count,
         validity,
         is_sorted: true,
         min: T::default().as_order(),
@@ -202,17 +203,16 @@ fn gen_stats<T: DoubleType>(array: &Bufferr<T>, validity: Option<Bitmap>) -> Dou
         average_run_length: 0.0,
         distinct_values: HashMap::new(),
         unique_count: 0,
-        set_count: array.len() - array.null_count(),
+        set_count: col.len() - null_count,
     };
 
     let mut is_init_value_initialized = false;
     let mut last_value = T::default().as_order();
     let mut run_count = 0;
 
-    let validity = validity.as_ref();
-    for (i, current_value) in array.values().iter().cloned().enumerate() {
+    for (i, current_value) in col.iter().cloned().enumerate() {
         let current_value = current_value.as_order();
-        if is_valid(&validity, i) {
+        if is_valid(stats.validity.as_ref(), i) {
             if current_value < last_value {
                 stats.is_sorted = false;
             }
@@ -238,7 +238,7 @@ fn gen_stats<T: DoubleType>(array: &Bufferr<T>, validity: Option<Bitmap>) -> Dou
         *stats.distinct_values.entry(current_value).or_insert(0) += 1;
     }
     stats.unique_count = stats.distinct_values.len();
-    stats.average_run_length = array.len() as f64 / run_count as f64;
+    stats.average_run_length = col.len() as f64 / run_count as f64;
 
     stats
 }
@@ -332,9 +332,9 @@ fn compress_sample_ratio<T: DoubleType, C: DoubleCompression<T>>(
     let stats = if stats.src.len() / sample_count <= sample_size {
         stats.clone()
     } else {
-        let array = &stats.src;
-        let separator = array.len() / sample_count;
-        let remainder = array.len() % sample_count;
+        let col = &stats.src;
+        let separator = col.len() / sample_count;
+        let remainder = col.len() % sample_count;
         let mut builder = Vec::with_capacity(sample_count * sample_size);
         let mut validity = if stats.null_count > 0 {
             Some(MutableBitmap::with_capacity(sample_count * sample_size))
@@ -351,10 +351,10 @@ fn compress_sample_ratio<T: DoubleType, C: DoubleCompression<T>>(
 
             let partition_begin = sample_i * separator + rng.gen_range(0..range_end);
 
-            let mut s = array.clone();
+            let mut s = col.clone();
             s.slice(partition_begin, sample_size);
 
-            match (&mut validity, stats.validity) {
+            match (&mut validity, &stats.validity) {
                 (Some(b), Some(validity)) => {
                     let mut v = validity.clone();
                     v.slice(partition_begin, sample_size);
@@ -364,8 +364,8 @@ fn compress_sample_ratio<T: DoubleType, C: DoubleCompression<T>>(
             }
             builder.extend(s);
         }
-        let sample_array: Buffer<T> = builder.into();
-        gen_stats(&sample_array, validity.map(|x| x.into()))
+        let sample_col: Buffer<T> = builder.into();
+        gen_stats(&sample_col, validity.map(|x| x.into()))
     };
 
     let size = c

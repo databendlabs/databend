@@ -272,7 +272,7 @@ impl BloomIndex {
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
-            if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
+            if validity.as_ref().map(|v| v.null_count()).unwrap_or(0) > 0 {
                 let validity = validity.unwrap();
                 let it = column.deref().iter().zip(validity.iter()).map(
                     |(v, b)| {

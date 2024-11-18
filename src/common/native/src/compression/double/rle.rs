@@ -17,6 +17,7 @@ use std::io::Write;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
 use databend_common_expression::types::Bitmap;
 
 use super::compress_sample_ratio;
@@ -34,13 +35,13 @@ use crate::write::WriteOptions;
 impl<T: DoubleType> DoubleCompression<T> for Rle {
     fn compress(
         &self,
-        array: &Buffer<T>,
-        _stats: &DoubleStats<T>,
+        col: &Buffer<T>,
+        stats: &DoubleStats<T>,
         _write_options: &WriteOptions,
         output: &mut Vec<u8>,
     ) -> Result<usize> {
         let size = output.len();
-        self.compress_double(output, array.values().clone(), array.validity())?;
+        self.compress_double(output, col.clone(), stats.validity.clone())?;
         Ok(output.len() - size)
     }
 
@@ -63,7 +64,7 @@ impl Rle {
         &self,
         w: &mut W,
         values: impl IntoIterator<Item = T>,
-        validity: Option<&Bitmap>,
+        validity: Option<Bitmap>,
     ) -> Result<()> {
         // help me generate RLE encode algorithm
         let mut seen_count: u32 = 0;
@@ -73,7 +74,7 @@ impl Rle {
         for (i, item) in values.into_iter().enumerate() {
             let item = item.as_order();
 
-            if is_valid(&validity, i) {
+            if is_valid(validity.as_ref(), i) {
                 if all_null {
                     all_null = false;
                     last_value = item;
@@ -107,12 +108,12 @@ impl Rle {
         &self,
         mut input: &'a [u8],
         length: usize,
-        array: &mut Vec<T>,
+        col: &mut Vec<T>,
     ) -> Result<&'a [u8]> {
         let mut bs = vec![0u8; std::mem::size_of::<T>()];
         let mut num_values = 0;
 
-        array.reserve(length);
+        col.reserve(length);
 
         loop {
             let len = input.read_u32::<LittleEndian>()?;
@@ -124,7 +125,7 @@ impl Rle {
             };
             let t = T::from_le_bytes(a);
             for _ in 0..len {
-                array.push(t);
+                col.push(t);
             }
 
             num_values += len as usize;

@@ -16,6 +16,7 @@ use std::io::BufRead;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::binary::BinaryColumn;
 
 use super::BinaryCompression;
 use super::BinaryStats;
@@ -26,12 +27,12 @@ use crate::error::Result;
 use crate::general_err;
 use crate::write::WriteOptions;
 
-impl<O: Offset> BinaryCompression<O> for OneValue {
+impl BinaryCompression for OneValue {
     fn to_compression(&self) -> Compression {
         Compression::OneValue
     }
 
-    fn compress_ratio(&self, stats: &super::BinaryStats<O>) -> f64 {
+    fn compress_ratio(&self, stats: &super::BinaryStats) -> f64 {
         if stats.unique_count <= 1 {
             stats.tuple_count as f64
         } else {
@@ -41,16 +42,12 @@ impl<O: Offset> BinaryCompression<O> for OneValue {
 
     fn compress(
         &self,
-        array: &BinaryColumn,
-        _stats: &BinaryStats<O>,
+        col: &BinaryColumn,
+        _stats: &BinaryStats,
         _write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,
     ) -> Result<usize> {
-        let val = array.iter().find(|v| v.is_some());
-        let val = match val {
-            Some(Some(v)) => v,
-            _ => &[],
-        };
+        let val = col.iter().next().unwrap_or(&[]);
 
         let start = output_buf.len();
 
@@ -64,7 +61,7 @@ impl<O: Offset> BinaryCompression<O> for OneValue {
         &self,
         mut input: &[u8],
         length: usize,
-        offsets: &mut Vec<O>,
+        offsets: &mut Vec<u64>,
         values: &mut Vec<u8>,
     ) -> Result<()> {
         let len = input.read_u32::<LittleEndian>()? as usize;
@@ -77,7 +74,7 @@ impl<O: Offset> BinaryCompression<O> for OneValue {
         input.consume(len);
 
         if offsets.is_empty() {
-            offsets.push(O::zero());
+            offsets.push(0);
         }
 
         offsets.reserve(length);
@@ -85,7 +82,7 @@ impl<O: Offset> BinaryCompression<O> for OneValue {
 
         for _ in 0..length {
             values.extend_from_slice(val);
-            offsets.push(O::from_usize(values.len()).unwrap());
+            offsets.push(values.len() as u64);
         }
         Ok(())
     }

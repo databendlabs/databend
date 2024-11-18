@@ -161,7 +161,7 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
         // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
         // we can just slice it.
         if self.num_rows <= bitmap.len()
-            && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+            && (bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len())
         {
             self.result = Some(Value::Column(BooleanType::upcast_column(
                 bitmap.sliced(0, self.num_rows),

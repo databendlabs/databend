@@ -1072,8 +1072,8 @@ impl Column {
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
-                has_false: col.unset_bits() > 0,
-                has_true: col.len() - col.unset_bits() > 0,
+                has_false: col.null_count() > 0,
+                has_true: col.len() - col.null_count() > 0,
             }),
             Column::String(col) => {
                 let (min, max) = StringType::iter_column(col).minmax().into_option().unwrap();
@@ -1115,7 +1115,7 @@ impl Column {
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
-                    has_null: col.validity.unset_bits() > 0,
+                    has_null: col.validity.null_count() > 0,
                     value: Some(Box::new(inner_domain)),
                 })
             }
@@ -1460,7 +1460,7 @@ impl Column {
         match self {
             Column::Null { .. } => (true, None),
             Column::Nullable(c) => {
-                if c.validity.unset_bits() == c.validity.len() {
+                if c.validity.null_count() == c.validity.len() {
                     (true, Some(&c.validity))
                 } else {
                     (false, Some(&c.validity))

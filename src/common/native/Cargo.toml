@@ -38,6 +38,7 @@ serde_derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
 snap = { workspace = true }
 zstd = { workspace = true }
+match-template = { workspace = true }
 
 [dev-dependencies]
 # used to test async readers

@@ -156,7 +156,7 @@ impl HashJoinState {
                 match col {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
-                        if bitmap.unset_bits() == 0 {
+                        if bitmap.null_count() == 0 {
                             valids = Some(Bitmap::new_constant(true, num_rows));
                             break;
                         } else {

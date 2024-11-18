@@ -17,16 +17,16 @@ use std::io::BufRead;
 use bitpacking::BitPacker;
 use bitpacking::BitPacker4x;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
 
 use super::compress_sample_ratio;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
-
-use crate::error::Result;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
+use crate::error::Result;
 use crate::write::WriteOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,7 +42,7 @@ impl<T: IntegerType> IntegerCompression<T> for Bitpacking {
     ) -> Result<usize> {
         let start: usize = output.len();
         let bitpacker = BitPacker4x::new();
-        let my_data = bytemuck::cast_slice(array.values().as_slice());
+        let my_data = bytemuck::cast_slice(array.as_slice());
 
         for chunk in my_data.chunks(BitPacker4x::BLOCK_LEN) {
             let num_bits: u8 = bitpacker.num_bits(chunk);

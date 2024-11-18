@@ -16,16 +16,16 @@ use std::hash::Hash;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
+use databend_common_column::types::NativeType;
 
 use super::compress_integer;
 use super::decompress_integer;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
-
 use crate::error::Error;
 use crate::error::Result;
-use databend_common_column::types::NativeType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Dict {}
@@ -34,15 +34,15 @@ impl<T: IntegerType> IntegerCompression<T> for Dict {
     fn compress(
         &self,
         array: &Buffer<T>,
-        _stats: &IntegerStats<T>,
+        stats: &IntegerStats<T>,
         write_options: &WriteOptions,
         output_buf: &mut Vec<u8>,
     ) -> Result<usize> {
         let start = output_buf.len();
         let mut encoder = DictEncoder::with_capacity(array.len());
-        for val in array.iter() {
+        for val in array.option_iter(stats.validity.as_ref()) {
             match val {
-                Some(val) => encoder.push(&RawNative { inner: *val }),
+                Some(val) => encoder.push(&RawNative { inner: val }),
                 None => {
                     if encoder.is_empty() {
                         encoder.push(&RawNative {
@@ -59,7 +59,7 @@ impl<T: IntegerType> IntegerCompression<T> for Dict {
         // dict data use custom encoding
         let mut write_options = write_options.clone();
         write_options.forbidden_compressions.push(Compression::Dict);
-        compress_integer(&indices, write_options, output_buf)?;
+        compress_integer(&indices, stats.validity.clone(), write_options, output_buf)?;
 
         let sets = encoder.get_sets();
         output_buf.extend_from_slice(&(sets.len() as u32).to_le_bytes());
@@ -164,16 +164,16 @@ where T: AsBytes + PartialEq + Clone
 
     pub fn take_indices(&mut self) -> Buffer<u32> {
         let indices = std::mem::take(&mut self.indices);
-        Buffer::<u32>::from_vec(indices)
+        indices.into()
     }
 }
 
 use hashbrown_v0_14::hash_map::RawEntryMut;
 use hashbrown_v0_14::HashMap;
 
-use crate::general_err;
 use crate::compression::get_bits_needed;
 use crate::compression::Compression;
+use crate::general_err;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 

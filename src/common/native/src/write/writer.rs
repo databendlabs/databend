@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use databend_common_expression::Column;
 use databend_common_expression::TableSchema;
 
 use super::common::write_eof;
@@ -109,7 +110,7 @@ impl<W: Write> NativeWriter<W> {
                 "The strawboat file must be started before it can be written to. Call `start` before `write`".to_string(),
             ));
         }
-        assert_eq!(chunk.columns().len(), self.schema.fields.len());
+        assert_eq!(chunk.len(), self.schema.fields.len());
         self.encode_chunk(chunk)?;
 
         self.state = State::Written;

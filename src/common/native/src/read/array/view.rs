@@ -16,10 +16,13 @@ use std::io::Cursor;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::binview::BinaryViewColumn;
+use databend_common_column::binview::View;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
-
+use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
+
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
@@ -31,19 +34,19 @@ use crate::CommonCompression;
 use crate::PageMeta;
 
 #[derive(Debug)]
-pub struct ViewArrayNestedIter<I>
+pub struct ViewColNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     iter: I,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     scratch: Vec<u8>,
 }
 
-impl<I> ViewArrayNestedIter<I>
+impl<I> ViewColNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    pub fn new(iter: I, data_type: DataType, init: Vec<InitNested>) -> Self {
+    pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
         Self {
             iter,
             data_type,
@@ -53,24 +56,20 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-impl<I> ViewArrayNestedIter<I>
+impl<I> ViewColNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
-    fn deserialize(
-        &mut self,
-        num_values: u64,
-        buffer: Vec<u8>,
-    ) -> Result<(NestedState, Column)> {
+    fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
         let length = num_values as usize;
 
-        let array = read_view_array(&mut reader, length, self.data_type.clone(), validity)?;
-        Ok((nested, array))
+        let col = read_view_col(&mut reader, length, self.data_type.clone(), validity)?;
+        Ok((nested, col))
     }
 }
 
-impl<I> Iterator for ViewArrayNestedIter<I>
+impl<I> Iterator for ViewColNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     type Item = Result<(NestedState, Column)>;
@@ -92,9 +91,9 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-pub fn read_nested_view_array<R: NativeReadBuf>(
+pub fn read_nested_view_col<R: NativeReadBuf>(
     reader: &mut R,
-    data_type: DataType,
+    data_type: TableDataType,
     init: Vec<InitNested>,
     page_metas: Vec<PageMeta>,
 ) -> Result<Vec<(NestedState, Column)>> {
@@ -103,16 +102,16 @@ pub fn read_nested_view_array<R: NativeReadBuf>(
     for page_meta in page_metas {
         let num_values = page_meta.num_values as usize;
         let (nested, validity) = read_nested(reader, &init, num_values)?;
-        let array = read_view_array(reader, num_values, data_type.clone(), validity)?;
-        results.push((nested, array));
+        let col = read_view_col(reader, num_values, data_type.clone(), validity)?;
+        results.push((nested, col));
     }
     Ok(results)
 }
 
-fn read_view_array<R: NativeReadBuf>(
+fn read_view_col<R: NativeReadBuf>(
     reader: &mut R,
     length: usize,
-    data_type: DataType,
+    data_type: TableDataType,
     validity: Option<Bitmap>,
 ) -> Result<Column> {
     let mut scratch = vec![0; 9];
@@ -143,19 +142,17 @@ fn read_view_array<R: NativeReadBuf>(
         buffers.push(Buffer::from(buffer));
     }
 
-    let array = unsafe {
-        BinaryViewColumn::new_unchecked_unknown_md(
+    let col = unsafe {
+        Column::String(BinaryViewColumn::new_unchecked_unknown_md(
             data_type.clone(),
             views,
             buffers.into(),
-            validity,
-            None,
-        )
+        ))
     };
 
-    if matches!(data_type, DataType::Utf8View) {
-        Ok(Box::new(array.to_utf8view()?))
+    if data_type.is_nullable() {
+        Ok(col.wrap_nullable(validity))
     } else {
-        Ok(Box::new(array))
+        Ok(col)
     }
 }

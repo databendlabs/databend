@@ -18,6 +18,7 @@ use std::io::Read;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use databend_common_column::buffer::Buffer;
 use databend_common_column::types::NativeType;
 use ringbuffer::AllocRingBuffer;
 use ringbuffer::RingBuffer;
@@ -51,7 +52,7 @@ impl<T: DoubleType> DoubleCompression<T> for Patas {
         let mut byte_writer =
             ByteWriter::<false>::with_capacity(array.len() * (std::mem::size_of::<T>() + 2));
 
-        for (i, val) in array.values().iter().enumerate() {
+        for (i, val) in array.iter().enumerate() {
             let val = val.as_bits();
 
             if !is_first {

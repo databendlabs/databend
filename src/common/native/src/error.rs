@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use databend_common_column::Error;
-pub use databend_common_column::Result;
+pub use databend_common_column::error::Error;
+pub use databend_common_column::error::Result;
 
 #[macro_export]
 macro_rules! general_err {

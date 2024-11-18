@@ -29,22 +29,22 @@ use crate::error::Result;
 impl BooleanCompression for Rle {
     fn compress(
         &self,
-        array: &Bitmap,
+        col: &Bitmap,
         validity: Option<Bitmap>,
         output: &mut Vec<u8>,
     ) -> Result<usize> {
         let size = output.len();
-        self.compress_integer(output, array.values().iter().map(|v| v as u8), validity)?;
+        self.compress_integer(output, col.iter().map(|v| v as u8), validity)?;
         Ok(output.len() - size)
     }
 
-    fn decompress(&self, mut input: &[u8], length: usize, array: &mut MutableBitmap) -> Result<()> {
+    fn decompress(&self, mut input: &[u8], length: usize, col: &mut MutableBitmap) -> Result<()> {
         let mut num_values = 0;
         while !input.is_empty() {
             let len: u32 = input.read_u32::<LittleEndian>()?;
             let t = input.read_u8()? != 0;
             for _ in 0..len {
-                array.push(t);
+                col.push(t);
             }
             num_values += len as usize;
             if num_values >= length {
