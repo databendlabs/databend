@@ -24,6 +24,7 @@ runs:
         path: distro/bin
         artifacts: metactl,meta,query
     - name: Pack Binaries
+      id: pack_binaries
       shell: bash
       run: |
         target=${{ inputs.target }}
@@ -44,19 +45,21 @@ runs:
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
         tar -C ./distro --exclude='*.debug' -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
         sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
+        echo "pkg_name=pkg_name" >> $GITHUB_OUTPUT
     - name: post sha256
       uses: actions/upload-artifact@v4
       with:
         name: sha256sums-${{ inputs.category }}-${{ inputs.target }}
-        path: sha256-${pkg_name}.txt
+        path: sha256-${{ steps.pack_binaries.outputs.pkg_name }}.txt
         retention-days: 1
     - name: post binaries
       uses: actions/upload-artifact@v4
       with:
-        name: ${pkg_name}.tar.gz
-        path: ${pkg_name}.tar.gz
+        name: ${{ steps.pack_binaries.outputs.pkg_name }}.tar.gz
+        path: ${{ steps.pack_binaries.outputs.pkg_name }}.tar.gz
         retention-days: 1
     - name: Pack DBG Binaries
+      id: pack_dbg_binaries
       shell: bash
       run: |
         target=${{ inputs.target }}
@@ -77,15 +80,16 @@ runs:
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
         tar -C ./distro -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
         sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
+        echo "pkg_name=pkg_name" >> $GITHUB_OUTPUT
     - name: post dbg sha256
       uses: actions/upload-artifact@v4
       with:
         name: sha256sums-${{ inputs.category }}-${{ inputs.target }}-gdb
-        path: sha256-${pkg_name}.txt
+        path: sha256-${{ steps.pack_dbg_binaries.outputs.pkg_name }}.txt
         retention-days: 1
     - name: post binaries
       uses: actions/upload-artifact@v4
       with:
-        name: ${pkg_name}.tar.gz
-        path: ${pkg_name}.tar.gz
+        name: ${{ steps.pack_dbg_binaries.outputs.pkg_name }}.tar.gz
+        path: ${{ steps.pack_dbg_binaries.outputs.pkg_name }}.tar.gz
         retention-days: 1
