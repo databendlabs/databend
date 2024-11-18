@@ -21,6 +21,7 @@ use chrono::Utc;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -93,7 +94,8 @@ pub fn serialize_block(
                 },
             )?;
 
-            let batch = block
+            let block = block.consume_convert_to_full();
+            let batch: Vec<Column> = block
                 .columns()
                 .iter()
                 .map(|x| x.value.as_column().unwrap().clone())

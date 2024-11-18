@@ -67,7 +67,7 @@ fn test_to_partitions() -> Result<()> {
             false,
             vec![],
             vec![field_index],
-            Bone,
+            None,
         );
         n.leaf_column_ids = vec![field_index as ColumnId];
         n

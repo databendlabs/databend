@@ -22,12 +22,12 @@ use std::ops::BitXorAssign;
 use std::ops::SubAssign;
 use std::sync::Arc;
 
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -230,7 +230,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
-        if column.len() == 0 {
+        if column.is_empty() {
             return Ok(());
         }
 

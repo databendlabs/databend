@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::Buffer;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::StringType;

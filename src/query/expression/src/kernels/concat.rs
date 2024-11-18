@@ -253,7 +253,7 @@ impl Column {
     }
 
     pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
-        let cols = bitmaps.map(|bitmap| Column::Boolean(bitmap));
+        let cols = bitmaps.map(Column::Boolean);
         Self::concat_use_arrow(cols, DataType::Boolean, num_rows)
             .into_boolean()
             .unwrap()

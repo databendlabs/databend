@@ -596,7 +596,7 @@ impl From<Utf8ViewColumn> for ArrayData {
             .add_buffers(
                 column
                     .buffers
-                    .into_iter()
+                    .iter()
                     .map(|x| x.clone().into())
                     .collect::<Vec<_>>(),
             );
@@ -612,7 +612,7 @@ impl From<BinaryViewColumn> for ArrayData {
             .add_buffers(
                 column
                     .buffers
-                    .into_iter()
+                    .iter()
                     .map(|x| x.clone().into())
                     .collect::<Vec<_>>(),
             );

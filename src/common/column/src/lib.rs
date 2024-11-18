@@ -16,6 +16,7 @@
 #![feature(portable_simd)]
 #![allow(clippy::unconditional_recursion)]
 #![allow(clippy::non_canonical_partial_ord_impl)]
+#![allow(clippy::len_without_is_empty)]
 #![allow(dead_code)]
 #![feature(trusted_len)]
 #![feature(try_blocks)]

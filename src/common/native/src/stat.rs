@@ -189,12 +189,8 @@ mod test {
 
     use databend_common_column::binary::BinaryColumn;
     use databend_common_expression::infer_schema_type;
-    
     use databend_common_expression::types::Int64Type;
-    
     use databend_common_expression::Column;
-    
-    
     use databend_common_expression::FromData;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
@@ -228,7 +224,7 @@ mod test {
         let mut writer = NativeWriter::new(&mut bytes, table_schema, options).unwrap();
 
         writer.start().unwrap();
-        writer.write(&vec![column]).unwrap();
+        writer.write(&[column]).unwrap();
         writer.finish().unwrap();
 
         let meta = writer.metas[0].clone();

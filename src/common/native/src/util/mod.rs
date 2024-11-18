@@ -41,7 +41,7 @@ macro_rules! with_match_integer_double_type {
         use databend_common_expression::types::NumberDataType::*;
         use databend_common_expression::types::F32;
         use databend_common_expression::types::F64;
-        
+
         match $key_type {
             Int8 => __with_ty__! { i8 },
             Int16 => __with_ty__! { i16 },
@@ -63,9 +63,9 @@ pub fn n_columns(data_type: &TableDataType) -> usize {
     use TableDataType::*;
 
     match data_type {
-        Array(inner) => n_columns(&inner),
-        Map(inner) => n_columns(&inner),
-        Tuple { fields_type, .. } => fields_type.iter().map(|inner| n_columns(&inner)).sum(),
+        Array(inner) => n_columns(inner),
+        Map(inner) => n_columns(inner),
+        Tuple { fields_type, .. } => fields_type.iter().map(n_columns).sum(),
         _ => 1,
     }
 }

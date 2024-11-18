@@ -264,7 +264,7 @@ impl BlockReader {
             .into_iter()
             .map(ColumnMeta::Native)
             .collect::<Vec<ColumnMeta>>();
-        let schema = DataSchema::try_from(&schema).ok()?;
+        let schema = DataSchema::from(&schema);
         Some((metas, ArrowSchema::from(&schema)))
     }
 }

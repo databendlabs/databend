@@ -654,11 +654,11 @@ impl NumberColumn {
             NumberColumn::Int32(buffer) => buffer.clone().into(),
             NumberColumn::Int64(buffer) => buffer.clone().into(),
             NumberColumn::Float32(buffer) => {
-                let r = unsafe { std::mem::transmute::<_, Buffer<f32>>(buffer.clone()) };
+                let r = unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(buffer.clone()) };
                 r.into()
             }
             NumberColumn::Float64(buffer) => {
-                let r = unsafe { std::mem::transmute::<_, Buffer<f64>>(buffer.clone()) };
+                let r = unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(buffer.clone()) };
                 r.into()
             }
         }
@@ -693,12 +693,10 @@ impl NumberColumn {
                 let buffer = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(buffer) };
                 Ok(NumberColumn::Float64(buffer))
             }
-            data_type => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported data type: {:?} into number column",
-                    data_type
-                )));
-            }
+            data_type => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported data type: {:?} into number column",
+                data_type
+            ))),
         }
     }
 }

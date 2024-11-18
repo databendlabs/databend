@@ -99,7 +99,7 @@ impl<W: Write> NativeWriter<W> {
     }
 
     /// Writes [`Chunk`] to the file
-    pub fn write(&mut self, chunk: &Vec<Column>) -> Result<()> {
+    pub fn write(&mut self, chunk: &[Column]) -> Result<()> {
         if self.state == State::Written {
             return Err(Error::OutOfSpec(
                 "The strawboat file can only accept one RowGroup in a single file".to_string(),

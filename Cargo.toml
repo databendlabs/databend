@@ -103,7 +103,6 @@ members = [
 
 # Workspace dependencies
 [workspace.dependencies]
-databend-common-column = { path = "src/common/column" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-auth = { path = "src/common/auth" }
@@ -114,6 +113,7 @@ databend-common-cache = { path = "src/common/cache" }
 databend-common-catalog = { path = "src/query/catalog" }
 databend-common-cloud-control = { path = "src/common/cloud_control" }
 databend-common-codegen = { path = "src/query/codegen" }
+databend-common-column = { path = "src/common/column" }
 databend-common-compress = { path = "src/common/compress" }
 databend-common-config = { path = "src/query/config" }
 databend-common-datavalues = { path = "src/query/datavalues" }
@@ -139,6 +139,7 @@ databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
+databend-common-native = { path = "src/common/native" }
 databend-common-openai = { path = "src/common/openai" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
@@ -170,7 +171,6 @@ databend-common-storages-view = { path = "src/query/storages/view" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
-databend-common-native = { path = "src/common/native" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }

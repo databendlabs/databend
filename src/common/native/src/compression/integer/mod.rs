@@ -210,30 +210,28 @@ fn gen_stats<T: IntegerType>(col: &Buffer<T>, validity: Option<Bitmap>) -> Integ
     let mut last_value = T::default();
     let mut run_count = 0;
 
-    for current_value in col.option_iter(stats.validity.as_ref()) {
-        if let Some(current_value) = current_value {
-            if current_value < last_value {
-                stats.is_sorted = false;
-            }
-
-            if last_value != current_value {
-                run_count += 1;
-                last_value = current_value;
-            }
-
-            if !is_init_value_initialized {
-                is_init_value_initialized = true;
-                stats.min = current_value;
-                stats.max = current_value;
-            }
-
-            if current_value > stats.max {
-                stats.max = current_value;
-            } else if current_value < stats.min {
-                stats.min = current_value;
-            }
-            *stats.distinct_values.entry(current_value).or_insert(0) += 1;
+    for current_value in col.option_iter(stats.validity.as_ref()).flatten() {
+        if current_value < last_value {
+            stats.is_sorted = false;
         }
+
+        if last_value != current_value {
+            run_count += 1;
+            last_value = current_value;
+        }
+
+        if !is_init_value_initialized {
+            is_init_value_initialized = true;
+            stats.min = current_value;
+            stats.max = current_value;
+        }
+
+        if current_value > stats.max {
+            stats.max = current_value;
+        } else if current_value < stats.min {
+            stats.min = current_value;
+        }
+        *stats.distinct_values.entry(current_value).or_insert(0) += 1;
     }
     stats.unique_count = stats.distinct_values.len();
     stats.average_run_length = col.len() as f64 / run_count as f64;
@@ -354,13 +352,10 @@ fn compress_sample_ratio<T: IntegerType, C: IntegerCompression<T>>(
             let mut s = col.clone();
             s.slice(partition_begin, sample_size);
 
-            match (&mut validity, &stats.validity) {
-                (Some(b), Some(validity)) => {
-                    let mut v = validity.clone();
-                    v.slice(partition_begin, sample_size);
-                    b.extend_from_trusted_len_iter(v.into_iter());
-                }
-                (_, _) => {}
+            if let (Some(b), Some(validity)) = (&mut validity, &stats.validity) {
+                let mut v = validity.clone();
+                v.slice(partition_begin, sample_size);
+                b.extend_from_trusted_len_iter(v.into_iter());
             }
 
             builder.extend(s.into_iter());

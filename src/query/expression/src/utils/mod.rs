@@ -25,8 +25,8 @@ pub mod udf_client;
 pub mod variant_transform;
 pub mod visitor;
 
-use databend_common_column::bitmap::Bitmap;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use ethnum::i256;
 

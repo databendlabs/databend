@@ -159,8 +159,7 @@ impl From<&TableField> for Field {
                     .zip(fields_type)
                     .map(|(name, ty)| {
                         let f = TableField::new(name, ty.clone());
-                        let arrow_f = Field::from(&f);
-                        arrow_f
+                        Field::from(&f)
                     })
                     .collect();
                 ArrowDataType::Struct(Fields::from(fields))
@@ -317,10 +316,7 @@ impl From<&Column> for ArrayData {
                 unsafe { builder.build_unchecked() }
             }
             Column::Tuple(fields) => {
-                let child_data = fields
-                    .iter()
-                    .map(|x| ArrayData::from(x))
-                    .collect::<Vec<_>>();
+                let child_data = fields.iter().map(ArrayData::from).collect::<Vec<_>>();
                 let builder = ArrayDataBuilder::new(arrow_type)
                     .len(value.len())
                     .child_data(child_data);

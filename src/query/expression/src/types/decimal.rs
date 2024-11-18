@@ -1189,12 +1189,10 @@ impl DecimalColumn {
                 };
                 Ok(Self::Decimal256(buffer, decimal_size))
             }
-            data_type => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported data type: {:?} into decimal column",
-                    data_type
-                )));
-            }
+            data_type => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported data type: {:?} into decimal column",
+                data_type
+            ))),
         }
     }
 }

@@ -16,7 +16,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;
@@ -28,6 +27,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::GenericType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringColumn;

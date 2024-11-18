@@ -50,6 +50,10 @@ impl BinaryColumn {
         self.offsets.len() - 1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.offsets.len() <= 1
+    }
+
     pub fn total_bytes_len(&self) -> usize {
         (*self.offsets().last().unwrap() - *self.offsets().first().unwrap()) as _
     }

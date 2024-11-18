@@ -83,6 +83,10 @@ impl BinaryColumnBuilder {
         self.offsets.len() - 1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.offsets.len() <= 1
+    }
+
     pub fn memory_size(&self) -> usize {
         self.offsets.len() * 8 + self.data.len()
     }
@@ -200,7 +204,7 @@ impl BinaryColumnBuilder {
     }
 
     pub fn pop(&mut self) -> Option<Vec<u8>> {
-        if self.len() > 0 {
+        if !self.is_empty() {
             let index = self.len() - 1;
             let start = unsafe { *self.offsets.get_unchecked(index) as usize };
             self.offsets.pop();

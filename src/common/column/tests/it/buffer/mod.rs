@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::binview::BinaryViewColumnBuilder;
 use databend_common_column::buffer::Buffer;
 
 mod immutable;
@@ -29,14 +30,14 @@ fn new_basic() {
 
 #[test]
 fn extend_from_repeats() {
-    let mut b = MutableBinaryViewArray::<str>::new();
-    b.extend_constant(4, Some("databend"));
+    let mut b = BinaryViewColumnBuilder::<str>::new();
+    b.extend_constant(4, "databend");
 
     let a = b.clone();
-    b.extend_trusted_len_values(a.values_iter());
+    b.extend_trusted_len_values(a.iter());
 
     assert_eq!(
-        b.as_box(),
-        MutableBinaryViewArray::<str>::from_values_iter(vec!["databend"; 8].into_iter()).as_box()
+        b.freeze(),
+        BinaryViewColumnBuilder::<str>::from_values_iter(vec!["databend"; 8].into_iter()).freeze()
     )
 }

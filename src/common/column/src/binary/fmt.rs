@@ -21,7 +21,7 @@ use std::fmt::Write;
 use super::BinaryColumn;
 use crate::fmt::write_vec;
 
-pub fn write_value<'a, W: Write>(array: &'a BinaryColumn, index: usize, f: &mut W) -> Result {
+pub fn write_value<W: Write>(array: &BinaryColumn, index: usize, f: &mut W) -> Result {
     let bytes = array.value(index);
     let writer = |f: &mut W, index| write!(f, "{}", bytes[index]);
 

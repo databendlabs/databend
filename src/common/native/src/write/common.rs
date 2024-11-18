@@ -42,7 +42,7 @@ pub struct WriteOptions {
 
 impl<W: Write> NativeWriter<W> {
     /// Encode and write columns to the file
-    pub fn encode_chunk(&mut self, chunk: &Vec<Column>) -> Result<()> {
+    pub fn encode_chunk(&mut self, chunk: &[Column]) -> Result<()> {
         assert!(!chunk.is_empty());
         let rows = chunk.first().map(|c| c.len()).unwrap();
         let page_size = self.options.max_page_size.unwrap_or(rows).min(rows);

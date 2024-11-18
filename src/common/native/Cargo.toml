@@ -15,30 +15,30 @@ test = true
 databend-common-column = { workspace = true }
 databend-common-expression = { workspace = true }
 
-env_logger = { workspace = true }
 ahash = { workspace = true }
 bitpacking = { workspace = true }
 bytemuck = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
 either = { workspace = true }
+env_logger = { workspace = true }
 ethnum = { workspace = true }
 hashbrown_v0_14 = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 lz4 = { workspace = true }
+match-template = { workspace = true }
 num = { workspace = true, features = ["std"] }
 num-traits = { workspace = true }
 opendal = { workspace = true }
 rand = { workspace = true }
 ringbuffer = { workspace = true }
 roaring = { workspace = true }
-serde = { workspace = true, features = ["rc"]}
+serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
 snap = { workspace = true }
 zstd = { workspace = true }
-match-template = { workspace = true }
 
 [dev-dependencies]
 # used to test async readers

@@ -21,6 +21,7 @@ use crate::bitmap::TrueIdxIter;
 /// # Safety
 /// Implementers of this trait guarantee that
 /// `value_unchecked` is safe when called up to `len`
+#[allow(clippy::missing_safety_doc)]
 pub unsafe trait ColumnAccessor<'a> {
     type Item: 'a;
     unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item;

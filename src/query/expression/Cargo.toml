@@ -11,10 +11,10 @@ test = true
 
 [dependencies]
 arrow-array = { workspace = true }
-arrow-flight = { workspace = true }
-arrow-data = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-cast = { workspace = true }
+arrow-data = { workspace = true }
+arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4"] }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
@@ -26,9 +26,9 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
 dashmap = { workspace = true }
-databend-common-column = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }

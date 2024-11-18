@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::iter::once;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_column::buffer::Buffer;
-use std::iter::TrustedLen;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 

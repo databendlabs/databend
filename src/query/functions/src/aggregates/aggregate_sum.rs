@@ -14,12 +14,12 @@
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;

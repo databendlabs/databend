@@ -16,8 +16,8 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_expression::types::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::ColumnBuilder;

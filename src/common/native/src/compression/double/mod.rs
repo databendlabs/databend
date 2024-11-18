@@ -351,13 +351,10 @@ fn compress_sample_ratio<T: DoubleType, C: DoubleCompression<T>>(
             let mut s = col.clone();
             s.slice(partition_begin, sample_size);
 
-            match (&mut validity, &stats.validity) {
-                (Some(b), Some(validity)) => {
-                    let mut v = validity.clone();
-                    v.slice(partition_begin, sample_size);
-                    b.extend_from_trusted_len_iter(v.into_iter());
-                }
-                (_, _) => {}
+            if let (Some(b), Some(validity)) = (&mut validity, &stats.validity) {
+                let mut v = validity.clone();
+                v.slice(partition_begin, sample_size);
+                b.extend_from_trusted_len_iter(v.into_iter());
             }
             builder.extend(s);
         }

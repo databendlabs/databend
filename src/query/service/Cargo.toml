@@ -56,8 +56,8 @@ databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
-databend-common-column = { workspace = true }
 databend-common-cloud-control = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }

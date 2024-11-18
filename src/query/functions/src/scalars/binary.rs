@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_expression::types::Bitmap;
 use databend_common_expression::error_to_null;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::binary::BinaryColumn;
@@ -25,6 +24,7 @@ use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;

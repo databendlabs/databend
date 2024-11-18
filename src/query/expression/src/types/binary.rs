@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;

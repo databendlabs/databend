@@ -20,7 +20,6 @@ use std::ops::BitXor;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_expression::types::Bitmap;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::DecimalDomain;
@@ -32,6 +31,7 @@ use databend_common_expression::types::number::NumberType;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
