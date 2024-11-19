@@ -25,12 +25,12 @@ ethnum = { workspace = true }
 hashbrown_v0_14 = { workspace = true }
 log = { workspace = true }
 lz4 = { workspace = true }
+match-template = { workspace = true }
 num = { workspace = true, features = ["std"] }
 opendal = { workspace = true }
 rand = { workspace = true }
 ringbuffer = { workspace = true }
 roaring = { workspace = true }
-match-template = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
 snap = { workspace = true }
@@ -38,6 +38,9 @@ zstd = { workspace = true }
 
 [dev-dependencies]
 # used to test async readers
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]
 
 [lints]
 workspace = true
