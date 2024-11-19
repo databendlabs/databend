@@ -160,7 +160,8 @@ impl From<&TableField> for Field {
                     .zip(fields_type)
                     .map(|(name, ty)| {
                         let f = TableField::new(name, ty.clone());
-                        Field::from(&f)
+                        let f = Field::from(&f);
+                        f.with_nullable(ty.is_nullable_or_null())
                     })
                     .collect();
                 ArrowDataType::Struct(Fields::from(fields))

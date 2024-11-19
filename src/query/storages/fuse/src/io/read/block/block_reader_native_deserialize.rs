@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use arrow_array::RecordBatch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -128,11 +127,7 @@ impl BlockReader {
         }
 
         // build data block
-        let chunk = RecordBatch::try_new(self.arrow_schema(), chunk_arrays)?;
-
-        let (mut data_block, _) = DataBlock::from_record_batch(&self.data_schema(), &chunk)?;
-
-        if need_to_fill_default_val {
+        let data_block = if need_to_fill_default_val {
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
             for (i, need_default_val) in need_default_vals.iter().enumerate() {
                 if !need_default_val {
@@ -141,11 +136,22 @@ impl BlockReader {
                     default_vals.push(Some(self.default_vals[i].clone()));
                 }
             }
-            data_block = data_block.create_with_opt_default_value(
+            let data_block = DataBlock::create_with_opt_default_value(
+                chunk_arrays,
                 &self.data_schema(),
                 &default_vals,
                 num_rows,
             )?;
+            data_block
+        } else {
+            debug_assert!(chunk_arrays.len() == self.projected_schema.num_fields());
+            let cols = chunk_arrays
+                .into_iter()
+                .zip(self.data_schema().fields())
+                .map(|(arr, f)| Column::from_arrow_rs(arr, f.data_type()))
+                .collect::<Result<Vec<_>>>()?;
+
+            DataBlock::new_from_columns(cols)
         };
 
         // populate cache if necessary

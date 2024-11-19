@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
+use arrow_array::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -457,14 +458,13 @@ impl DataBlock {
     // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],
     // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
     pub fn create_with_opt_default_value(
-        &self,
+        arrays: Vec<ArrayRef>,
         schema: &DataSchema,
         default_vals: &[Option<Scalar>],
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
-        let entries = self.columns();
 
         let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
@@ -477,7 +477,8 @@ impl DataBlock {
                 }
                 None => {
                     chunk_idx += 1;
-                    entries[chunk_idx].clone()
+                    let col = Column::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
+                    BlockEntry::new(data_type.clone(), Value::Column(col))
                 }
             };
 
