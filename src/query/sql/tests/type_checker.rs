@@ -30,7 +30,7 @@ fn test_resolve_function_call_name() {
         unquoted_ident_case_sensitive: true,
         quoted_ident_case_sensitive: true,
         deny_column_reference: false,
-    };;
+    };
     let metadata = MetadataRef::default();
     let aliases = vec![];
 
