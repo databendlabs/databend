@@ -1411,16 +1411,14 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.69.4"
+version = "0.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
+checksum = "f49d8fed880d473ea71efb9bf597651e77201bdd4893efe54c9e5d65ae04ce6f"
 dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
- "lazy_static",
- "lazycell",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -2998,9 +2996,9 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0819048a792e2eac58b455bbbcf6077c81e2780b3cc4f565a6e72e92dde56bd1"
+checksum = "bd8770a1c49fa21e62a768a0de442cc3f77998a357303d56ddd3485cb7c58d3a"
 dependencies = [
  "async-trait",
  "log",
@@ -3132,6 +3130,7 @@ dependencies = [
  "fastrace",
  "futures",
  "libc",
+ "libmimalloc-sys",
  "log",
  "logcall",
  "micromarshal",
@@ -4671,9 +4670,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbea10312fa203003b572b701b6121cecd8eaf260e7ec7687796b552044541c6"
+checksum = "393daaf83f32c5685887103b04bd9762d43298f7820b9f888144877fcf1d89e8"
 dependencies = [
  "arrow",
  "async-compression 0.4.12",
@@ -4696,9 +4695,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-core"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b8f3bf7bb87d0f2fce8a1992eea4a0b442c01165a0d68aab2727a386c945ab"
+checksum = "7dd1abd8ab1c4200648510204cdfcb538af1eca2c9433e12276dee26a1806144"
 dependencies = [
  "arrow",
  "chrono",
@@ -4719,9 +4718,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40bed5c66f36e79baea7c95d2d0dc8433671606ca7152012562c7145e3b909a1"
+checksum = "5038d47b403ce2351b109fb82627959a27a16a53ce16397bf1ca39307e052b5c"
 dependencies = [
  "quote",
  "syn 2.0.58",
@@ -9184,12 +9183,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazycell"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
-
-[[package]]
 name = "leb128"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9339,6 +9332,16 @@ name = "libm"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
+name = "libmimalloc-sys"
+version = "0.1.39"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23aa6811d3bd4deb8a84dde645f943476d13b248d818edcf8ce0b2f37f036b44"
+dependencies = [
+ "cc",
+ "libc",
+]
 
 [[package]]
 name = "libredox"
