@@ -35,9 +35,9 @@ pub mod variant;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -49,7 +49,9 @@ pub use self::array::ArrayType;
 pub use self::binary::BinaryColumn;
 pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
+pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;
+pub use self::boolean::MutableBitmap;
 pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
@@ -313,6 +315,17 @@ impl DataType {
             DataType::Number(num_ty) => num_ty.get_decimal_properties(),
             _ => None,
         }
+    }
+
+    pub fn is_physical_binary(&self) -> bool {
+        matches!(
+            self,
+            DataType::Binary
+                | DataType::Bitmap
+                | DataType::Variant
+                | DataType::Geometry
+                | DataType::Geography
+        )
     }
 }
 

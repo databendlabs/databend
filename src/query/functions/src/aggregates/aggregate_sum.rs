@@ -14,12 +14,12 @@
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
@@ -89,7 +89,7 @@ where
     TSum: Number + std::ops::AddAssign,
 {
     match validity {
-        Some(v) if v.unset_bits() > 0 => {
+        Some(v) if v.null_count() > 0 => {
             let mut sum = TSum::default();
             inner.iter().zip(v.iter()).for_each(|(t, b)| {
                 if b {

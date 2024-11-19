@@ -153,10 +153,8 @@ impl VirtualColumnReader {
                 .as_ref()
                 .and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
             {
-                let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
-                    arrow_array.into();
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                let value = Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?);
+                let value = Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?);
                 data_block.add_column(BlockEntry::new(data_type, value));
                 continue;
             }

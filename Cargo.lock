@@ -3027,50 +3027,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-arrow"
-version = "0.1.0"
-dependencies = [
- "ahash 0.8.11",
- "arrow-array",
- "arrow-buffer",
- "arrow-data",
- "arrow-schema",
- "bitpacking 0.8.4",
- "bytemuck",
- "byteorder",
- "bytes",
- "chrono",
- "chrono-tz 0.8.6",
- "dyn-clone",
- "either",
- "env_logger 0.11.5",
- "ethnum",
- "flate2",
- "foreign_vec",
- "hashbrown 0.14.5",
- "indexmap 2.6.0",
- "log",
- "lz4",
- "num",
- "num-traits",
- "opendal",
- "ordered-float 4.2.2",
- "proptest",
- "quanta 0.11.1",
- "rand",
- "ringbuffer",
- "roaring",
- "serde",
- "serde_derive",
- "serde_json",
- "simdutf8",
- "snap",
- "tokio",
- "tokio-util",
- "zstd 0.12.4",
-]
-
-[[package]]
 name = "databend-common-ast"
 version = "0.0.4"
 dependencies = [
@@ -3122,6 +3078,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "borsh",
+ "bytemuck",
  "bytes",
  "bytesize",
  "chrono",
@@ -3193,7 +3150,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap 6.1.0",
- "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",
@@ -3242,6 +3198,29 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tower 0.5.1",
+]
+
+[[package]]
+name = "databend-common-column"
+version = "0.1.0"
+dependencies = [
+ "arrow-buffer",
+ "arrow-data",
+ "arrow-schema",
+ "bytemuck",
+ "databend-common-base",
+ "databend-common-exception",
+ "either",
+ "ethnum",
+ "foreign_vec",
+ "hex",
+ "match-template",
+ "num-traits",
+ "proptest",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "simdutf8",
 ]
 
 [[package]]
@@ -3301,7 +3280,6 @@ dependencies = [
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
- "databend-common-arrow",
  "databend-common-ast",
  "geos",
  "geozero 0.14.0",
@@ -3329,6 +3307,9 @@ name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
  "arrow-flight",
  "arrow-ipc",
  "arrow-ord",
@@ -3343,9 +3324,9 @@ dependencies = [
  "comfy-table",
  "criterion",
  "dashmap 6.1.0",
- "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-grpc",
@@ -3379,7 +3360,6 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
- "simdutf8",
  "strength_reduce",
  "terminal_size 0.2.6",
  "tonic",
@@ -3396,7 +3376,6 @@ dependencies = [
  "base64 0.22.1",
  "bstr",
  "chrono-tz 0.8.6",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
@@ -3435,7 +3414,6 @@ dependencies = [
  "crc32fast",
  "criterion",
  "ctor 0.2.8",
- "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
@@ -3508,8 +3486,8 @@ dependencies = [
  "ahash 0.8.11",
  "bumpalo",
  "cfg-if",
- "databend-common-arrow",
  "databend-common-base",
+ "databend-common-column",
  "ethnum",
  "rand",
 ]
@@ -3883,6 +3861,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-native"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.11",
+ "bitpacking 0.8.4",
+ "bytemuck",
+ "byteorder",
+ "bytes",
+ "databend-common-column",
+ "databend-common-expression",
+ "env_logger 0.11.5",
+ "ethnum",
+ "hashbrown 0.14.5",
+ "log",
+ "lz4",
+ "match-template",
+ "num",
+ "opendal",
+ "rand",
+ "ringbuffer",
+ "roaring",
+ "serde",
+ "serde_json",
+ "snap",
+ "zstd 0.12.4",
+]
+
+[[package]]
 name = "databend-common-openai"
 version = "0.1.0"
 dependencies = [
@@ -4106,13 +4112,13 @@ dependencies = [
  "async-backtrace",
  "chrono",
  "dashmap 6.1.0",
- "databend-common-arrow",
  "databend-common-auth",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-metrics",
+ "databend-common-native",
  "databend-enterprise-storage-encryption",
  "flagset",
  "futures",
@@ -4197,7 +4203,6 @@ dependencies = [
  "bytes",
  "chrono",
  "criterion",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4209,6 +4214,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-metrics",
+ "databend-common-native",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
@@ -4412,7 +4418,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4563,6 +4568,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
+ "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-types",
@@ -4939,7 +4945,6 @@ dependencies = [
  "async-trait",
  "backon",
  "clap",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-building",
  "databend-common-grpc",
@@ -4979,6 +4984,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "test-harness",
+ "tokio",
  "tokio-stream",
  "tonic",
  "tonic-reflection",
@@ -5049,13 +5055,13 @@ dependencies = [
  "criterion",
  "ctor 0.2.8",
  "dashmap 6.1.0",
- "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
  "databend-common-cache",
  "databend-common-catalog",
  "databend-common-cloud-control",
+ "databend-common-column",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
@@ -5253,12 +5259,12 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",
  "crc32fast",
  "crossbeam-channel",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-cache",
  "databend-common-catalog",
@@ -5284,7 +5290,6 @@ dependencies = [
  "anyerror",
  "cbordata",
  "criterion",
- "databend-common-arrow",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
@@ -5371,12 +5376,12 @@ version = "0.1.0"
 dependencies = [
  "bincode 1.3.3",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
+ "databend-common-native",
  "databend-common-storage",
  "enum-as-inner 0.5.1",
  "log",
@@ -9856,7 +9861,7 @@ dependencies = [
  "futures-util",
  "once_cell",
  "parking_lot 0.12.3",
- "quanta 0.12.3",
+ "quanta",
  "rustc_version",
  "smallvec",
  "tagptr",
@@ -11879,22 +11884,6 @@ checksum = "658fa1faf7a4cc5f057c9ee5ef560f717ad9d8dc66d975267f709624d6e1ab88"
 
 [[package]]
 name = "quanta"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a17e662a7a8291a865152364c20c7abc5e60486ab2001e8ec10b24862de0b9ab"
-dependencies = [
- "crossbeam-utils",
- "libc",
- "mach2",
- "once_cell",
- "raw-cpuid 10.7.0",
- "wasi",
- "web-sys",
- "winapi",
-]
-
-[[package]]
-name = "quanta"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e5167a477619228a0b284fac2674e3c388cba90631d7b7de620e6f1fcd08da5"
@@ -11902,7 +11891,7 @@ dependencies = [
  "crossbeam-utils",
  "libc",
  "once_cell",
- "raw-cpuid 11.1.0",
+ "raw-cpuid",
  "wasi",
  "web-sys",
  "winapi",
@@ -12130,15 +12119,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c179499072da789afe44127d5f4aa6012de2c2f96ef759990196b37387a2a0f8"
 dependencies = [
  "random-number",
-]
-
-[[package]]
-name = "raw-cpuid"
-version = "10.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c297679cb867470fa8c9f67dbba74a78d78e3e98d7cf2b08d6d71540f797332"
-dependencies = [
- "bitflags 1.3.2",
 ]
 
 [[package]]
@@ -14735,7 +14715,6 @@ checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
 dependencies = [
  "bytes",
  "futures-core",
- "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",

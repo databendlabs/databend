@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -34,6 +33,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;

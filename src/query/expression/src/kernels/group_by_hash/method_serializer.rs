@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
-use crate::types::binary::BinaryIterator;
+use crate::types::binary::BinaryColumnIter;
 use crate::Column;
 use crate::HashMethod;
 use crate::InputColumns;
@@ -29,7 +29,7 @@ pub struct HashMethodSerializer {}
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
 
-    type HashKeyIter<'a> = BinaryIterator<'a>;
+    type HashKeyIter<'a> = BinaryColumnIter<'a>;
 
     fn name(&self) -> String {
         "Serializer".to_string()

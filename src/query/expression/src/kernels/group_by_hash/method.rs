@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ptr::NonNull;
 
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;

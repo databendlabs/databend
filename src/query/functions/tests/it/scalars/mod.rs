@@ -222,8 +222,8 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
 }
 
 fn test_arrow_conversion(col: &Column) {
-    let arrow_col = col.as_arrow();
-    let new_col = Column::from_arrow(&*arrow_col, &col.data_type()).unwrap();
+    let arrow_col = col.clone().into_arrow_rs();
+    let new_col = Column::from_arrow_rs(arrow_col, &col.data_type()).unwrap();
     assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 

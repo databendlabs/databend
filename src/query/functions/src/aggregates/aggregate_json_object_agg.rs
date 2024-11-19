@@ -20,13 +20,12 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::TzLUT;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;
@@ -364,7 +363,7 @@ where
         };
         let validity = match (key_validity, val_validity) {
             (Some(key_validity), Some(val_validity)) => {
-                let and_validity = bitmap::and(&key_validity, &val_validity);
+                let and_validity = boolean::and(&key_validity, &val_validity);
                 Some(and_validity)
             }
             (Some(key_validity), None) => Some(key_validity.clone()),

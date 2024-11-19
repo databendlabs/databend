@@ -62,7 +62,7 @@ impl AsyncSystemTable for StagesTable {
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         let stages = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker().await?;
+            let visibility_checker = ctx.get_visibility_checker(false).await?;
             stages
                 .into_iter()
                 .filter(|stage| {

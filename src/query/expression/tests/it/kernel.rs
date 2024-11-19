@@ -14,7 +14,7 @@
 
 use core::ops::Range;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::AnyType;
@@ -626,7 +626,7 @@ fn test_builder() {
         }
     }
 
-    for (start, len) in databend_common_arrow::arrow::bitmap::utils::SlicesIterator::new(&bitmap) {
+    for (start, len) in databend_common_column::bitmap::utils::SlicesIterator::new(&bitmap) {
         let sub_col = col.slice(start..start + len);
         AnyType::append_column(&mut builder2, &sub_col);
     }

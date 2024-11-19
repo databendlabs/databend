@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::TzLUT;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;

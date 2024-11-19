@@ -20,11 +20,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
@@ -452,7 +452,7 @@ impl HashJoinBuildState {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let valid_num = match &$valids {
-                    Some(valids) => valids.len() - valids.unset_bits(),
+                    Some(valids) => valids.len() - valids.null_count(),
                     None => $chunk.num_rows(),
                 };
                 let mut local_space: Vec<u8> = Vec::with_capacity(valid_num * entry_size);
@@ -519,14 +519,14 @@ impl HashJoinBuildState {
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::String(col)) => col.current_buffer_len(),
+                    KeysState::Column(Column::String(col)) => col.total_bytes_len(),
                     KeysState::Column(
                         Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col),
                     ) => col.data().len(),
                     _ => unreachable!(),
                 };
                 let valid_num = match &$valids {
-                    Some(valids) => valids.len() - valids.unset_bits(),
+                    Some(valids) => valids.len() - valids.null_count(),
                     None => $chunk.num_rows(),
                 };
                 let mut entry_local_space: Vec<u8> = Vec::with_capacity(valid_num * entry_size);
@@ -692,10 +692,10 @@ impl HashJoinBuildState {
                 });
             match valids {
                 ControlFlow::Continue(Some(valids)) | ControlFlow::Break(Some(valids)) => {
-                    if valids.unset_bits() == valids.len() {
+                    if valids.null_count() == valids.len() {
                         return Ok(());
                     }
-                    if valids.unset_bits() != 0 {
+                    if valids.null_count() != 0 {
                         Some(valids)
                     } else {
                         None
@@ -717,7 +717,7 @@ impl HashJoinBuildState {
             JoinType::RightMark => {
                 if !_has_null && !keys_columns.is_empty() {
                     if let Some(validity) = keys_columns[0].validity().1 {
-                        if validity.unset_bits() > 0 {
+                        if validity.null_count() > 0 {
                             _has_null = true;
                             let mut has_null_ref = self
                                 .hash_join_state
