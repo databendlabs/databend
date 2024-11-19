@@ -476,8 +476,8 @@ impl DataBlock {
                     BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
                 }
                 None => {
-                    chunk_idx += 1;
                     let col = Column::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
+                    chunk_idx += 1;
                     BlockEntry::new(data_type.clone(), Value::Column(col))
                 }
             };
