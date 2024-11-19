@@ -59,9 +59,9 @@ impl AsyncSink for SendPartInfoSink {
         Ok(())
     }
 
-    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        if let Some(meta) = data_block.get_meta() {
-            if let Some(data) = BlockPruneResult::downcast_ref_from(meta) {
+    async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
+        if let Some(meta) = data_block.take_meta() {
+            if let Some(data) = BlockPruneResult::downcast_from(meta) {
                 let arrow_schema = self.schema.as_ref().into();
                 let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
                 let block_metas = &data.block_metas;
@@ -76,7 +76,7 @@ impl AsyncSink for SendPartInfoSink {
                 };
 
                 for info in info_ptr {
-                        if let Some(sender) = &self.sender {
+                    if let Some(sender) = &self.sender {
                         let _ = dbg!(sender.send(Ok(info)).await);
                     }
                 }

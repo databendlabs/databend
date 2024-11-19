@@ -52,9 +52,9 @@ impl AsyncBlockPruneTransform {
 impl AsyncAccumulatingTransform for AsyncBlockPruneTransform {
     const NAME: &'static str = "AsyncBlockPruneTransform";
 
-    async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
-        if let Some(ptr) = data.get_meta() {
-            if let Some(meta) = BlockMetasMeta::downcast_from(ptr.clone()) {
+    async fn transform(&mut self, mut data: DataBlock) -> Result<Option<DataBlock>> {
+        if let Some(ptr) = data.take_meta() {
+            if let Some(meta) = BlockMetasMeta::downcast_from(ptr) {
                 let block_meta_indexes =
                     self.block_pruner.internal_column_pruning(&meta.block_metas);
 
