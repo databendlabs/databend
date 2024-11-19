@@ -255,7 +255,7 @@ pub fn geo_to_ewkt(geo: Geometry, srid: Option<i32>) -> Result<String> {
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
 }
 
-/// Process EWKB inut and return SRID.
+/// Process EWKB input and return SRID.
 pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
     let mut srid_processor = SridProcessor::new();
     ewkb.process_geom(&mut srid_processor).ok()?;
@@ -263,7 +263,7 @@ pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
     srid_processor.srid
 }
 
-/// Process EWKB inut and return Gemetry object and SRID.
+/// Process EWKB input and return Geometry object and SRID.
 pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>, Option<i32>)> {
     let mut ewkb_processor = EwkbProcessor::new();
     ewkb.process_geom(&mut ewkb_processor)?;
@@ -271,7 +271,7 @@ pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>,
     let geo = ewkb_processor
         .geo_writer
         .take_geometry()
-        .ok_or(ErrorCode::GeometryError("Invalid ewkb format"))?;
+        .ok_or_else(|_| ErrorCode::GeometryError("Invalid ewkb format"))?;
     let srid = ewkb_processor.srid;
     Ok((geo, srid))
 }

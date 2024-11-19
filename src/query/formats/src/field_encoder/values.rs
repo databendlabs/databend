@@ -317,7 +317,7 @@ impl FieldEncoderValues {
                 GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
                 GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
             })
-            .unwrap_or(v.to_vec());
+            .unwrap_or_else(|_| v.to_vec());
 
         self.write_string_inner(&s, out_buf, in_nested);
     }
@@ -340,7 +340,7 @@ impl FieldEncoderValues {
                 GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
                 GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
             })
-            .unwrap_or(v.0.to_vec());
+            .unwrap_or_else(|_| v.0.to_vec());
 
         self.write_string_inner(&s, out_buf, in_nested);
     }
