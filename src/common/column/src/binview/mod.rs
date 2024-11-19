@@ -470,7 +470,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
                     .get_slice_unchecked(&col_i.buffers);
                 let value_j = col_j
                     .views
-                    .get_unchecked(i)
+                    .get_unchecked(j)
                     .get_slice_unchecked(&col_j.buffers);
                 value_i.cmp(value_j)
             }

@@ -122,3 +122,35 @@ fn test_slice() {
         "databend", "y", "z"
     ]);
 }
+
+#[test]
+fn test_compare() {
+    let data = vec![
+        "aaaz",
+        "aaaaaaaahello",
+        "bbbbbbbbbbbbbbbbbbbbhello",
+        "ccccccccccccccchello",
+        "y",
+        "z",
+        "zzzzzz",
+        "abc",
+    ];
+
+    let array: Utf8ViewColumn = data.into_iter().collect();
+
+    let min = array.iter().min().unwrap();
+    let max = array.iter().max().unwrap();
+
+    let min_expect = (0..array.len())
+        .min_by(|i, j| Utf8ViewColumn::compare(&array, *i, &array, *j))
+        .unwrap();
+    let min_expect = array.value(min_expect);
+
+    let max_expect = (0..array.len())
+        .max_by(|i, j| Utf8ViewColumn::compare(&array, *i, &array, *j))
+        .unwrap();
+    let max_expect = array.value(max_expect);
+
+    assert_eq!(min, min_expect);
+    assert_eq!(max, max_expect);
+}
