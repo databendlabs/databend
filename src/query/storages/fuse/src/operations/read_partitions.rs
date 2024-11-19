@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_channel::Receiver;
+use async_channel::Sender;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -41,6 +42,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -62,7 +64,9 @@ use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::PrunedSegmentReceiverSource;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
+use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
+use crate::pruning_pipeline::TopNPruneTransform;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
@@ -164,8 +168,8 @@ impl FuseTable {
         }
         let push_downs = plan.push_downs.clone();
         let max_io_requests = self.adjust_io_request(&ctx)?;
-        let (tx, rx) = async_channel::bounded(max_io_requests);
-        self.pruned_result_receiver.lock().replace(rx);
+        let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
+        self.pruned_result_receiver.lock().replace(part_info_rx);
 
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
         // the parts to the next pipeline
@@ -181,7 +185,7 @@ impl FuseTable {
                 });
 
         if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
-            let sender = tx.clone();
+            let sender = part_info_tx.clone();
             source_pipeline.set_on_init(move || {
                 ctx.get_runtime()?.try_spawn(
                     async move {
@@ -201,15 +205,21 @@ impl FuseTable {
         let mut prune_pipeline = Pipeline::create();
         let pruner = self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?;
 
-        let (tx, rx) = async_channel::bounded(max_io_requests);
+        let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        self.prune_segments_with_pipeline(&pruner, &mut prune_pipeline, ctx.clone(), rx)?;
+        self.prune_segments_with_pipeline(
+            &pruner,
+            &mut prune_pipeline,
+            ctx.clone(),
+            segment_rx,
+            part_info_tx,
+        )?;
         prune_pipeline.set_on_init(move || {
             ctx.get_runtime()?.try_spawn(
                 async move {
                     let segment_pruned_result = pruner.segment_pruning(lazy_init_segments).await?;
                     for segment in segment_pruned_result {
-                        let _ = tx.send(Ok(segment)).await;
+                        let _ = segment_tx.send(Ok(segment)).await;
                     }
                     Ok::<_, ErrorCode>(())
                 },
@@ -296,11 +306,12 @@ impl FuseTable {
         pruner: &FusePruner,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
-        rx: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
+        segment_rx: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
-            |output| PrunedSegmentReceiverSource::create(ctx.clone(), rx.clone(), output),
+            |output| PrunedSegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
         )?;
         prune_pipeline
@@ -316,8 +327,8 @@ impl FuseTable {
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
         {
             // async pruning with bloom index or inverted index.
-            prune_pipeline.add_transform(|intput, output| {
-                AsyncBlockPruneTransform::create(intput, output, block_pruner.clone())
+            prune_pipeline.add_transform(|input, output| {
+                AsyncBlockPruneTransform::create(input, output, block_pruner.clone())
             })?;
         } else {
             // sync pruning without a bloom index and inverted index.
@@ -325,6 +336,41 @@ impl FuseTable {
                 SyncBlockPruneTransform::create(input, output, block_pruner.clone())
             })?;
         }
+
+        let push_down = pruner.push_down.clone();
+
+        if push_down
+            .as_ref()
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
+            .is_some()
+        {
+            // if there are ordering + limit clause and no filter, use topn pruner
+            let schema = pruner.table_schema.clone();
+            let push_down = push_down.as_ref().unwrap();
+            let limit = push_down.limit.unwrap();
+            let sort = push_down.order_by.clone();
+            let topn_pruner = TopNPrunner::create(schema, sort, limit);
+            prune_pipeline.resize(1, false)?;
+            prune_pipeline.add_transform(move |input, output| {
+                TopNPruneTransform::create(input, output, topn_pruner.clone())
+            })?;
+        }
+
+        let top_k = push_down
+            .as_ref()
+            .filter(|_| self.is_native()) // Only native format supports topk push down.
+            .and_then(|p| p.top_k(self.schema().as_ref()))
+            .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
+            .transpose()?;
+        prune_pipeline.add_sink(|input| {
+            SendPartInfoSink::create(
+                input,
+                part_info_tx.clone(),
+                push_down.clone(),
+                top_k.clone(),
+                pruner.table_schema.clone(),
+            )
+        })?;
 
         Ok(())
     }

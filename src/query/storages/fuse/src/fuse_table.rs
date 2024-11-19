@@ -21,10 +21,13 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::base::tokio::sync::OnceCell;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
@@ -88,6 +91,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -134,7 +138,7 @@ pub struct FuseTable {
     pub(crate) changes_desc: Option<ChangesDesc>,
 
     // A table instance level cache of snapshot_location, if this table is attaching to someone else.
-    attached_table_location: tokio::sync::OnceCell<String>,
+    attached_table_location: OnceCell<String>,
 
     pub(crate) pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }

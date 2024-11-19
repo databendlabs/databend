@@ -19,10 +19,14 @@ mod extract_segment_transform;
 mod pruned_segment_meta;
 mod pruned_segment_receiver_source;
 mod sample_block_metas_transform;
+mod send_part_info_sink;
 mod sync_block_prune_transform;
+mod topn_prune_transform;
 
 pub use async_block_prune_transform::AsyncBlockPruneTransform;
 pub use extract_segment_transform::ExtractSegmentTransform;
 pub use pruned_segment_receiver_source::PrunedSegmentReceiverSource;
 pub use sample_block_metas_transform::SampleBlockMetasTransform;
+pub use send_part_info_sink::SendPartInfoSink;
 pub use sync_block_prune_transform::SyncBlockPruneTransform;
+pub use topn_prune_transform::TopNPruneTransform;
