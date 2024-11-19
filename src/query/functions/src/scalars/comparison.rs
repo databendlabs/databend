@@ -49,6 +49,7 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::ValueRef;
+use jsonb::RawJsonb;
 use regex::Regex;
 
 use crate::scalars::decimal::register_decimal_compare_op;
@@ -509,14 +510,26 @@ fn register_like(registry: &mut FunctionRegistry) {
             | LikePattern::StartOfPercent(_)
             | LikePattern::EndOfPercent(_)
             | LikePattern::Constant(_) => {
-                if let Some(s) = jsonb::as_str(val) {
-                    pattern_type.compare(s.as_bytes())
-                } else {
-                    false
+                let raw_jsonb = RawJsonb(val);
+                match raw_jsonb.as_str() {
+                    Ok(Some(s)) => pattern_type.compare(s.as_bytes()),
+                    Ok(None) => false,
+                    Err(_) => {
+                        let s = raw_jsonb.to_string();
+                        pattern_type.compare(s.as_bytes())
+                    }
                 }
             }
-
-            _ => jsonb::traverse_check_string(val, |v| pattern_type.compare(v)),
+            _ => {
+                let raw_jsonb = RawJsonb(val);
+                match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
+                    Ok(res) => res,
+                    Err(_) => {
+                        let s = raw_jsonb.to_string();
+                        pattern_type.compare(s.as_bytes())
+                    }
+                }
+            }
         }),
     );
 

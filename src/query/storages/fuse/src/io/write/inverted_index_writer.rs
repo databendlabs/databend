@@ -34,6 +34,7 @@ use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_storages_common_index::extract_component_fields;
 use databend_storages_common_index::extract_fsts;
+use jsonb::RawJsonb;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -109,7 +110,7 @@ impl InvertedIndexWriter {
                     ScalarRef::String(text) => doc.add_text(field, text),
                     ScalarRef::Variant(jsonb_val) => {
                         // only support object JSON, other JSON type will not add index.
-                        if let Ok(Some(obj_val)) = jsonb::to_serde_json_object(jsonb_val) {
+                        if let Ok(Some(obj_val)) = RawJsonb(jsonb_val).to_serde_json_object() {
                             let object: BTreeMap<String, OwnedValue> = obj_val
                                 .into_iter()
                                 .map(|(key, value)| (key, OwnedValue::from(value)))
