@@ -87,7 +87,7 @@ runs:
         name: sha256sums-${{ inputs.category }}-${{ inputs.target }}-gdb
         path: sha256-${{ steps.pack_dbg_binaries.outputs.pkg_name }}.txt
         retention-days: 1
-    - name: post binaries
+    - name: post dbg binaries
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.pack_dbg_binaries.outputs.pkg_name }}.tar.gz
