@@ -189,12 +189,12 @@ where
         TableDataType::Array(inner) => {
             init.push(InitNested::List(is_nullable));
             let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
-            DynIter::new(ListIterator::new(iter, inner.as_ref().clone()))
+            DynIter::new(ListIterator::new(iter, data_type.clone()))
         }
         TableDataType::Map(inner) => {
             init.push(InitNested::List(is_nullable));
             let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
-            DynIter::new(MapIterator::new(iter, inner.as_ref().clone()))
+            DynIter::new(MapIterator::new(iter, data_type.clone()))
         }
         TableDataType::Tuple {
             fields_name: _,

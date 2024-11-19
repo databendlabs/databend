@@ -245,11 +245,19 @@ fn get_all_test_data_types() -> Vec<DataType> {
             precision: 55,
             scale: 3,
         })),
+        DataType::Nullable(Box::new(DataType::Geography)),
+        DataType::Nullable(Box::new(DataType::Geometry)),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
         DataType::Nullable(Box::new(DataType::Variant)),
         DataType::Nullable(Box::new(DataType::Binary)),
         DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+        DataType::Array(Box::new(
+            DataType::Number(NumberDataType::UInt32).wrap_nullable(),
+        )),
+        DataType::Nullable(Box::new(DataType::Array(Box::new(DataType::Number(
+            NumberDataType::UInt32,
+        ))))),
         DataType::Map(Box::new(DataType::Tuple(vec![
             DataType::Number(NumberDataType::UInt64),
             DataType::String,

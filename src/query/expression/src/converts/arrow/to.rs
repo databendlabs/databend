@@ -31,6 +31,7 @@ use databend_common_exception::Result;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
@@ -181,7 +182,7 @@ impl From<&TableField> for Field {
             TableDataType::Geography => {
                 metadata.insert(
                     EXTENSION_KEY.to_string(),
-                    ARROW_EXT_TYPE_GEOMETRY.to_string(),
+                    ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
                 );
                 ArrowDataType::LargeBinary
             }

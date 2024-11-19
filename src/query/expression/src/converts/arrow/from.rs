@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
@@ -70,6 +71,7 @@ impl TryFrom<&Field> for TableField {
             ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
             ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
             ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
+            ARROW_EXT_TYPE_GEOGRAPHY => TableDataType::Geography,
             _ => match arrow_f.data_type() {
                 ArrowDataType::Null => TableDataType::Null,
                 ArrowDataType::Boolean => TableDataType::Boolean,
@@ -105,6 +107,10 @@ impl TryFrom<&Field> for TableField {
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,
                 ArrowDataType::Date64 => TableDataType::Date,
+                ArrowDataType::List(field) => {
+                    let inner_type = TableField::try_from(field.as_ref())?;
+                    TableDataType::Array(Box::new(inner_type.data_type))
+                }
                 ArrowDataType::LargeList(field) => {
                     let inner_type = TableField::try_from(field.as_ref())?;
                     TableDataType::Array(Box::new(inner_type.data_type))
@@ -261,6 +267,11 @@ impl Column {
                 NullableColumn::new_column(column, validity)
             }
             DataType::Array(inner) => {
+                let f = DataField::new("DUMMY", *inner.clone());
+                let inner_f = Field::from(&f);
+                let array =
+                    arrow_cast::cast(array.as_ref(), &ArrowDataType::LargeList(inner_f.into()))?;
+
                 let array = array
                     .as_any()
                     .downcast_ref::<arrow_array::LargeListArray>()
