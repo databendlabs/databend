@@ -26,6 +26,7 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 paste = { workspace = true }
 prost = { workspace = true }
+redis = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

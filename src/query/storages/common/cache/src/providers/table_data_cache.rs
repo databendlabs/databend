@@ -116,6 +116,11 @@ impl CacheAccessor for TableDataCache {
         }
     }
 
+    fn get_batch<Q: AsRef<str>>(&self, keys: Vec<Q>) -> Vec<Option<Arc<Bytes>>> {
+        log::info!("LruDiskCacheHolder get_batch's keys len: {}", keys.len());
+        todo!()
+    }
+
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
         let Some(cached_value) = self.get(k) else {
             metrics_inc_cache_miss_bytes(len, DISK_TABLE_DATA_CACHE_NAME);
@@ -147,6 +152,11 @@ impl CacheAccessor for TableDataCache {
             }
         }
         Arc::new(v)
+    }
+
+    fn insert_batch(&self, entries: Vec<(String, Bytes)>) -> Vec<Arc<Bytes>> {
+        log::info!("insert_batch's entries len: {}", entries.len());
+        todo!()
     }
 
     fn evict(&self, k: &str) -> bool {

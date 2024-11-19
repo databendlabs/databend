@@ -4110,7 +4110,7 @@ impl<'a> TypeChecker<'a> {
         let mut args = Vec::with_capacity(1);
         let box (key_scalar, key_type) = self.resolve(key_arg)?;
 
-        if primary_type != key_type {
+        if primary_type != key_type.remove_nullable() {
             args.push(wrap_cast(&key_scalar, &primary_type));
         } else {
             args.push(key_scalar);

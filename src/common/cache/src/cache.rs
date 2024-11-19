@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod lru;
+pub mod ttl;
 
 use std::borrow::Borrow;
 use std::hash::Hash;
@@ -54,6 +55,8 @@ pub trait Cache<K: Eq + Hash + MemSized, V: MemSized> {
 
     /// Removes and returns the key-value pair as a tuple by policy (Lru, Lfu, etc.).
     fn pop_by_policy(&mut self) -> Option<(K, V)>;
+
+    fn cleanup_all_expired(&mut self);
 
     /// Checks if the map contains the given key.
     fn contains<Q>(&self, k: &Q) -> bool

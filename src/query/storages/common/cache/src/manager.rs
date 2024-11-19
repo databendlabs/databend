@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
@@ -28,6 +29,7 @@ use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
 use crate::caches::CompactSegmentInfoCache;
+use crate::caches::DictionaryCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::ParquetMetaDataCache;
@@ -35,6 +37,7 @@ use crate::caches::PrunePartitionsCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::InMemoryLruCache;
+use crate::InMemoryTtlCache;
 use crate::TableDataCache;
 use crate::TableDataCacheBuilder;
 
@@ -54,6 +57,7 @@ pub struct CacheManager {
     table_data_cache: Option<TableDataCache>,
     in_memory_table_data_cache: Option<ColumnArrayCache>,
     block_meta_cache: Option<BlockMetaCache>,
+    dictionary_cache: Option<DictionaryCache>,
 }
 
 impl CacheManager {
@@ -127,6 +131,7 @@ impl CacheManager {
                 table_data_cache,
                 in_memory_table_data_cache,
                 block_meta_cache: None,
+                dictionary_cache: None,
             }));
         } else {
             let table_snapshot_cache = Self::new_named_items_cache(
@@ -181,6 +186,22 @@ impl CacheManager {
                 MEMORY_CACHE_BLOCK_META,
             );
 
+            // let dictionary_cache = Self::new_named_items_cache(
+            //     config.dictionary_count as usize,
+            //     MEMORY_CACHE_DICTIONARY,
+            // );
+
+            // let dictionary_cache = Self::new_named_items_fifo_cache(
+            //     config.dictionary_count as usize,
+            //     MEMORY_CACHE_DICTIONARY,
+            // );
+
+            let dictionary_cache = Self::new_named_items_ttl_cache(
+                config.dictionary_count as usize,
+                MEMORY_CACHE_DICTIONARY,
+                MEMORY_CACHE_TIME_TO_LIVE,
+            );
+
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 compact_segment_info_cache,
@@ -194,6 +215,7 @@ impl CacheManager {
                 in_memory_table_data_cache,
                 block_meta_cache,
                 parquet_meta_data_cache,
+                dictionary_cache,
             }));
         }
 
@@ -252,6 +274,10 @@ impl CacheManager {
         self.in_memory_table_data_cache.clone()
     }
 
+    pub fn get_dictionary_cache(&self) -> Option<DictionaryCache> {
+        self.dictionary_cache.clone()
+    }
+
     pub fn new_named_items_cache<V: Into<CacheValue<V>>>(
         capacity: usize,
         name: impl Into<String>,
@@ -259,6 +285,21 @@ impl CacheManager {
         match capacity {
             0 => None,
             _ => Some(InMemoryLruCache::with_items_capacity(name.into(), capacity)),
+        }
+    }
+
+    pub fn new_named_items_ttl_cache<V: Into<CacheValue<V>>>(
+        capacity: usize,
+        name: impl Into<String>,
+        ttl: Duration,
+    ) -> Option<InMemoryTtlCache<V>> {
+        match capacity {
+            0 => None,
+            _ => Some(InMemoryTtlCache::with_items_capacity(
+                name.into(),
+                capacity,
+                ttl,
+            )),
         }
     }
 
@@ -310,3 +351,6 @@ const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_in
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
+const MEMORY_CACHE_DICTIONARY: &str = "memory_cache_dictionary";
+
+const MEMORY_CACHE_TIME_TO_LIVE: Duration = Duration::from_secs(360); // 360 seconds

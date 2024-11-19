@@ -36,9 +36,12 @@ pub trait CacheAccessor {
     type V;
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>>;
+    fn get_batch<Q: AsRef<str>>(&self, keys: Vec<Q>) -> Vec<Option<Arc<Self::V>>>;
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>>;
 
     fn insert(&self, key: String, value: Self::V) -> Arc<Self::V>;
+    // fn insert_batch(&self, keys: Vec<String>, values: Vec<Self::V>) -> Vec<Arc<Self::V>>;
+    fn insert_batch(&self, entries: Vec<(String, Self::V)>) -> Vec<Arc<Self::V>>;
     fn evict(&self, k: &str) -> bool;
     fn contains_key(&self, k: &str) -> bool;
     fn bytes_size(&self) -> u64;

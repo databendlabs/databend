@@ -2856,6 +2856,14 @@ pub struct CacheConfig {
     )]
     pub table_data_deserialized_memory_ratio: u64,
 
+    /// Max number of cached dictionary values. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-dictionary-count",
+        value_name = "VALUE",
+        default_value = "2147483648"
+    )]
+    pub dictionary_count: u64,
+
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
     #[clap(long = "cache-table-meta-segment-count", value_name = "VALUE")]
@@ -3065,6 +3073,7 @@ mod cache_config_converters {
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
+                dictionary_count: value.dictionary_count,
             })
         }
     }
@@ -3093,6 +3102,7 @@ mod cache_config_converters {
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
+                dictionary_count: value.dictionary_count,
             }
         }
     }

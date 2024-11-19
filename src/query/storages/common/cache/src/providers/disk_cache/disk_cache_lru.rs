@@ -82,6 +82,11 @@ impl CacheAccessor for LruDiskCacheHolder {
         })
     }
 
+    fn get_batch<Q: AsRef<str>>(&self, keys: Vec<Q>) -> Vec<Option<Arc<Bytes>>> {
+        log::info!("LruDiskCacheHolder get_batch's keys len: {}", keys.len());
+        todo!()
+    }
+
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
         let Some(cached_value) = self.get(k) else {
             metrics_inc_cache_miss_bytes(len, self.name());
@@ -99,6 +104,11 @@ impl CacheAccessor for LruDiskCacheHolder {
             error!("put disk cache item failed {}", e);
         }
         Arc::new(value)
+    }
+
+    fn insert_batch(&self, entries: Vec<(String, Bytes)>) -> Vec<Arc<Bytes>> {
+        log::info!("insert_batch's entries len: {}", entries.len());
+        todo!()
     }
 
     fn evict(&self, k: &str) -> bool {

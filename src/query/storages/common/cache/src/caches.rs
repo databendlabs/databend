@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_expression::Scalar;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
@@ -31,6 +32,7 @@ use parquet::file::metadata::ParquetMetaData;
 use crate::manager::CacheManager;
 use crate::CacheAccessor;
 use crate::InMemoryLruCache;
+use crate::InMemoryTtlCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
@@ -62,6 +64,9 @@ pub type SizedColumnArray = (
     Box<dyn databend_common_arrow::arrow::array::Array>,
     ArrayRawDataUncompressedSize,
 );
+
+// In memory object cache of dictionary values
+pub type DictionaryCache = InMemoryTtlCache<Scalar>;
 
 // Bind Type of cached objects to Caches
 //
@@ -140,6 +145,13 @@ impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
     type Cache = InvertedIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_meta_cache()
+    }
+}
+
+impl CachedObject<Scalar> for Scalar {
+    type Cache = DictionaryCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_dictionary_cache()
     }
 }
 
@@ -275,5 +287,14 @@ impl From<FileSize> for CacheValue<FileSize> {
 impl<T> MemSized for CacheValue<T> {
     fn mem_bytes(&self) -> usize {
         self.mem_bytes
+    }
+}
+
+impl From<Scalar> for CacheValue<Scalar> {
+    fn from(value: Scalar) -> Self {
+        CacheValue {
+            mem_bytes: value.as_ref().memory_size() + 8,
+            inner: Arc::new(value),
+        }
     }
 }

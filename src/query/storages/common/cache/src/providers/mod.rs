@@ -14,6 +14,7 @@
 
 mod disk_cache;
 mod memory_cache;
+mod memory_ttl_cache;
 mod table_data_cache;
 
 pub use disk_cache::io_result::Error as DiskCacheError;
@@ -23,6 +24,7 @@ pub use disk_cache::LruDiskCache;
 pub use disk_cache::LruDiskCacheBuilder;
 pub use disk_cache::LruDiskCacheHolder;
 pub use memory_cache::InMemoryLruCache;
+pub use memory_ttl_cache::InMemoryTtlCache;
 pub use table_data_cache::TableDataCache;
 pub use table_data_cache::TableDataCacheBuilder;
 pub use table_data_cache::TableDataCacheKey;

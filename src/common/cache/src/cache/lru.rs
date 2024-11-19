@@ -254,6 +254,11 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
         })
     }
 
+    #[inline]
+    fn cleanup_all_expired(&mut self) {
+        unimplemented!()
+    }
+
     /// Checks if the map contains the given key.
     ///
     /// # Examples
