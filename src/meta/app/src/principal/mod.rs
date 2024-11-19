@@ -102,6 +102,7 @@ pub use user_defined_function::UserDefinedFunction;
 pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;
 pub use user_grant::UserGrantSet;
+pub use user_grant::SYSTEM_TABLES_ALLOW_LIST;
 pub use user_identity::UserIdentity;
 pub use user_info::UserInfo;
 pub use user_info::UserOption;

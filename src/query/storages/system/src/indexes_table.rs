@@ -154,7 +154,7 @@ impl IndexesTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<TableInfo>> {
         let tenant = ctx.get_tenant();
-        let visibility_checker = ctx.get_visibility_checker().await?;
+        let visibility_checker = ctx.get_visibility_checker(false).await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
 
         let ctl_name = catalog.name();
