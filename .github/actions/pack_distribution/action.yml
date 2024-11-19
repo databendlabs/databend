@@ -16,6 +16,7 @@ runs:
   using: "composite"
   steps:
     - name: Install nfpm@latest
+      shell: bash
       run: |
         curl -sSLo nfpm.tar.gz https://github.com/goreleaser/nfpm/releases/download/v2.26.0/nfpm_2.26.0_Linux_x86_64.tar.gz
         tar xf nfpm.tar.gz
@@ -24,6 +25,7 @@ runs:
         rm nfpm.tar.gz
     - name: Get target
       id: target
+      shell: bash
       run: |
         echo 'target=${{ inputs.arch }}-unknown-linux-gnu' >> $GITHUB_OUTPUT
     - name: Download artifacts
@@ -35,6 +37,7 @@ runs:
         artifacts: metactl,meta,query,query.debug
         path: distro/bin
     - name: Build Packages
+      shell: bash
       id: build_packages
       run: |
         export name="databend"
@@ -59,6 +62,7 @@ runs:
         nfpm pkg --packager ${{ inputs.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
         echo "pkg_name=databend_${deb_version}_${arch}" >> $GITHUB_OUTPUT
     - name: Build dbg Packages
+      shell: bash
       id: build_dbg_packages
       run: |
         export name="databend"
