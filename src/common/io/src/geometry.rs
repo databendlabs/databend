@@ -271,7 +271,7 @@ pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>,
     let geo = ewkb_processor
         .geo_writer
         .take_geometry()
-        .ok_or_else(|_| ErrorCode::GeometryError("Invalid ewkb format"))?;
+        .ok_or_else(|| ErrorCode::GeometryError("Invalid ewkb format"))?;
     let srid = ewkb_processor.srid;
     Ok((geo, srid))
 }
