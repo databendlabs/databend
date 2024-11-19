@@ -136,13 +136,12 @@ impl BlockReader {
                     default_vals.push(Some(self.default_vals[i].clone()));
                 }
             }
-            let data_block = DataBlock::create_with_opt_default_value(
+            DataBlock::create_with_opt_default_value(
                 chunk_arrays,
                 &self.data_schema(),
                 &default_vals,
                 num_rows,
-            )?;
-            data_block
+            )?
         } else {
             debug_assert!(chunk_arrays.len() == self.projected_schema.num_fields());
             let cols = chunk_arrays
