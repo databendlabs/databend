@@ -24,7 +24,7 @@ use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 use crate::FuseBlockPartInfo;
 
 pub struct SendPartInfoSink {
-    sender: Sender<Result<PartInfoPtr>>,
+    sender: Option<Sender<Result<PartInfoPtr>>>,
     push_downs: Option<PushDownInfo>,
     top_k: Option<(TopK, Scalar)>,
     schema: TableSchemaRef,
@@ -41,7 +41,7 @@ impl SendPartInfoSink {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
             SendPartInfoSink {
-                sender,
+                sender: Some(sender),
                 push_downs,
                 top_k,
                 schema,
@@ -55,7 +55,7 @@ impl AsyncSink for SendPartInfoSink {
     const NAME: &'static str = "SendPartInfoSink";
 
     async fn on_finish(&mut self) -> Result<()> {
-        self.sender.close();
+        drop(self.sender.take());
         Ok(())
     }
 
@@ -74,11 +74,14 @@ impl AsyncSink for SendPartInfoSink {
                         }
                     },
                 };
+
                 for info in info_ptr {
-                    let _ = self.sender.send(Ok(info)).await;
+                        if let Some(sender) = &self.sender {
+                        let _ = dbg!(sender.send(Ok(info)).await);
+                    }
                 }
 
-                return Ok(true);
+                return Ok(false);
             }
         }
         Err(ErrorCode::Internal(
