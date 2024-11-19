@@ -15,12 +15,10 @@
 use core::ops::Range;
 
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::Utf8ViewArray;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::vec_ext::VecExt;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
 use crate::types::binary::BinaryColumn;
@@ -163,7 +161,7 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
         // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
         // we can just slice it.
         if self.num_rows <= bitmap.len()
-            && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+            && (bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len())
         {
             self.result = Some(Value::Column(BooleanType::upcast_column(
                 bitmap.sliced(0, self.num_rows),
@@ -232,16 +230,9 @@ impl<'a> TakeRangeVisitor<'a> {
     }
 
     fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
-        let new_views = self.take_primitive_types(col.data.views().clone());
-        let new_col = unsafe {
-            Utf8ViewArray::new_unchecked_unknown_md(
-                col.data.data_type().clone(),
-                new_views,
-                col.data.data_buffers().clone(),
-                None,
-                None,
-            )
-        };
-        StringColumn::new(new_col)
+        let new_views = self.take_primitive_types(col.views().clone());
+        unsafe {
+            StringColumn::new_unchecked_unknown_md(new_views, col.data_buffers().clone(), None)
+        }
     }
 }

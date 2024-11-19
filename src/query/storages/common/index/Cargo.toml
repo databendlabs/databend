@@ -16,7 +16,7 @@ ignored = ["xorfilter-rs", "match-template"]
 [dependencies]
 anyerror = { workspace = true }
 cbordata = { workspace = true }
-databend-common-arrow = { workspace = true }
+
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -38,7 +38,7 @@ xorfilter-rs = { workspace = true, features = ["cbordata"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
-databend-common-arrow = { workspace = true }
+
 rand = { workspace = true }
 
 [[bench]]

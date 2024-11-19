@@ -15,7 +15,7 @@
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
-use crate::types::binary::BinaryIterator;
+use crate::types::binary::BinaryColumnIter;
 use crate::types::BinaryColumn;
 use crate::Column;
 use crate::HashMethod;
@@ -29,7 +29,7 @@ pub struct HashMethodSingleBinary {}
 impl HashMethod for HashMethodSingleBinary {
     type HashKey = [u8];
 
-    type HashKeyIter<'a> = BinaryIterator<'a>;
+    type HashKeyIter<'a> = BinaryColumnIter<'a>;
 
     fn name(&self) -> String {
         "SingleBinary".to_string()
@@ -78,9 +78,7 @@ impl KeyAccessor for BinaryColumn {
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        debug_assert!(index + 1 < self.offsets.len());
-
-        &self.data[*self.offsets.get_unchecked(index) as usize
-            ..*self.offsets.get_unchecked(index + 1) as usize]
+        debug_assert!(index + 1 < self.offsets().len());
+        self.index_unchecked(index)
     }
 }

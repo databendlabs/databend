@@ -16,5 +16,9 @@ mod from;
 mod to;
 
 pub const EXTENSION_KEY: &str = "Extension";
-
-pub use to::table_schema_to_arrow_schema;
+pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
+pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
+pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
+pub const ARROW_EXT_TYPE_GEOMETRY: &str = "Geometry";
+pub const ARROW_EXT_TYPE_GEOGRAPHY: &str = "Geography";

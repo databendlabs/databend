@@ -15,7 +15,7 @@
 use core::ops::Range;
 use std::collections::HashSet;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;

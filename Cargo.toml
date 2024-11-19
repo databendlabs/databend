@@ -9,12 +9,13 @@ edition = "2021"
 resolver = "2"
 members = [
     "src/binaries",
-    "src/common/arrow",
     "src/common/auth",
     "src/common/base",
     "src/common/building",
     "src/common/cache",
     "src/common/cloud_control",
+    "src/common/column",
+    "src/common/native",
     "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
@@ -102,7 +103,6 @@ members = [
 
 # Workspace dependencies
 [workspace.dependencies]
-databend-common-arrow = { path = "src/common/arrow" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-auth = { path = "src/common/auth" }
@@ -113,6 +113,7 @@ databend-common-cache = { path = "src/common/cache" }
 databend-common-catalog = { path = "src/query/catalog" }
 databend-common-cloud-control = { path = "src/common/cloud_control" }
 databend-common-codegen = { path = "src/query/codegen" }
+databend-common-column = { path = "src/common/column" }
 databend-common-compress = { path = "src/common/compress" }
 databend-common-config = { path = "src/query/config" }
 databend-common-datavalues = { path = "src/query/datavalues" }
@@ -138,6 +139,7 @@ databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
+databend-common-native = { path = "src/common/native" }
 databend-common-openai = { path = "src/common/openai" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
@@ -575,7 +577,6 @@ incremental = false
 debug-assertions = true
 
 # [profile.release.package]
-# databend-common-arrow = { codegen-units = 16 }
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
 

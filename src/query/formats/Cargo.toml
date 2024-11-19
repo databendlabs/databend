@@ -11,7 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { workspace = true }
+
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -38,7 +38,7 @@ roaring = { workspace = true, features = ["serde"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-databend-common-arrow = { workspace = true }
+
 pretty_assertions = { workspace = true }
 tokio = { workspace = true }
 

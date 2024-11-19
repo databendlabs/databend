@@ -24,18 +24,14 @@ use arrow_ipc::writer::FileWriter;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::CompressionType;
 use arrow_schema::Schema;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::BlockEntry;
 use crate::Column;
-use crate::ColumnBuilder;
 use crate::DataField;
-use crate::Value;
 
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
     bitmap
@@ -79,7 +75,7 @@ pub fn write_column(
     col: &Column,
     w: &mut impl Write,
 ) -> std::result::Result<(), arrow_schema::ArrowError> {
-    let field: arrow_schema::Field = col.arrow_field().into();
+    let field = col.arrow_field();
     let schema = Schema::new(vec![field]);
     let mut writer = FileWriter::try_new_with_options(
         w,
@@ -109,17 +105,6 @@ pub fn read_column<R: Read + Seek>(r: &mut R) -> Result<Column> {
         .remove_column(0);
 
     Column::from_arrow_rs(col, f.data_type())
-}
-
-/// Convert a column to a arrow array.
-pub fn column_to_arrow_array(column: &BlockEntry, num_rows: usize) -> Box<dyn Array> {
-    match &column.value {
-        Value::Scalar(v) => {
-            let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &column.data_type);
-            builder.build().as_arrow()
-        }
-        Value::Column(c) => c.as_arrow(),
-    }
 }
 
 pub fn and_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {

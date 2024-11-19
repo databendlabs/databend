@@ -17,9 +17,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
@@ -1143,6 +1145,55 @@ impl DecimalColumn {
                 )
             }
         })
+    }
+
+    pub fn arrow_buffer(&self) -> arrow_buffer::Buffer {
+        match self {
+            DecimalColumn::Decimal128(col, _) => col.clone().into(),
+            DecimalColumn::Decimal256(col, _) => {
+                let col = unsafe {
+                    std::mem::transmute::<_, Buffer<databend_common_column::types::i256>>(
+                        col.clone(),
+                    )
+                };
+                col.into()
+            }
+        }
+    }
+
+    pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
+        let buffer = self.arrow_buffer();
+        let builder = ArrayDataBuilder::new(arrow_type)
+            .len(self.len())
+            .buffers(vec![buffer]);
+        unsafe { builder.build_unchecked() }
+    }
+
+    pub fn try_from_arrow_data(array: ArrayData) -> Result<Self> {
+        let buffer = array.buffers()[0].clone();
+        match array.data_type() {
+            arrow_schema::DataType::Decimal128(p, s) => {
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal128(buffer.into(), decimal_size))
+            }
+            arrow_schema::DataType::Decimal256(p, s) => {
+                let buffer: Buffer<databend_common_column::types::i256> = buffer.into();
+                let buffer = unsafe { std::mem::transmute::<_, Buffer<i256>>(buffer) };
+
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal256(buffer, decimal_size))
+            }
+            data_type => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported data type: {:?} into decimal column",
+                data_type
+            ))),
+        }
     }
 }
 

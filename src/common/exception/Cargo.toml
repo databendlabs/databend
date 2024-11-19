@@ -11,7 +11,6 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }

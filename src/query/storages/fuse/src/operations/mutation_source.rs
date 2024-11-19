@@ -88,7 +88,7 @@ impl FuseTable {
 
         Ok(match &predicates {
             Value::Scalar(v) => *v,
-            Value::Column(bitmap) => bitmap.unset_bits() == 0,
+            Value::Column(bitmap) => bitmap.null_count() == 0,
         })
     }
 

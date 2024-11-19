@@ -15,7 +15,6 @@
 use std::fs;
 use std::io::Read;
 
-use databend_common_arrow::arrow::array::ViewType;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
@@ -234,7 +233,7 @@ async fn test_raft_service_install_snapshot_v1() -> anyhow::Result<()> {
     let mut offset = 0;
 
     for (i, line) in snapshot_data.into_iter().enumerate() {
-        let mut chunk = line.to_bytes().to_vec();
+        let mut chunk = line.as_bytes().to_vec();
         let done = i == snapshot_data.len() - 1;
         if !done {
             chunk.push(b'\n');

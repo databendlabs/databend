@@ -107,11 +107,6 @@ pub trait StateMachineApiExt: StateMachineApi {
                 future::ready(Ok(res))
             });
 
-        // Make it static
-
-        let vs = strm.collect::<Vec<_>>().await;
-        let strm = futures::stream::iter(vs);
-
         Ok(strm.boxed())
     }
 

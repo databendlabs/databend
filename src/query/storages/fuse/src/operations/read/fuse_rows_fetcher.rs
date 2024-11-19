@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
@@ -175,7 +175,7 @@ where F: RowsFetcher + Send + Sync + 'static
         } else {
             // From merge into matched data, the row id column is nullable but has no null value.
             let value = *value.into_nullable().unwrap();
-            debug_assert!(value.validity.unset_bits() == 0);
+            debug_assert!(value.validity.null_count() == 0);
             value.column.into_number().unwrap().into_u_int64().unwrap()
         };
 
