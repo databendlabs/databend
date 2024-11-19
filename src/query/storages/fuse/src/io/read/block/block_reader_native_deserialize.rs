@@ -289,7 +289,7 @@ impl BlockReader {
         name: String,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ColumnIter<'static>> {
-        let field = TableField::new(&name, TableDataType::Variant);
+        let field = TableField::new(&name, TableDataType::Variant.wrap_nullable());
 
         let native_column_reader = NativeColumnsReader::new()?;
         match native_column_reader.column_iters(readers, field, vec![]) {
