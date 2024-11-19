@@ -62,9 +62,9 @@ macro_rules! with_match_integer_double_type {
 pub fn n_columns(data_type: &TableDataType) -> usize {
     use TableDataType::*;
 
-    match data_type {
-        Array(inner) => n_columns(inner),
-        Map(inner) => n_columns(inner),
+    match data_type.remove_nullable() {
+        Array(inner) => n_columns(&inner),
+        Map(inner) => n_columns(&inner),
         Tuple { fields_type, .. } => fields_type.iter().map(n_columns).sum(),
         _ => 1,
     }

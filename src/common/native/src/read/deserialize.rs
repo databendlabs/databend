@@ -207,7 +207,7 @@ where
                     let mut init = init.clone();
                     init.push(InitNested::Struct(is_nullable));
                     let n = n_columns(f);
-                    let readers = readers.drain(readers.len() - n..).collect();
+                    let readers = readers.drain(readers.len().saturating_sub(n)..).collect();
                     deserialize_nested(readers, f.clone(), init)
                 })
                 .collect::<Result<Vec<_>>>()?;

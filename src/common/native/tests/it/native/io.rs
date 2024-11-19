@@ -269,6 +269,18 @@ fn get_all_test_data_types() -> Vec<DataType> {
             DataType::Number(NumberDataType::UInt64),
             DataType::String,
         ]))))),
+        DataType::Tuple(vec![
+            DataType::Tuple(vec![
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Float64),
+            ])
+            .wrap_nullable(),
+            DataType::Tuple(vec![
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+            ])
+            .wrap_nullable(),
+        ]),
     ]
 }
 
