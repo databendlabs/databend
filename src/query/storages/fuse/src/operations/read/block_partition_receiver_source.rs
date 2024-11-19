@@ -50,9 +50,9 @@ impl AsyncSource for BlockPartitionReceiverSource {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.meta_receiver.recv().await {
-            Ok(Ok(part)) => dbg!(Ok(Some(DataBlock::empty_with_meta(
+            Ok(Ok(part)) => Ok(Some(DataBlock::empty_with_meta(
                 BlockPartitionMeta::create(vec![part]),
-            )))),
+            ))),
             Ok(Err(e)) => Err(
                 // The error is occurred in pruning process
                 e,

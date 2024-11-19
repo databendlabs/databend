@@ -77,7 +77,7 @@ impl AsyncSink for SendPartInfoSink {
 
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {
-                        let _ = dbg!(sender.send(Ok(info)).await);
+                        let _ = sender.send(Ok(info)).await;
                     }
                 }
 
