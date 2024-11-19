@@ -723,7 +723,7 @@ impl<'a> TypeChecker<'a> {
                 let func_name = func_name.as_str();
                 let func_name_lowercase = func_name.to_lowercase();
                 if !is_builtin_function(&func_name_lowercase)
-                    && !Self::all_sugar_functions().contains(&func_name_lowercase)
+                    && !Self::all_sugar_functions().contains(&func_name_lowercase.as_str())
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
                         return Ok(udf);
