@@ -30,7 +30,6 @@ arrow-data = { workspace = true }
 arrow-schema = { workspace = true }
 bytemuck = { workspace = true }
 either = { workspace = true }
-enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 foreign_vec = { workspace = true }
 hex = { workspace = true }

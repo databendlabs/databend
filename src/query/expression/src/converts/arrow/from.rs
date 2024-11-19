@@ -104,6 +104,7 @@ impl TryFrom<&Field> for TableField {
                 }
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,
+                ArrowDataType::Date64 => TableDataType::Date,
                 ArrowDataType::LargeList(field) => {
                     let inner_type = TableField::try_from(field.as_ref())?;
                     TableDataType::Array(Box::new(inner_type.data_type))

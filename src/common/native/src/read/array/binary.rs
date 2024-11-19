@@ -60,6 +60,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
         let mut reader = BufReader::with_capacity(buffer.len(), Cursor::new(buffer));
         let length = num_values as usize;
+
         let (nested, validity) = read_nested(&mut reader, &self.init, num_values as usize)?;
         let mut offsets: Vec<u64> = Vec::with_capacity(length + 1);
         let mut values = Vec::with_capacity(0);

@@ -171,10 +171,10 @@ where
             ))
         }
         t if t.is_physical_binary() => {
-            init.push(InitNested::Primitive(t.is_nullable()));
+            init.push(InitNested::Primitive(is_nullable));
             DynIter::new(BinaryNestedIter::<_>::new(
                 readers.pop().unwrap(),
-                t.clone(),
+                data_type.clone(),
                 init,
             ))
         }
@@ -187,12 +187,12 @@ where
             ))
         }
         TableDataType::Array(inner) => {
-            init.push(InitNested::List(inner.is_nullable()));
+            init.push(InitNested::List(is_nullable));
             let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
             DynIter::new(ListIterator::new(iter, inner.as_ref().clone()))
         }
         TableDataType::Map(inner) => {
-            init.push(InitNested::List(inner.is_nullable()));
+            init.push(InitNested::List(is_nullable));
             let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
             DynIter::new(MapIterator::new(iter, inner.as_ref().clone()))
         }

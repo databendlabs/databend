@@ -247,6 +247,8 @@ fn get_all_test_data_types() -> Vec<DataType> {
         })),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
+        DataType::Nullable(Box::new(DataType::Variant)),
+        DataType::Nullable(Box::new(DataType::Binary)),
         DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Map(Box::new(DataType::Tuple(vec![
             DataType::Number(NumberDataType::UInt64),

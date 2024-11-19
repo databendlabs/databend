@@ -17,7 +17,6 @@ chrono = { workspace = true }
 dashmap = { workspace = true, features = ["serde"] }
 databend-common-auth = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }

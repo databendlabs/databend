@@ -8,12 +8,11 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "jemalloc"]
+default = ["jemalloc"]
 memory-profiling = [
     "databend-meta/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
-simd = ["databend-meta/simd"]
 jemalloc = ["databend-common-base/jemalloc"]
 io-uring = [
     "databend-meta/io-uring",
