@@ -4979,6 +4979,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "test-harness",
+ "tokio",
  "tokio-stream",
  "tonic",
  "tonic-reflection",
