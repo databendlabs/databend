@@ -15,15 +15,16 @@
 //! This module provides data structures for build column indexes.
 //! It's used by Fuse Engine and Parquet Engine.
 
-use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
-use databend_common_arrow::arrow::datatypes::Field as ArrowField;
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::native::nested::InitNested;
+use arrow_schema::DataType as ArrowType;
+use arrow_schema::Field;
+use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_native::nested::InitNested;
 
 #[derive(Debug, Clone)]
 pub struct ColumnNodes {
@@ -31,7 +32,7 @@ pub struct ColumnNodes {
 }
 
 impl ColumnNodes {
-    pub fn new_from_schema(schema: &ArrowSchema, table_schema: Option<&TableSchema>) -> Self {
+    pub fn new_from_schema(schema: &Schema, table_schema: Option<&TableSchema>) -> Self {
         let mut leaf_id = 0;
         let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
@@ -56,18 +57,18 @@ impl ColumnNodes {
     /// If we don't dfs into it, the inner columns information will be lost.
     /// and we can not construct the arrow-parquet reader correctly.
     fn traverse_fields_dfs(
-        field: &ArrowField,
+        field: &Field,
         is_nested: bool,
         init: Vec<InitNested>,
         leaf_id: &mut usize,
     ) -> ColumnNode {
-        match &field.data_type {
+        match &field.data_type() {
             ArrowType::Struct(inner_fields) => {
                 let mut child_column_nodes = Vec::with_capacity(inner_fields.len());
                 let mut child_leaf_ids = Vec::with_capacity(inner_fields.len());
                 for inner_field in inner_fields {
                     let mut inner_init = init.clone();
-                    inner_init.push(InitNested::Struct(field.is_nullable));
+                    inner_init.push(InitNested::Struct(field.is_nullable()));
 
                     let child_column_node =
                         Self::traverse_fields_dfs(inner_field, true, inner_init, leaf_id);
@@ -86,7 +87,7 @@ impl ColumnNodes {
             | ArrowType::LargeList(inner_field)
             | ArrowType::FixedSizeList(inner_field, _) => {
                 let mut inner_init = init.clone();
-                inner_init.push(InitNested::List(field.is_nullable));
+                inner_init.push(InitNested::List(field.is_nullable()));
 
                 let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
@@ -104,7 +105,7 @@ impl ColumnNodes {
             }
             ArrowType::Map(inner_field, _) => {
                 let mut inner_init = init.clone();
-                inner_init.push(InitNested::List(field.is_nullable));
+                inner_init.push(InitNested::List(field.is_nullable()));
 
                 let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
@@ -172,7 +173,8 @@ impl ColumnNodes {
 /// For the nested types, it may contain more than one leaf column.
 #[derive(Debug, Clone)]
 pub struct ColumnNode {
-    pub field: ArrowField,
+    pub table_field: TableField,
+    pub field: Field,
     // Array/Struct column or inner column of nested data types.
     pub is_nested: bool,
     // The initial info of nested data types, used to read inner field of struct column.
@@ -187,13 +189,15 @@ pub struct ColumnNode {
 
 impl ColumnNode {
     pub fn new(
-        field: ArrowField,
+        field: Field,
         is_nested: bool,
         init: Vec<InitNested>,
         leaf_indices: Vec<usize>,
         children: Option<Vec<ColumnNode>>,
     ) -> Self {
+        let table_field = TableField::try_from(&field).unwrap();
         Self {
+            table_field,
             field,
             is_nested,
             init,

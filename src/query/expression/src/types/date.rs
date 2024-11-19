@@ -19,7 +19,7 @@ use std::ops::Range;
 
 use chrono::NaiveDate;
 use chrono_tz::Tz;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;

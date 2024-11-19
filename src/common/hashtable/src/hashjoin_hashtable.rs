@@ -17,8 +17,8 @@ use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
 use super::traits::Keyable;
@@ -165,12 +165,12 @@ where
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 hashes.iter_mut().for_each(|hash| {
                     *hash = 0;
                 });
                 return 0;
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -220,7 +220,7 @@ where
     ) -> (usize, usize) {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 unmatched_selection
                     .iter_mut()
                     .enumerate()
@@ -228,7 +228,7 @@ where
                         *val = idx as u32;
                     });
                 return (0, hashes.len());
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -290,9 +290,9 @@ where
     ) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 return 0;
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use bumpalo::Bump;
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use ethnum::i256;
@@ -95,8 +95,8 @@ pub unsafe fn serialize_column_to_rowformat(
             })
         }
         Column::Boolean(v) => {
-            if v.unset_bits() == 0 || v.unset_bits() == v.len() {
-                let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
+            if v.null_count() == 0 || v.null_count() == v.len() {
+                let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
                     store(&val, address[index].add(offset) as *mut u8);
@@ -360,7 +360,7 @@ unsafe fn row_match_binary_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        let is_all_set = validity.unset_bits() == 0;
+        let is_all_set = validity.null_count() == 0;
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
@@ -441,7 +441,7 @@ unsafe fn row_match_string_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        let is_all_set = validity.unset_bits() == 0;
+        let is_all_set = validity.null_count() == 0;
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
@@ -523,7 +523,7 @@ unsafe fn row_match_column_type<T: ArgType>(
 
     let mut equal: bool;
     if let Some(validity) = validity {
-        let is_all_set = validity.unset_bits() == 0;
+        let is_all_set = validity.null_count() == 0;
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);

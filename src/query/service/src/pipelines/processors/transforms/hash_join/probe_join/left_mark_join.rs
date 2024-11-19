@@ -55,7 +55,7 @@ impl HashJoinProbeState {
             .get_by_offset(0)
             .to_column(process_state.input.num_rows());
         // Check if there is any null in the probe column.
-        if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
+        if matches!(probe_column.validity().1, Some(x) if x.null_count() > 0) {
             let mut has_null = self
                 .hash_join_state
                 .hash_join_desc
@@ -153,7 +153,7 @@ impl HashJoinProbeState {
             .get_by_offset(0)
             .to_column(process_state.input.num_rows());
         // Check if there is any null in the probe column.
-        if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
+        if matches!(probe_column.validity().1, Some(x) if x.null_count() > 0) {
             let mut has_null = self
                 .hash_join_state
                 .hash_join_desc

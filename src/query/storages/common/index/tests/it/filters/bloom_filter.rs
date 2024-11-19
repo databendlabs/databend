@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::array::ArrayColumn;
@@ -25,6 +24,7 @@ use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;

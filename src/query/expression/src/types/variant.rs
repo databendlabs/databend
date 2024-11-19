@@ -23,7 +23,7 @@ use jsonb::Value;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
-use super::binary::BinaryIterator;
+use super::binary::BinaryColumnIter;
 use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
@@ -52,7 +52,7 @@ impl ValueType for VariantType {
     type ScalarRef<'a> = &'a [u8];
     type Column = BinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = BinaryIterator<'a>;
+    type ColumnIterator<'a> = BinaryColumnIter<'a>;
     type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]
