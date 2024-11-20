@@ -44,7 +44,7 @@ impl Binder {
         child: SExpr,
     ) -> Result<SExpr> {
         if !bind_context.srf_info.srfs.is_empty() {
-            // Rewrite the Set-returning functions in as columns.
+            // Rewrite the Set-returning functions as columns.
             let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
             for (_, item) in scalar_items.iter_mut() {
                 srf_rewriter.visit(&mut item.scalar)?;
