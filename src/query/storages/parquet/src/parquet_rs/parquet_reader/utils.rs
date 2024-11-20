@@ -15,10 +15,9 @@
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
-use databend_common_arrow::arrow::array::Arrow2Arrow;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -95,15 +94,7 @@ pub fn transform_record_batch_by_field_paths(
 }
 
 pub fn bitmap_to_boolean_array(bitmap: Bitmap) -> BooleanArray {
-    let res = Box::new(
-        databend_common_arrow::arrow::array::BooleanArray::try_new(
-            databend_common_arrow::arrow::datatypes::DataType::Boolean,
-            bitmap,
-            None,
-        )
-        .unwrap(),
-    );
-    BooleanArray::from(res.to_data())
+    BooleanArray::from(bitmap.into_array_data())
 }
 
 /// FieldPaths is used to traverse nested columns in [`RecordBatch`].

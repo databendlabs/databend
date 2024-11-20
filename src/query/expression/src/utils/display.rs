@@ -24,10 +24,9 @@ use databend_common_ast::parser::Dialect;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use databend_common_io::ewkb_to_geo;
+use databend_common_io::geo_to_ewkt;
 use geozero::wkb::Ewkb;
-use geozero::GeozeroGeometry;
-use geozero::ToGeos;
-use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
@@ -40,7 +39,6 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
-use crate::types::binary::BinaryColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
 use crate::types::decimal::DecimalColumn;
@@ -54,7 +52,6 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
-use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
 use crate::types::AnyType;
@@ -169,16 +166,16 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let ewkb = Ewkb(s);
-                let geos = ewkb.to_geos().unwrap();
-                let geom = geos
-                    .to_ewkt(geos.srid())
-                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
+                let geom = ewkb_to_geo(&mut Ewkb(s))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{geom:?}")
             }
             ScalarRef::Geography(v) => {
-                let ewkt = v.to_ewkt().unwrap_or_else(|e| format!("Invalid data: {e}"));
-                write!(f, "{ewkt:?}")
+                let geog = ewkb_to_geo(&mut Ewkb(v.0))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+                write!(f, "{geog:?}")
             }
         }
     }
@@ -263,20 +260,16 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let ewkb = Ewkb(s);
-                let geos = ewkb.to_geos().unwrap();
-                let geom = geos
-                    .to_ewkt(geos.srid())
-                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
+                let geom = ewkb_to_geo(&mut Ewkb(s))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "'{geom}'")
             }
             ScalarRef::Geography(v) => {
-                let ewkb = Ewkb(v.0);
-                let geos = ewkb.to_geos().unwrap();
-                let geom = geos
-                    .to_ewkt(geos.srid())
-                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
-                write!(f, "'{geom}'")
+                let geog = ewkb_to_geo(&mut Ewkb(v.0))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+                write!(f, "'{geog}'")
             }
         }
     }
@@ -411,26 +404,6 @@ impl Debug for DecimalColumn {
                 ))
                 .finish(),
         }
-    }
-}
-
-impl Debug for BinaryColumn {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("BinaryColumn")
-            .field(
-                "data",
-                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
-            )
-            .field("offsets", &self.offsets())
-            .finish()
-    }
-}
-
-impl Debug for StringColumn {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("StringColumn")
-            .field("data", &format_args!("{:?}", self.data))
-            .finish()
     }
 }
 

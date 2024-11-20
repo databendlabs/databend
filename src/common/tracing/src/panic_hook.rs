@@ -34,6 +34,7 @@ pub fn set_panic_hook() {
     }));
 }
 
+#[allow(dead_code)]
 fn should_backtrace() -> bool {
     // if user not specify or user set to enable, we should backtrace
     match USER_SET_ENABLE_BACKTRACE.load(Ordering::Relaxed) {
@@ -70,15 +71,11 @@ pub fn captures_frames(frames: &mut Vec<BacktraceFrame>) {
 }
 
 pub fn backtrace(frames: usize) -> String {
-    if should_backtrace() {
-        let mut frames = Vec::with_capacity(frames);
-        captures_frames(&mut frames);
-        let mut backtrace = Backtrace::from(frames);
-        backtrace.resolve();
-        format!("{:?}", backtrace)
-    } else {
-        String::new()
-    }
+    let mut frames = Vec::with_capacity(frames);
+    captures_frames(&mut frames);
+    let mut backtrace = Backtrace::from(frames);
+    backtrace.resolve();
+    format!("{:?}", backtrace)
 }
 
 #[cfg(test)]

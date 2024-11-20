@@ -17,9 +17,9 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::with_number_mapped_type;

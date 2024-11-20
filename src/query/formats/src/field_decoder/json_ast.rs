@@ -16,7 +16,6 @@ use std::any::Any;
 use std::io::Cursor;
 
 use chrono_tz::Tz;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_from_json;
@@ -32,6 +31,7 @@ use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
@@ -39,8 +39,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
+use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 use num_traits::NumCast;
@@ -346,7 +346,7 @@ impl FieldJsonAstDecoder {
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
-                let geom = parse_to_ewkb(v, None)?;
+                let geom = geometry_from_ewkt(v, None)?;
                 column.put_slice(&geom);
                 column.commit_row();
                 Ok(())

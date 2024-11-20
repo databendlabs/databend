@@ -24,6 +24,7 @@ use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
+use databend_common_exception::StackTrace;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
@@ -62,6 +63,8 @@ impl GlobalServices {
 
     #[async_backtrace::framed]
     pub async fn init_with(config: &InnerConfig) -> Result<()> {
+        StackTrace::pre_load_symbol();
+
         // app name format: node_id[0..7]@cluster_id
         let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
 

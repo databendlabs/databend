@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_arrow::native::ColumnMeta as NativeColumnMeta;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
+use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;

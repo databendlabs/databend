@@ -214,8 +214,6 @@ impl ReplaceInterpreter {
                 &name_resolution_ctx,
                 metadata,
                 &[],
-                Default::default(),
-                Default::default(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
             let columns = scalar.used_columns();

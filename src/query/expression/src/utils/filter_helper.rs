@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 
 use crate::arrow::bitmap_into_mut;
 use crate::types::BooleanType;
@@ -25,7 +25,7 @@ impl FilterHelpers {
     pub fn is_all_unset(predicate: &Value<BooleanType>) -> bool {
         match &predicate {
             Value::Scalar(v) => !v,
-            Value::Column(bitmap) => bitmap.unset_bits() == bitmap.len(),
+            Value::Column(bitmap) => bitmap.null_count() == bitmap.len(),
         }
     }
 

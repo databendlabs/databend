@@ -19,7 +19,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 crc32fast = { workspace = true }
 ctor = { workspace = true }
-databend-common-arrow = { workspace = true }
+
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -30,9 +30,7 @@ databend-common-vector = { workspace = true }
 dtparse = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
-geo-types = { workspace = true }
 geohash = { workspace = true }
-geos = { workspace = true }
 geozero = { workspace = true }
 h3o = { workspace = true }
 hex = { workspace = true }

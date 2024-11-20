@@ -107,16 +107,6 @@ impl From<std::num::TryFromIntError> for ErrorCode {
     }
 }
 
-impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::arrow::error::Error) -> Self {
-        use databend_common_arrow::arrow::error::Error;
-        match error {
-            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
-            v => ErrorCode::from_std_error(v),
-        }
-    }
-}
-
 impl From<arrow_schema::ArrowError> for ErrorCode {
     fn from(error: arrow_schema::ArrowError) -> Self {
         match error {
@@ -284,12 +274,13 @@ impl Display for SerializedError {
 
 impl From<&ErrorCode> for SerializedError {
     fn from(e: &ErrorCode) -> Self {
+        // let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();
         SerializedError {
             code: e.code(),
             name: e.name(),
             message: e.message(),
             span: e.span(),
-            backtrace: e.backtrace.clone(),
+            backtrace: e.backtrace.to_physical(),
             stacks: e.stacks().iter().map(|f| f.into()).collect(),
         }
     }

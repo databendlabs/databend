@@ -102,7 +102,6 @@ use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
@@ -114,7 +113,6 @@ use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
-use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
@@ -161,7 +159,6 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::MetadataRef;
 
 /// A helper for type checking.
@@ -180,8 +177,6 @@ pub struct TypeChecker<'a> {
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
-    ctes_map: Box<IndexMap<String, CteInfo>>,
-    m_cte_bound_ctx: HashMap<IndexType, BindContext>,
 
     aliases: &'a [(String, ScalarExpr)],
 
@@ -213,21 +208,11 @@ impl<'a> TypeChecker<'a> {
             func_ctx,
             name_resolution_ctx,
             metadata,
-            ctes_map: Box::default(),
-            m_cte_bound_ctx: Default::default(),
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
             forbid_udf,
         })
-    }
-
-    pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {
-        self.m_cte_bound_ctx = m_cte_bound_ctx;
-    }
-
-    pub fn set_ctes_map(&mut self, ctes_map: Box<IndexMap<String, CteInfo>>) {
-        self.ctes_map = ctes_map;
     }
 
     #[allow(dead_code)]
@@ -1102,10 +1087,10 @@ impl<'a> TypeChecker<'a> {
     // TODO: remove this function
     fn rewrite_substring(args: &mut [ScalarExpr]) {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
-            if let databend_common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
+            if let Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: databend_common_expression::Scalar::Number(1i64.into()),
+                    value: Scalar::Number(1i64.into()),
                 }
                 .into();
             }
@@ -1281,7 +1266,7 @@ impl<'a> TypeChecker<'a> {
                 let box (expr, _) = self.resolve(expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let databend_common_expression::Expr::Constant { scalar, .. } = expr {
+                if let EExpr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {
                     Err(ErrorCode::SemanticError(
@@ -1645,7 +1630,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve aggregation function call.
-
     fn resolve_aggregate_function(
         &mut self,
         span: Span,
@@ -1661,16 +1645,6 @@ impl<'a> TypeChecker<'a> {
         ) {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InSetReturningFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "aggregate functions can not be used in set-returning function".to_string(),
             )
             .set_span(span));
         }
@@ -2771,7 +2745,7 @@ impl<'a> TypeChecker<'a> {
         // Note: check function may reorder the args
 
         let mut folded_args = match &expr {
-            databend_common_expression::Expr::FunctionCall {
+            EExpr::FunctionCall {
                 args: checked_args, ..
             } => {
                 let mut folded_args = Vec::with_capacity(args.len());
@@ -3069,14 +3043,13 @@ impl<'a> TypeChecker<'a> {
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
-        for (cte_idx, bound_ctx) in self.m_cte_bound_ctx.iter() {
-            binder.set_m_cte_bound_ctx(*cte_idx, bound_ctx.clone());
-        }
-        binder.ctes_map = self.ctes_map.clone();
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
+        self.bind_context
+            .cte_context
+            .set_cte_context(output_context.cte_context);
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1
@@ -3579,7 +3552,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: databend_common_expression::Scalar::String(" ".to_string()),
+                value: Scalar::String(" ".to_string()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -4878,10 +4851,10 @@ impl<'a> TypeChecker<'a> {
 
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
-        expr: &databend_common_expression::Expr<Index>,
+        expr: &EExpr<Index>,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            if let (databend_common_expression::Expr::Constant { scalar, .. }, _) =
+            if let (EExpr::Constant { scalar, .. }, _) =
                 ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
                 let scalar = shrink_scalar(scalar);

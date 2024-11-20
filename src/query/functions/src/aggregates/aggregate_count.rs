@@ -16,9 +16,9 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
@@ -93,14 +93,14 @@ impl AggregateFunction for AggregateCountFunction {
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         let nulls = if columns.is_empty() {
-            validity.map(|v| v.unset_bits()).unwrap_or(0)
+            validity.map(|v| v.null_count()).unwrap_or(0)
         } else {
             match &columns[0] {
                 Column::Nullable(c) => validity
                     .map(|v| v & (&c.validity))
                     .unwrap_or_else(|| c.validity.clone())
-                    .unset_bits(),
-                _ => validity.map(|v| v.unset_bits()).unwrap_or(0),
+                    .null_count(),
+                _ => validity.map(|v| v.null_count()).unwrap_or(0),
             }
         };
         state.count += (input_rows - nulls) as u64;
@@ -121,7 +121,7 @@ impl AggregateFunction for AggregateCountFunction {
         match validity {
             Some(v) => {
                 // all nulls
-                if v.unset_bits() == v.len() {
+                if v.null_count() == v.len() {
                     return Ok(());
                 }
                 for (valid, place) in v.iter().zip(places.iter()) {

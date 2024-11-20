@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::Utf8ViewArray;
-use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::bitmap::TrueIdxIter;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::utils::SlicesIterator;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::bitmap::TrueIdxIter;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
@@ -40,7 +38,7 @@ impl DataBlock {
             return Ok(self);
         }
 
-        let count_zeros = bitmap.unset_bits();
+        let count_zeros = bitmap.null_count();
         match count_zeros {
             0 => Ok(self),
             _ => {
@@ -145,7 +143,7 @@ pub struct FilterVisitor<'a> {
 
 impl<'a> FilterVisitor<'a> {
     pub fn new(filter: &'a Bitmap) -> Self {
-        let filter_rows = filter.len() - filter.unset_bits();
+        let filter_rows = filter.len() - filter.null_count();
         let strategy = IterationStrategy::default_strategy(filter.len(), filter_rows);
         Self {
             filter,
@@ -268,7 +266,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
 
     fn visit_boolean(&mut self, mut bitmap: Bitmap) -> Result<()> {
         // faster path for all bits set
-        if bitmap.unset_bits() == 0 {
+        if bitmap.null_count() == 0 {
             bitmap.slice(0, self.filter_rows);
             self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
             return Ok(());
@@ -344,24 +342,21 @@ impl<'a> FilterVisitor<'a> {
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 for i in iter {
                     unsafe {
-                        builder.put_and_commit(values.index_unchecked(i));
+                        builder.put_and_commit(values.value_unchecked(i));
                     }
                 }
                 builder.build()
             }
             _ => {
                 // reuse the buffers
-                let new_views = self.filter_primitive_types(values.data.views().clone());
-                let new_col = unsafe {
-                    Utf8ViewArray::new_unchecked_unknown_md(
-                        values.data.data_type().clone(),
+                let new_views = self.filter_primitive_types(values.views().clone());
+                unsafe {
+                    StringColumn::new_unchecked_unknown_md(
                         new_views,
-                        values.data.data_buffers().clone(),
+                        values.data_buffers().clone(),
                         None,
-                        Some(values.data.total_buffer_len()),
                     )
-                };
-                StringColumn::new(new_col)
+                }
             }
         }
     }

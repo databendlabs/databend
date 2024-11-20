@@ -17,8 +17,6 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,6 +25,8 @@ use databend_common_expression::eval_function;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullableType;
@@ -272,7 +272,7 @@ impl BloomIndex {
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
-            if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
+            if validity.as_ref().map(|v| v.null_count()).unwrap_or(0) > 0 {
                 let validity = validity.unwrap();
                 let it = column.deref().iter().zip(validity.iter()).map(
                     |(v, b)| {
@@ -545,7 +545,7 @@ impl BloomIndex {
     /// If it does, the bloom index for the column will not be established.
     fn check_large_string(column: &Column) -> bool {
         if let Column::String(v) = &column {
-            let bytes_per_row = v.current_buffer_len() / v.len().max(1);
+            let bytes_per_row = v.total_bytes_len() / v.len().max(1);
             if bytes_per_row > 256 {
                 return true;
             }

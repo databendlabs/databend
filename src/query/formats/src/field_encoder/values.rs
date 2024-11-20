@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bstr::ByteSlice;
 use chrono_tz::Tz;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::types::array::ArrayColumn;
-use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::geography::GeographyColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::BinaryColumn;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -35,14 +34,14 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_io::ewkb_to_geo;
+use databend_common_io::geo_to_ewkb;
+use databend_common_io::geo_to_ewkt;
+use databend_common_io::geo_to_json;
+use databend_common_io::geo_to_wkb;
+use databend_common_io::geo_to_wkt;
 use databend_common_io::GeometryDataType;
 use geozero::wkb::Ewkb;
-use geozero::CoordDimensions;
-use geozero::GeozeroGeometry;
-use geozero::ToGeos;
-use geozero::ToJson;
-use geozero::ToWkb;
-use geozero::ToWkt;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -308,24 +307,17 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = match self.common_settings().geometry_format {
-            GeometryDataType::WKB => hex::encode_upper(
-                Ewkb(v.to_vec())
-                    .to_wkb(CoordDimensions::xy())
-                    .unwrap()
-                    .as_bytes(),
-            )
-            .as_bytes()
-            .to_vec(),
-            GeometryDataType::WKT => Ewkb(v.to_vec()).to_wkt().unwrap().as_bytes().to_vec(),
-            GeometryDataType::EWKB => hex::encode_upper(v).as_bytes().to_vec(),
-            GeometryDataType::EWKT => {
-                let ewkb = Ewkb(v.to_vec());
-                let geos = ewkb.to_geos().unwrap();
-                geos.to_ewkt(geos.srid()).unwrap().as_bytes().to_vec()
-            }
-            GeometryDataType::GEOJSON => Ewkb(v.to_vec()).to_json().unwrap().as_bytes().to_vec(),
-        };
+        let s = ewkb_to_geo(&mut Ewkb(v))
+            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => {
+                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                }
+                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
+            .unwrap_or_else(|_| v.to_vec());
 
         self.write_string_inner(&s, out_buf, in_nested);
     }
@@ -338,21 +330,17 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = match self.common_settings().geometry_format {
-            GeometryDataType::WKB => {
-                hex::encode_upper(Ewkb(v.0).to_wkb(CoordDimensions::xy()).unwrap().as_bytes())
-                    .as_bytes()
-                    .to_vec()
-            }
-            GeometryDataType::WKT => Ewkb(v.0).to_wkt().unwrap().as_bytes().to_vec(),
-            GeometryDataType::EWKB => hex::encode_upper(v.0).as_bytes().to_vec(),
-            GeometryDataType::EWKT => {
-                let ewkb = Ewkb(v.0);
-                let geos = ewkb.to_geos().unwrap();
-                geos.to_ewkt(geos.srid()).unwrap().as_bytes().to_vec()
-            }
-            GeometryDataType::GEOJSON => Ewkb(v.0).to_json().unwrap().as_bytes().to_vec(),
-        };
+        let s = ewkb_to_geo(&mut Ewkb(v.0))
+            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => {
+                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                }
+                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
+            .unwrap_or_else(|_| v.0.to_vec());
 
         self.write_string_inner(&s, out_buf, in_nested);
     }

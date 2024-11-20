@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -29,6 +28,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
@@ -451,7 +451,7 @@ impl AggregationContext {
             }
         }
 
-        let delete_nums = bitmap.unset_bits();
+        let delete_nums = bitmap.null_count();
         info!("number of row deleted: {}", delete_nums);
 
         // shortcut: nothing to be deleted

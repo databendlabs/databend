@@ -19,7 +19,6 @@ anyerror = { workspace = true }
 byteorder = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
 openraft = { workspace = true }
@@ -28,7 +27,6 @@ serde_json = { workspace = true }
 sled = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

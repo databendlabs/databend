@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -156,7 +156,7 @@ impl HashJoinState {
                 match col {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
-                        if bitmap.unset_bits() == 0 {
+                        if bitmap.null_count() == 0 {
                             valids = Some(Bitmap::new_constant(true, num_rows));
                             break;
                         } else {

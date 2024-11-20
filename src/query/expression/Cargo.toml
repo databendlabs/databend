@@ -11,6 +11,9 @@ test = true
 
 [dependencies]
 arrow-array = { workspace = true }
+arrow-buffer = { workspace = true }
+arrow-cast = { workspace = true }
+arrow-data = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4"] }
 arrow-schema = { workspace = true }
@@ -23,9 +26,9 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
 dashmap = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
@@ -37,7 +40,6 @@ enum-as-inner = { workspace = true }
 ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
 futures = { workspace = true }
 geo = { workspace = true }
-geos = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
@@ -56,7 +58,6 @@ roaring = { workspace = true, features = ["serde"] }
 rust_decimal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-simdutf8 = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }
 tonic = { workspace = true }
@@ -77,6 +78,3 @@ harness = false
 
 [lints]
 workspace = true
-
-[package.metadata.cargo-machete]
-ignored = ["geos"]

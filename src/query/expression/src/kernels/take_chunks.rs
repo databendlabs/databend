@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 use string::StringColumnBuilder;
@@ -811,7 +811,7 @@ impl Column {
         let mut total_len = 0;
         let mut unset_bits = 0;
         for bitmap in col.iter() {
-            unset_bits += bitmap.unset_bits();
+            unset_bits += bitmap.null_count();
             total_len += bitmap.len();
         }
         if unset_bits == total_len || unset_bits == 0 {

@@ -21,9 +21,9 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
@@ -679,7 +679,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             // If the original value is NULL, we can ignore the error.
             let rhs: Bitmap = bitmap.clone().not().into();
             let res = error_bitmap.clone().bitor(&rhs);
-            if res.unset_bits() == 0 {
+            if res.null_count() == 0 {
                 ctx.errors = None;
             } else {
                 *error_bitmap = res;
@@ -697,8 +697,8 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             Value::Column(column) => {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
-                        let validity = bitmap.into();
-                        let validity = databend_common_arrow::arrow::bitmap::and(
+                        let validity: Bitmap = bitmap.into();
+                        let validity = databend_common_column::bitmap::and(
                             &nullable_column.validity,
                             &validity,
                         );

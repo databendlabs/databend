@@ -53,7 +53,7 @@ pub fn evaluate_topk(
     let topk_col = block.columns()[0].value.as_column().unwrap();
     let num_rows = topk_col.len();
     let filter = topk.evaluate_column(topk_col, sorter);
-    if filter.unset_bits() == num_rows {
+    if filter.null_count() == num_rows {
         // All rows are filtered out.
         return Ok(None);
     }

@@ -13,17 +13,14 @@ test = true
 
 [features]
 default = ["simd"]
-simd = ["databend-common-arrow/simd"]
+simd = ["databend-common-column/simd"]
 python-udf = ["arrow-udf-python"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
-    # "databend-common-meta-embedded/io-uring",
     "databend-common-meta-store/io-uring",
-    # "databend-common-meta-sled-store/io-uring",
-    # "databend-common-meta-raft-store/io-uring",
 ]
 
 enable_queries_executor = []
@@ -54,12 +51,13 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
-databend-common-arrow = { workspace = true }
+
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-cloud-control = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -73,7 +71,6 @@ databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-embedded = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -168,7 +165,6 @@ sqlx = { workspace = true }
 strength_reduce = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
-time = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
 toml = { workspace = true, default-features = false }

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -59,7 +58,6 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
-use indexmap::IndexMap;
 use log::debug;
 use log::warn;
 use parking_lot::RwLock;
@@ -572,8 +570,6 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
         let mut values = Vec::with_capacity(data_schema.fields.len());
         for field in &data_schema.fields {

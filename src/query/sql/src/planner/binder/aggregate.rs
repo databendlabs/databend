@@ -33,12 +33,14 @@ use itertools::Itertools;
 use super::prune_by_children;
 use super::ExprContext;
 use super::Finder;
+use crate::binder::project_set::SetReturningRewriter;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
@@ -347,6 +349,13 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
+        if !bind_context.srf_info.srfs.is_empty() {
+            // Rewrite the Set-returning functions in Aggregate function as columns.
+            let mut srf_rewriter = SetReturningRewriter::new(bind_context, true);
+            for item in select_list.items.iter_mut() {
+                srf_rewriter.visit(&mut item.scalar)?;
+            }
+        }
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
             rewriter.visit(&mut item.scalar)?;
@@ -373,22 +382,16 @@ impl Binder {
 
         // Extract available aliases from `SELECT` clause,
         for item in select_list.items.iter() {
-            if let SelectTarget::AliasedExpr { alias: Some(_), .. } = item.select_target {
-                let column = if let ScalarExpr::BoundColumnRef(column_ref) = &item.scalar {
-                    let mut column = column_ref.column.clone();
-                    column.column_name = item.alias.clone();
-                    column
-                } else {
-                    self.create_derived_column_binding(
-                        item.alias.clone(),
-                        item.scalar.data_type()?,
-                        Some(item.scalar.clone()),
-                    )
-                };
-                available_aliases.push((column, item.scalar.clone()));
+            if let SelectTarget::AliasedExpr {
+                alias: Some(alias), ..
+            } = item.select_target
+            {
+                let column = normalize_identifier(alias, &self.name_resolution_ctx);
+                available_aliases.push((column.name, item.scalar.clone()));
             }
         }
 
+        let original_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::GroupClaue);
         match group_by {
             GroupBy::Normal(exprs) => self.resolve_group_items(
@@ -398,7 +401,7 @@ impl Binder {
                 &available_aliases,
                 false,
                 &mut vec![],
-            ),
+            )?,
             GroupBy::All => {
                 let groups = self.resolve_group_all(select_list)?;
                 self.resolve_group_items(
@@ -408,10 +411,10 @@ impl Binder {
                     &available_aliases,
                     false,
                     &mut vec![],
-                )
+                )?;
             }
             GroupBy::GroupingSets(sets) => {
-                self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)
+                self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)?;
             }
             // TODO: avoid too many clones.
             GroupBy::Rollup(exprs) => {
@@ -420,16 +423,18 @@ impl Binder {
                 for i in (0..=exprs.len()).rev() {
                     sets.push(exprs[0..i].to_vec());
                 }
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
+                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
             }
             GroupBy::Cube(exprs) => {
                 // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
                 let sets = (0..=exprs.len())
                     .flat_map(|count| exprs.clone().into_iter().combinations(count))
                     .collect::<Vec<_>>();
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
+                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
             }
         }
+        bind_context.set_expr_context(original_context);
+        Ok(())
     }
 
     pub fn bind_aggregate(
@@ -490,7 +495,7 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
         sets: &[Vec<Expr>],
-        available_aliases: &[(ColumnBinding, ScalarExpr)],
+        available_aliases: &[(String, ScalarExpr)],
     ) -> Result<()> {
         let mut grouping_sets = Vec::with_capacity(sets.len());
         for set in sets {
@@ -587,7 +592,7 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
         group_by: &[Expr],
-        available_aliases: &[(ColumnBinding, ScalarExpr)],
+        available_aliases: &[(String, ScalarExpr)],
         collect_grouping_sets: bool,
         grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
@@ -639,12 +644,10 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
-                self.m_cte_bound_ctx.clone(),
-                self.ctes_map.clone(),
             );
-            let (scalar_expr, _) = scalar_binder
+            let (mut scalar_expr, _) = scalar_binder
                 .bind(expr)
-                .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
+                .or_else(|e| self.resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
@@ -657,6 +660,11 @@ impl Binder {
             {
                 // The group key is duplicated
                 continue;
+            }
+
+            if !bind_context.srf_info.srfs.is_empty() {
+                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
+                srf_rewriter.visit(&mut scalar_expr)?;
             }
 
             let group_item_name = format!("{:#}", expr);
@@ -768,17 +776,18 @@ impl Binder {
 
         Ok((scalar, alias))
     }
+
     fn resolve_alias_item(
+        &mut self,
         bind_context: &mut BindContext,
         expr: &Expr,
-        available_aliases: &[(ColumnBinding, ScalarExpr)],
+        available_aliases: &[(String, ScalarExpr)],
         original_error: ErrorCode,
     ) -> Result<(ScalarExpr, DataType)> {
         let mut result: Vec<usize> = vec![];
         // If cannot resolve group item, then try to find an available alias
-        for (i, (column_binding, _)) in available_aliases.iter().enumerate() {
+        for (i, (alias, _)) in available_aliases.iter().enumerate() {
             // Alias of the select item
-            let col_name = column_binding.column_name.as_str();
             if let Expr::ColumnRef {
                 column:
                     ColumnRef {
@@ -789,7 +798,7 @@ impl Binder {
                 ..
             } = expr
             {
-                if col_name.eq_ignore_ascii_case(column.name()) {
+                if alias.eq_ignore_ascii_case(column.name()) {
                     result.push(i);
                 }
             }
@@ -803,31 +812,75 @@ impl Binder {
                     .set_span(expr.span()),
             )
         } else {
-            let (column_binding, scalar) = available_aliases[result[0]].clone();
-            // We will add the alias to BindContext, so we can reference it
-            // in `HAVING` and `ORDER BY` clause.
-            bind_context.add_column_binding(column_binding.clone());
+            let (alias, mut scalar) = available_aliases[result[0]].clone();
 
-            let index = column_binding.index;
-            bind_context.aggregate_info.group_items.push(ScalarItem {
-                scalar: scalar.clone(),
-                index,
-            });
-            bind_context.aggregate_info.group_items_map.insert(
-                scalar.clone(),
-                bind_context.aggregate_info.group_items.len() - 1,
-            );
+            if !bind_context.srf_info.srfs.is_empty() {
+                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
+                srf_rewriter.visit(&mut scalar)?;
+            }
 
-            // Add a mapping (alias -> scalar), so we can resolve the alias later
+            // check scalar first, avoid duplicate create column.
+            let mut scalar_column_index = None;
+            let column_binding = if let Some(column_index) =
+                bind_context.aggregate_info.group_items_map.get(&scalar)
+            {
+                scalar_column_index = Some(*column_index);
+
+                let group_item = &bind_context.aggregate_info.group_items[*column_index];
+                ColumnBindingBuilder::new(
+                    alias.clone(),
+                    group_item.index,
+                    Box::new(group_item.scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build()
+            } else if let ScalarExpr::BoundColumnRef(column_ref) = &scalar {
+                let mut column = column_ref.column.clone();
+                column.column_name = alias.clone();
+                column
+            } else {
+                self.create_derived_column_binding(
+                    alias.clone(),
+                    scalar.data_type()?,
+                    Some(scalar.clone()),
+                )
+            };
+
+            if scalar_column_index.is_none() {
+                let index = column_binding.index;
+                bind_context.aggregate_info.group_items.push(ScalarItem {
+                    scalar: scalar.clone(),
+                    index,
+                });
+                bind_context.aggregate_info.group_items_map.insert(
+                    scalar.clone(),
+                    bind_context.aggregate_info.group_items.len() - 1,
+                );
+                scalar_column_index = Some(bind_context.aggregate_info.group_items.len() - 1);
+            }
+
+            let scalar_column_index = scalar_column_index.unwrap();
+
             let column_ref: ScalarExpr = BoundColumnRef {
                 span: scalar.span(),
-                column: column_binding,
+                column: column_binding.clone(),
             }
             .into();
-            bind_context.aggregate_info.group_items_map.insert(
-                column_ref,
-                bind_context.aggregate_info.group_items.len() - 1,
-            );
+            let has_column = bind_context
+                .aggregate_info
+                .group_items_map
+                .contains_key(&column_ref);
+            if !has_column {
+                // We will add the alias to BindContext, so we can reference it
+                // in `HAVING` and `ORDER BY` clause.
+                bind_context.add_column_binding(column_binding.clone());
+
+                // Add a mapping (alias -> scalar), so we can resolve the alias later
+                bind_context
+                    .aggregate_info
+                    .group_items_map
+                    .insert(column_ref, scalar_column_index);
+            }
 
             Ok((scalar.clone(), scalar.data_type()?))
         }
