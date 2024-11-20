@@ -339,7 +339,7 @@ jobs:
 
   test_publish:
     needs: [build]
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/pack_binaries
@@ -349,7 +349,7 @@ jobs:
           category: default
   test_distribution:
     needs: [ build ]
-    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/pack_distribution
