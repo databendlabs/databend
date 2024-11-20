@@ -12,44 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 use std::time::Instant;
 
-use reqwest::cookie::CookieStore;
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
-use reqwest::Client;
-use reqwest::ClientBuilder;
-use serde::Deserialize;
+use databend_common_http::HttpClient as Client;
+use databend_common_http::QueryResponse;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
-use url::Url;
 
-use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
 use crate::util::parser_rows;
-use crate::util::HttpSessionConf;
 
 pub struct HttpClient {
     pub client: Client,
-    pub session_token: String,
     pub debug: bool,
-    pub session: Option<HttpSessionConf>,
-}
-
-#[derive(serde::Deserialize, Debug)]
-struct QueryResponse {
-    session: Option<HttpSessionConf>,
-    data: Option<serde_json::Value>,
-    next_uri: Option<String>,
-
-    error: Option<serde_json::Value>,
 }
 
 // make error message the same with ErrorCode::display
-fn format_error(value: serde_json::Value) -> String {
+fn format_error(value: &serde_json::Value) -> String {
     let value = value.as_object().unwrap();
     let detail = value.get("detail").and_then(|v| v.as_str());
     let code = value["code"].as_u64().unwrap();
@@ -64,60 +43,16 @@ fn format_error(value: serde_json::Value) -> String {
     }
 }
 
-#[derive(Deserialize)]
-struct TokenInfo {
-    session_token: String,
-}
-
-#[derive(Deserialize)]
-struct LoginResponse {
-    tokens: Option<TokenInfo>,
-}
-
 impl HttpClient {
     pub async fn create() -> Result<Self> {
-        let mut header = HeaderMap::new();
-        header.insert(
-            "Content-Type",
-            HeaderValue::from_str("application/json").unwrap(),
-        );
-        header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        let cookie_provider = GlobalCookieStore::new();
-        let cookie = HeaderValue::from_str("cookie_enabled=true").unwrap();
-        let mut initial_cookies = [&cookie].into_iter();
-        cookie_provider.set_cookies(&mut initial_cookies, &Url::parse("https://a.com").unwrap());
-        let client = ClientBuilder::new()
-            .cookie_provider(Arc::new(cookie_provider))
-            .default_headers(header)
-            // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
-            .http2_keep_alive_timeout(Duration::from_secs(15))
-            .pool_max_idle_per_host(0)
-            .build()?;
+        let host = "http://127.0.0.1:8000".to_string();
+        let username = "root".to_string();
+        let password = "".to_string();
 
-        let url = "http://127.0.0.1:8000/v1/session/login";
-
-        let session_token = client
-            .post(url)
-            .body("{}")
-            .basic_auth("root", Some(""))
-            .send()
-            .await
-            .inspect_err(|e| {
-                println!("fail to send to {}: {:?}", url, e);
-            })?
-            .json::<LoginResponse>()
-            .await
-            .inspect_err(|e| {
-                println!("fail to decode json when call {}: {:?}", url, e);
-            })?
-            .tokens
-            .unwrap()
-            .session_token;
+        let client = Client::create(host, username, password).await?;
 
         Ok(Self {
             client,
-            session_token,
-            session: None,
             debug: false,
         })
     }
@@ -125,22 +60,14 @@ impl HttpClient {
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
 
-        let url = "http://127.0.0.1:8000/v1/query".to_string();
-        let mut parsed_rows = vec![];
-        let mut response = self.post_query(sql, &url).await?;
-        self.handle_response(&response, &mut parsed_rows)?;
-        while let Some(next_uri) = &response.next_uri {
-            let url = format!("http://127.0.0.1:8000{next_uri}");
-            let new_response = self.poll_query_result(&url).await?;
-            if new_response.next_uri.is_some() {
-                self.handle_response(&new_response, &mut parsed_rows)?;
-                response = new_response;
-            } else {
-                break;
-            }
-        }
-        if let Some(error) = response.error {
+        let responses = self.client.query(sql).await?;
+        if let Some(error) = &responses[0].error {
             return Err(format_error(error).into());
+        }
+
+        let mut parsed_rows = vec![];
+        for response in responses {
+            self.handle_response(&response, &mut parsed_rows)?;
         }
         // Todo: add types to compare
         let mut types = vec![];
@@ -166,53 +93,9 @@ impl HttpClient {
         response: &QueryResponse,
         parsed_rows: &mut Vec<Vec<String>>,
     ) -> Result<()> {
-        if response.session.is_some() {
-            self.session = response.session.clone();
-        }
         if let Some(data) = &response.data {
             parsed_rows.append(&mut parser_rows(data)?);
         }
         Ok(())
-    }
-
-    // Send request and get response by json format
-    async fn post_query(&self, sql: &str, url: &str) -> Result<QueryResponse> {
-        let mut query = HashMap::new();
-        query.insert("sql", serde_json::to_value(sql)?);
-        if let Some(session) = &self.session {
-            query.insert("session", serde_json::to_value(session)?);
-        }
-        Ok(self
-            .client
-            .post(url)
-            .json(&query)
-            .bearer_auth(&self.session_token)
-            .send()
-            .await
-            .inspect_err(|e| {
-                println!("fail to send to {}: {:?}", url, e);
-            })?
-            .json::<QueryResponse>()
-            .await
-            .inspect_err(|e| {
-                println!("fail to decode json when call {}: {:?}", url, e);
-            })?)
-    }
-
-    async fn poll_query_result(&self, url: &str) -> Result<QueryResponse> {
-        Ok(self
-            .client
-            .get(url)
-            .bearer_auth(&self.session_token)
-            .send()
-            .await
-            .inspect_err(|e| {
-                println!("fail to send to {}: {:?}", url, e);
-            })?
-            .json::<QueryResponse>()
-            .await
-            .inspect_err(|e| {
-                println!("fail to decode json when call {}: {:?}", url, e);
-            })?)
     }
 }

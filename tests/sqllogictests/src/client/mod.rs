@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod global_cookie_store;
 mod http_client;
 mod mysql_client;
 

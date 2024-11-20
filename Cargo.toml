@@ -536,9 +536,6 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 # Databend Integration Test
-databend-client = { version = "0.22" }
-databend-driver = { version = "0.22" }
-databend-driver-core = { version = "0.22" }
 msql-srv = "0.11.0"
 mysql_common = "0.32.4"
 quickcheck = "1.0"
