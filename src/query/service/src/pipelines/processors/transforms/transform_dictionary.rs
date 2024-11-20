@@ -28,9 +28,10 @@ use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringColumn;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -74,38 +75,19 @@ impl DictionaryOperator {
                         scalar.as_ref().infer_data_type(),
                     ))),
                 },
-                Value::Column(column) => match column {
-                    Column::Nullable(box nullable_col) => match &nullable_col.column {
-                        Column::String(str_col) => {
-                            self.get_column_values_from_redis(
-                                str_col,
-                                &Some(nullable_col.validity.clone()),
-                                data_type,
-                                connection,
-                                default_value,
-                            )
-                            .await
-                        }
-                        _ => Err(ErrorCode::DictionarySourceError(format!(
-                            "Redis dictionary operator currently does not support value type {}",
-                            column.data_type()
-                        ))),
-                    },
-                    Column::String(str_col) => {
-                        self.get_column_values_from_redis(
-                            str_col,
-                            &None,
-                            data_type,
-                            connection,
-                            default_value,
-                        )
-                        .await
-                    }
-                    _ => Err(ErrorCode::DictionarySourceError(format!(
-                        "Redis dictionary operator currently does not support value type {}",
-                        column.data_type()
-                    ))),
-                },
+                Value::Column(column) => {
+                    let (_, validity) = column.validity();
+                    let column =
+                        StringType::try_downcast_column(&column.remove_nullable()).unwrap();
+                    self.get_column_values_from_redis(
+                        &column,
+                        validity,
+                        data_type,
+                        connection,
+                        default_value,
+                    )
+                    .await
+                }
             },
             DictionaryOperator::Mysql((pool, sql)) => match value {
                 Value::Scalar(scalar) => {
@@ -149,7 +131,7 @@ impl DictionaryOperator {
     async fn get_column_values_from_redis(
         &self,
         str_col: &StringColumn,
-        validity: &Option<Bitmap>,
+        validity: Option<&Bitmap>,
         data_type: &DataType,
         connection: &ConnectionManager,
         default_value: &Scalar,
@@ -158,14 +140,11 @@ impl DictionaryOperator {
         let key_cnt = str_col.len();
         let mut keys: Vec<&str> = vec![];
         let mut key_map = HashMap::new();
-        for i in 0..key_cnt {
-            if self.check_validity(validity, i) {
-                let key = unsafe { str_col.index_unchecked(i) };
-                if !key_map.contains_key(key) {
-                    keys.push(key);
-                    let index = key_map.len();
-                    key_map.insert(key, index);
-                }
+        for key in str_col.option_iter(validity).flatten() {
+            if !key_map.contains_key(key) {
+                keys.push(key);
+                let index = key_map.len();
+                key_map.insert(key, index);
             }
         }
 
@@ -182,9 +161,8 @@ impl DictionaryOperator {
             let res = Self::from_redis_value_to_scalar(&redis_val, data_type, default_value)?;
             match res {
                 Scalar::Array(arr) => {
-                    for i in 0..key_cnt {
-                        if self.check_validity(validity, i) {
-                            let key = unsafe { str_col.index_unchecked(i) };
+                    for key in str_col.option_iter(validity) {
+                        if let Some(key) = key {
                             let index = key_map[key];
                             let val = unsafe { arr.index_unchecked(index) };
                             builder.push(val);
@@ -195,8 +173,8 @@ impl DictionaryOperator {
                 }
                 Scalar::String(str) => {
                     let val = Scalar::String(str);
-                    for i in 0..key_cnt {
-                        if self.check_validity(validity, i) {
+                    for key in str_col.option_iter(validity) {
+                        if let Some(_key) = key {
                             builder.push(val.as_ref());
                         } else {
                             builder.push(default_value.as_ref());
@@ -230,14 +208,6 @@ impl DictionaryOperator {
             }
             redis::Value::Nil => Ok(default_value.clone()),
             _ => unreachable!(),
-        }
-    }
-
-    #[inline]
-    fn check_validity(&self, validity: &Option<Bitmap>, i: usize) -> bool {
-        match validity {
-            Some(vali_bitmap) => vali_bitmap.get_bit(i),
-            None => true,
         }
     }
 
