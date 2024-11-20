@@ -60,7 +60,7 @@ runs:
         cp ./scripts/distribution/release-readme.txt distro/readme.txt
         cp -r ./scripts/distribution/local-scripts/* distro/scripts/
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
-        nfpm pkg --packager ${{ inputs.packager }} -t './$pkg_name' -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
+        nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: Build dbg Packages
       shell: bash
@@ -80,7 +80,7 @@ runs:
 
         deb_version=${version/-/.}
         pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}-dbg.${{ inputs.packager }}"
-        nfpm pkg --packager ${{ inputs.packager }} -t './$pkg_name' -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
+        nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: post packages
       uses: actions/upload-artifact@v4
