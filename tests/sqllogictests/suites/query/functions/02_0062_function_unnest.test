@@ -503,6 +503,12 @@ select max(unnest([11,12]))
 ----
 12
 
+query T
+SELECT distinct unnest(split(coalesce(NULL, 'a,b'), ',')) AS c1
+----
+a
+b
+
 statement error 1065
 select unnest(first_value('aa') OVER (PARTITION BY 'bb'))
 
