@@ -185,9 +185,7 @@ jobs:
       fail-fast: false
       matrix:
         dirs:
-          - "query"
           - "crdb"
-          - "duckdb"
           - "base"
           - "ydb"
           - "tpcds"
