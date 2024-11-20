@@ -64,7 +64,7 @@ jobs:
           name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
 
   standalone_large:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
