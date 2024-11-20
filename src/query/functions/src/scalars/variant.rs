@@ -44,7 +44,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
-use databend_common_expression::utils::serialize::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;

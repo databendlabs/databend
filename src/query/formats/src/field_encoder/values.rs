@@ -42,7 +42,6 @@ use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::GeometryDataType;
 use geozero::wkb::Ewkb;
-
 use jiff::tz::TimeZone;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;

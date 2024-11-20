@@ -17,8 +17,6 @@ use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
 
-use chrono::DateTime;
-use chrono_tz::Tz;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;

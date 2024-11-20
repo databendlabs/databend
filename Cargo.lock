@@ -5262,6 +5262,7 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",
