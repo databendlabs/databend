@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
 use std::io;
@@ -27,6 +28,8 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::Result;
 use databend_common_storage::init_operator;
 use databend_common_storage::StorageConfig;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::Config as LogConfig;
 use databend_query::GlobalServices;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -121,6 +124,10 @@ async fn run(config: &InspectorConfig) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let mut log_config = LogConfig::default();
+    log_config.stderr.on = true;
+    let _guards = init_logging("table_meta_inspector", &log_config, BTreeMap::new());
+
     let config = InspectorConfig::parse();
 
     if let Err(err) = run(&config).await {

@@ -22,12 +22,12 @@ use std::ops::BitXorAssign;
 use std::ops::SubAssign;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -230,7 +230,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
-        if column.len() == 0 {
+        if column.is_empty() {
             return Ok(());
         }
 
@@ -238,7 +238,7 @@ where
         let state = place.get::<BitmapAggState>();
 
         if let Some(validity) = validity {
-            if validity.unset_bits() == column.len() {
+            if validity.null_count() == column.len() {
                 return Ok(());
             }
 
@@ -406,7 +406,7 @@ where
     }
 
     fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
-        if predicate.unset_bits() == 0 {
+        if predicate.null_count() == 0 {
             return places.to_vec();
         }
         let it = predicate
@@ -468,7 +468,7 @@ where
 
         let new_places = Self::filter_place(places, &predicate);
         let new_places_slice = new_places.as_slice();
-        let row_size = predicate.len() - predicate.unset_bits();
+        let row_size = predicate.len() - predicate.null_count();
 
         let input = [column];
         self.inner

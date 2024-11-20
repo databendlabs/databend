@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::date::date_to_string;
@@ -32,6 +31,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_storage::build_operator;
+use jiff::tz::TimeZone;
 use opendal::services::Redis;
 use opendal::Operator;
 use sqlx::MySqlPool;
@@ -52,8 +52,10 @@ impl DictionaryOperator {
     fn format_key(&self, key: ScalarRef<'_>) -> String {
         match key {
             ScalarRef::String(s) => s.to_string(),
-            ScalarRef::Date(d) => format!("{}", date_to_string(d as i64, Tz::UTC)),
-            ScalarRef::Timestamp(t) => format!("{}", timestamp_to_string(t, Tz::UTC)),
+            ScalarRef::Date(d) => format!("{}", date_to_string(d as i64, &TimeZone::UTC)),
+            ScalarRef::Timestamp(t) => {
+                format!("{}", timestamp_to_string(t, &TimeZone::UTC))
+            }
             _ => format!("{}", key),
         }
     }

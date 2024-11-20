@@ -16,9 +16,9 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
@@ -196,13 +196,13 @@ impl AggregateIfCombinator {
             .map(|c| c.filter(predicate))
             .collect::<Vec<_>>();
 
-        let rows = predicate.len() - predicate.unset_bits();
+        let rows = predicate.len() - predicate.null_count();
 
         (columns, rows)
     }
 
     fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
-        if predicate.unset_bits() == 0 {
+        if predicate.null_count() == 0 {
             return places.to_vec();
         }
         let it = predicate

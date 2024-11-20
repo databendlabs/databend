@@ -275,7 +275,7 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_dio", DefaultSettingValue{
+                ("enable_dio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables Direct IO.",
                     mode: SettingMode::Both,
@@ -288,7 +288,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -463,7 +463,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -475,7 +475,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_partition_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -511,7 +511,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -880,7 +880,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-
                 ("enable_auto_fix_missing_bloom_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables auto fix missing bloom index",
@@ -939,7 +938,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(128),
                     desc: "Sets the maximum length for truncating SQL queries in short_sql function.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..=1024*1024)),
+                    range: Some(SettingRange::Numeric(1..=1024 * 1024)),
+                }),
+                ("enable_distributed_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable distributed index pruning, as it is very necessary and should remain enabled in the vast majority of cases.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
             ]);
 

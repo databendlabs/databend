@@ -16,7 +16,6 @@ use std::any::Any;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
@@ -30,6 +29,7 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
@@ -82,6 +82,7 @@ impl SeparatedTextDecoder {
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
                 timezone: options_ext.timezone,
+                jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
                 is_rounding_mode: options_ext.is_rounding_mode,
@@ -98,6 +99,7 @@ impl SeparatedTextDecoder {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
+                jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
@@ -251,10 +253,7 @@ impl SeparatedTextDecoder {
 
     fn read_date(&self, column: &mut Vec<i32>, data: &[u8]) -> Result<()> {
         let mut buffer_readr = Cursor::new(&data);
-        let date = buffer_readr.read_date_text(
-            &self.common_settings().timezone,
-            self.common_settings().enable_dst_hour_fix,
-        )?;
+        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
@@ -265,11 +264,7 @@ impl SeparatedTextDecoder {
             read_num_text_exact(data)?
         } else {
             let mut buffer_readr = Cursor::new(&data);
-            let t = buffer_readr.read_timestamp_text(
-                &self.common_settings().timezone,
-                false,
-                self.common_settings.enable_dst_hour_fix,
-            )?;
+            let t = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
             match t {
                 DateTimeResType::Datetime(t) => {
                     if !buffer_readr.eof() {
@@ -281,7 +276,7 @@ impl SeparatedTextDecoder {
                         );
                         return Err(ErrorCode::BadBytes(msg));
                     }
-                    t.timestamp_micros()
+                    t.timestamp().as_microsecond()
                 }
                 _ => unreachable!(),
             }

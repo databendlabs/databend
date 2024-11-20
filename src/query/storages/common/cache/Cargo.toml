@@ -11,7 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { workspace = true }
+arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }

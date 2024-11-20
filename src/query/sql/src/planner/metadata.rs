@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use ahash::HashMap;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -74,6 +74,11 @@ pub struct Metadata {
     table_row_id_index: HashMap<IndexType, IndexType>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
+
+    /// Scan id of each scan operator.
+    next_scan_id: usize,
+    /// Mappings from base column index to scan id.
+    base_column_scan_id: HashMap<IndexType, usize>,
 }
 
 impl Metadata {
@@ -462,8 +467,23 @@ impl Metadata {
     pub fn set_max_column_position(&mut self, max_pos: usize) {
         self.max_column_position = max_pos
     }
+
     pub fn get_max_column_position(&self) -> usize {
         self.max_column_position
+    }
+
+    pub fn next_scan_id(&mut self) -> usize {
+        let next_scan_id = self.next_scan_id;
+        self.next_scan_id += 1;
+        next_scan_id
+    }
+
+    pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<usize, usize>) {
+        self.base_column_scan_id.extend(base_column_scan_id);
+    }
+
+    pub fn base_column_scan_id(&self, column_index: usize) -> Option<usize> {
+        self.base_column_scan_id.get(&column_index).cloned()
     }
 }
 
@@ -568,6 +588,10 @@ impl TableEntry {
     /// Return true if this table need to be consumed.
     pub fn is_consume(&self) -> bool {
         self.consume
+    }
+
+    pub fn update_table_index(&mut self, table_index: IndexType) {
+        self.index = table_index;
     }
 }
 
