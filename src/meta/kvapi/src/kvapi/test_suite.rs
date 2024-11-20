@@ -54,6 +54,30 @@ impl kvapi::TestSuite {
         KV: kvapi::KVApi,
         B: kvapi::ApiBuilder<KV>,
     {
+        self.test_single_node(&builder).await?;
+
+        // Run cross node test on every 2 adjacent nodes
+        let mut i = 0;
+        loop {
+            let cluster = builder.build_cluster().await;
+            self.kv_write_read_across_nodes(&cluster[i], &cluster[i + 1])
+                .await?;
+
+            if i + 1 == cluster.len() - 1 {
+                break;
+            }
+            i += 1;
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    pub async fn test_single_node<KV, B>(&self, builder: &B) -> anyhow::Result<()>
+    where
+        KV: kvapi::KVApi,
+        B: kvapi::ApiBuilder<KV>,
+    {
         self.kv_write_read(&builder.build().await).await?;
         self.kv_delete(&builder.build().await).await?;
         self.kv_update(&builder.build().await).await?;
@@ -73,19 +97,6 @@ impl kvapi::TestSuite {
             .await?;
         self.kv_delete_by_prefix_transaction(&builder.build().await)
             .await?;
-
-        // Run cross node test on every 2 adjacent nodes
-        let mut i = 0;
-        loop {
-            let cluster = builder.build_cluster().await;
-            self.kv_write_read_across_nodes(&cluster[i], &cluster[i + 1])
-                .await?;
-
-            if i + 1 == cluster.len() - 1 {
-                break;
-            }
-            i += 1;
-        }
 
         Ok(())
     }
@@ -260,6 +271,7 @@ impl kvapi::TestSuite {
         info!("---get unexpired");
         {
             let res = kv.get_kv("k1").await?;
+            // dbg!("got k1:{:?}", &res);
             // dbg!("got non expired k1", &res);
             assert!(res.is_some(), "got unexpired");
         }

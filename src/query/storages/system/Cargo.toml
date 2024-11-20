@@ -17,7 +17,6 @@ jemalloc = ["databend-common-base/jemalloc", "tikv-jemalloc-ctl"]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
@@ -26,6 +25,7 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
+databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -42,6 +42,7 @@ databend-common-users = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 once_cell = { workspace = true }

@@ -19,12 +19,12 @@ use std::iter::once;
 
 use ahash::HashSet;
 use ahash::HashSetExt;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -435,7 +435,7 @@ impl Partitioner {
                 let row_bloom_hashes: Vec<Option<&u64>> = column_bloom_hashes
                     .iter()
                     .filter_map(|(hashes, validity)| match validity {
-                        Some(v) if v.unset_bits() != 0 => v
+                        Some(v) if v.null_count() != 0 => v
                             .get(row_idx)
                             .map(|v| if v { hashes.get(row_idx) } else { None }),
                         _ => Some(hashes.get(row_idx)),

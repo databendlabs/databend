@@ -9,12 +9,13 @@ edition = "2021"
 resolver = "2"
 members = [
     "src/binaries",
-    "src/common/arrow",
     "src/common/auth",
     "src/common/base",
     "src/common/building",
     "src/common/cache",
     "src/common/cloud_control",
+    "src/common/column",
+    "src/common/native",
     "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
@@ -102,7 +103,6 @@ members = [
 
 # Workspace dependencies
 [workspace.dependencies]
-databend-common-arrow = { path = "src/common/arrow" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-auth = { path = "src/common/auth" }
@@ -113,6 +113,7 @@ databend-common-cache = { path = "src/common/cache" }
 databend-common-catalog = { path = "src/query/catalog" }
 databend-common-cloud-control = { path = "src/common/cloud_control" }
 databend-common-codegen = { path = "src/query/codegen" }
+databend-common-column = { path = "src/common/column" }
 databend-common-compress = { path = "src/common/compress" }
 databend-common-config = { path = "src/query/config" }
 databend-common-datavalues = { path = "src/query/datavalues" }
@@ -138,6 +139,7 @@ databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
+databend-common-native = { path = "src/common/native" }
 databend-common-openai = { path = "src/common/openai" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
@@ -286,10 +288,8 @@ futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
 geo = { version = "0.28.0", features = ["use-serde"] }
-geo-types = "0.7.13"
 geohash = "0.13.0"
-geos = { version = "9.0.0", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.14.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+geozero = { version = "0.14.0", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
 gimli = "0.31.0"
 globiter = "0.1"
 goldenfile = "1.4"
@@ -308,6 +308,7 @@ humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 iceberg = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
+iceberg-catalog-glue = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
 iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
 iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "fe5df3f" }
 indexmap = "2.0.0"
@@ -317,7 +318,8 @@ jaq-core = "1.5.1"
 jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
-jsonb = "0.4.3"
+jiff = { version = "0.1.14", features = ["serde", "tzdb-bundle-always"] }
+jsonb = "0.4.4"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
@@ -376,7 +378,7 @@ openraft = { version = "0.10.0", features = [
 ] }
 opensrv-mysql = { version = "0.7.0", features = ["tls"] }
 orc-rust = "0.5.0"
-ordered-float = { version = "4.1.0", default-features = false }
+ordered-float = { version = "4.5.0", default-features = false }
 ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
@@ -390,7 +392,7 @@ pin-project = "1"
 pin-project-lite = "0.2.9"
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression", "cookie"] }
 pot = "2.0.0"
-pprof = { version = "0.13.0", features = [
+pprof = { version = "0.14.0", features = [
     "flamegraph",
     "protobuf-codec",
     "protobuf",
@@ -403,7 +405,7 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
 quanta = "0.11.1"
-raft-log = { version = "0.2.2" }
+raft-log = { version = "0.2.3" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
@@ -498,7 +500,7 @@ zstd = "0.12.3"
 # AST needed
 cargo-license = "0.6.1"
 cargo_metadata = "0.18"
-fast-float = "0.2.0"
+fast-float2 = "0.2.3"
 gix = "0.63.0"
 indent = "0.1.1"
 logos = "0.12.1"
@@ -569,14 +571,15 @@ overflow-checks = false
 opt-level = "s"         ## defaults to be 3
 incremental = true
 
+[profile.ci]
+inherits = "release"
+overflow-checks = false
+incremental = false
+debug-assertions = true
+
 # [profile.release.package]
-# databend-common-arrow = { codegen-units = 16 }
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
-
-[profile.bench]
-debug = true
-overflow-checks = false
 
 [profile.dev]
 split-debuginfo = "unpacked"
@@ -592,6 +595,10 @@ miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 databend-common-exception = { opt-level = 3 }
+
+[profile.bench]
+debug = true
+overflow-checks = false
 
 [profile.test]
 opt-level = 0
@@ -612,7 +619,6 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
 orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }

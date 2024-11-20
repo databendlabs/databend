@@ -210,13 +210,12 @@ evaluation (internal):
 +--------+-----------------------------------------+
 
 
-ast            : add_years(to_date(0), 10000)
-raw expr       : add_years(to_date(0), 10000)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -354285
-output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+error: 
+  --> SQL:1:1
+  |
+1 | add_years(to_date(0), 10000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : add_years(to_date(0), 100)
@@ -502,13 +501,12 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : add_years(to_timestamp(0), 10000)
-raw expr       : add_years(to_timestamp(0), 10000)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -30610224000000000
-output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+error: 
+  --> SQL:1:1
+  |
+1 | add_years(to_timestamp(0), 10000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : add_years(to_timestamp(0), 100)
@@ -995,13 +993,12 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
-ast            : date_add(year, 10000, to_date(0))
-raw expr       : add_years(to_date(0), 10000)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -354285
-output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+error: 
+  --> SQL:1:1
+  |
+1 | date_add(year, 10000, to_date(0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : date_add(year, 100, to_date(0))
@@ -1260,13 +1257,12 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : date_add(year, 10000, to_timestamp(0))
-raw expr       : add_years(to_timestamp(0), 10000)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -30610224000000000
-output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+error: 
+  --> SQL:1:1
+  |
+1 | date_add(year, 10000, to_timestamp(0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : date_add(year, 100, to_timestamp(0))
@@ -1717,13 +1713,12 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
-ast            : to_date(0) + interval 10000 year
-raw expr       : add_years(to_date(0), 10000)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -354285
-output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+error: 
+  --> SQL:1:12
+  |
+1 | to_date(0) + interval 10000 year
+  |            ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : to_date(0) + interval 100 year
@@ -1982,13 +1977,12 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : to_timestamp(0) + interval 10000 year
-raw expr       : add_years(to_timestamp(0), 10000)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -30610224000000000
-output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+error: 
+  --> SQL:1:17
+  |
+1 | to_timestamp(0) + interval 10000 year
+  |                 ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : to_timestamp(0) + interval 100 year

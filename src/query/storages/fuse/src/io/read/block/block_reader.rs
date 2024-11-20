@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::arrow::datatypes::Schema;
-use databend_common_arrow::native::read::NativeColumnsReader;
+use arrow_schema::Field;
+use arrow_schema::Schema;
+use arrow_schema::SchemaRef;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -29,6 +29,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_native::read::NativeColumnsReader;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
@@ -43,6 +44,7 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
+    pub(crate) arrow_schema: SchemaRef,
     pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) project_column_nodes: Vec<ColumnNode>,
     pub(crate) default_vals: Vec<Scalar>,
@@ -127,7 +129,7 @@ impl BlockReader {
         };
 
         let arrow_schema: Schema = schema.as_ref().into();
-        let native_columns_reader = NativeColumnsReader::new(arrow_schema.clone())?;
+        let native_columns_reader = NativeColumnsReader::new()?;
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 
         let project_column_nodes: Vec<ColumnNode> = projection
@@ -143,6 +145,7 @@ impl BlockReader {
             operator,
             projection,
             projected_schema,
+            arrow_schema: arrow_schema.into(),
             project_indices,
             project_column_nodes,
             default_vals,
@@ -189,6 +192,10 @@ impl BlockReader {
 
     pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
+    }
+
+    pub fn arrow_schema(&self) -> SchemaRef {
+        self.arrow_schema.clone()
     }
 
     pub fn data_fields(&self) -> Vec<DataField> {

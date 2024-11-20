@@ -75,7 +75,10 @@ pub trait SessionPrivilegeManager {
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
 }
@@ -336,27 +339,31 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
         // TODO(liyz): is it check the visibility according onwerships?
-        let user_api = UserApiProvider::instance();
-        let ownerships = user_api
-            .role_api(&self.session_ctx.get_current_tenant())
-            .get_ownerships()
-            .await?;
         let roles = self.get_all_effective_roles().await?;
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
-        let ownership_objects = if roles_name.contains(&"account_admin".to_string()) {
-            vec![]
-        } else {
-            let mut ownership_objects = vec![];
-            for ownership in ownerships {
-                if roles_name.contains(&ownership.data.role) {
-                    ownership_objects.push(ownership.data.object);
+        let ownership_objects =
+            if roles_name.contains(&"account_admin".to_string()) || ignore_ownership {
+                vec![]
+            } else {
+                let user_api = UserApiProvider::instance();
+                let ownerships = user_api
+                    .role_api(&self.session_ctx.get_current_tenant())
+                    .get_ownerships()
+                    .await?;
+                let mut ownership_objects = vec![];
+                for ownership in ownerships {
+                    if roles_name.contains(&ownership.data.role) {
+                        ownership_objects.push(ownership.data.object);
+                    }
                 }
-            }
-            ownership_objects
-        };
+                ownership_objects
+            };
 
         Ok(GrantObjectVisibilityChecker::new(
             &self.get_current_user()?,

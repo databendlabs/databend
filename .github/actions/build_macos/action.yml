@@ -32,7 +32,6 @@ runs:
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
-
     - name: Setup build env
       shell: bash
       run: |
@@ -41,33 +40,15 @@ runs:
         echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
-    - name: Build Debug for all artifacts
-      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
-      shell: bash
-      run: cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }}
-
-    - name: Build Debug for specific artifacts
-      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
+    - name: Build
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
         echo "==> building libs ..."
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --lib
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --profile ${{ env.BUILD_PROFILE }} --lib
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --bin databend-$artifact
-        done
-
-    - name: Build Release
-      if: env.BUILD_PROFILE == 'release'
-      shell: bash
-      run: |
-        artifacts="${{ inputs.artifacts }}"
-        echo "==> building libs ..."
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --release --lib
-        for artifact in ${artifacts//,/ }; do
-          echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
         done
 
     - name: Upload artifact

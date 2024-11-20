@@ -33,6 +33,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::bind_table_reference::JoinConditions;
+use crate::binder::project_set::SetReturningRewriter;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
@@ -49,6 +50,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
+use crate::plans::VisitorMut;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Visibility;
@@ -84,7 +86,13 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
-        let (scalar, _) = scalar_binder.bind(expr)?;
+        let (mut scalar, _) = scalar_binder.bind(expr)?;
+
+        // rewrite Set-returning functions as columns.
+        if !bind_context.srf_info.srfs.is_empty() {
+            let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
+            srf_rewriter.visit(&mut scalar)?;
+        }
 
         let f = |scalar: &ScalarExpr| {
             matches!(

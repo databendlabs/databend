@@ -18,7 +18,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_management::*;
-use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
@@ -154,7 +154,7 @@ fn create_test_node_info() -> NodeInfo {
 }
 
 async fn new_cluster_api() -> Result<(MetaStore, ClusterMgr)> {
-    let test_api = MetaStore::L(Arc::new(MetaEmbedded::new_temp().await?));
+    let test_api = MetaStore::L(Arc::new(MemMeta::default()));
     let cluster_manager = ClusterMgr::create(
         test_api.clone(),
         "test-tenant-id",

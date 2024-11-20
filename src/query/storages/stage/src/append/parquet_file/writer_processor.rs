@@ -17,12 +17,11 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
-use arrow_schema::Schema as ArrowSchema;
+use arrow_schema::Schema;
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
@@ -47,7 +46,7 @@ pub struct ParquetFileWriter {
     output: Arc<OutputPort>,
 
     table_info: StageTableInfo,
-    arrow_schema: Arc<ArrowSchema>,
+    arrow_schema: Arc<Schema>,
 
     input_data: Vec<DataBlock>,
 
@@ -74,7 +73,7 @@ const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
 const MAX_ROW_GROUP_SIZE: usize = 1024 * 1024;
 
 fn create_writer(
-    arrow_schema: Arc<ArrowSchema>,
+    arrow_schema: Arc<Schema>,
     targe_file_size: Option<usize>,
 ) -> Result<ArrowWriter<Vec<u8>>> {
     let props = WriterProperties::builder()
@@ -107,7 +106,7 @@ impl ParquetFileWriter {
         let unload_output =
             UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
 
-        let arrow_schema = Arc::new(table_schema_to_arrow_schema(&table_info.schema));
+        let arrow_schema = Arc::new(Schema::from(table_info.schema.as_ref()));
         let writer = create_writer(arrow_schema.clone(), targe_file_size)?;
 
         Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {

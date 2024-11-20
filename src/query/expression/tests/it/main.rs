@@ -25,7 +25,6 @@ use databend_common_expression::DataBlock;
 extern crate core;
 
 mod block;
-mod column;
 mod common;
 mod decimal;
 mod fill_field_default_value;

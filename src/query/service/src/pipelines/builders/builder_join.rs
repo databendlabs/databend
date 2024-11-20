@@ -163,6 +163,7 @@ impl PipelineBuilder {
             join_state.clone(),
             output_len,
         )?;
+        build_state.add_runtime_filter_ready();
 
         let create_sink_processor = |input| {
             Ok(ProcessorPtr::create(TransformHashJoinBuild::try_create(

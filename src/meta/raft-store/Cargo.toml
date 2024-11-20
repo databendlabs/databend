@@ -23,12 +23,10 @@ chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
-databend-common-meta-api = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 fastrace = { workspace = true }

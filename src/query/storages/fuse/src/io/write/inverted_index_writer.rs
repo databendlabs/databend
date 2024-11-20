@@ -19,9 +19,9 @@ use std::sync::Arc;
 use arrow_ipc::writer::write_message;
 use arrow_ipc::writer::IpcDataGenerator;
 use arrow_ipc::writer::IpcWriteOptions;
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
@@ -201,7 +201,7 @@ pub(crate) fn block_to_inverted_index(
     }
 
     // footer: schema + offsets + schema_len + meta_len
-    let arrow_schema = Arc::new(table_schema_to_arrow_schema(table_schema));
+    let arrow_schema = Arc::new(ArrowSchema::from(table_schema));
     let generator = IpcDataGenerator {};
     let write_options = IpcWriteOptions::default();
     #[allow(deprecated)]

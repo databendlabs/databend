@@ -15,8 +15,6 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::CoordsIter;
-use geo::Geometry;
-use geos::wkt::TryFromWkt;
 use geozero::ToWkb;
 
 pub const LONGITUDE_MIN: f64 = -180.0;
@@ -24,20 +22,28 @@ pub const LONGITUDE_MAX: f64 = 180.0;
 pub const LATITUDE_MIN: f64 = -90.0;
 pub const LATITUDE_MAX: f64 = 90.0;
 
-use super::geometry::cut_srid;
+use super::geometry::ewkt_str_to_geo;
 
 pub fn geography_from_ewkt_bytes(ewkt: &[u8]) -> Result<Vec<u8>> {
     let s = std::str::from_utf8(ewkt).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
     geography_from_ewkt(s)
 }
 
-pub fn geography_from_ewkt(ewkt: &str) -> Result<Vec<u8>> {
-    let (srid, wkt) = cut_srid(ewkt)?;
-    let geog: Geometry<f64> =
-        Geometry::try_from_wkt_str(wkt).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-    geog.coords_iter().try_for_each(|c| check_point(c.x, c.y))?;
-    geog.to_ewkb(geozero::CoordDimensions::xy(), srid)
-        .map_err(ErrorCode::from)
+/// Parses an EWKT input and returns a value of EWKB Geography.
+pub fn geography_from_ewkt(input: &str) -> Result<Vec<u8>> {
+    let input = input.trim();
+    let (geo, parsed_srid) = ewkt_str_to_geo(input)?;
+    if let Some(parsed_srid) = parsed_srid {
+        if parsed_srid != 4326 {
+            return Err(ErrorCode::GeometryError(format!(
+                "SRIDs other than 4326 are not supported. Got SRID: {}",
+                parsed_srid
+            )));
+        }
+    }
+    geo.coords_iter().try_for_each(|c| check_point(c.x, c.y))?;
+    geo.to_ewkb(geozero::CoordDimensions::xy(), parsed_srid)
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
 }
 
 pub fn check_point(lon: f64, lat: f64) -> Result<()> {

@@ -54,7 +54,7 @@ jobs:
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
-      build_profile: release
+      build_profile: ci
       runner_provider: aws
       license_type: enterprise
 

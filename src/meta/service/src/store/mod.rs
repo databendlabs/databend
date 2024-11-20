@@ -17,8 +17,6 @@ mod raft_state_machine_impl;
 #[allow(clippy::module_inception)]
 mod store;
 mod store_inner;
-mod to_storage_error;
 
 pub use store::RaftStore;
 pub use store_inner::StoreInner;
-pub use to_storage_error::ToStorageError;

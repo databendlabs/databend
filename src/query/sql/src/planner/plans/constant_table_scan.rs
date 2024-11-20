@@ -190,7 +190,7 @@ impl Operator for ConstantTableScan {
             let (is_all_null, bitmap) = value.validity();
             let null_count = match (is_all_null, bitmap) {
                 (true, _) => self.num_rows as u64,
-                (false, Some(bitmap)) => bitmap.unset_bits() as u64,
+                (false, Some(bitmap)) => bitmap.null_count() as u64,
                 (false, None) => 0,
             };
 

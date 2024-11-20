@@ -166,23 +166,23 @@ query T
 explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1
 ----
 Limit
-├── output columns: [count(t.number) (#5), count(t1.number) (#2)]
+├── output columns: [count(t.number) (#3), count(t1.number) (#1)]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
 └── Sort
-    ├── output columns: [count(t.number) (#5), count(t1.number) (#2)]
+    ├── output columns: [count(t.number) (#3), count(t1.number) (#1)]
     ├── sort keys: [count(t1.number) ASC NULLS LAST]
     ├── estimated rows: 2.00
     └── HashJoin
-        ├── output columns: [count(t.number) (#5), count(t1.number) (#2)]
+        ├── output columns: [count(t.number) (#3), count(t1.number) (#1)]
         ├── join type: RIGHT OUTER
-        ├── build keys: [CAST(t3.c1 (#2) AS UInt64 NULL)]
-        ├── probe keys: [t4.c (#5)]
+        ├── build keys: [CAST(t3.c1 (#1) AS UInt64 NULL)]
+        ├── probe keys: [t4.c (#3)]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── AggregateFinal(Build)
-        │   ├── output columns: [count(t1.number) (#2), t1.number (#0)]
+        │   ├── output columns: [count(t1.number) (#1), t1.number (#0)]
         │   ├── group by: [number]
         │   ├── aggregate functions: [count()]
         │   ├── estimated rows: 1.00
@@ -200,7 +200,7 @@ Limit
         │           ├── push downs: [filters: [], limit: NONE]
         │           └── estimated rows: 1.00
         └── AggregateFinal(Probe)
-            ├── output columns: [count(t.number) (#5), t.number (#3)]
+            ├── output columns: [count(t.number) (#3), t.number (#2)]
             ├── group by: [number]
             ├── aggregate functions: [count()]
             ├── estimated rows: 2.00
@@ -210,7 +210,7 @@ Limit
                 ├── estimated rows: 2.00
                 └── TableScan
                     ├── table: default.system.numbers
-                    ├── output columns: [number (#3)]
+                    ├── output columns: [number (#2)]
                     ├── read rows: 2
                     ├── read size: < 1 KiB
                     ├── partitions total: 1
