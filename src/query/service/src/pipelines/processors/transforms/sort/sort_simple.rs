@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::simpler::Simpler;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortCompare;
 use databend_common_pipeline_core::processors::Event;
@@ -90,14 +91,15 @@ impl TransformSortSimple {
     fn commit(&mut self) -> Result<()> {
         self.simpler.compact_blocks();
         let mut simple = self.simpler.take_blocks();
-        assert!(simple.len() <= 1);
-        let simple = if simple.is_empty() {
-            DataBlock::empty()
-        } else {
-            simple.remove(0)
-        };
-
-        let done = self.state.commit_simple(self.id, simple)?;
+        assert!(simple.len() <= 1); // Unlikely to sample rows greater than 65536
+        let done = self.state.commit_simple(
+            self.id,
+            if simple.is_empty() {
+                None
+            } else {
+                Some(simple.remove(0))
+            },
+        )?;
         self.step = if done {
             self.output_data = VecDeque::from(std::mem::take(&mut self.blocks));
             Step::Finish
@@ -186,6 +188,7 @@ pub struct SortSimpleState {
 
 struct StateInner {
     partitions: usize,
+    empty_block: DataBlock,
     sort_desc: Vec<SortColumnDescription>,
     partial: Vec<Option<DataBlock>>,
     bounds: Option<DataBlock>,
@@ -195,8 +198,16 @@ impl StateInner {
     fn determine_bounds(&mut self) -> Result<()> {
         let partial = std::mem::take(&mut self.partial)
             .into_iter()
-            .map(|b| b.unwrap())
+            .filter_map(|b| {
+                let b = b.unwrap();
+                if b.is_empty() { None } else { Some(b) }
+            })
             .collect::<Vec<_>>();
+
+        if partial.is_empty() {
+            self.bounds = Some(self.empty_block.clone());
+            return Ok(());
+        }
 
         let candidates = DataBlock::concat(&partial)?;
         let rows = candidates.num_rows();
@@ -238,6 +249,7 @@ impl SortSimpleState {
     fn new(
         inputs: usize,
         partitions: usize,
+        empty_block: DataBlock,
         sort_desc: Arc<Vec<SortColumnDescription>>,
     ) -> Arc<SortSimpleState> {
         let sort_desc = sort_desc
@@ -252,6 +264,7 @@ impl SortSimpleState {
         Arc::new(SortSimpleState {
             inner: RwLock::new(StateInner {
                 partitions,
+                empty_block,
                 sort_desc,
                 partial: vec![None; inputs],
                 bounds: None,
@@ -267,8 +280,9 @@ impl SortSimpleState {
         None
     }
 
-    fn commit_simple(&self, id: usize, block: DataBlock) -> Result<bool> {
+    fn commit_simple(&self, id: usize, block: Option<DataBlock>) -> Result<bool> {
         let mut inner = self.inner.write().unwrap();
+        let block = block.unwrap_or(inner.empty_block.clone());
         let x = inner.partial[id].replace(block);
         debug_assert!(x.is_none());
         let done = inner.partial.iter().all(|x| x.is_some());
@@ -282,6 +296,7 @@ impl SortSimpleState {
 
 pub fn add_range_shuffle_exchange(
     pipeline: &mut Pipeline,
+    schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     k: usize,
 ) -> Result<()> {
@@ -289,7 +304,8 @@ pub fn add_range_shuffle_exchange(
     let i = atomic::AtomicUsize::new(0);
     let n = pipeline.output_len();
     let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
-    let state = SortSimpleState::new(n, n, sort_desc.clone());
+    let empty_block = DataBlock::empty_with_schema(Arc::new(schema.project(&columns)));
+    let state = SortSimpleState::new(n, n, empty_block, sort_desc.clone());
     pipeline.add_transform(|input, output| {
         let id = i.fetch_add(1, atomic::Ordering::AcqRel);
         Ok(ProcessorPtr::create(Box::new(TransformSortSimple::new(
@@ -308,7 +324,10 @@ pub fn add_range_shuffle_exchange(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::ArgType;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
 
     use super::*;
@@ -324,6 +343,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
+        let schema = DataSchemaRefExt::create(vec![DataField::new("a", Int32Type::data_type())]);
         let mut inner = StateInner {
             partitions: 3,
             sort_desc: vec![SortColumnDescription {
@@ -333,6 +353,7 @@ mod tests {
             }],
             partial,
             bounds: None,
+            empty_block: DataBlock::empty_with_schema(schema),
         };
 
         inner.determine_bounds().unwrap();

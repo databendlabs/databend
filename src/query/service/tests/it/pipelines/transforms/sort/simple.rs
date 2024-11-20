@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::types::ArgType;
 use databend_query::pipelines::processors::transforms::sort::add_range_shuffle_exchange;
 
 use super::*;
@@ -26,12 +27,13 @@ fn create_pipeline(
     let source_pipe = create_source_pipe(ctx, data)?;
     pipeline.add_pipe(source_pipe);
 
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", Int32Type::data_type())]);
     let sort_desc = Arc::new(vec![SortColumnDescription {
         offset: 0,
         asc: true,
         nulls_first: true,
     }]);
-    add_range_shuffle_exchange(&mut pipeline, sort_desc, k)?;
+    add_range_shuffle_exchange(&mut pipeline, schema, sort_desc, k)?;
 
     pipeline.resize(1, false)?;
 

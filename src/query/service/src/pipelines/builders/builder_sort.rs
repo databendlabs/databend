@@ -209,7 +209,7 @@ impl SortPipelineBuilder {
         pipeline: &mut Pipeline,
         k: usize,
     ) -> Result<()> {
-        add_range_shuffle_exchange(pipeline, self.sort_desc.clone(), k)?;
+        add_range_shuffle_exchange(pipeline, self.schema.clone(), self.sort_desc.clone(), k)?;
 
         // Partial sort
         pipeline.add_transformer(|| {
