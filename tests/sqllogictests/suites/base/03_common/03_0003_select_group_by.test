@@ -269,7 +269,7 @@ a2
 a3
 
 query T
-SELECT distinct unnest(split(col2, ',')) FROM t_str;
+SELECT distinct unnest(split(col2, ',')) AS col3 FROM t_str ORDER BY col3;
 ----
 a1
 a2
