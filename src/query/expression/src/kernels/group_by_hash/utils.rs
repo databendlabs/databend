@@ -40,6 +40,7 @@ pub fn serialize_group_columns(
         }
         builder.commit_row();
     }
+    debug_assert_eq!(builder.data.len(), serialize_size);
     builder.build()
 }
 
