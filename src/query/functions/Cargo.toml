@@ -16,7 +16,6 @@ borsh = { workspace = true, features = ["derive"] }
 bstr = { workspace = true }
 bumpalo = { workspace = true }
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
 crc32fast = { workspace = true }
 ctor = { workspace = true }
 
@@ -39,6 +38,7 @@ jaq-core = { workspace = true }
 jaq-interpret = { workspace = true }
 jaq-parse = { workspace = true }
 jaq-std = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 libm = { workspace = true }

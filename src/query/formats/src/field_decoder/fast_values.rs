@@ -87,6 +87,7 @@ impl FastFieldDecoderValues {
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
                 ],
                 timezone: format.timezone,
+                jiff_timezone: format.jiff_timezone,
                 disable_variant_check: false,
                 binary_format: Default::default(),
                 is_rounding_mode,
@@ -284,10 +285,7 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(
-            &self.common_settings().timezone,
-            self.common_settings().enable_dst_hour_fix,
-        )?;
+        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
@@ -302,11 +300,7 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr.read_timestamp_text(
-            &self.common_settings().timezone,
-            false,
-            self.common_settings.enable_dst_hour_fix,
-        )?;
+        let ts = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
         match ts {
             DateTimeResType::Datetime(ts) => {
                 if !buffer_readr.eof() {
@@ -318,7 +312,7 @@ impl FastFieldDecoderValues {
                     );
                     return Err(ErrorCode::BadBytes(msg));
                 }
-                let mut micros = ts.timestamp_micros();
+                let mut micros = ts.timestamp().as_microsecond();
                 clamp_timestamp(&mut micros);
                 column.push(micros.as_());
             }

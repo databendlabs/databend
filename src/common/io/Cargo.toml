@@ -24,6 +24,7 @@ ethnum = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
+jiff = { workspace = true }
 lexical-core = { workspace = true }
 micromarshal = { workspace = true }
 roaring = { workspace = true, features = ["serde"] }

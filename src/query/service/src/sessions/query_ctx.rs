@@ -28,7 +28,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -61,7 +60,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::date_helper::TzFactory;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -114,6 +112,8 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -716,11 +716,15 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
+        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
         let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
+            jiff_timezone,
             geometry_format,
             enable_dst_hour_fix,
             format_null_as_str,
@@ -739,15 +743,22 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let settings = self.get_settings();
 
-        let tz = settings.get_timezone()?;
-        let tz = TzFactory::instance().get_by_name(&tz)?;
-        let now = Utc::now();
+        let tz_string = settings.get_timezone()?;
+        let tz = tz_string.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        let jiff_tz = TimeZone::get(&tz_string).map_err(|e| {
+            ErrorCode::InvalidTimezone(format!(
+                "Timezone has been checked and should be valid but got error: {}",
+                e
+            ))
+        })?;
+        let now = Zoned::now().with_time_zone(TimeZone::UTC);
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
-        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
         let random_function_seed = settings.get_random_function_seed()?;
@@ -755,6 +766,7 @@ impl TableContext for QueryContext {
         Ok(FunctionContext {
             tz,
             now,
+            jiff_tz,
             rounding_mode,
             disable_variant_check,
 
@@ -767,7 +779,6 @@ impl TableContext for QueryContext {
 
             geometry_output_format,
             parse_datetime_ignore_remainder,
-            enable_dst_hour_fix,
             enable_strict_datetime_parser,
             random_function_seed,
         })

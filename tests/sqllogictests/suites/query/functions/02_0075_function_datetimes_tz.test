@@ -431,13 +431,15 @@ select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_
 statement ok
 set timezone='Europe/London';
 
-statement error 1006
-----
+query T
 select to_date(to_timestamp('2021-03-28 01:00'));
-
-statement error 1006
 ----
+2021-03-28
+
+query T
 select '2021-03-28 01:59:59'::timestamp;
+----
+2021-03-28 02:59:59.000000
 
 statement ok
 set timezone='Asia/Shanghai';
@@ -574,21 +576,25 @@ set timezone='Asia/Shanghai';
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
 query T
 select to_date('1947-04-15')
@@ -763,11 +769,15 @@ SELECT substr(DATE_ADD(month, 1, now())::String, 1,4)=substr(now()::String, 1,4)
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1941-04-15 01:00:00.000000
 
-statement error 1006
+query T
 SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1942-03-15 01:00:00.000000
 
 statement ok
 unset timezone;

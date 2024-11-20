@@ -25,7 +25,6 @@ bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
-dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
@@ -44,6 +43,7 @@ geozero = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 log = { workspace = true }
