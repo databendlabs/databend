@@ -42,7 +42,6 @@ jobs:
         dirs:
           - "standalone"
           - "crdb"
-          - "duckdb"
           - "base"
           - "ydb"
           - "tpcds"
@@ -64,13 +63,14 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
 
-  standalone_query:
+  standalone_large:
     runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
         dirs:
           - "query"
+          - "duckdb"
         handler:
           - "mysql"
           - "http"
@@ -89,7 +89,7 @@ jobs:
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-query-${{ matrix.handler }}-${{ matrix.format }}
+          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
   standalone_udf_server:
     runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
@@ -113,7 +113,7 @@ jobs:
           name: test-sqllogic-standalone-udf-server
 
   standalone_cloud:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - name: Start Cloud Control Server
@@ -161,7 +161,7 @@ jobs:
           name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
   standalone_iceberg_tpch:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -193,6 +193,34 @@ jobs:
           - "tpcds"
           - "tpch"
           - "cluster"
+        handler:
+          - "mysql"
+          - "http"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_sqllogic_cluster_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handler }}
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-cluster-${{ matrix.dirs }}-${{ matrix.handler }}
+
+  cluster_large:
+    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
+    strategy:
+      fail-fast: false
+      matrix:
+        dirs:
+          - "query"
+          - "duckdb"
         handler:
           - "mysql"
           - "http"
