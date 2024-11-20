@@ -1,14 +1,14 @@
 statement ok
-SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = (4, 56);
+SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = (13, 56);
 
 query TT
 select value, default = value  from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek') order by value;
 ----
-4 0
+13 0
 56 0
 
 statement ok
-set variable (a, b) = (select 3, 55)
+set variable (a, b) = (select 12, 55)
 
 
 statement ok
@@ -17,7 +17,7 @@ SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = select $a + 1, $b + 1;
 query TT
 select value, default = value  from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek') order by value;
 ----
-4 0
+13 0
 56 0
 
 statement ok
