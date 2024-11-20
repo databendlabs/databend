@@ -52,7 +52,8 @@ runs:
             ;;
         esac
 
-        pkg_name="databend_${${version/-/.}/v/}_${{ inputs.arch }}.${{ inputs.packager }}"
+        deb_version=${version/-/.}
+        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}.${{ inputs.packager }}"
         mkdir -p distro/{bin,configs,systemd,scripts}
         cp ./scripts/distribution/systemd/databend-* distro/systemd/
         cp ./scripts/distribution/configs/databend-* distro/configs/
@@ -77,7 +78,8 @@ runs:
             ;;
         esac
 
-        pkg_name="databend_${${version/-/.}/v/}_${{ inputs.arch }}-dbg.${{ inputs.packager }}"
+        deb_version=${version/-/.}
+        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}-dbg.${{ inputs.packager }}"
         nfpm pkg --packager ${{ inputs.packager }} -o '$pkg_name' -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: post packages
