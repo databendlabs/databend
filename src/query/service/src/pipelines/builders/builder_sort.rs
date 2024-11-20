@@ -135,15 +135,15 @@ impl PipelineBuilder {
             None => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
-                if true {
-                    builder
-                        .remove_order_col_at_last()
-                        .build_full_sort_pipeline(&mut self.main_pipeline)
-                } else {
-                    let k = 20;
+                let k = self.settings.get_range_shuffle_sort_simple_size()?;
+                if k > 0 && self.main_pipeline.output_len() > 1 {
                     builder
                         .remove_order_col_at_last()
                         .build_range_shuffle_sort_pipeline(&mut self.main_pipeline, k)
+                } else {
+                    builder
+                        .remove_order_col_at_last()
+                        .build_full_sort_pipeline(&mut self.main_pipeline)
                 }
             }
         }

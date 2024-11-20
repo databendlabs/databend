@@ -522,6 +522,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
+                ("range_shuffle_sort_simple_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(20),
+                    desc: "Sets the simple size per partition used for range shuffle sorting, 0 to disable range shuffle sorting.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=500)),
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
