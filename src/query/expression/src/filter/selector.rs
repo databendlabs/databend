@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use std::time::Instant;
-
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;

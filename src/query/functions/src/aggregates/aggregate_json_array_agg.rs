@@ -20,7 +20,6 @@ use std::sync::Arc;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
-use databend_common_expression::date_helper::TzLUT;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -30,6 +29,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use jiff::tz::TimeZone;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
@@ -100,7 +100,7 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let tz = TzLUT::default();
+        let tz = TimeZone::UTC;
         let mut items = Vec::with_capacity(self.values.len());
         for value in &self.values {
             let v = T::upcast_scalar(value.clone());
@@ -109,7 +109,7 @@ where
                 continue;
             }
             let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), tz, &mut val);
+            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
             items.push(val);
         }
         let mut data = vec![];

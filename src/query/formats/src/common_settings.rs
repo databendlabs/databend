@@ -15,6 +15,7 @@
 use chrono_tz::Tz;
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::BinaryFormat;
+use jiff::tz::TimeZone;
 
 #[derive(Clone)]
 pub struct InputCommonSettings {
@@ -22,6 +23,7 @@ pub struct InputCommonSettings {
     pub false_bytes: Vec<u8>,
     pub null_if: Vec<Vec<u8>>,
     pub timezone: Tz,
+    pub jiff_timezone: TimeZone,
     pub disable_variant_check: bool,
     pub binary_format: BinaryFormat,
     pub is_rounding_mode: bool,
@@ -36,6 +38,7 @@ pub struct OutputCommonSettings {
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
+    pub jiff_timezone: TimeZone,
     pub binary_format: BinaryFormat,
     pub geometry_format: GeometryDataType,
 }
