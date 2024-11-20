@@ -60,7 +60,7 @@ runs:
         cp -r ./scripts/distribution/local-scripts/* distro/scripts/
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
         nfpm pkg --packager ${{ inputs.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
-        echo "pkg_name=databend_${deb_version}_${arch}" >> $GITHUB_OUTPUT
+        echo "pkg_name=databend_${deb_version}_${arch}.${{ inputs.packager }}" >> $GITHUB_OUTPUT
     - name: Build dbg Packages
       shell: bash
       id: build_dbg_packages
@@ -79,12 +79,12 @@ runs:
             ;;
         esac
         nfpm pkg --packager ${{ inputs.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
-        echo "pkg_name=databend_${deb_version}_${arch}" >> $GITHUB_OUTPUT
+        echo "pkg_name=databend_${deb_version}_${arch}.${{ inputs.packager }}" >> $GITHUB_OUTPUT
     - name: post packages
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.build_packages.outputs.pkg_name }}.tar.gz
-        path: ${{ steps.build_packages.outputs.pkg_name }}.tar.gz
+        name: ${{ steps.build_packages.outputs.pkg_name }}
+        path: ${{ steps.build_packages.outputs.pkg_name }}
         retention-days: 1
     - name: post dbg packages
       uses: actions/upload-artifact@v4
