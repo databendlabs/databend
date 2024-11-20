@@ -108,18 +108,6 @@ impl DictionaryMeta {
             username, password, host, port, db
         ))
     }
-
-    pub fn build_redis_connection_url(&self) -> Result<String> {
-        let host = self
-            .options
-            .get("host")
-            .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
-        let port = self
-            .options
-            .get("port")
-            .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
-        Ok(format!("redis://{}:{}", host, port))
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

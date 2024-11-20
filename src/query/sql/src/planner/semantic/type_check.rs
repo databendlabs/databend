@@ -4115,7 +4115,14 @@ impl<'a> TypeChecker<'a> {
                 })
             }
             "redis" => {
-                let connection_url = dictionary.build_redis_connection_url()?;
+                let host = dictionary
+                    .options
+                    .get("host")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
+                let port = dictionary
+                    .options
+                    .get("port")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
                 let username = dictionary.options.get("username").cloned();
                 let password = dictionary.options.get("password").cloned();
                 let db_index = dictionary
@@ -4123,7 +4130,8 @@ impl<'a> TypeChecker<'a> {
                     .get("db_index")
                     .map(|i| i.parse::<i64>().unwrap());
                 DictionarySource::Redis(RedisSource {
-                    connection_url,
+                    host: host.to_string(),
+                    port: port.to_string(),
                     username,
                     password,
                     db_index,

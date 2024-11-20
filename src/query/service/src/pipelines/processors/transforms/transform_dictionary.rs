@@ -41,6 +41,9 @@ use jiff::tz::TimeZone;
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
 use redis::Client;
+use redis::ConnectionInfo;
+use redis::ProtocolVersion;
+use redis::RedisConnectionInfo;
 use sqlx::MySqlPool;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
@@ -64,21 +67,21 @@ impl DictionaryOperator {
     ) -> Result<Value<AnyType>> {
         match self {
             DictionaryOperator::Redis(connection) => match value {
-                Value::Scalar(scalar) => match scalar {
-                    Scalar::String(str) => {
-                        self.get_scalar_value_from_redis(str, connection, data_type, default_value)
-                            .await
-                    }
-                    Scalar::Null => Ok(Value::Scalar(default_value.clone())),
-                    _ => Err(ErrorCode::DictionarySourceError(format!(
-                        "Redis dictionary operator currently does not support value type {}",
-                        scalar.as_ref().infer_data_type(),
-                    ))),
-                },
+                Value::Scalar(scalar) => {
+                    self.get_scalar_value_from_redis(scalar, connection, default_value)
+                        .await
+                }
                 Value::Column(column) => {
                     let (_, validity) = column.validity();
-                    let column =
-                        StringType::try_downcast_column(&column.remove_nullable()).unwrap();
+                    let column = match StringType::try_downcast_column(&column.remove_nullable()) {
+                        Some(col) => col,
+                        None => {
+                            return Err(ErrorCode::DictionarySourceError(format!(
+                                "Redis dictionary operator currently does not support column type {}",
+                                column.data_type(),
+                            )));
+                        }
+                    };
                     self.get_column_values_from_redis(
                         &column,
                         validity,
@@ -114,17 +117,28 @@ impl DictionaryOperator {
 
     async fn get_scalar_value_from_redis(
         &self,
-        key: &String,
+        key: &Scalar,
         connection: &ConnectionManager,
-        data_type: &DataType,
         default_value: &Scalar,
     ) -> Result<Value<AnyType>> {
-        let mut conn = connection.clone();
-        let redis_val: redis::Value = conn.get(key).await.unwrap();
-        let res = Self::from_redis_value_to_scalar(&redis_val, data_type, default_value)?;
-        match res {
-            Scalar::String(str) => Ok(Value::Scalar(Scalar::String(str))),
-            _ => unreachable!(),
+        match key {
+            Scalar::String(str) => {
+                let mut conn = connection.clone();
+                let redis_val: redis::Value = conn.get(str).await.unwrap();
+                let res = Self::from_redis_value_to_scalar(&redis_val, default_value)?;
+                if res.is_empty() {
+                    Err(ErrorCode::DictionarySourceError(format!(
+                        "from_redis_value_to_scalar gets an empty vector",
+                    )))
+                } else {
+                    Ok(Value::Scalar(res[0].clone()))
+                }
+            }
+            Scalar::Null => Ok(Value::Scalar(default_value.clone())),
+            _ => Err(ErrorCode::DictionarySourceError(format!(
+                "Redis dictionary operator currently does not support value type {}",
+                key.as_ref().infer_data_type(),
+            ))),
         }
     }
 
@@ -138,8 +152,8 @@ impl DictionaryOperator {
     ) -> Result<Value<AnyType>> {
         // step-1: deduplicate the keys in the column.
         let key_cnt = str_col.len();
-        let mut keys: Vec<&str> = vec![];
-        let mut key_map = HashMap::new();
+        let mut keys = Vec::with_capacity(key_cnt);
+        let mut key_map = HashMap::with_capacity(key_cnt);
         for key in str_col.option_iter(validity).flatten() {
             if !key_map.contains_key(key) {
                 keys.push(key);
@@ -158,30 +172,20 @@ impl DictionaryOperator {
         } else {
             let mut conn = connection.clone();
             let redis_val: redis::Value = conn.get(keys).await.unwrap();
-            let res = Self::from_redis_value_to_scalar(&redis_val, data_type, default_value)?;
-            match res {
-                Scalar::Array(arr) => {
-                    for key in str_col.option_iter(validity) {
-                        if let Some(key) = key {
-                            let index = key_map[key];
-                            let val = unsafe { arr.index_unchecked(index) };
-                            builder.push(val);
-                        } else {
-                            builder.push(default_value.as_ref());
-                        }
+            let res = Self::from_redis_value_to_scalar(&redis_val, default_value)?;
+            if res.is_empty() {
+                return Err(ErrorCode::DictionarySourceError(format!(
+                    "from_redis_value_to_scalar gets an empty vector",
+                )));
+            } else {
+                for key in str_col.option_iter(validity) {
+                    if let Some(key) = key {
+                        let index = key_map[key];
+                        builder.push(res[index].as_ref());
+                    } else {
+                        builder.push(default_value.as_ref());
                     }
                 }
-                Scalar::String(str) => {
-                    let val = Scalar::String(str);
-                    for key in str_col.option_iter(validity) {
-                        if let Some(_key) = key {
-                            builder.push(val.as_ref());
-                        } else {
-                            builder.push(default_value.as_ref());
-                        }
-                    }
-                }
-                _ => unreachable!(),
             }
         }
         Ok(Value::Column(builder.build()))
@@ -190,24 +194,26 @@ impl DictionaryOperator {
     #[inline]
     fn from_redis_value_to_scalar(
         rv: &redis::Value,
-        data_type: &DataType,
         default_value: &Scalar,
-    ) -> Result<Scalar> {
+    ) -> Result<Vec<Scalar>> {
         match rv {
             redis::Value::BulkString(bs) => {
                 let str = unsafe { String::from_utf8_unchecked(bs.to_vec()) };
-                Ok(Scalar::String(str))
+                Ok(vec![Scalar::String(str)])
             }
             redis::Value::Array(arr) => {
-                let mut builder = ColumnBuilder::with_capacity(data_type, 1);
+                let mut scalar_vec = Vec::with_capacity(arr.len());
                 for item in arr {
-                    let scalar = Self::from_redis_value_to_scalar(item, data_type, default_value)?;
-                    builder.push(scalar.as_ref());
+                    let mut scalar = Self::from_redis_value_to_scalar(item, default_value)?;
+                    scalar_vec.append(&mut scalar);
                 }
-                Ok(Scalar::Array(builder.build()))
+                Ok(scalar_vec)
             }
-            redis::Value::Nil => Ok(default_value.clone()),
-            _ => unreachable!(),
+            redis::Value::Nil => Ok(vec![default_value.clone()]),
+            _ => Err(ErrorCode::DictionarySourceError(format!(
+                "from_redis_value_to_scalar currently does not support redis::Value type {:?}",
+                rv,
+            ))),
         }
     }
 
@@ -288,7 +294,20 @@ impl TransformAsyncFunction {
             if let AsyncFunctionArgument::DictGetFunction(dict_arg) = &async_func_desc.func_arg {
                 match &dict_arg.dict_source {
                     DictionarySource::Redis(redis_source) => {
-                        let client = Client::open(redis_source.connection_url.clone())?;
+                        let port = redis_source
+                            .port
+                            .parse()
+                            .expect("Failed to parse String port to u16");
+                        let connection_info = ConnectionInfo {
+                            addr: redis::ConnectionAddr::Tcp(redis_source.host.clone(), port),
+                            redis: RedisConnectionInfo {
+                                db: redis_source.db_index.unwrap_or(0),
+                                username: redis_source.username.clone(),
+                                password: redis_source.password.clone(),
+                                protocol: ProtocolVersion::RESP2,
+                            },
+                        };
+                        let client = Client::open(connection_info)?;
                         let conn = databend_common_base::runtime::block_on(
                             ConnectionManager::new(client),
                         )?;
