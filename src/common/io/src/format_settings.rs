@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
+use jiff::tz::TimeZone;
 
 use crate::GeometryDataType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
     pub timezone: Tz,
+    pub jiff_timezone: TimeZone,
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
     pub format_null_as_str: bool,
@@ -29,6 +31,7 @@ impl Default for FormatSettings {
     fn default() -> Self {
         Self {
             timezone: "UTC".parse::<Tz>().unwrap(),
+            jiff_timezone: TimeZone::UTC,
             geometry_format: GeometryDataType::default(),
             enable_dst_hour_fix: false,
             format_null_as_str: true,

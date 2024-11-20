@@ -3345,6 +3345,7 @@ dependencies = [
  "hex",
  "hyper-util",
  "itertools 0.13.0",
+ "jiff",
  "jsonb",
  "lexical-core",
  "log",
@@ -3387,6 +3388,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "geozero 0.14.0",
  "hex",
+ "jiff",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -3409,7 +3411,6 @@ dependencies = [
  "bstr",
  "bumpalo",
  "chrono",
- "chrono-tz 0.8.6",
  "comfy-table",
  "crc32fast",
  "criterion",
@@ -3435,6 +3436,7 @@ dependencies = [
  "jaq-interpret",
  "jaq-parse",
  "jaq-std",
+ "jiff",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3525,6 +3527,7 @@ dependencies = [
  "geo",
  "geozero 0.14.0",
  "hex",
+ "jiff",
  "lexical-core",
  "micromarshal",
  "rand",
@@ -4556,7 +4559,6 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "chrono-tz 0.8.6",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
@@ -4583,6 +4585,7 @@ dependencies = [
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",
+ "jiff",
  "jsonb",
  "log",
  "once_cell",
@@ -5132,6 +5135,7 @@ dependencies = [
  "hyper-util",
  "indicatif",
  "itertools 0.13.0",
+ "jiff",
  "jsonb",
  "jwt-simple",
  "log",
@@ -5234,6 +5238,7 @@ dependencies = [
  "databend-driver-core",
  "ethnum",
  "itertools 0.13.0",
+ "jiff",
  "jsonb",
  "rand",
  "tokio",
@@ -8979,10 +8984,11 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a45489186a6123c128fdf6016183fcfab7113e1820eb813127e036e287233fb"
+checksum = "b9d9d414fc817d3e3d62b2598616733f76c4cc74fbac96069674739b881295c8"
 dependencies = [
+ "jiff-tzdb",
  "jiff-tzdb-platform",
  "serde",
  "windows-sys 0.59.0",

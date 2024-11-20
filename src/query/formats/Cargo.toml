@@ -28,6 +28,7 @@ bstr = { workspace = true }
 chrono-tz = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 match-template = { workspace = true }
