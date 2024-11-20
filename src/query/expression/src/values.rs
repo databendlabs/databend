@@ -102,12 +102,6 @@ pub enum Value<T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum ValueRef<'a, T: ValueType> {
-    Scalar(T::ScalarRef<'a>),
-    Column(T::Column),
-}
-
 #[derive(
     Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
 )]
@@ -219,66 +213,33 @@ pub enum ColumnBuilder {
     Geography(BinaryColumnBuilder),
 }
 
-impl<'a, T: ValueType> ValueRef<'a, T> {
-    pub fn to_owned(self) -> Value<T> {
-        match self {
-            ValueRef::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(scalar)),
-            ValueRef::Column(col) => Value::Column(col),
-        }
-    }
-
-    pub fn semantically_eq(&'a self, other: &'a Self) -> bool {
+impl<T: ValueType> Value<T> {
+    pub fn semantically_eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ValueRef::Scalar(s1), ValueRef::Scalar(s2)) => s1 == s2,
-            (ValueRef::Column(c1), ValueRef::Column(c2)) => c1 == c2,
-            (ValueRef::Scalar(s), ValueRef::Column(c))
-            | (ValueRef::Column(c), ValueRef::Scalar(s)) => {
-                T::iter_column(c).all(|scalar| scalar == *s)
+            (Value::Scalar(s1), Value::Scalar(s2)) => s1 == s2,
+            (Value::Column(c1), Value::Column(c2)) => c1 == c2,
+            (Value::Scalar(s), Value::Column(c)) | (Value::Column(c), Value::Scalar(s)) => {
+                let s = T::to_scalar_ref(s);
+                T::iter_column(c).all(|scalar| scalar == s)
             }
         }
     }
 
-    pub fn len(&'a self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
-            ValueRef::Scalar(_) => 1,
-            ValueRef::Column(col) => T::column_len(col),
+            Value::Scalar(_) => 1,
+            Value::Column(col) => T::column_len(col),
         }
     }
 
-    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+    pub fn memory_size(&self) -> usize {
         match self {
-            ValueRef::Scalar(scalar) => Some(scalar.clone()),
-            ValueRef::Column(col) => T::index_column(col, index),
+            Value::Scalar(scalar) => T::scalar_memory_size(&T::to_scalar_ref(scalar)),
+            Value::Column(c) => T::column_memory_size(c),
         }
     }
 
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
-        match self {
-            ValueRef::Scalar(scalar) => scalar.clone(),
-            ValueRef::Column(c) => T::index_column_unchecked(c, index),
-        }
-    }
-
-    pub fn memory_size(&'a self) -> usize {
-        match self {
-            ValueRef::Scalar(scalar) => T::scalar_memory_size(scalar),
-            ValueRef::Column(c) => T::column_memory_size(c),
-        }
-    }
-}
-
-impl<'a, T: ValueType> Value<T> {
-    pub fn as_ref(&'a self) -> ValueRef<'a, T> {
-        match self {
-            Value::Scalar(scalar) => ValueRef::Scalar(T::to_scalar_ref(scalar)),
-            Value::Column(col) => ValueRef::Column(col.clone()),
-        }
-    }
-
-    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+    pub fn index(&self, index: usize) -> Option<T::ScalarRef<'_>> {
         match self {
             Value::Scalar(scalar) => Some(T::to_scalar_ref(scalar)),
             Value::Column(col) => T::index_column(col, index),
@@ -288,7 +249,7 @@ impl<'a, T: ValueType> Value<T> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
+    pub unsafe fn index_unchecked(&self, index: usize) -> T::ScalarRef<'_> {
         match self {
             Value::Scalar(scalar) => T::to_scalar_ref(scalar),
             Value::Column(c) => T::index_column_unchecked(c, index),
@@ -326,7 +287,12 @@ impl Value<AnyType> {
     }
 
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
-        Some(self.as_ref().try_downcast::<T>()?.to_owned())
+        Some(match self {
+            Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
+                &scalar.as_ref(),
+            )?)),
+            Value::Column(col) => Value::Column(T::try_downcast_column(col)?),
+        })
     }
 
     pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {
@@ -335,20 +301,11 @@ impl Value<AnyType> {
             scalar => scalar,
         }
     }
-}
-
-impl<'a> ValueRef<'a, AnyType> {
-    pub fn try_downcast<T: ValueType>(&self) -> Option<ValueRef<'_, T>> {
-        Some(match self {
-            ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
-            ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
-        })
-    }
 
     pub fn domain(&self, data_type: &DataType) -> Domain {
         match self {
-            ValueRef::Scalar(scalar) => scalar.domain(data_type),
-            ValueRef::Column(col) => col.domain(),
+            Value::Scalar(scalar) => scalar.as_ref().domain(data_type),
+            Value::Column(col) => col.domain(),
         }
     }
 }

@@ -49,7 +49,6 @@ use databend_common_expression::types::F32;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::values::Value;
-use databend_common_expression::values::ValueRef;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -867,7 +866,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
 }
 
 fn unary_minus_decimal(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     arg_type: DataType,
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {
@@ -969,8 +968,8 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                         "to_string",
                         |_, _| FunctionDomain::Full,
                         |from, _| match from {
-                            ValueRef::Scalar(s) => Value::Scalar(s.to_string()),
-                            ValueRef::Column(from) => {
+                            Value::Scalar(s) => Value::Scalar(s.to_string()),
+                            Value::Column(from) => {
                                 let options = NUM_TYPE::lexical_options();
                                 const FORMAT: u128 = lexical_core::format::STANDARD;
 
@@ -1002,8 +1001,8 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                     "try_to_string",
                     |_, _| FunctionDomain::Full,
                     |from, _| match from {
-                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string())),
-                        ValueRef::Column(from) => {
+                        Value::Scalar(s) => Value::Scalar(Some(s.to_string())),
+                        Value::Column(from) => {
                             let options = NUM_TYPE::lexical_options();
                             const FORMAT: u128 = lexical_core::format::STANDARD;
                             let mut builder =
