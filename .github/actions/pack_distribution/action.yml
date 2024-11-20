@@ -43,8 +43,6 @@ runs:
         export name="databend"
         export version="${{ inputs.version }}"
         export path="distro"
-        deb_version=${version/-/.}
-        deb_version=${deb_version/v/}
         case "${{ inputs.arch }}" in
           x86_64)
             export arch="amd64"
@@ -53,14 +51,16 @@ runs:
             export arch="arm64"
             ;;
         esac
+
+        pkg_name="databend_${${version/-/.}/v/}_${{ inputs.arch }}.${{ inputs.packager }}"        
         mkdir -p distro/{bin,configs,systemd,scripts}
         cp ./scripts/distribution/systemd/databend-* distro/systemd/
         cp ./scripts/distribution/configs/databend-* distro/configs/
         cp ./scripts/distribution/release-readme.txt distro/readme.txt
         cp -r ./scripts/distribution/local-scripts/* distro/scripts/
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
-        nfpm pkg --packager ${{ inputs.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
-        echo "pkg_name=databend_${deb_version}_${arch}.${{ inputs.packager }}" >> $GITHUB_OUTPUT
+        nfpm pkg --packager ${{ inputs.packager }} -o '$pkg_name' -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: Build dbg Packages
       shell: bash
       id: build_dbg_packages
@@ -68,8 +68,6 @@ runs:
         export name="databend"
         export version="${{ inputs.version }}"
         export path="distro"
-        deb_version=${version/-/.}
-        deb_version=${deb_version/v/}
         case "${{ inputs.arch }}" in
           x86_64)
             export arch="amd64"
@@ -78,8 +76,10 @@ runs:
             export arch="arm64"
             ;;
         esac
-        nfpm pkg --packager ${{ inputs.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
-        echo "pkg_name=databend_${deb_version}_${arch}.${{ inputs.packager }}" >> $GITHUB_OUTPUT
+
+        pkg_name="databend_${${version/-/.}/v/}_${{ inputs.arch }}-dbg.${{ inputs.packager }}"
+        nfpm pkg --packager ${{ inputs.packager }} -o '$pkg_name' -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: post packages
       uses: actions/upload-artifact@v4
       with:
