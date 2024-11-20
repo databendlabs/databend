@@ -153,7 +153,7 @@ rand = { workspace = true }
 recursive = "0.1.1"
 regex = { workspace = true }
 reqwest = { workspace = true }
-rustls = "0.22"
+rustls = "0.23"
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 rustyline = "14"
