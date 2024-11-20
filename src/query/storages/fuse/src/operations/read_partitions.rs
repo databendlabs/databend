@@ -50,6 +50,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
 use opendal::Operator;
+use parking_lot::Mutex;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -65,6 +66,7 @@ use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::PrunedSegmentReceiverSource;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
+use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::FuseLazyPartInfo;
@@ -213,6 +215,7 @@ impl FuseTable {
             ctx.clone(),
             segment_rx,
             part_info_tx,
+            derterministic_cache_key.clone(),
         )?;
         prune_pipeline.set_on_init(move || {
             ctx.get_runtime()?.try_spawn(
@@ -308,6 +311,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         segment_rx: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
+        derterministic_cache_key: Option<String>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -362,6 +366,7 @@ impl FuseTable {
             .and_then(|p| p.top_k(self.schema().as_ref()))
             .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
             .transpose()?;
+        let send_part_state = Arc::new(Mutex::new(SendPartState::create(derterministic_cache_key)));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
                 input,
@@ -369,6 +374,7 @@ impl FuseTable {
                 push_down.clone(),
                 top_k.clone(),
                 pruner.table_schema.clone(),
+                send_part_state.clone(),
             )
         })?;
 

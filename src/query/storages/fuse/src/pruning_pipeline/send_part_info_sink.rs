@@ -17,6 +17,9 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
@@ -31,17 +34,68 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_storage::ColumnNodes;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use parking_lot::Mutex;
 
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 use crate::FuseBlockPartInfo;
+
+pub struct SendPartState {
+    remain_sender: usize,
+    partitions: Partitions,
+    statistics: PartStatistics,
+    derterministic_cache_key: Option<String>,
+}
+
+impl SendPartState {
+    pub fn create(derterministic_cache_key: Option<String>) -> Self {
+        SendPartState {
+            remain_sender: 0,
+            partitions: Partitions::default(),
+            statistics: PartStatistics::default(),
+            derterministic_cache_key,
+        }
+    }
+
+    pub fn attach_sender(&mut self) {
+        self.remain_sender += 1;
+    }
+
+    // Every SendPartInfoSink processor need call detach_sinker to finalize partitions and store in cache
+    pub fn detach_sinker(&mut self, partitions: &Partitions, statistics: &PartStatistics) {
+        type CacheItem = (PartStatistics, Partitions);
+        self.remain_sender -= 1;
+        self.partitions
+            .partitions
+            .extend(partitions.partitions.clone());
+        self.partitions.kind = partitions.kind.clone();
+        self.statistics.merge(statistics);
+        // concat partitions and statistics
+        if self.remain_sender == 0 {
+            // finalize partitions and store in cache
+            if let Some(cache_key) = self.derterministic_cache_key.clone() {
+                if let Some(cache) = CacheItem::cache() {
+                    cache.insert(
+                        cache_key,
+                        (self.statistics.clone(), self.partitions.clone()),
+                    );
+                }
+            }
+        }
+    }
+}
 
 pub struct SendPartInfoSink {
     sender: Option<Sender<Result<PartInfoPtr>>>,
     push_downs: Option<PushDownInfo>,
     top_k: Option<(TopK, Scalar)>,
     schema: TableSchemaRef,
+    partitions: Partitions,
+    statistics: PartStatistics,
+    send_part_state: Arc<Mutex<SendPartState>>,
 }
 
 impl SendPartInfoSink {
@@ -51,7 +105,11 @@ impl SendPartInfoSink {
         push_downs: Option<PushDownInfo>,
         top_k: Option<(TopK, Scalar)>,
         schema: TableSchemaRef,
+        send_part_state: Arc<Mutex<SendPartState>>,
     ) -> Result<ProcessorPtr> {
+        let partitions = Partitions::default();
+        let statistics = PartStatistics::default();
+        send_part_state.lock().attach_sender();
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
             SendPartInfoSink {
@@ -59,6 +117,9 @@ impl SendPartInfoSink {
                 push_downs,
                 top_k,
                 schema,
+                partitions,
+                statistics,
+                send_part_state,
             },
         )))
     }
@@ -69,6 +130,9 @@ impl AsyncSink for SendPartInfoSink {
     const NAME: &'static str = "SendPartInfoSink";
 
     async fn on_finish(&mut self) -> Result<()> {
+        self.send_part_state
+            .lock()
+            .detach_sinker(&self.partitions, &self.statistics);
         drop(self.sender.take());
         Ok(())
     }
@@ -79,7 +143,7 @@ impl AsyncSink for SendPartInfoSink {
                 let arrow_schema = self.schema.as_ref().into();
                 let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
                 let block_metas = &data.block_metas;
-                let info_ptr = match &self.push_downs {
+                let info_ptr = match self.push_downs.clone() {
                     None => self.all_columns_partitions(block_metas),
                     Some(extras) => match &extras.projection {
                         None => self.all_columns_partitions(block_metas),
@@ -88,6 +152,8 @@ impl AsyncSink for SendPartInfoSink {
                         }
                     },
                 };
+
+                self.partitions.partitions.extend(info_ptr.clone());
 
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {
@@ -106,9 +172,10 @@ impl AsyncSink for SendPartInfoSink {
 
 impl SendPartInfoSink {
     fn all_columns_partitions(
-        &self,
+        &mut self,
         block_metas: &[(BlockMetaIndex, Arc<BlockMeta>)],
     ) -> Vec<PartInfoPtr> {
+        self.partitions.kind = PartitionsShuffleKind::Mod;
         block_metas
             .iter()
             .map(|(block_meta_index, block_meta)| {
@@ -158,11 +225,12 @@ impl SendPartInfoSink {
     }
 
     fn projection_partitions(
-        &self,
+        &mut self,
         block_metas: &[(BlockMetaIndex, Arc<BlockMeta>)],
         projection: &Projection,
         column_nodes: &ColumnNodes,
     ) -> Vec<PartInfoPtr> {
+        self.partitions.kind = PartitionsShuffleKind::Seq;
         block_metas
             .iter()
             .map(|(block_meta_index, block_meta)| {
