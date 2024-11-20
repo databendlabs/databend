@@ -593,13 +593,15 @@ select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_
 statement ok
 set timezone='Europe/London';
 
-statement error 1006
-----
+query T
 select to_date(to_timestamp('2021-03-28 01:00'));
-
-statement error 1006
 ----
+2021-03-28
+
+query T
 select '2021-03-28 01:59:59'::timestamp;
+----
+2021-03-28 02:59:59.000000
 
 statement ok
 set timezone='Asia/Shanghai';
@@ -609,8 +611,10 @@ select to_date('1941-03-15');
 ----
 1941-03-15
 
-statement error 1006
+query T
 select to_date('1941-03-15 00:00:00');
+----
+1941-03-15
 
 query T
 select to_date('1941-03-15 02:00:00');
@@ -728,29 +732,35 @@ set timezone='Asia/Shanghai';
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
 query T
 select to_date('1947-04-15')
 ----
 1947-04-15
 
-statement error 1006
+query T
 select to_date('1947-04-15 00:00:00')
+----
+1947-04-15
 
 query T
 select to_timestamp('1990-09-16 01:00:00');
@@ -895,11 +905,15 @@ select to_year(to_date('1919-04-13','%Y-%m-%d'));
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1941-04-15 01:00:00.000000
 
-statement error 1006
+query T
 SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1942-03-15 01:00:00.000000
 
 statement ok
 unset timezone;
@@ -968,8 +982,10 @@ statement ok
 set timezone='Asia/Shanghai';
 
 
-statement error 1006
+query T
 select convert_timezone('Asia/Shanghai', '1947-04-15 00:00:00');
+----
+1947-04-15 01:00:00.000000
 
 statement ok
 set enable_dst_hour_fix=1;
@@ -989,3 +1005,47 @@ drop table if exists t;
 
 statement ok
 unset timezone;
+
+# UTC +5:45
+statement ok
+set timezone='Asia/Kathmandu';
+
+query T
+select to_start_of_second('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:54:33.000000
+
+query T
+select to_start_of_minute('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:54:00.000000
+
+query T
+select to_start_of_five_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:50:00.000000
+
+query T
+select to_start_of_ten_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:50:00.000000
+
+query T
+select to_start_of_fifteen_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:45:00.000000
+
+query T
+select time_slot('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:30:00.000000
+
+query T
+select to_start_of_hour('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:00:00.000000
+
+query T
+select to_start_of_day('2024-11-14 11:54:33.667269');
+----
+2024-11-14 00:00:00.000000

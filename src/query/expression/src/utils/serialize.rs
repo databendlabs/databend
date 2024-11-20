@@ -15,8 +15,8 @@
 use std::cmp::Ordering;
 use std::result::Result;
 
-use chrono::Datelike;
-use chrono::NaiveDate;
+use jiff::civil::Date;
+use jiff::Unit;
 
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalSize;
@@ -24,8 +24,10 @@ use crate::types::decimal::DecimalSize;
 pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
 
 #[inline]
-pub fn uniform_date(date: NaiveDate) -> i32 {
-    date.num_days_from_ce() - EPOCH_DAYS_FROM_CE
+pub fn uniform_date(date: Date) -> i32 {
+    date.since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days()
 }
 
 // Used in function, so we don't want to return ErrorCode with backtrace
@@ -38,7 +40,7 @@ pub fn read_decimal_with_size<T: Decimal>(
     // Read one more digit for round
     let (n, d, e, n_read) =
         read_decimal::<T>(buf, (size.precision + 1) as u32, size.scale as _, exact)?;
-    if d as i32 + e > (size.precision - size.scale).into() {
+    if d as i32 + e > (size.precision - size.scale) as i32 {
         return Err(decimal_overflow_error());
     }
     let scale_diff = e + size.scale as i32;
