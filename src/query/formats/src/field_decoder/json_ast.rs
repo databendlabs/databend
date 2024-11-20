@@ -39,8 +39,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
+use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 use num_traits::NumCast;
@@ -346,7 +346,7 @@ impl FieldJsonAstDecoder {
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
-                let geom = parse_to_ewkb(v, None)?;
+                let geom = geometry_from_ewkt(v, None)?;
                 column.put_slice(&geom);
                 column.commit_row();
                 Ok(())

@@ -40,7 +40,6 @@ enum-as-inner = { workspace = true }
 ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
 futures = { workspace = true }
 geo = { workspace = true }
-geos = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
@@ -79,6 +78,3 @@ harness = false
 
 [lints]
 workspace = true
-
-[package.metadata.cargo-machete]
-ignored = ["geos"]

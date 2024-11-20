@@ -3641,7 +3641,7 @@ Functions overloads:
 1 st_dimension(Geometry NULL) :: Int32 NULL
 0 st_distance(Geometry, Geometry) :: Float64
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
-0 st_endpoint(Geometry) :: Geometry
+0 st_endpoint(Geometry) :: Geometry NULL
 1 st_endpoint(Geometry NULL) :: Geometry NULL
 0 st_geographyfromewkt(String) :: Geography
 1 st_geographyfromewkt(String NULL) :: Geography NULL
@@ -3677,13 +3677,13 @@ Functions overloads:
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
 0 st_npoints(Geometry) :: UInt32
 1 st_npoints(Geometry NULL) :: UInt32 NULL
-0 st_pointn(Geometry, Int32) :: Geometry
+0 st_pointn(Geometry, Int32) :: Geometry NULL
 1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
 0 st_setsrid(Geometry, Int32) :: Geometry
 1 st_setsrid(Geometry NULL, Int32 NULL) :: Geometry NULL
 0 st_srid(Geometry) :: Int32
 1 st_srid(Geometry NULL) :: Int32 NULL
-0 st_startpoint(Geometry) :: Geometry
+0 st_startpoint(Geometry) :: Geometry NULL
 1 st_startpoint(Geometry NULL) :: Geometry NULL
 0 st_transform(Geometry, Int32) :: Geometry
 1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL

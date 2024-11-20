@@ -1913,12 +1913,12 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
     let exp = match e_part {
         Some(s) => match s.parse::<i32>() {
             Ok(i) => i,
-            Err(_) => return Ok(Literal::Float64(fast_float::parse(text)?)),
+            Err(_) => return Ok(Literal::Float64(fast_float2::parse(text)?)),
         },
         None => 0,
     };
     if i_part.len() as i32 + exp > 76 {
-        Ok(Literal::Float64(fast_float::parse(text)?))
+        Ok(Literal::Float64(fast_float2::parse(text)?))
     } else {
         let mut digits = String::with_capacity(76);
         digits.push_str(i_part);
@@ -1960,7 +1960,7 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     if text.is_empty() {
         return Ok(Literal::UInt64(0));
     } else if text.len() > 76 {
-        return Ok(Literal::Float64(fast_float::parse(text)?));
+        return Ok(Literal::Float64(fast_float2::parse(text)?));
     }
 
     let value = i256::from_str_radix(text, radix)?;
