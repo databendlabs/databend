@@ -52,7 +52,7 @@ runs:
             ;;
         esac
 
-        pkg_name="databend_${${version/-/.}/v/}_${{ inputs.arch }}.${{ inputs.packager }}"        
+        pkg_name="databend_${${version/-/.}/v/}_${{ inputs.arch }}.${{ inputs.packager }}"
         mkdir -p distro/{bin,configs,systemd,scripts}
         cp ./scripts/distribution/systemd/databend-* distro/systemd/
         cp ./scripts/distribution/configs/databend-* distro/configs/
