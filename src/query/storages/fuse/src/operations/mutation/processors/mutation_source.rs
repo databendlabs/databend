@@ -200,7 +200,7 @@ impl Processor for MutationSource {
                                 0
                             }
                         }
-                        Value::Column(bitmap) => bitmap.len() - bitmap.unset_bits(),
+                        Value::Column(bitmap) => bitmap.len() - bitmap.null_count(),
                     };
 
                     if affect_rows != 0 {

@@ -17,12 +17,13 @@ use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
 
-use chrono::NaiveDate;
-use chrono_tz::Tz;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::civil::Date;
+use jiff::fmt::strtime;
+use jiff::tz::TimeZone;
 use log::error;
 use num_traits::AsPrimitive;
 
@@ -260,11 +261,10 @@ impl ArgType for DateType {
 #[inline]
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
-    tz: Tz,
-    enable_dst_hour_fix: bool,
-) -> databend_common_exception::Result<NaiveDate> {
+    jiff_tz: &TimeZone,
+) -> databend_common_exception::Result<Date> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(&tz, enable_dst_hour_fix) {
+    match reader.read_date_text(jiff_tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
             Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
@@ -277,6 +277,7 @@ pub fn string_to_date(
 }
 
 #[inline]
-pub fn date_to_string(date: impl AsPrimitive<i64>, tz: Tz) -> impl Display {
-    date.as_().to_date(tz).format(DATE_FORMAT)
+pub fn date_to_string(date: impl AsPrimitive<i64>, tz: &TimeZone) -> impl Display {
+    let res = date.as_().to_date(tz.clone());
+    strtime::format(DATE_FORMAT, res).unwrap()
 }

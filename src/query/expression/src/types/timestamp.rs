@@ -17,13 +17,14 @@ use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
 
-use chrono::DateTime;
-use chrono_tz::Tz;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::fmt::strtime;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
 use log::error;
 
 use super::number::SimpleDomain;
@@ -273,11 +274,10 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 #[inline]
 pub fn string_to_timestamp(
     ts_str: impl AsRef<[u8]>,
-    tz: Tz,
-    enable_dst_hour_fix: bool,
-) -> databend_common_exception::Result<DateTime<Tz>> {
+    jiff_tz: &TimeZone,
+) -> databend_common_exception::Result<Zoned> {
     let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
-    match reader.read_timestamp_text(&tz, false, enable_dst_hour_fix) {
+    match reader.read_timestamp_text(jiff_tz) {
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
                 Ok(..) => Ok(dt),
@@ -293,6 +293,7 @@ pub fn string_to_timestamp(
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: i64, tz: Tz) -> impl Display {
-    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT)
+pub fn timestamp_to_string(ts: i64, tz: &TimeZone) -> impl Display {
+    let zdt = ts.to_timestamp(tz.clone());
+    strtime::format(TIMESTAMP_FORMAT, &zdt).unwrap()
 }

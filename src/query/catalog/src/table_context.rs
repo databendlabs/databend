@@ -224,7 +224,10 @@ pub trait TableContext: Send + Sync {
         check_current_role_only: bool,
     ) -> Result<()>;
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> Tenant;

@@ -690,7 +690,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+    async fn get_visibility_checker(
+        &self,
+        _ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
 

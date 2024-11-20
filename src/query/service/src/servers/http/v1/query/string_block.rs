@@ -47,8 +47,11 @@ pub fn block_to_strings(
         .collect();
 
     let mut res = Vec::new();
-    let encoder =
-        FieldEncoderValues::create_for_http_handler(format.timezone, format.geometry_format);
+    let encoder = FieldEncoderValues::create_for_http_handler(
+        format.jiff_timezone.clone(),
+        format.timezone,
+        format.geometry_format,
+    );
     let mut buf = vec![];
     for row_index in 0..rows_size {
         let mut row: Vec<Option<String>> = Vec::with_capacity(block.num_columns());

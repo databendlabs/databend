@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
