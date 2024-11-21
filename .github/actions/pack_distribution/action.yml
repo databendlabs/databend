@@ -66,7 +66,7 @@ runs:
       shell: bash
       id: build_dbg_packages
       run: |
-        export name="databend"
+        export name="databend_dbg"
         export version="${{ inputs.version }}"
         export path="distro"
         case "${{ inputs.arch }}" in
@@ -79,7 +79,7 @@ runs:
         esac
 
         deb_version=${version/-/.}
-        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}-dbg.${{ inputs.packager }}"
+        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}_dbg.${{ inputs.packager }}"
         nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: post packages
