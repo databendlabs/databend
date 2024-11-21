@@ -32,6 +32,7 @@ use mysql_async::prelude::Queryable;
 use mysql_async::FromRowError;
 use mysql_async::Row;
 use mysql_async::SslOpts;
+use rustls::crypto::CryptoProvider;
 use tokio::sync::Barrier;
 
 use crate::tests::tls_constants::*;
@@ -56,6 +57,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 async fn test_connect_with_tls() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
+    CryptoProvider::install_default();
 
     let tcp_keepalive_timeout_secs = 120;
     let tls_config = MySQLTlsConfig::new(TEST_SERVER_CERT.to_string(), TEST_SERVER_KEY.to_string());
