@@ -2738,30 +2738,49 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: CreateLockRevReq,
     ) -> Result<CreateLockRevReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        let ctx = func_name!();
+        debug!(req :? =(&req); "SchemaApi: {}", ctx);
 
         let lock_key = &req.lock_key;
+        let id_generator = IdGenerator::table_lock_id();
 
-        let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
-        let key = lock_key.gen_key(revision);
+        let mut trials = txn_backoff(None, ctx);
+        loop {
+            trials.next().unwrap()?.await;
 
-        let lock_meta = LockMeta {
-            user: req.user.clone(),
-            node: req.node.clone(),
-            query_id: req.query_id.clone(),
-            created_on: Utc::now(),
-            acquired_on: None,
-            lock_type: lock_key.lock_type(),
-            extra_info: lock_key.get_extra_info(),
-        };
+            let revision = fetch_id(self, id_generator.clone()).await?;
+            let key = lock_key.gen_key(revision);
+            let lock_meta = LockMeta {
+                user: req.user.clone(),
+                node: req.node.clone(),
+                query_id: req.query_id.clone(),
+                created_on: Utc::now(),
+                acquired_on: None,
+                lock_type: lock_key.lock_type(),
+                extra_info: lock_key.get_extra_info(),
+            };
 
-        // Revision is unique. if it presents, consider it as success.
-        // Thus, we could just ignore create result
-        let _ = self
-            .crud_try_insert(&key, lock_meta, Some(req.ttl), || Ok::<(), Infallible>(()))
-            .await?;
+            let condition = vec![
+                txn_cond_seq(&id_generator, Eq, revision),
+                // assumes lock are absent.
+                txn_cond_seq(&key, Eq, 0),
+            ];
+            let if_then = vec![TxnOp::put_with_ttl(
+                key.to_string_key(),
+                serialize_struct(&lock_meta)?,
+                Some(req.ttl),
+            )];
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+            let (succ, _responses) = send_txn(self, txn_req).await?;
 
-        Ok(CreateLockRevReply { revision })
+            if succ {
+                return Ok(CreateLockRevReply { revision });
+            }
+        }
     }
 
     #[logcall::logcall]
