@@ -5,7 +5,7 @@ on:
     types:
       - labeled
     branches:
-      - main
+      - 'release/*'
 
 permissions:
   id-token: write
