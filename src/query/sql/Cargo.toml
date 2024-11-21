@@ -36,6 +36,8 @@ databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-io = { workspace = true }
+databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 ahash = { workspace = true, features = ["no-rng"] }

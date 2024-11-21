@@ -4076,6 +4076,8 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
  "databend-storages-common-cache",
+ "databend-storages-common-io",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "derive-visitor",
  "educe 0.4.23",
