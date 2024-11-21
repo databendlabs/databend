@@ -71,7 +71,9 @@ impl Binder {
 
         // Check and bind common table expression
         let cte_map = bind_context.cte_context.cte_map.clone();
-        if let Some(cte_info) = cte_map.get(&table_name) {
+        if let Some(cte_info) = cte_map.get(&table_name)
+            && !cte_info.materialized
+        {
             if self
                 .metadata
                 .read()
@@ -186,9 +188,6 @@ impl Binder {
                 unreachable!()
             };
             let (s_expr, mut new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
-            bind_context
-                .cte_context
-                .set_cte_context(new_bind_context.cte_context.clone());
 
             let cols = table_meta
                 .schema()

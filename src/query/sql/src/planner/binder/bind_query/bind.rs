@@ -14,10 +14,15 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::CreateOption;
+use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
+use databend_common_ast::ast::CTE;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -84,15 +89,19 @@ impl Binder {
             let cte_info = CteInfo {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
-                materialized: cte.materialized,
                 recursive: with.recursive,
                 cte_idx: idx,
                 columns: vec![],
+                materialized: cte.materialized,
             };
             bind_context
                 .cte_context
                 .cte_map
                 .insert(table_name, cte_info);
+            // If the CTE is materialized, we'll construct a temp table for it.
+            if cte.materialized {
+                self.m_cte_to_temp_table(cte)?;
+            }
         }
 
         Ok(())
@@ -164,5 +173,39 @@ impl Binder {
             Arc::new(sort_plan.into()),
             Arc::new(child),
         ))
+    }
+
+    fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<()> {
+        let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
+            Engine::Fuse
+        } else {
+            Engine::Memory
+        };
+
+        let create_table_stmt = CreateTableStmt {
+            create_option: CreateOption::CreateOrReplace,
+            catalog: None,
+            database: None,
+            table: cte.alias.name.clone(),
+            source: None,
+            engine: Some(engine),
+            uri_location: None,
+            cluster_by: None,
+            table_options: Default::default(),
+            as_query: Some(cte.query.clone()),
+            table_type: TableType::Temporary,
+        };
+
+        let create_table_sql = create_table_stmt.to_string();
+        if let Some(subquery_executor) = &self.subquery_executor {
+            let _ = databend_common_base::runtime::block_on(async move {
+                subquery_executor
+                    .execute_query_with_sql_string(&create_table_sql)
+                    .await
+            })?;
+        } else {
+            return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
+        };
+        Ok(())
     }
 }
