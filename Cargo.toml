@@ -573,7 +573,7 @@ incremental = true
 
 [profile.ci]
 inherits = "release"
-overflow-checks = false
+overflow-checks = true
 incremental = false
 debug-assertions = true
 
