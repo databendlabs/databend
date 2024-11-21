@@ -304,13 +304,13 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         return None;
     }
     // Inspired by fast_strstr (https://github.com/RaphaelJ/fast_strstr).
-    let mut checksum = 0;
+    let mut checksum: i64 = 0;
     for i in 0..needle_len {
         // # Safety
         // `needle_len` <= haystack_len
         unsafe {
-            checksum += haystack.get_unchecked(i);
-            checksum -= needle.get_unchecked(i);
+            checksum += haystack.get_unchecked(i) as _;
+            checksum -= needle.get_unchecked(i) as _;
         }
     }
     let mut idx = 0;
