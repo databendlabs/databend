@@ -336,24 +336,3 @@ jobs:
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
       license_type: ${{ inputs.license_type }}
-
-  test_publish:
-    needs: [build]
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/pack_binaries
-        with:
-          version: 1.2
-          target: x86_64-unknown-linux-gnu
-          category: default
-  test_distribution:
-    needs: [ build ]
-    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/pack_distribution
-        with:
-          version: v1.2.661-nightly
-          arch: x86_64
-          packager: deb
