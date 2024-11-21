@@ -54,14 +54,12 @@ use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -1061,28 +1059,6 @@ impl TableContext for QueryContext {
             files_to_copy,
             duplicated_files,
         })
-    }
-
-    fn set_materialized_cte(
-        &self,
-        idx: (IndexType, IndexType),
-        blocks: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()> {
-        let mut ctes = self.shared.materialized_cte_tables.write();
-        ctes.insert(idx, blocks);
-        Ok(())
-    }
-
-    fn get_materialized_cte(
-        &self,
-        idx: (IndexType, IndexType),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
-        let ctes = self.shared.materialized_cte_tables.read();
-        Ok(ctes.get(&idx).cloned())
-    }
-
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
-        self.shared.materialized_cte_tables.clone()
     }
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()> {

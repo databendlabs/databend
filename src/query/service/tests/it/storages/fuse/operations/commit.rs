@@ -37,7 +37,6 @@ use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -727,25 +726,6 @@ impl TableContext for CtxDelegation {
 
     fn get_all_variables(&self) -> HashMap<String, Scalar> {
         HashMap::new()
-    }
-
-    fn set_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-        _blocks: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()> {
-        todo!()
-    }
-
-    fn get_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
-        todo!()
-    }
-
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
-        todo!()
     }
 
     fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {

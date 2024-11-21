@@ -25,12 +25,10 @@ use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
-use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
@@ -48,11 +46,6 @@ pub struct PipelineBuilder {
     // probe data_fields for distributed merge into when source build
     pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
-
-    // The cte state of each materialized cte.
-    pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
-    // The column offsets used by cte scan
-    pub cte_scan_offsets: HashMap<IndexType, Vec<usize>>,
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
@@ -78,8 +71,6 @@ impl PipelineBuilder {
             pipelines: vec![],
             main_pipeline: Pipeline::with_scopes(scopes),
             exchange_injector: DefaultExchangeInjector::create(),
-            cte_state: HashMap::new(),
-            cte_scan_offsets: HashMap::new(),
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
@@ -162,7 +153,6 @@ impl PipelineBuilder {
 
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
-            PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -189,9 +179,6 @@ impl PipelineBuilder {
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::MaterializedCte(materialized_cte) => {
-                self.build_materialized_cte(materialized_cte)
-            }
             PhysicalPlan::CacheScan(cache_scan) => self.build_cache_scan(cache_scan),
             PhysicalPlan::ExpressionScan(expression_scan) => {
                 self.build_expression_scan(expression_scan)
