@@ -462,7 +462,20 @@ impl MetaService for MetaServiceImpl {
             binary_version: status.binary_version,
             data_version: status.data_version.to_string(),
             endpoint: status.endpoint,
-            raft_log_size: status.raft_log_size,
+
+            raft_log_size: status.raft_log.wal_total_size,
+
+            raft_log_status: Some(pb::RaftLogStatus {
+                cache_items: status.raft_log.cache_items,
+                cache_used_size: status.raft_log.cache_used_size,
+                wal_total_size: status.raft_log.wal_total_size,
+                wal_open_chunk_size: status.raft_log.wal_open_chunk_size,
+                wal_offset: status.raft_log.wal_offset,
+                wal_closed_chunk_count: status.raft_log.wal_closed_chunk_count,
+                wal_closed_chunk_total_size: status.raft_log.wal_closed_chunk_total_size,
+                wal_closed_chunk_sizes: status.raft_log.wal_closed_chunk_sizes,
+            }),
+
             snapshot_key_count: status.snapshot_key_count as u64,
             state: status.state,
             is_leader: status.is_leader,

@@ -225,7 +225,7 @@ impl Binder {
         if stmt.distinct {
             s_expr = self.bind_distinct(
                 stmt.span,
-                &from_context,
+                &mut from_context,
                 &projections,
                 &mut scalar_items,
                 s_expr,

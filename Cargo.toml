@@ -404,7 +404,7 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
 quanta = "0.11.1"
-raft-log = { version = "0.2.3" }
+raft-log = { version = "0.2.5" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
@@ -581,10 +581,6 @@ debug-assertions = true
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
 
-[profile.bench]
-debug = true
-overflow-checks = false
-
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
@@ -599,6 +595,10 @@ miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 databend-common-exception = { opt-level = 3 }
+
+[profile.bench]
+debug = true
+overflow-checks = false
 
 [profile.test]
 opt-level = 0
