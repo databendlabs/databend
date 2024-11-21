@@ -25,7 +25,7 @@ env:
 
 jobs:
   management_mode:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
@@ -35,18 +35,24 @@ jobs:
           handlers: mysql,http
 
   standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - "${{ matrix.tests.runner }}"
+      - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
       matrix:
-        dirs:
-          - "standalone"
-          - "crdb"
-          - "duckdb"
-          - "base"
-          - "ydb"
-          - "tpcds"
-          - "tpch"
+        tests:
+          - { dirs: "query", runner: "4c16g" }
+          - { dirs: "duckdb", runner: "4c16g" }
+          - { dirs: "crdb", runner: "2c8g" }
+          - { dirs: "base", runner: "2c8g" }
+          - { dirs: "ydb", runner: "2c8g" }
+          - { dirs: "tpcds", runner: "2c8g" }
+          - { dirs: "tpch", runner: "2c8g" }
+          - { dirs: "standalone", runner: "2c8g" }
         handler:
           - "mysql"
           - "http"
@@ -55,44 +61,17 @@ jobs:
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
-          dirs: ${{ matrix.dirs }}
+          dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
           storage-format: all
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
-
-  standalone_query:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    strategy:
-      fail-fast: false
-      matrix:
-        dirs:
-          - "query"
-        handler:
-          - "mysql"
-          - "http"
-        format:
-          - "native"
-          - "parquet"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
-        with:
-          dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handler }}
-          storage-format: ${{ matrix.format }}
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-standalone-query-${{ matrix.handler }}-${{ matrix.format }}
+          name: test-sqllogic-standalone-${{ matrix.tests.dirs }}-${{ matrix.handler }}
 
   standalone_udf_server:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - name: Start UDF Server
@@ -113,7 +92,7 @@ jobs:
           name: test-sqllogic-standalone-udf-server
 
   standalone_cloud:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - name: Start Cloud Control Server
@@ -134,7 +113,7 @@ jobs:
           name: test-sqllogic-standalone-cloud
 
   standalone_minio:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
@@ -161,7 +140,7 @@ jobs:
           name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
   standalone_iceberg_tpch:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -180,19 +159,24 @@ jobs:
           name: test-sqllogic-standalone-iceberg-tpch
 
   cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - "${{ matrix.tests.runner }}"
+      - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
       matrix:
-        dirs:
-          - "query"
-          - "crdb"
-          - "duckdb"
-          - "base"
-          - "ydb"
-          - "tpcds"
-          - "tpch"
-          - "cluster"
+        tests:
+          - { dirs: "query", runner: "4c16g" }
+          - { dirs: "duckdb", runner: "4c16g" }
+          - { dirs: "crdb", runner: "2c8g" }
+          - { dirs: "base", runner: "2c8g" }
+          - { dirs: "ydb", runner: "2c8g" }
+          - { dirs: "tpcds", runner: "2c8g" }
+          - { dirs: "tpch", runner: "2c8g" }
+          - { dirs: "cluster", runner: "2c8g" }
         handler:
           - "mysql"
           - "http"
@@ -205,16 +189,16 @@ jobs:
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
         with:
-          dirs: ${{ matrix.dirs }}
+          dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-cluster-${{ matrix.dirs }}-${{ matrix.handler }}
+          name: test-sqllogic-cluster-${{ matrix.tests.dirs }}-${{ matrix.handler }}
 
   stage:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
@@ -236,7 +220,7 @@ jobs:
           name: test-sqllogic-stage-${{ matrix.storage }}
 
   standalone_no_table_meta_cache:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
@@ -260,7 +244,7 @@ jobs:
           name: test-sqllogic-standalone-no-table-meta-cache-${{ matrix.dirs }}-${{ matrix.handler }}
 
   ee:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:

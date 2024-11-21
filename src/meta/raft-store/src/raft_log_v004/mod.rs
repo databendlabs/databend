@@ -27,6 +27,7 @@ pub const TREE_RAFT_LOG: &str = "raft_log";
 
 pub type RaftLogV004 = raft_log::RaftLog<RaftLogTypes>;
 pub type RaftLogConfig = raft_log::Config;
+pub type RaftLogStat = raft_log::Stat<RaftLogTypes>;
 
 pub use callback::Callback;
 pub use callback_data::CallbackData;
