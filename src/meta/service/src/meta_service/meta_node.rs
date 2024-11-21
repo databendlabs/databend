@@ -32,6 +32,7 @@ use databend_common_meta_client::reply_to_api_result;
 use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
+use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -446,6 +447,11 @@ impl MetaNode {
                 server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
+                {
+                    let st = meta_node.get_raft_log_stat().await;
+                    server_metrics::set_raft_log_stat(st);
+                }
+
                 // metrics about server storage
                 server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
                 server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
@@ -820,6 +826,10 @@ impl MetaNode {
     /// Get the size in bytes of the on disk files of the raft log storage.
     async fn get_raft_log_size(&self) -> u64 {
         self.sto.log.read().await.on_disk_size()
+    }
+
+    async fn get_raft_log_stat(&self) -> RaftLogStat {
+        self.sto.log.read().await.stat()
     }
 
     async fn get_snapshot_key_count(&self) -> u64 {
