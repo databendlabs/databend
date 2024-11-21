@@ -44,7 +44,6 @@ use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 use crate::FuseBlockPartInfo;
 
 pub struct SendPartState {
-    remain_sender: usize,
     partitions: Partitions,
     statistics: PartStatistics,
     derterministic_cache_key: Option<String>,
@@ -53,38 +52,33 @@ pub struct SendPartState {
 impl SendPartState {
     pub fn create(derterministic_cache_key: Option<String>) -> Self {
         SendPartState {
-            remain_sender: 0,
             partitions: Partitions::default(),
             statistics: PartStatistics::default(),
             derterministic_cache_key,
         }
     }
 
-    pub fn attach_sender(&mut self) {
-        self.remain_sender += 1;
+    pub fn set_cache(&self) {
+        type CacheItem = (PartStatistics, Partitions);
+        if let Some(cache_key) = &self.derterministic_cache_key {
+            if let Some(cache) = CacheItem::cache() {
+                cache.insert(
+                    cache_key.clone(),
+                    (self.statistics.clone(), self.partitions.clone()),
+                );
+            }
+        }
     }
 
-    // Every SendPartInfoSink processor need call detach_sinker to finalize partitions and store in cache
+    // Every SendPartInfoSink processor need call detach_sinker to
     pub fn detach_sinker(&mut self, partitions: &Partitions, statistics: &PartStatistics) {
-        type CacheItem = (PartStatistics, Partitions);
-        self.remain_sender -= 1;
+        // concat partitions and statistics
         self.partitions
             .partitions
             .extend(partitions.partitions.clone());
-        self.partitions.kind = partitions.kind.clone();
         self.statistics.merge(statistics);
-        // concat partitions and statistics
-        if self.remain_sender == 0 {
-            // finalize partitions and store in cache
-            if let Some(cache_key) = self.derterministic_cache_key.clone() {
-                if let Some(cache) = CacheItem::cache() {
-                    cache.insert(
-                        cache_key,
-                        (self.statistics.clone(), self.partitions.clone()),
-                    );
-                }
-            }
-        }
+        // the kind is determined by the push_downs, should be same for all partitions
+        self.partitions.kind = partitions.kind.clone();
     }
 }
 
@@ -109,7 +103,6 @@ impl SendPartInfoSink {
     ) -> Result<ProcessorPtr> {
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
-        send_part_state.lock().attach_sender();
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
             SendPartInfoSink {

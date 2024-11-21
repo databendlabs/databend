@@ -35,6 +35,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
@@ -377,6 +378,14 @@ impl FuseTable {
                 send_part_state.clone(),
             )
         })?;
+
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if let Ok(()) = info.res {
+                // only populating cache when the pipeline is finished successfully
+                send_part_state.lock().set_cache();
+            }
+            Ok(())
+        });
 
         Ok(())
     }
