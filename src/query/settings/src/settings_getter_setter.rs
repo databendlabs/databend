@@ -821,4 +821,8 @@ impl Settings {
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
+
+    pub fn get_persist_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("persist_materialized_cte")? != 0)
+    }
 }
