@@ -409,9 +409,7 @@ raft-log = { version = "0.2.3" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
-redis = { version = "0.27.5", features = [
-    "connection-manager",
-]}
+redis = { version = "0.27.5", features = ["connection-manager"] }
 regex = "1.8.1"
 replace_with = "0.1.7"
 reqwest = { version = "0.12", default-features = false, features = [
