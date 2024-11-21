@@ -41,6 +41,16 @@ impl WatchNotify {
         let _ = rx.changed().await;
     }
 
+    pub fn has_notified(&self) -> bool {
+        match self.rx.has_changed() {
+            Ok(b) => b,
+            Err(_) => {
+                // The sender has never dropped before
+                unreachable!()
+            }
+        }
+    }
+
     pub fn notify_waiters(&self) {
         let _ = self.tx.send_replace(true);
     }
@@ -61,16 +71,18 @@ mod tests {
     #[tokio::test]
     async fn test_notify_waiters_ahead() {
         let notify = WatchNotify::new();
-
+        assert!(!notify.has_notified());
         let notified1 = notify.notified();
+        assert!(!notify.has_notified());
 
         // notify_waiters ahead of notified being instantiated and awaited
         notify.notify_waiters();
-
+        assert!(notify.has_notified());
         // this should not await indefinitely
         let notified2 = notify.notified();
         notified2.await;
 
         notified1.await;
+        assert!(notify.has_notified());
     }
 }

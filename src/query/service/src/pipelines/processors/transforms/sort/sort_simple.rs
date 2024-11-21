@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -25,165 +23,19 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortCompare;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::sort_exchange::SortRangeExchange;
-
-pub struct TransformSortSimple {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    input_data: Option<DataBlock>,
-    output_data: VecDeque<DataBlock>,
-
-    id: usize,
-    simpler: Simpler<StdRng>,
-    blocks: Vec<DataBlock>,
-    state: Arc<SortSimpleState>,
-    step: Step,
-}
-
-unsafe impl Send for TransformSortSimple {}
-
-enum Step {
-    Commit,
-    Wait,
-    Finish,
-}
-
-impl TransformSortSimple {
-    fn new(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        id: usize,
-        k: usize,
-        columns: Vec<usize>,
-        state: Arc<SortSimpleState>,
-    ) -> Self {
-        let rng = StdRng::from_rng(rand::thread_rng()).unwrap();
-        let simpler = Simpler::new(columns, 65536, k, rng);
-        TransformSortSimple {
-            input,
-            output,
-            input_data: None,
-            output_data: VecDeque::default(),
-            id,
-            simpler,
-            blocks: Vec::default(),
-            state,
-            step: Step::Commit,
-        }
-    }
-
-    fn collect(&mut self, data: DataBlock) -> Result<()> {
-        self.simpler.add_block(data.clone());
-        self.blocks.push(data);
-
-        Ok(())
-    }
-
-    fn commit(&mut self) -> Result<()> {
-        self.simpler.compact_blocks();
-        let mut simple = self.simpler.take_blocks();
-        assert!(simple.len() <= 1); // Unlikely to sample rows greater than 65536
-        let done = self.state.commit_simple(
-            self.id,
-            if simple.is_empty() {
-                None
-            } else {
-                Some(simple.remove(0))
-            },
-        )?;
-        self.step = if done {
-            self.output_data = VecDeque::from(std::mem::take(&mut self.blocks));
-            Step::Finish
-        } else {
-            Step::Wait
-        };
-
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl Processor for TransformSortSimple {
-    fn name(&self) -> String {
-        "TransformSortSimple".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if let Some(data_block) = self.output_data.pop_front() {
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input_data.is_some() {
-            return Ok(Event::Sync);
-        }
-
-        if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Sync);
-        }
-
-        if self.input.is_finished() {
-            return match self.step {
-                Step::Commit => Ok(Event::Sync),
-                Step::Wait => Ok(Event::Async),
-                Step::Finish => {
-                    self.output.finish();
-                    Ok(Event::Finished)
-                }
-            };
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
-    }
-
-    fn process(&mut self) -> Result<()> {
-        if let Some(block) = self.input_data.take() {
-            return self.collect(block);
-        }
-
-        match self.step {
-            Step::Commit => self.commit(),
-            _ => unreachable!(),
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        self.state.done.notified().await;
-        self.output_data = VecDeque::from(std::mem::take(&mut self.blocks));
-        self.step = Step::Finish;
-        Ok(())
-    }
-}
+use super::sort_spill::TransformSortSimpleWait;
 
 pub struct SortSimpleState {
     inner: RwLock<StateInner>,
-    done: WatchNotify,
+    pub(super) done: WatchNotify,
 }
 
 struct StateInner {
@@ -294,6 +146,46 @@ impl SortSimpleState {
     }
 }
 
+pub struct TransformSortSimple {
+    id: usize,
+    simpler: Simpler<StdRng>,
+    state: Arc<SortSimpleState>,
+}
+
+unsafe impl Send for TransformSortSimple {}
+
+impl TransformSortSimple {
+    fn new(id: usize, k: usize, columns: Vec<usize>, state: Arc<SortSimpleState>) -> Self {
+        let rng = StdRng::from_rng(rand::thread_rng()).unwrap();
+        let simpler = Simpler::new(columns, 65536, k, rng);
+        TransformSortSimple { id, simpler, state }
+    }
+}
+
+impl Transform for TransformSortSimple {
+    const NAME: &'static str = "TransformSortSimple";
+
+    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+        self.simpler.add_block(data.clone());
+        Ok(data)
+    }
+
+    fn on_finish(&mut self) -> Result<()> {
+        self.simpler.compact_blocks();
+        let mut simple = self.simpler.take_blocks();
+        assert!(simple.len() <= 1); // Unlikely to sample rows greater than 65536
+        self.state.commit_simple(
+            self.id,
+            if simple.is_empty() {
+                None
+            } else {
+                Some(simple.remove(0))
+            },
+        )?;
+        Ok(())
+    }
+}
+
 pub fn add_range_shuffle_exchange(
     pipeline: &mut Pipeline,
     schema: DataSchemaRef,
@@ -306,16 +198,15 @@ pub fn add_range_shuffle_exchange(
     let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
     let empty_block = DataBlock::empty_with_schema(Arc::new(schema.project(&columns)));
     let state = SortSimpleState::new(n, n, empty_block, sort_desc.clone());
-    pipeline.add_transform(|input, output| {
+    pipeline.add_transformer(|| {
         let id = i.fetch_add(1, atomic::Ordering::AcqRel);
-        Ok(ProcessorPtr::create(Box::new(TransformSortSimple::new(
-            input,
-            output,
-            id,
-            k,
-            columns.clone(),
-            state.clone(),
-        ))))
+        TransformSortSimple::new(id, k, columns.clone(), state.clone())
+    });
+
+    pipeline.add_transform(|input, output| {
+        Ok(ProcessorPtr::create(Box::new(
+            TransformSortSimpleWait::new(input, output, state.clone()),
+        )))
     })?;
 
     pipeline.exchange(n, SortRangeExchange::new(n, sort_desc, state));

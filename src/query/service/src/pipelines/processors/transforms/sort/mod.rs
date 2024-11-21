@@ -15,6 +15,7 @@
 mod sort_exchange;
 mod sort_merge;
 mod sort_simple;
+mod sort_spill;
 
 pub use sort_merge::*;
 pub use sort_simple::*;
