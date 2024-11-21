@@ -83,7 +83,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     {
         let mut sto = RaftStore::open(&tc.config.raft_config).await?;
         assert_eq!(id, sto.id);
-        assert!(!sto.is_opened());
+        assert!(!sto.is_opened);
         assert_eq!(None, sto.read_vote().await?);
 
         info!("--- update metasrv");
@@ -102,7 +102,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     {
         let mut sto = RaftStore::open(&tc.config.raft_config).await?;
         assert_eq!(id, sto.id);
-        assert!(sto.is_opened());
+        assert!(sto.is_opened);
         assert_eq!(Some(Vote::new(10, 5)), sto.read_vote().await?);
 
         assert_eq!(log_id(1, 2, 1), sto.get_log_id(1).await?);

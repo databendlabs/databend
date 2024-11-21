@@ -19,4 +19,4 @@ mod store;
 mod store_inner;
 
 pub use store::RaftStore;
-pub use store_inner::StoreInner;
+pub use store_inner::RaftStoreInner;
