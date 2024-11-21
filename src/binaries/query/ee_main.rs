@@ -35,6 +35,7 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
+    // Testing, should be removed
     set_crash_hook((*databend_common_config::DATABEND_COMMIT_VERSION).clone());
     ThreadTracker::init();
 
