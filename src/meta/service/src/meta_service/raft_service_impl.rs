@@ -148,7 +148,7 @@ impl RaftServiceImpl {
 
         let resp = InstallSnapshotResponse { vote: my_vote };
 
-        let ss_store = self.meta_node.sto.snapshot_store();
+        let ss_store = self.meta_node.raft_store.snapshot_store();
 
         let finished_snapshot = {
             let mut receiver_v1 = self.receiver_v1.lock().await;
@@ -194,7 +194,7 @@ impl RaftServiceImpl {
             ..
         } = received;
 
-        let raft_config = &self.meta_node.sto.config;
+        let raft_config = &self.meta_node.raft_store.config;
 
         let db = DB::open_snapshot(&temp_path, snapshot_meta.snapshot_id.clone(), raft_config)
             .map_err(|e| {
@@ -235,7 +235,7 @@ impl RaftServiceImpl {
 
         let _guard = snapshot_recv_inflight(&addr).counter_guard();
 
-        let ss_store = self.meta_node.sto.snapshot_store();
+        let ss_store = self.meta_node.raft_store.snapshot_store();
 
         let mut receiver_v003 = ss_store.new_receiver(&addr).map_err(io_err_to_status)?;
         receiver_v003.set_on_recv_callback(new_incr_recvfrom_bytes(addr.clone()));

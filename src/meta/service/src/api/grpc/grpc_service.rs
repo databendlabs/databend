@@ -362,7 +362,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let strm = meta_node.sto.inner().export();
+        let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = 32;
         // - Chunk up upto 32 Ok items inside a Vec<String>;
@@ -390,7 +390,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let strm = meta_node.sto.inner().export();
+        let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
         // - Chunk up upto `chunk_size` Ok items inside a Vec<String>;
