@@ -191,7 +191,8 @@ fn log_query_start(ctx: &QueryContext) {
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
     let now = SystemTime::now();
     let session = ctx.get_current_session();
-    let mut status = session.get_status().write();
+    let status = session.get_status();
+    let mut status = status.write();
     // already finished
     if status.last_query_finished_at.is_some() {
         return;
