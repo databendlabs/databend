@@ -29,7 +29,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -77,8 +76,6 @@ use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
-
-pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
 
 pub struct ContextError;
 
@@ -280,19 +277,6 @@ pub trait TableContext: Send + Sync {
         files: &[StageFileInfo],
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
-
-    fn set_materialized_cte(
-        &self,
-        idx: (usize, usize),
-        mem_table: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()>;
-
-    fn get_materialized_cte(
-        &self,
-        idx: (usize, usize),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
-
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
 
