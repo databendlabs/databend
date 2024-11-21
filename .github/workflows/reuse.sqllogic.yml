@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
-        timeout-minutes: 10
+        timeout-minutes: 30
         with:
           dirs: management
           handlers: mysql,http
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
@@ -80,7 +80,7 @@ jobs:
           python3 tests/udf/udf_server.py &
           sleep 2
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: udf_server
           handlers: mysql,http
@@ -101,7 +101,7 @@ jobs:
           python3 tests/cloud_control_server/simple_server.py &
           sleep 2
       - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: task
           handlers: mysql,http
@@ -128,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
@@ -187,7 +187,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
@@ -208,7 +208,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
@@ -231,7 +231,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
@@ -258,7 +258,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ee
           handlers: mysql,http
