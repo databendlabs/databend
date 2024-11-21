@@ -260,7 +260,7 @@ impl RangeJoinState {
             .try_downcast::<UInt64Type>()
             .unwrap();
         if let Value::Column(col) = &column {
-            for val in UInt64Type::iter_column(&col) {
+            for val in UInt64Type::iter_column(col) {
                 p_array.push(val)
             }
         }
