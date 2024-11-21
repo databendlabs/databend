@@ -396,17 +396,11 @@ function install_libtiff {
 function install_binutils {
 	PACKAGE_MANAGER=$1
 
-	echo "==> installing libtiff..."
+	echo "==> installing binutils..."
 
 	case "$PACKAGE_MANAGER" in
 	apt-get)
 		install_pkg binutils "$PACKAGE_MANAGER"
-		;;
-	pacman)
-		# skip
-		;;
-	apk)
-		# skip
 		;;
 	yum | dnf)
 		install_pkg binutils "$PACKAGE_MANAGER"

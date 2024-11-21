@@ -82,15 +82,13 @@ runs:
         pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}_dbg.${{ inputs.packager }}"
         nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
-    - name: post packages
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.build_packages.outputs.pkg_name }}
-        path: ${{ steps.build_packages.outputs.pkg_name }}
-        retention-days: 1
-    - name: post dbg packages
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.build_dbg_packages.outputs.pkg_name }}
-        path: ${{ steps.build_dbg_packages.outputs.pkg_name }}
-        retention-days: 1
+    - name: Update release to github
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      # Reference: https://cli.github.com/manual/gh_release_upload
+      run: |
+        version="${{ inputs.version }}"
+        # name looks like: `databend_0.8.144~nightly_amd64.deb`
+        gh release upload ${version} ${{ steps.build_packages.outputs.pkg_name }} --clobber
+        gh release upload ${version} ${{ steps.build_dbg_packages.outputs.pkg_name }} --clobber

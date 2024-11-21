@@ -11,8 +11,6 @@ description: |
 vendor: "Datafuse Labs"
 homepage: "https://databend.com"
 license: "Apache-2.0"
-depends:
-  - libc6 (>= 2.31)
 contents:
   # Binaries
   - src: ${path}/bin/databend-query.debug
