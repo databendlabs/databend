@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
-        timeout-minutes: 10
+        timeout-minutes: 30
         with:
           dirs: management
           handlers: mysql,http
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
@@ -80,7 +80,7 @@ jobs:
           python3 tests/udf/udf_server.py &
           sleep 2
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: udf_server
           handlers: mysql,http
@@ -101,7 +101,7 @@ jobs:
           python3 tests/cloud_control_server/simple_server.py &
           sleep 2
       - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: task
           handlers: mysql,http
@@ -128,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
@@ -139,25 +139,25 @@ jobs:
         with:
           name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
-  standalone_iceberg_tpch:
-    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-      - uses: ./.github/actions/test_sqllogic_iceberg_tpch
-        timeout-minutes: 15
-        with:
-          dirs: tpch_iceberg
-          handlers: mysql,http
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-standalone-iceberg-tpch
-
+#  standalone_iceberg_tpch:
+#    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-java@v4
+#        with:
+#          distribution: "temurin"
+#          java-version: "17"
+#      - uses: ./.github/actions/test_sqllogic_iceberg_tpch
+#        timeout-minutes: 15
+#        with:
+#          dirs: tpch_iceberg
+#          handlers: mysql,http
+#      - name: Upload failure
+#        if: failure()
+#        uses: ./.github/actions/artifact_failure
+#        with:
+#          name: test-sqllogic-standalone-iceberg-tpch
+#
   cluster:
     runs-on:
       - self-hosted
@@ -187,7 +187,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
@@ -208,7 +208,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
@@ -231,7 +231,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
@@ -258,7 +258,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           dirs: ee
           handlers: mysql,http

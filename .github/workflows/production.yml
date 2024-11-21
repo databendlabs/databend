@@ -3,7 +3,7 @@ name: Production
 on:
   push:
     branches:
-      - main
+      - 'release/*'
   merge_group:
 
 jobs:
