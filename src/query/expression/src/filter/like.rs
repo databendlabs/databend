@@ -309,8 +309,8 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         // # Safety
         // `needle_len` <= haystack_len
         unsafe {
-            checksum += haystack.get_unchecked(i) as _;
-            checksum -= needle.get_unchecked(i) as _;
+            checksum += *haystack.get_unchecked(i) as i64;
+            checksum -= *needle.get_unchecked(i) as i64;
         }
     }
     let mut idx = 0;
@@ -331,8 +331,8 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         // # Safety
         // `idx` < `haystack_len` and `idx` + `needle_len` < `haystack_len`.
         unsafe {
-            checksum -= haystack.get_unchecked(idx);
-            checksum += haystack.get_unchecked(idx + needle_len);
+            checksum -= *haystack.get_unchecked(idx) as i64;
+            checksum += *haystack.get_unchecked(idx + needle_len) as i64;
         }
         idx += 1;
     }
