@@ -132,7 +132,7 @@ fn bench(c: &mut Criterion) {
         }
     }
 
-    for length in [10240] {
+    for length in [10240, 102400] {
         let (left, right) = generate_random_int_data(&mut rng, length);
 
         group.bench_function(format!("function_iterator_iterator_v1/{length}"), |b| {
