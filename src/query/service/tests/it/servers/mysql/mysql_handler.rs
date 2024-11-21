@@ -56,7 +56,9 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 async fn test_connect_with_tls() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
-    rustls::crypto::ring::default_provider().install_default().unwrap();
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .unwrap();
     let tcp_keepalive_timeout_secs = 120;
     let tls_config = MySQLTlsConfig::new(TEST_SERVER_CERT.to_string(), TEST_SERVER_KEY.to_string());
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, tls_config)?;
