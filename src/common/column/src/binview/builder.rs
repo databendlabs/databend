@@ -196,9 +196,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
 
         self.push_value(value);
         let value = self.views.pop().unwrap();
-
-        self.total_bytes_len +=
-            (self.total_bytes_len - old_bytes_len) * additional.saturating_sub(1);
+        self.total_bytes_len = old_bytes_len + value.length as usize * additional;
         self.views.extend(std::iter::repeat(value).take(additional));
     }
 

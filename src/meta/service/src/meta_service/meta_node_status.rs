@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 
 use databend_common_meta_raft_store::ondisk::DataVersion;
+use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Node;
@@ -32,8 +33,8 @@ pub struct MetaNodeStatus {
     /// The raft service endpoint for internal communication
     pub endpoint: String,
 
-    /// The size in bytes of the raft-log on disk data.
-    pub raft_log_size: u64,
+    /// The status about local raft-log
+    pub raft_log: RaftLogStatus,
 
     /// Total number of keys in current snapshot
     pub snapshot_key_count: u64,
@@ -77,4 +78,40 @@ pub struct MetaNodeStatus {
     ///
     /// `seq` is a monotonically incremental integer for every value that is inserted or updated.
     pub last_seq: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct RaftLogStatus {
+    pub cache_items: u64,
+    pub cache_used_size: u64,
+    pub wal_total_size: u64,
+    pub wal_open_chunk_size: u64,
+    pub wal_offset: u64,
+    pub wal_closed_chunk_count: u64,
+    pub wal_closed_chunk_total_size: u64,
+    pub wal_closed_chunk_sizes: BTreeMap<String, u64>,
+}
+
+impl From<RaftLogStat> for RaftLogStatus {
+    fn from(s: RaftLogStat) -> Self {
+        let closed_sizes = s
+            .closed_chunks
+            .iter()
+            .map(|c| (c.chunk_id.to_string(), c.size))
+            .collect();
+
+        let closed_total_size = s.closed_chunks.iter().map(|c| c.size).sum::<u64>();
+        let wal_total_size = closed_total_size + s.open_chunk.size;
+
+        Self {
+            cache_items: s.payload_cache_item_count,
+            cache_used_size: s.payload_cache_size,
+            wal_total_size,
+            wal_open_chunk_size: s.open_chunk.size,
+            wal_offset: s.open_chunk.global_end,
+            wal_closed_chunk_count: s.closed_chunks.len() as u64,
+            wal_closed_chunk_total_size: closed_total_size,
+            wal_closed_chunk_sizes: closed_sizes,
+        }
+    }
 }
