@@ -3325,7 +3325,6 @@ dependencies = [
  "chrono-tz 0.8.6",
  "comfy-table",
  "criterion",
- "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-column",

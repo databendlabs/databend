@@ -852,8 +852,8 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let raft_log_size = self.get_raft_log_size().await;
-        let key_count = self.get_snapshot_key_count().await;
+        let raft_log_status = self.get_raft_log_stat().await.into();
+        let snapshot_key_count = self.get_snapshot_key_count().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -870,8 +870,8 @@ impl MetaNode {
             binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
-            raft_log_size,
-            snapshot_key_count: key_count,
+            raft_log: raft_log_status,
+            snapshot_key_count,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
