@@ -802,7 +802,7 @@ pub enum AsyncFunctionArgument {
 #[educe(PartialEq, Eq, Hash)]
 pub struct RedisSource {
     pub host: String,
-    pub port: String,
+    pub port: u16,
     pub username: Option<String>,
     pub password: Option<String>,
     pub db_index: Option<i64>,

@@ -4119,10 +4119,13 @@ impl<'a> TypeChecker<'a> {
                     .options
                     .get("host")
                     .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
-                let port = dictionary
+                let port_str = dictionary
                     .options
                     .get("port")
                     .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
+                let port = port_str
+                    .parse()
+                    .expect("Failed to parse String port to u16");
                 let username = dictionary.options.get("username").cloned();
                 let password = dictionary.options.get("password").cloned();
                 let db_index = dictionary
@@ -4131,7 +4134,7 @@ impl<'a> TypeChecker<'a> {
                     .map(|i| i.parse::<i64>().unwrap());
                 DictionarySource::Redis(RedisSource {
                     host: host.to_string(),
-                    port: port.to_string(),
+                    port,
                     username,
                     password,
                     db_index,

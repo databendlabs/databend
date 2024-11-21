@@ -214,8 +214,20 @@ impl DictionaryOperator {
             redis::Value::Array(arr) => {
                 let mut scalar_vec = Vec::with_capacity(arr.len());
                 for item in arr {
-                    let mut scalar = Self::from_redis_value_to_scalar(item, default_value)?;
-                    scalar_vec.append(&mut scalar);
+                    let scalar = match item {
+                        redis::Value::BulkString(bs) => {
+                            let str = unsafe { String::from_utf8_unchecked(bs.to_vec()) };
+                            Scalar::String(str)
+                        }
+                        redis::Value::Nil => default_value.clone(),
+                        _ => {
+                            return Err(ErrorCode::DictionarySourceError(format!(
+                                "from_redis_value_to_scalar currently does not support redis::Value type {:?}",
+                                item,
+                            )));
+                        }
+                    };
+                    scalar_vec.push(scalar);
                 }
                 Ok(scalar_vec)
             }
@@ -304,12 +316,11 @@ impl TransformAsyncFunction {
             if let AsyncFunctionArgument::DictGetFunction(dict_arg) = &async_func_desc.func_arg {
                 match &dict_arg.dict_source {
                     DictionarySource::Redis(redis_source) => {
-                        let port = redis_source
-                            .port
-                            .parse()
-                            .expect("Failed to parse String port to u16");
                         let connection_info = ConnectionInfo {
-                            addr: redis::ConnectionAddr::Tcp(redis_source.host.clone(), port),
+                            addr: redis::ConnectionAddr::Tcp(
+                                redis_source.host.clone(),
+                                redis_source.port,
+                            ),
                             redis: RedisConnectionInfo {
                                 db: redis_source.db_index.unwrap_or(0),
                                 username: redis_source.username.clone(),
