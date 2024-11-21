@@ -189,17 +189,12 @@ fn log_query_start(ctx: &QueryContext) {
 }
 
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
+    InterpreterMetrics::record_query_finished(ctx, error.clone());
+
     let now = SystemTime::now();
     let session = ctx.get_current_session();
-    let status = session.get_status();
-    let mut status = status.write();
-    // already finished
-    if status.last_query_finished_at.is_some() {
-        return;
-    }
 
-    status.query_finish();
-    InterpreterMetrics::record_query_finished(ctx, error.clone());
+    session.get_status().write().query_finish();
     let typ = session.get_type();
     if typ.is_user_session() {
         SessionManager::instance().status.write().query_finish(now);
