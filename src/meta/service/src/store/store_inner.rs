@@ -84,10 +84,7 @@ impl RaftStoreInner {
     /// Open an existent raft-store or create a new one.
     #[fastrace::trace]
     pub async fn open(config: &RaftConfig) -> Result<RaftStoreInner, MetaStartupError> {
-        info!(
-            "open_or_create StoreInner: id={}, config_id={}",
-            config.id, config.config_id
-        );
+        info!("open_or_create StoreInner: id={}", config.id);
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);

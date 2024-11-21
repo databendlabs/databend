@@ -23,7 +23,6 @@ use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Node;
 use databend_meta::meta_service::MetaNode;
-use databend_meta::Opened;
 use log::info;
 use maplit::btreeset;
 

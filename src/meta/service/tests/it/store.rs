@@ -36,7 +36,6 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_meta::meta_service::meta_node::LogStore;
 use databend_meta::meta_service::meta_node::SMStore;
 use databend_meta::store::RaftStore;
-use databend_meta::Opened;
 use futures::TryStreamExt;
 use log::debug;
 use log::info;
