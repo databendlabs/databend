@@ -124,7 +124,12 @@ impl DictionaryOperator {
         match key {
             Scalar::String(str) => {
                 let mut conn = connection.clone();
-                let redis_val: redis::Value = conn.get(str).await.unwrap();
+                let redis_val: redis::Value = match conn.get(str).await {
+                    Ok(response) => response,
+                    Err(err) => {
+                        return Err(ErrorCode::DictionarySourceError(format!("{}", err)));
+                    }
+                };
                 let res = Self::from_redis_value_to_scalar(&redis_val, default_value)?;
                 if res.is_empty() {
                     Err(ErrorCode::DictionarySourceError(format!(
@@ -171,7 +176,12 @@ impl DictionaryOperator {
             }
         } else {
             let mut conn = connection.clone();
-            let redis_val: redis::Value = conn.get(keys).await.unwrap();
+            let redis_val: redis::Value = match conn.get(keys).await {
+                Ok(response) => response,
+                Err(err) => {
+                    return Err(ErrorCode::DictionarySourceError(format!("{}", err)));
+                }
+            };
             let res = Self::from_redis_value_to_scalar(&redis_val, default_value)?;
             if res.is_empty() {
                 return Err(ErrorCode::DictionarySourceError(format!(

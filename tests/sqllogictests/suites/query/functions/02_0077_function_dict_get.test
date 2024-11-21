@@ -1,26 +1,26 @@
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d1(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d1(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d2(key string not null, value string null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d2(key string not null, value string null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d3(key string null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d3(key string null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d4(key string null, value string null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d4(key string null, value string null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d5(key string not null, value string not null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d5(key string not null, value string not null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d6(key string not null, value string null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d6(key string not null, value string null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d7(key string null, value string not null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d7(key string null, value string not null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 statement ok
-CREATE OR REPLACE DICTIONARY redis_d8(key string null, value string null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY redis_d8(key string null, value string null default 'default_value') PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6179'))
 
 query T
 SELECT dict_get(redis_d1, 'value', 'b')
