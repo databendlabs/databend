@@ -54,7 +54,9 @@ pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 });
 
 /// Oldest compatible nightly meta-client version
-pub static MIN_METACLI_SEMVER: Version = Version::new(0, 9, 41);
+///
+/// It should be 1.2.287 but 1.2.287 does not contain complete binaries
+pub static MIN_METACLI_SEMVER: Version = Version::new(1, 2, 288);
 
 /// The min meta-server version that can be deployed together in a cluster,
 /// i.e., the network APIs are compatible.

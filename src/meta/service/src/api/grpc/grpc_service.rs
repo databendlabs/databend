@@ -120,27 +120,6 @@ impl MetaServiceImpl {
                     .await;
                 RaftReply::from(res)
             }
-            MetaGrpcReq::GetKV(a) => {
-                let res = m
-                    .get_kv(&a.key)
-                    .log_elapsed_info(format!("GetKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::MGetKV(a) => {
-                let res = m
-                    .mget_kv(&a.keys)
-                    .log_elapsed_info(format!("MGetKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::ListKV(a) => {
-                let res = m
-                    .prefix_list_kv(&a.prefix)
-                    .log_elapsed_info(format!("ListKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
         };
 
         network_metrics::incr_request_result(reply.error.is_empty());

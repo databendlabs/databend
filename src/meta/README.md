@@ -86,7 +86,8 @@ The following is an illustration of the latest query-meta compatibility:
 | [1.1.32, 1.2.63)   | ✅                | ✅              | ❌          |❌          |
 | [1.2.63, 1.2.226)  | ✅                | ✅              | ❌          |❌          |
 | [1.2.226, 1.2.258) | ✅                | ✅              | ✅          |❌          |
-| [1.2.258, +∞)      | ✅                | ✅              | ✅          |✅          |
+| [1.2.258, 1.2.663) | ✅                | ✅              | ✅          |✅          |
+| [1.2.663, +∞)      | ❌                | ❌              | ✅          |✅          |
 
 History versions that are not included in the above chart:
 

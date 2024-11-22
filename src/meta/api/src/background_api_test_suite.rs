@@ -180,10 +180,10 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.len(), "there is one task");
-            assert_eq!(task_id, res[0].1, "task name");
+            assert_eq!(task_id, res[0].0.name(), "task name");
             assert_eq!(
                 BackgroundTaskState::DONE,
-                res[0].2.task_state,
+                res[0].1.task_state,
                 "first state is done"
             );
         }
