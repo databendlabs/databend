@@ -4095,7 +4095,7 @@ impl<'a> TypeChecker<'a> {
         let mut args = Vec::with_capacity(1);
         let box (key_scalar, key_type) = self.resolve(key_arg)?;
 
-        if primary_type != key_type {
+        if primary_type != key_type.remove_nullable() {
             args.push(wrap_cast(&key_scalar, &primary_type));
         } else {
             args.push(key_scalar);
@@ -4115,7 +4115,17 @@ impl<'a> TypeChecker<'a> {
                 })
             }
             "redis" => {
-                let connection_url = dictionary.build_redis_connection_url()?;
+                let host = dictionary
+                    .options
+                    .get("host")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
+                let port_str = dictionary
+                    .options
+                    .get("port")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
+                let port = port_str
+                    .parse()
+                    .expect("Failed to parse String port to u16");
                 let username = dictionary.options.get("username").cloned();
                 let password = dictionary.options.get("password").cloned();
                 let db_index = dictionary
@@ -4123,7 +4133,8 @@ impl<'a> TypeChecker<'a> {
                     .get("db_index")
                     .map(|i| i.parse::<i64>().unwrap());
                 DictionarySource::Redis(RedisSource {
-                    connection_url,
+                    host: host.to_string(),
+                    port,
                     username,
                     password,
                     db_index,
