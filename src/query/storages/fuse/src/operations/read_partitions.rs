@@ -51,7 +51,6 @@ use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
 use opendal::Operator;
-use parking_lot::Mutex;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -206,12 +205,13 @@ impl FuseTable {
         }
 
         let mut prune_pipeline = Pipeline::create();
-        let pruner = self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?;
+        let pruner =
+            Arc::new(self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?);
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
         self.prune_segments_with_pipeline(
-            &pruner,
+            pruner.clone(),
             &mut prune_pipeline,
             ctx.clone(),
             segment_rx,
@@ -221,7 +221,8 @@ impl FuseTable {
         prune_pipeline.set_on_init(move || {
             ctx.get_runtime()?.try_spawn(
                 async move {
-                    let segment_pruned_result = pruner.segment_pruning(lazy_init_segments).await?;
+                    let segment_pruned_result =
+                        pruner.clone().segment_pruning(lazy_init_segments).await?;
                     for segment in segment_pruned_result {
                         let _ = segment_tx.send(Ok(segment)).await;
                     }
@@ -307,7 +308,7 @@ impl FuseTable {
 
     pub fn prune_segments_with_pipeline(
         &self,
-        pruner: &FusePruner,
+        pruner: Arc<FusePruner>,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
         segment_rx: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
@@ -367,7 +368,18 @@ impl FuseTable {
             .and_then(|p| p.top_k(self.schema().as_ref()))
             .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
             .transpose()?;
-        let send_part_state = Arc::new(Mutex::new(SendPartState::create(derterministic_cache_key)));
+
+        let limit = push_down
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .and_then(|p| p.limit);
+
+        let send_part_state = Arc::new(SendPartState::create(
+            derterministic_cache_key,
+            limit,
+            pruner.clone(),
+            self.data_metrics.clone(),
+        ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
                 input,
@@ -382,7 +394,7 @@ impl FuseTable {
         prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
             if let Ok(()) = info.res {
                 // only populating cache when the pipeline is finished successfully
-                send_part_state.lock().set_cache();
+                send_part_state.populating_cache();
             }
             Ok(())
         });
@@ -716,7 +728,7 @@ impl FuseTable {
         (statistics, partitions)
     }
 
-    fn all_columns_part(
+    pub fn all_columns_part(
         schema: Option<&TableSchemaRef>,
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<(TopK, Scalar)>,
@@ -766,7 +778,7 @@ impl FuseTable {
         )
     }
 
-    pub(crate) fn projection_part(
+    pub fn projection_part(
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,
