@@ -3153,7 +3153,7 @@ impl<'a> TypeChecker<'a> {
 
     pub fn is_sugar_function(name: &str) -> bool {
         Self::all_sugar_functions()
-            .into_iter()
+            .iter()
             .any(|func| func.eq_ignore_ascii_case(name))
     }
 
