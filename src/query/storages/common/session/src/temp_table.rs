@@ -123,7 +123,10 @@ impl TempTblMgr {
                     .as_ref()
                     .map(|o| format!("{}.{}", name_ident.db_name, o))
                     .unwrap_or(desc);
-                self.name_to_id.insert(desc, table_id);
+                let old_id = self.name_to_id.insert(desc, table_id);
+                if let Some(old_id) = old_id {
+                    self.id_to_table.remove(&old_id);
+                }
                 self.id_to_table.insert(table_id, TempTable {
                     db_name: name_ident.db_name,
                     table_name: orphan_table_name.clone().unwrap_or(name_ident.table_name),
