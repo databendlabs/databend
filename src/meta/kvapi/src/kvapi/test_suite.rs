@@ -388,7 +388,7 @@ impl kvapi::TestSuite {
             .upsert_kv(UpsertKV::new(
                 test_key,
                 MatchSeq::Exact(seq + 1),
-                Operation::AsIs,
+                Operation::Update(b"v1".to_vec()),
                 Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
@@ -401,7 +401,7 @@ impl kvapi::TestSuite {
             .upsert_kv(UpsertKV::new(
                 test_key,
                 MatchSeq::Exact(seq),
-                Operation::AsIs,
+                Operation::Update(b"v1".to_vec()),
                 Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;

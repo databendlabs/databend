@@ -110,6 +110,9 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///              require the client to call kv_read_v1 for get/mget/list,
 ///              which is added `2024-01-07: since 1.2.287`
 ///
+/// - 2024-11-2*: since 1.2.6**
+///   👥 client: remove use of `Operation::AsIs`
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
