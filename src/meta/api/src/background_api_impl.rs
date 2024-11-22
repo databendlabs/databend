@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Instant;
+
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::background::background_job_id_ident::BackgroundJobId;
@@ -226,14 +228,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(MetaSpec::new_expire(req.expire_at)),
+                Some(MetaSpec::new_ttl(req.ttl)),
             ))
             .await?;
         // confirm a successful update
         assert!(resp.is_changed());
         Ok(UpdateBackgroundTaskReply {
             last_updated: Utc::now(),
-            expire_at: req.expire_at,
+            expire_at: Instant::now() + req.ttl,
         })
     }
 
