@@ -119,6 +119,9 @@ download_test_suite() {
 	mkdir -p ./testsuite/$ver
 	tar -xf "$fn" -C ./testsuite/$ver
 
+	echo " === Extracted test suites to ./testsuite/$ver:"
+	ls ./testsuite/$ver
+
 	chmod +x ./testsuite/$ver/bin/*
 }
 
@@ -240,7 +243,7 @@ run_test() {
 
 		# Replace suites
 		rm -rf "tests/sqllogictests/suites"
-		mv "./testsuite/suites" "tests/sqllogictests/suites"
+		mv "./testsuite/$query_ver/suites" "tests/sqllogictests/suites"
 
     ./testsuite/$query_ver/bin/databend-sqllogictests --handlers mysql --run_dir 05_ddl
 		cd -
