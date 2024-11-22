@@ -38,3 +38,21 @@ select * from system.temporary_tables order by table_id;
 ----
 default t0 4611686018427407904 FUSE
 d1 t1 4611686018427407907 FUSE
+
+statement ok
+CREATE OR REPLACE TEMP TABLE d1.t1(a int not null, b int not null) as select * from d1.t1;
+
+query T
+select * from system.temporary_tables order by table_id;
+----
+default t0 4611686018427407904 FUSE
+d1 t1 4611686018427407908 FUSE
+
+statement ok
+CREATE OR REPLACE TEMP TABLE d1.t1(a int not null, b int not null) as select * from d1.t1;
+
+query T
+select * from system.temporary_tables order by table_id;
+----
+default t0 4611686018427407904 FUSE
+d1 t1 4611686018427407909 FUSE
