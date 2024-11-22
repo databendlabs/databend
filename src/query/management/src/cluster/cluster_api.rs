@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 
@@ -23,7 +25,7 @@ pub trait ClusterApi: Sync + Send {
     ///
     /// - To update, use `SeqMatch::GE(1)` to match any present record.
     /// - To add, use `SeqMatch::Exact(0)` to match no present record.
-    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<u64>;
+    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<Change<Vec<u8>>>;
 
     /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>>;
@@ -35,12 +37,30 @@ pub trait ClusterApi: Sync + Send {
 
     /// Add a new node.
     async fn add_node(&self, node: NodeInfo) -> Result<u64> {
-        self.upsert_node(node, MatchSeq::Exact(0)).await
+        let res = self.upsert_node(node.clone(), MatchSeq::Exact(0)).await?;
+
+        let res_seq = res.added_seq_or_else(|_v| {
+            ErrorCode::ClusterNodeAlreadyExists(format!(
+                "Node with ID '{}' already exists in the cluster.",
+                node.id
+            ))
+        })?;
+
+        Ok(res_seq)
     }
 
     /// Keep the tenant's cluster node alive.
     async fn heartbeat(&self, node: &NodeInfo) -> Result<u64> {
         // Update or insert the node with GE(0).
-        self.upsert_node(node.clone(), MatchSeq::GE(0)).await
+        let transition = self.upsert_node(node.clone(), MatchSeq::GE(0)).await?;
+
+        let Some(res) = transition.result else {
+            return Err(ErrorCode::MetaServiceError(format!(
+                "Unexpected None result returned when upsert heartbeat node {}",
+                node.id
+            )));
+        };
+
+        Ok(res.seq)
     }
 }

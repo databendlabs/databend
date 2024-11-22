@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::NodeInfo;
@@ -71,7 +72,7 @@ impl ClusterMgr {
 impl ClusterApi for ClusterMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<u64> {
+    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<Change<Vec<u8>>> {
         let meta = Some(self.new_lift_time());
         let value = Operation::Update(serde_json::to_vec(&node)?);
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
@@ -79,14 +80,8 @@ impl ClusterApi for ClusterMgr {
             .metastore
             .upsert_kv(UpsertKV::new(&node_key, seq, value, meta));
 
-        let res_seq = upsert_node.await?.added_seq_or_else(|_v| {
-            ErrorCode::ClusterNodeAlreadyExists(format!(
-                "Node with ID '{}' already exists in the cluster.",
-                node.id
-            ))
-        })?;
-
-        Ok(res_seq)
+        let transition = upsert_node.await?;
+        Ok(transition)
     }
 
     #[async_backtrace::framed]
