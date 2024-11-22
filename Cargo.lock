@@ -1342,18 +1342,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
-name = "bb8"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d89aabfae550a5c44b43ab941844ffcd2e993cb6900b342debf59e9ea74acdb8"
-dependencies = [
- "async-trait",
- "futures-util",
- "parking_lot 0.12.3",
- "tokio",
-]
-
-[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2635,12 +2623,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5"
 
 [[package]]
-name = "crc16"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
-
-[[package]]
 name = "crc32c"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3270,6 +3252,7 @@ dependencies = [
  "parquet",
  "paste",
  "prost",
+ "redis",
  "reqwest",
  "rustc-demangle",
  "serde",
@@ -5082,6 +5065,7 @@ dependencies = [
  "prost",
  "rand",
  "recursive",
+ "redis",
  "regex",
  "reqwest",
  "rmp-serde",
@@ -10383,7 +10367,6 @@ dependencies = [
  "async-trait",
  "backon",
  "base64 0.22.1",
- "bb8",
  "bytes",
  "chrono",
  "crc32c",
@@ -10401,7 +10384,6 @@ dependencies = [
  "prometheus-client",
  "prost",
  "quick-xml 0.36.1",
- "redis",
  "reqsign",
  "reqwest",
  "serde",
@@ -12060,25 +12042,17 @@ dependencies = [
  "async-trait",
  "bytes",
  "combine",
- "crc16",
  "futures",
  "futures-util",
  "itoa",
- "log",
  "num-bigint",
  "percent-encoding",
  "pin-project-lite",
- "rand",
- "rustls 0.23.12",
- "rustls-native-certs 0.7.1",
- "rustls-pemfile 2.1.3",
- "rustls-pki-types",
  "ryu",
  "sha1_smol",
  "socket2",
  "tokio",
  "tokio-retry2",
- "tokio-rustls 0.26.0",
  "tokio-util",
  "url",
 ]
@@ -12677,19 +12651,6 @@ checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
 dependencies = [
  "openssl-probe",
  "rustls-pemfile 1.0.4",
- "schannel",
- "security-framework",
-]
-
-[[package]]
-name = "rustls-native-certs"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a88d6d420651b496bdd98684116959239430022a115c1240e6c3993be0b15fba"
-dependencies = [
- "openssl-probe",
- "rustls-pemfile 2.1.3",
- "rustls-pki-types",
  "schannel",
  "security-framework",
 ]
