@@ -45,7 +45,6 @@ use fastrace::Span;
 use indexmap::IndexSet;
 use log::debug;
 use log::info;
-use log::log;
 use log::warn;
 
 use crate::operations::mutation::SegmentCompactChecker;
