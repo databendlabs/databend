@@ -14,9 +14,9 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-formats = { workspace = true }
 databend-common-functions = { workspace = true }
+databend-common-http = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-sql = { workspace = true }
-databend-common-http = { workspace = true }
 ethnum = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
