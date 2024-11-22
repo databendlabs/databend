@@ -74,22 +74,24 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let mut trigger = Vec::with_capacity(tasks.len());
         let mut create_timestamps = Vec::with_capacity(tasks.len());
         let mut update_timestamps = Vec::with_capacity(tasks.len());
-        for (_, name, task) in tasks {
-            names.push(name);
-            types.push(task.task_type.to_string());
-            stats.push(task.task_state.to_string());
-            messages.push(task.message);
+        for (name, seq_task) in tasks {
+            names.push(name.name().to_string());
+            types.push(seq_task.task_type.to_string());
+            stats.push(seq_task.task_state.to_string());
+            messages.push(seq_task.message.to_string());
             compaction_stats.push(
-                task.compaction_task_stats
+                seq_task
+                    .compaction_task_stats
                     .as_ref()
                     .map(|s| serde_json::to_vec(s).unwrap_or_default()),
             );
             vacuum_stats.push(
-                task.vacuum_stats
+                seq_task
+                    .vacuum_stats
                     .as_ref()
                     .map(|s| serde_json::to_vec(s).unwrap_or_default()),
             );
-            if let Some(compact_stats) = task.compaction_task_stats.as_ref() {
+            if let Some(compact_stats) = seq_task.compaction_task_stats.as_ref() {
                 database_ids.push(compact_stats.db_id);
                 table_ids.push(compact_stats.table_id);
                 task_run_secs.push(compact_stats.total_compaction_time.map(|s| s.as_secs()));
@@ -98,10 +100,15 @@ impl AsyncSystemTable for BackgroundTaskTable {
                 table_ids.push(0);
                 task_run_secs.push(None);
             }
-            creators.push(task.creator.map(|s| s.to_string()));
-            trigger.push(task.manual_trigger.map(|s| s.trigger.display().to_string()));
-            create_timestamps.push(task.created_at.timestamp_micros());
-            update_timestamps.push(task.last_updated.unwrap_or_default().timestamp_micros());
+            creators.push(seq_task.creator.as_ref().map(|s| s.to_string()));
+            trigger.push(
+                seq_task
+                    .manual_trigger
+                    .as_ref()
+                    .map(|s| s.trigger.display().to_string()),
+            );
+            create_timestamps.push(seq_task.created_at.timestamp_micros());
+            update_timestamps.push(seq_task.last_updated.unwrap_or_default().timestamp_micros());
         }
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
