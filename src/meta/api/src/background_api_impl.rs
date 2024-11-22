@@ -42,7 +42,6 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqValue;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
@@ -54,7 +53,6 @@ use futures::TryStreamExt;
 use log::debug;
 
 use crate::background_api::BackgroundApi;
-use crate::deserialize_struct;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
@@ -243,22 +241,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
-    ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError> {
+    ) -> Result<Vec<(BackgroundTaskIdent, SeqV<BackgroundTaskInfo>)>, KVAppError> {
         let ident = BackgroundTaskIdent::new(&req.tenant, "dummy");
-        let prefix = ident.tenant_prefix();
-
-        let reply = self.prefix_list_kv(&prefix).await?;
-        let mut res = vec![];
-        for (k, v) in reply {
-            let ident = BackgroundTaskIdent::from_str_key(k.as_str()).map_err(|e| {
-                KVAppError::MetaError(MetaError::from(InvalidReply::new(
-                    "list_background_tasks",
-                    &e,
-                )))
-            })?;
-            let val: BackgroundTaskInfo = deserialize_struct(&v.data)?;
-            res.push((v.seq, ident.name().to_string(), val));
-        }
+        let dir = DirName::new(ident);
+        let res = self.list_pb_vec(&dir).await?;
         Ok(res)
     }
 

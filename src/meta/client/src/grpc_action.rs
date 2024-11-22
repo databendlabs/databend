@@ -53,10 +53,6 @@ pub trait RequestFor: Clone + fmt::Debug {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcReq {
     UpsertKV(UpsertKVReq),
-
-    GetKV(GetKVReq),
-    MGetKV(MGetKVReq),
-    ListKV(ListKVReq),
 }
 
 impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
@@ -123,16 +119,6 @@ pub enum MetaGrpcReadReq {
 // All Read requests returns a stream of KV pairs.
 impl RequestFor for MetaGrpcReadReq {
     type Reply = BoxStream<StreamItem>;
-}
-
-impl From<MetaGrpcReadReq> for MetaGrpcReq {
-    fn from(v: MetaGrpcReadReq) -> Self {
-        match v {
-            MetaGrpcReadReq::GetKV(v) => MetaGrpcReq::GetKV(v),
-            MetaGrpcReadReq::MGetKV(v) => MetaGrpcReq::MGetKV(v),
-            MetaGrpcReadReq::ListKV(v) => MetaGrpcReq::ListKV(v),
-        }
-    }
 }
 
 impl From<MetaGrpcReadReq> for RaftRequest {
