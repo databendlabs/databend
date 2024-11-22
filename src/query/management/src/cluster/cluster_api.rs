@@ -16,19 +16,31 @@ use databend_common_exception::Result;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 
+/// Databend-query cluster management API
 #[async_trait::async_trait]
 pub trait ClusterApi: Sync + Send {
-    // Add a new node info to /tenant/cluster_id/node-name.
-    async fn add_node(&self, node: NodeInfo) -> Result<u64>;
+    /// Add or update a node info to /tenant/cluster_id/node-name.
+    ///
+    /// - To update, use `SeqMatch::GE(1)` to match any present record.
+    /// - To add, use `SeqMatch::Exact(0)` to match no present record.
+    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<u64>;
 
-    // Get the tenant's cluster all nodes.
+    /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>>;
 
-    // Drop the tenant's cluster one node by node.id.
+    /// Drop the tenant's cluster one node by node.id.
     async fn drop_node(&self, node_id: String, seq: MatchSeq) -> Result<()>;
 
-    // Keep the tenant's cluster node alive.
-    async fn heartbeat(&self, node: &NodeInfo, seq: MatchSeq) -> Result<u64>;
-
     async fn get_local_addr(&self) -> Result<Option<String>>;
+
+    /// Add a new node.
+    async fn add_node(&self, node: NodeInfo) -> Result<u64> {
+        self.upsert_node(node, MatchSeq::Exact(0)).await
+    }
+
+    /// Keep the tenant's cluster node alive.
+    async fn heartbeat(&self, node: &NodeInfo) -> Result<u64> {
+        // Update or insert the node with GE(0).
+        self.upsert_node(node.clone(), MatchSeq::GE(0)).await
+    }
 }

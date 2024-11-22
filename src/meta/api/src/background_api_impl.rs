@@ -42,7 +42,6 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
@@ -50,6 +49,7 @@ use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
@@ -224,7 +224,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let meta = req.task_info.clone();
 
         let resp = self
-            .upsert_kv(UpsertKVReq::new(
+            .upsert_kv(UpsertKV::new(
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
