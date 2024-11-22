@@ -721,9 +721,7 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
-                if !is_builtin_function(func_name)
-                    && !Self::all_sugar_functions().contains(&func_name)
-                {
+                if !is_builtin_function(func_name) && !Self::is_sugar_function(func_name) {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
                         return Ok(udf);
                     } else {
@@ -3151,6 +3149,12 @@ impl<'a> TypeChecker<'a> {
             "stream_has_data",
             "getvariable",
         ]
+    }
+
+    pub fn is_sugar_function(name: &str) -> bool {
+        Self::all_sugar_functions()
+            .into_iter()
+            .any(|func| func.eq_ignore_ascii_case(name))
     }
 
     fn try_rewrite_sugar_function(
