@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(deprecated)]
+
 //! This crate defines data types used in meta data storage service.
 
 use std::fmt::Debug;
