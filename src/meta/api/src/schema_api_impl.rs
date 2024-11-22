@@ -56,6 +56,7 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::id_generator::IdGeneratorValue;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
 use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -2748,7 +2749,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let revision = fetch_id(self, id_generator.clone()).await?;
+            let current_rev = self.get_seq(&id_generator).await?;
+            let revision = current_rev + 1;
             let key = lock_key.gen_key(revision);
             let lock_meta = LockMeta {
                 user: req.user.clone(),
@@ -2761,15 +2763,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             let condition = vec![
-                txn_cond_seq(&id_generator, Eq, revision),
+                txn_cond_seq(&id_generator, Eq, current_rev),
                 // assumes lock are absent.
                 txn_cond_seq(&key, Eq, 0),
             ];
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.ttl),
-            )];
+            let if_then = vec![
+                txn_op_put(&id_generator, b"".to_vec()),
+                txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
+            ];
             let txn_req = TxnRequest {
                 condition,
                 if_then,
