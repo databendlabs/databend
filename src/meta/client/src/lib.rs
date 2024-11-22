@@ -105,6 +105,11 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-03-04: since: 1.2.361
 ///   👥 client: `MetaSpec` use `ttl`, remove `expire_at`, require 1.2.258
 ///
+/// - 2024-11-22: since 1.2.663
+///   🖥 server: remove `MetaGrpcReq::GetKV/MGetKV/ListKV`,
+///              require the client to call kv_read_v1 for get/mget/list,
+///              which is added `2024-01-07: since 1.2.287`
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
