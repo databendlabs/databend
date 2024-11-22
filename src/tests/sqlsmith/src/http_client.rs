@@ -72,31 +72,31 @@ impl CookieStore for GlobalCookieStore {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct ServerInfo {
-    pub id: String,
-    pub start_time: String,
+pub(crate) struct ServerInfo {
+    pub(crate) id: String,
+    pub(crate) start_time: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct HttpSessionConf {
-    pub database: Option<String>,
-    pub role: Option<String>,
-    pub secondary_roles: Option<Vec<String>>,
-    pub settings: Option<BTreeMap<String, String>>,
-    pub txn_state: Option<String>,
-    pub last_server_info: Option<ServerInfo>,
+pub(crate) struct HttpSessionConf {
+    pub(crate) database: Option<String>,
+    pub(crate) role: Option<String>,
+    pub(crate) secondary_roles: Option<Vec<String>>,
+    pub(crate) settings: Option<BTreeMap<String, String>>,
+    pub(crate) txn_state: Option<String>,
+    pub(crate) last_server_info: Option<ServerInfo>,
     #[serde(default)]
-    pub last_query_ids: Vec<String>,
-    pub internal: Option<String>,
+    pub(crate) last_query_ids: Vec<String>,
+    pub(crate) internal: Option<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]
-pub struct QueryResponse {
-    pub session: Option<HttpSessionConf>,
-    pub data: Option<serde_json::Value>,
+pub(crate) struct QueryResponse {
+    pub(crate) session: Option<HttpSessionConf>,
+    pub(crate) data: Option<serde_json::Value>,
     next_uri: Option<String>,
 
-    pub error: Option<serde_json::Value>,
+    pub(crate) error: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -109,15 +109,15 @@ struct LoginResponse {
     tokens: Option<TokenInfo>,
 }
 
-pub struct HttpClient {
-    pub host: String,
-    pub client: Client,
-    pub session_token: String,
-    pub session: Option<HttpSessionConf>,
+pub(crate) struct HttpClient {
+    pub(crate) host: String,
+    pub(crate) client: Client,
+    pub(crate) session_token: String,
+    pub(crate) session: Option<HttpSessionConf>,
 }
 
 impl HttpClient {
-    pub async fn create(host: String, username: String, password: String) -> Result<Self> {
+    pub(crate) async fn create(host: String, username: String, password: String) -> Result<Self> {
         let mut header = HeaderMap::new();
         header.insert(
             "Content-Type",
@@ -169,7 +169,7 @@ impl HttpClient {
         })
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<Vec<QueryResponse>> {
+    pub(crate) async fn query(&mut self, sql: &str) -> Result<Vec<QueryResponse>> {
         let url = format!("{}/v1/query", self.host);
         let mut responses = vec![];
         let response = self.post_query(sql, &url).await?;

@@ -15,19 +15,15 @@ memory-profiling = ["tempfile"]
 
 [dependencies]
 anyerror = { workspace = true }
-cookie = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
 poem = { workspace = true }
-reqwest = { workspace = true, features = ["cookies"] }
 serde = { workspace = true }
-serde_json = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
-url = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

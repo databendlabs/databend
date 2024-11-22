@@ -3472,7 +3472,6 @@ name = "databend-common-http"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "cookie",
  "databend-common-base",
  "databend-common-exception",
  "futures",
@@ -3480,12 +3479,9 @@ dependencies = [
  "log",
  "poem",
  "pretty_assertions",
- "reqwest",
  "serde",
- "serde_json",
  "tempfile",
  "thiserror",
- "url",
 ]
 
 [[package]]
@@ -5123,9 +5119,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "clap",
+ "cookie",
  "databend-common-base",
  "databend-common-exception",
- "databend-common-http",
  "env_logger 0.11.5",
  "futures-util",
  "msql-srv",
@@ -5140,6 +5136,7 @@ dependencies = [
  "sqlparser 0.50.0",
  "thiserror",
  "tokio",
+ "url",
  "walkdir",
 ]
 
@@ -5149,12 +5146,12 @@ version = "0.1.0"
 dependencies = [
  "chrono-tz 0.8.6",
  "clap",
+ "cookie",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
  "databend-common-functions",
- "databend-common-http",
  "databend-common-io",
  "databend-common-sql",
  "ethnum",
@@ -5162,10 +5159,13 @@ dependencies = [
  "jiff",
  "jsonb",
  "rand",
+ "reqwest",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

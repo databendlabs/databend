@@ -17,14 +17,9 @@
 mod debug;
 mod errors;
 mod health;
-mod http_client;
 mod http_shutdown_handlers;
 
 pub use debug::*;
 pub use errors::HttpError;
 pub use health::*;
-pub use http_client::HttpClient;
-pub use http_client::HttpSessionConf;
-pub use http_client::QueryResponse;
-pub use http_client::ServerInfo;
 pub use http_shutdown_handlers::HttpShutdownHandler;

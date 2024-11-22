@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
@@ -23,6 +26,24 @@ use walkdir::WalkDir;
 use crate::arg::SqlLogicTestArgs;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ServerInfo {
+    pub id: String,
+    pub start_time: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct HttpSessionConf {
+    pub database: Option<String>,
+    pub role: Option<String>,
+    pub secondary_roles: Option<Vec<String>>,
+    pub settings: Option<BTreeMap<String, String>>,
+    pub txn_state: Option<String>,
+    pub last_server_info: Option<ServerInfo>,
+    #[serde(default)]
+    pub last_query_ids: Vec<String>,
+    pub internal: Option<String>,
+}
 
 pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
     let mut parsed_rows = Vec::new();

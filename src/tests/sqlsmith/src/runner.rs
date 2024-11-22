@@ -24,13 +24,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_http::HttpClient as Client;
-use databend_common_http::QueryResponse;
 use databend_common_sql::resolve_type_name;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
 
+use crate::http_client::HttpClient;
+use crate::http_client::QueryResponse;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
@@ -77,7 +77,7 @@ const KNOWN_ERRORS: &[&str] = &[
 pub struct Runner {
     count: usize,
     seed: Option<u64>,
-    pub(crate) client: Client,
+    pub(crate) client: HttpClient,
     db: String,
     timeout: u64,
 }
@@ -92,7 +92,7 @@ impl Runner {
         seed: Option<u64>,
         timeout: u64,
     ) -> Result<Self> {
-        let client = Client::create(host, username, password).await?;
+        let client = HttpClient::create(host, username, password).await?;
 
         Ok(Self {
             count,
