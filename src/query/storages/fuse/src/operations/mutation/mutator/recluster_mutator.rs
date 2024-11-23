@@ -44,6 +44,7 @@ use fastrace::future::FutureExt;
 use fastrace::Span;
 use indexmap::IndexSet;
 use log::debug;
+use log::info;
 use log::warn;
 
 use crate::operations::mutation::SegmentCompactChecker;
@@ -208,6 +209,11 @@ impl ReclusterMutator {
         let mut selected_blocks_idx = IndexSet::new();
         for (level, indices) in blocks_map.into_iter() {
             if level == -1 || indices.len() < 2 {
+                info!(
+                    "breaking while checking level:  level {}, indices len {} ",
+                    level,
+                    indices.len()
+                );
                 continue;
             }
 
@@ -249,6 +255,11 @@ impl ReclusterMutator {
                     total_bytes as usize,
                     level,
                 ));
+                info!(
+                    "breaking after check for recluster:  level {}, num of task {} ",
+                    level,
+                    tasks.len()
+                );
                 break;
             }
 
@@ -304,6 +315,11 @@ impl ReclusterMutator {
                     level,
                 ));
             }
+            info!(
+                "breaking after add remains:  level {}, num of task {} ",
+                level,
+                tasks.len()
+            );
             break;
         }
 
