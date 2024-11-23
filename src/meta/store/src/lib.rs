@@ -24,12 +24,12 @@ use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use log::info;
 use tokio_stream::Stream;
 
@@ -85,7 +85,7 @@ impl MetaStore {
 impl kvapi::KVApi for MetaStore {
     type Error = MetaError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,
             MetaStore::R(x) => x.upsert_kv(act).await,

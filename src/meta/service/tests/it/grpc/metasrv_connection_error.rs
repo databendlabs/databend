@@ -23,8 +23,8 @@ use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::UpsertKV;
 use log::info;
 use test_harness::test;
 
@@ -162,7 +162,7 @@ async fn test_write_read(client: &Arc<ClientHandle>, key: impl Display) -> anyho
     info!("--- test write/read: {}", key);
 
     let k = key.to_string();
-    let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
+    let res = client.upsert_kv(UpsertKV::update(&k, &b(&k))).await?;
 
     info!("--- upsert {} res: {:?}", k, res);
 

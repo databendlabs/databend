@@ -60,6 +60,7 @@ pub trait StateMachineApiExt: StateMachineApi {
                     .await?
             }
             Operation::Delete => self.map_mut().set(upsert_kv.key.clone(), None).await?,
+            #[allow(deprecated)]
             Operation::AsIs => {
                 MapApiExt::update_meta(self.map_mut(), upsert_kv.key.clone(), kv_meta.clone())
                     .await?

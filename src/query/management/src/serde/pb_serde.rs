@@ -18,7 +18,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::InvalidReply;
@@ -26,6 +25,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 
 use crate::serde::Quota;
@@ -102,7 +102,7 @@ where
     let value = databend_common_meta_api::serialize_struct(&data)?;
 
     let res = kv_api
-        .upsert_kv(UpsertKVReq::new(
+        .upsert_kv(UpsertKV::new(
             key,
             MatchSeq::Exact(seq_value.seq),
             Operation::Update(value),

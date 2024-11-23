@@ -130,7 +130,6 @@ use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
@@ -238,7 +237,7 @@ async fn upsert_test_data(
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
     let res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: key.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Update(value),
@@ -255,7 +254,7 @@ async fn delete_test_data(
     key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: key.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Delete,
