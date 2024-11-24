@@ -1182,6 +1182,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
+            | Plan::UseCatalog(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)

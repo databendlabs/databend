@@ -265,6 +265,10 @@ impl QueryContextShared {
         self.session.get_current_catalog()
     }
 
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session.set_current_catalog(catalog_name)
+    }
+
     pub fn get_aborting(&self) -> Arc<AtomicBool> {
         self.aborting.clone()
     }

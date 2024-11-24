@@ -27,6 +27,9 @@ pub enum QueryAffect {
     UseDB {
         name: String,
     },
+    UseCatalog {
+        name: String,
+    },
     ChangeSettings {
         keys: Vec<String>,
         values: Vec<String>,

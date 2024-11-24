@@ -3123,6 +3123,7 @@ impl<'a> TypeChecker<'a> {
 
     pub fn all_sugar_functions() -> &'static [&'static str] {
         &[
+            "current_catalog",
             "database",
             "currentdatabase",
             "current_database",
@@ -3160,6 +3161,10 @@ impl<'a> TypeChecker<'a> {
         args: &[&Expr],
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         match (func_name.to_lowercase().as_str(), args) {
+            ("current_catalog", &[]) => Some(self.resolve(&Expr::Literal {
+                span,
+                value: Literal::String(self.ctx.get_current_catalog()),
+            })),
             ("database" | "currentdatabase" | "current_database", &[]) => {
                 Some(self.resolve(&Expr::Literal {
                     span,
