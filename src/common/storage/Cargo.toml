@@ -15,6 +15,7 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true, features = ["serde"] }
+databend-common-ast = { workspace = true }
 databend-common-auth = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
