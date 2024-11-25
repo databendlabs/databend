@@ -14,8 +14,8 @@
 
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_exception::ErrorCode;
-use databend_common_meta_app::principal::OnErrorMode;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;

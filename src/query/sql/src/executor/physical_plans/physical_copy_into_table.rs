@@ -34,7 +34,6 @@ pub struct CopyIntoTable {
     pub required_source_schema: DataSchemaRef,
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
-    pub force: bool,
     pub stage_table_info: StageTableInfo,
     pub table_info: TableInfo,
 

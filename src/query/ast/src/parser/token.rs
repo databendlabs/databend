@@ -1220,8 +1220,6 @@ pub enum TokenKind {
     VACUUM,
     #[token("VALUES", ignore(ascii_case))]
     VALUES,
-    #[token("VALIDATION_MODE", ignore(ascii_case))]
-    VALIDATION_MODE,
     #[token("VARBINARY", ignore(ascii_case))]
     VARBINARY,
     #[token("VARCHAR", ignore(ascii_case))]

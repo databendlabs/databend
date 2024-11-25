@@ -34,7 +34,6 @@ use crate::storage::StorageParams;
 // internalStageParams
 // directoryTableParams
 // [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
-// [ COPY_OPTIONS = ( copyOptions ) ]
 // [ COMMENT = '<string_literal>' ]
 //
 // -- External stage
@@ -42,7 +41,6 @@ use crate::storage::StorageParams;
 // externalStageParams
 // directoryTableParams
 // [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
-// [ COPY_OPTIONS = ( copyOptions ) ]
 // [ COMMENT = '<string_literal>' ]
 //
 //
@@ -52,7 +50,6 @@ use crate::storage::StorageParams;
 // 's3://<bucket>[/<path>/]'
 // [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' [ AWS_TOKEN = '<string>' ] } | AWS_ROLE = '<string>'  } ) ) } ]
 //
-// copyOptions ::=
 // ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
 // SIZE_LIMIT = <num>
 
@@ -403,7 +400,7 @@ pub struct StageParams {
     pub storage: StorageParams,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
 pub enum OnErrorMode {
     Continue,
     SkipFileNum(u64),
@@ -507,92 +504,6 @@ pub struct CopyOptions {
     pub max_file_size: usize,
     pub single: bool,
     pub detailed_output: bool,
-}
-
-impl CopyOptions {
-    pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
-        if opts.is_empty() {
-            return Ok(());
-        }
-        for (k, v) in opts.iter() {
-            match k.as_str() {
-                "on_error" => {
-                    let on_error = OnErrorMode::from_str(v)?;
-                    self.on_error = on_error;
-                }
-                "size_limit" => {
-                    let size_limit = usize::from_str(v)?;
-                    self.size_limit = size_limit;
-                }
-                "max_files" => {
-                    let max_files = usize::from_str(v)?;
-                    self.max_files = max_files;
-                }
-                "split_size" => {
-                    let split_size = usize::from_str(v)?;
-                    self.split_size = split_size;
-                }
-                "purge" => {
-                    let purge = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
-                    })?;
-                    self.purge = purge;
-                }
-                "single" => {
-                    let single = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
-                    })?;
-                    self.single = single;
-                }
-                "max_file_size" => {
-                    let max_file_size = usize::from_str(v)?;
-                    self.max_file_size = max_file_size;
-                }
-                "disable_variant_check" => {
-                    let disable_variant_check = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!(
-                            "Cannot parse disable_variant_check: {} as bool",
-                            v
-                        ))
-                    })?;
-                    self.disable_variant_check = disable_variant_check;
-                }
-                "return_failed_only" => {
-                    let return_failed_only = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!(
-                            "Cannot parse return_failed_only: {} as bool",
-                            v
-                        ))
-                    })?;
-                    self.return_failed_only = return_failed_only;
-                }
-                _ => {
-                    if !ignore_unknown {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "Unknown stage copy option {}",
-                            k
-                        )));
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for CopyOptions {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "OnErrorMode {}", self.on_error)?;
-        write!(f, "SizeLimit {}", self.size_limit)?;
-        write!(f, "MaxFiles {}", self.max_files)?;
-        write!(f, "SplitSize {}", self.split_size)?;
-        write!(f, "Purge {}", self.purge)?;
-        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
-        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
-        write!(f, "MaxFileSize {}", self.max_file_size)?;
-        write!(f, "Single {}", self.single)?;
-        write!(f, "DetailedOutput {}", self.detailed_output)
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
