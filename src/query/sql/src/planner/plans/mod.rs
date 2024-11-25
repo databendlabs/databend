@@ -52,6 +52,7 @@ mod sort;
 mod system;
 mod udf;
 mod union_all;
+mod value_scan;
 mod window;
 
 pub use aggregate::*;
@@ -99,4 +100,5 @@ pub use sort::*;
 pub use system::*;
 pub use udf::*;
 pub use union_all::UnionAll;
+pub use value_scan::*;
 pub use window::*;

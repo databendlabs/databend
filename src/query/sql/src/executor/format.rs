@@ -485,6 +485,9 @@ fn to_format_tree(
             ))
         }
         PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::ValueScan(plan) => {
+            Ok(FormatTreeNode::new(format!("ValueScan: {}", plan.plan_id)))
+        }
     }
 }
 

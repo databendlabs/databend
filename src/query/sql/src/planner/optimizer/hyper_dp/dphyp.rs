@@ -296,7 +296,9 @@ impl DPhpy {
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
             | RelOperator::Recluster(_)
-            | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::CompactBlock(_)
+            | RelOperator::CopyIntoTable(_)
+            | RelOperator::ValueScan(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 

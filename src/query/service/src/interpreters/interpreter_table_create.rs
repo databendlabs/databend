@@ -38,7 +38,10 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::field_default_value;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::CopyIntoTablePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -63,13 +66,11 @@ use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
-use crate::interpreters::InsertInterpreter;
+use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::Insert;
-use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
@@ -218,26 +219,44 @@ impl CreateTableInterpreter {
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
 
-        let table_info = TableInfo::new(
+        let _table_info = TableInfo::new(
             &self.plan.database,
             &self.plan.table,
             TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
 
-        let insert_plan = Insert {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-            schema: self.plan.schema.clone(),
-            overwrite: false,
-            source: InsertInputSource::SelectPlan(select_plan),
-            table_info: Some(table_info),
+        let (project_columns, source, metadata) = match select_plan.as_ref() {
+            Plan::Query {
+                bind_context,
+                s_expr,
+                metadata,
+                ..
+            } => (
+                Some(bind_context.columns.clone()),
+                *s_expr.clone(),
+                metadata.clone(),
+            ),
+            _ => unreachable!(),
         };
 
-        let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
-            .execute2()
-            .await?;
+        let insert_plan = CopyIntoTablePlan {
+            catalog_name: self.plan.catalog.clone(),
+            database_name: self.plan.database.clone(),
+            table_name: self.plan.table.clone(),
+            required_values_schema: Arc::new(self.plan.schema.clone().into()),
+            values_consts: vec![],
+            required_source_schema: Arc::new(self.plan.schema.clone().into()),
+            project_columns,
+            mutation_kind: MutationKind::Insert,
+        };
+
+        let s_expr = SExpr::create_unary(Arc::new(insert_plan.into()), Arc::new(source));
+
+        let mut pipeline =
+            CopyIntoTableInterpreter::try_create(self.ctx.clone(), s_expr, metadata, None, false)?
+                .execute2()
+                .await?;
 
         let db_name = self.plan.database.clone();
         let table_name = self.plan.table.clone();

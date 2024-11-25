@@ -256,6 +256,7 @@ impl PipelineBuilder {
             PhysicalPlan::ColumnMutation(column_mutation) => {
                 self.build_column_mutation(column_mutation)
             }
+            PhysicalPlan::ValueScan(value_scan) => self.build_value_scan(value_scan),
         }?;
 
         self.is_exchange_neighbor = is_exchange_neighbor;

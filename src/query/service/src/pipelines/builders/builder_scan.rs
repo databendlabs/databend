@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
@@ -26,9 +27,14 @@ use databend_common_sql::executor::physical_plans::CacheScan;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CteScan;
 use databend_common_sql::executor::physical_plans::ExpressionScan;
+use databend_common_sql::executor::physical_plans::PhysicalValueScan;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::physical_plans::Values;
 use databend_common_sql::plans::CacheSource;
+use databend_common_sql::NameResolutionContext;
 
+use super::RawValueSource;
+use super::ValueSource;
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
 use crate::pipelines::processors::transforms::MaterializedCteSource;
@@ -162,5 +168,34 @@ impl PipelineBuilder {
         })?;
 
         Ok(())
+    }
+
+    pub(crate) fn build_value_scan(&mut self, scan: &PhysicalValueScan) -> Result<()> {
+        match &scan.values {
+            Values::Values(rows) => self.main_pipeline.add_source(
+                |output| {
+                    let inner = ValueSource::new(rows.clone(), scan.output_schema.clone());
+                    AsyncSourcer::create(self.ctx.clone(), output, inner)
+                },
+                1,
+            ),
+            Values::RawValues { rest_str, start } => self.main_pipeline.add_source(
+                |output| {
+                    let name_resolution_ctx = NameResolutionContext {
+                        deny_column_reference: true,
+                        ..Default::default()
+                    };
+                    let inner = RawValueSource::new(
+                        rest_str.clone(),
+                        self.ctx.clone(),
+                        name_resolution_ctx,
+                        scan.output_schema.clone(),
+                        *start,
+                    );
+                    AsyncSourcer::create(self.ctx.clone(), output, inner)
+                },
+                1,
+            ),
+        }
     }
 }

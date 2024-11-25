@@ -22,7 +22,6 @@ use databend_common_exception::Result;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::plans::CopyIntoTableMode;
 use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
 use crate::plans::Plan;
@@ -121,7 +120,6 @@ impl Binder {
                                 table_name.clone(),
                                 Arc::new(schema.clone().into()),
                                 &values_str,
-                                CopyIntoTableMode::Replace,
                             )
                             .await?;
                         Ok(InsertInputSource::Stage(Box::new(plan)))

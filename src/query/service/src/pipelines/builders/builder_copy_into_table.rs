@@ -24,45 +24,32 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::ParquetFileFormatParams;
-use databend_common_meta_app::principal::StageInfo;
+// use databend_common_meta_app::principal::FileFormatParams;
+// use databend_common_meta_app::principal::ParquetFileFormatParams;
+// use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_storage::StageFileInfo;
 use log::debug;
 use log::info;
 
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformNullIf;
+// use crate::pipelines::processors::TransformNullIf;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
-/// This file implements copy into table pipeline builder.
 impl PipelineBuilder {
     pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
         let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
-        let source_schema = match &copy.source {
-            CopyIntoTableSource::Query(input) => {
-                self.build_pipeline(input)?;
-                // Reorder the result for select clause
-                PipelineBuilder::build_result_projection(
-                    &self.func_ctx,
-                    input.output_schema()?,
-                    copy.project_columns.as_ref().unwrap(),
-                    &mut self.main_pipeline,
-                    false,
-                )?;
-                let fields = copy
-                    .project_columns
-                    .as_ref()
-                    .unwrap()
+        self.ctx
+            .set_read_block_thresholds(to_table.get_block_thresholds());
+        let source_schema = match &copy.project_columns {
+            Some(project_columns) => {
+                let fields = project_columns
                     .iter()
                     .map(|column_binding| {
                         DataField::new(
@@ -73,14 +60,19 @@ impl PipelineBuilder {
                     .collect();
                 DataSchemaRefExt::create(fields)
             }
-            CopyIntoTableSource::Stage(input) => {
-                self.ctx
-                    .set_read_block_thresholds(to_table.get_block_thresholds());
-
-                self.build_pipeline(input)?;
-                copy.required_source_schema.clone()
-            }
+            None => copy.input.output_schema()?,
         };
+
+        self.build_pipeline(&copy.input)?;
+        if let Some(project_columns) = &copy.project_columns {
+            PipelineBuilder::build_result_projection(
+                &self.func_ctx,
+                copy.input.output_schema()?,
+                project_columns,
+                &mut self.main_pipeline,
+                false,
+            )?;
+        }
         Self::build_append_data_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
@@ -91,34 +83,32 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn need_null_if_processor<'a>(
-        plan: &'a CopyIntoTable,
-        source_schema: &Arc<DataSchema>,
-        dest_schema: &Arc<DataSchema>,
-    ) -> Option<&'a [String]> {
-        if plan.is_transform {
-            return None;
-        }
-        if let FileFormatParams::Parquet(ParquetFileFormatParams { null_if, .. }) =
-            &plan.stage_table_info.stage_info.file_format_params
-        {
-            if !null_if.is_empty()
-                && source_schema
-                    .fields
-                    .iter()
-                    .zip(dest_schema.fields.iter())
-                    .any(|(src_field, dest_field)| {
-                        TransformNullIf::column_need_transform(
-                            src_field.data_type(),
-                            dest_field.data_type(),
-                        )
-                    })
-            {
-                return Some(null_if);
-            }
-        }
-        None
-    }
+    // fn need_null_if_processor<'a>(
+    //     plan: &'a CopyIntoTable,
+    //     _source_schema: &Arc<DataSchema>,
+    //     _dest_schema: &Arc<DataSchema>,
+    // ) -> Option<&'a [String]> {
+    //     // if let FileFormatParams::Parquet(ParquetFileFormatParams { null_if, .. }) =
+    //     //     &plan.stage_table_info.stage_info.file_format_params
+    //     // {
+    //     //     if !null_if.is_empty()
+    //     //         && source_schema
+    //     //             .fields
+    //     //             .iter()
+    //     //             .zip(dest_schema.fields.iter())
+    //     //             .any(|(src_field, dest_field)| {
+    //     //                 TransformNullIf::column_need_transform(
+    //     //                     src_field.data_type(),
+    //     //                     dest_field.data_type(),
+    //     //                 )
+    //     //             })
+    //     //     {
+    //     //         return Some(null_if);
+    //     //     }
+    //     // }
+    //     // None
+    //     todo!()
+    // }
 
     fn build_append_data_pipeline(
         ctx: Arc<QueryContext>,
@@ -130,24 +120,23 @@ impl PipelineBuilder {
         let plan_required_source_schema = &plan.required_source_schema;
         let plan_values_consts = &plan.values_consts;
         let plan_required_values_schema = &plan.required_values_schema;
-        let plan_write_mode = &plan.write_mode;
 
-        let source_schema = if let Some(null_if) =
-            Self::need_null_if_processor(plan, &source_schema, plan_required_source_schema)
-        {
-            let func_ctx = ctx.get_function_context()?;
-            main_pipeline.try_add_transformer(|| {
-                TransformNullIf::try_new(
-                    source_schema.clone(),
-                    plan_required_source_schema.clone(),
-                    func_ctx.clone(),
-                    null_if,
-                )
-            })?;
-            TransformNullIf::new_schema(&source_schema)
-        } else {
-            source_schema
-        };
+        // let source_schema = if let Some(null_if) =
+        //     Self::need_null_if_processor(plan, &source_schema, plan_required_source_schema)
+        // {
+        //     let func_ctx = ctx.get_function_context()?;
+        //     main_pipeline.try_add_transformer(|| {
+        //         TransformNullIf::try_new(
+        //             source_schema.clone(),
+        //             plan_required_source_schema.clone(),
+        //             func_ctx.clone(),
+        //             null_if,
+        //         )
+        //     })?;
+        //     TransformNullIf::new_schema(&source_schema)
+        // } else {
+        //     source_schema
+        // };
 
         if &source_schema != plan_required_source_schema {
             // only parquet need cast
@@ -171,31 +160,18 @@ impl PipelineBuilder {
             )?;
         }
 
-        // append data without commit.
-        match plan_write_mode {
-            CopyIntoTableMode::Insert { overwrite: _ } => {
-                Self::build_append2table_without_commit_pipeline(
-                    ctx,
-                    main_pipeline,
-                    to_table.clone(),
-                    plan_required_values_schema.clone(),
-                )?
-            }
-            CopyIntoTableMode::Replace => {}
-            CopyIntoTableMode::Copy => Self::build_append2table_without_commit_pipeline(
-                ctx,
-                main_pipeline,
-                to_table.clone(),
-                plan_required_values_schema.clone(),
-            )?,
-        }
-        Ok(())
+        Self::build_append2table_without_commit_pipeline(
+            ctx,
+            main_pipeline,
+            to_table.clone(),
+            plan_required_values_schema.clone(),
+        )
     }
 
     pub(crate) fn build_upsert_copied_files_to_meta_req(
         ctx: Arc<QueryContext>,
         to_table: &dyn Table,
-        stage_info: &StageInfo,
+        purge: bool,
         copied_files: &[StageFileInfo],
         force: bool,
     ) -> Result<Option<UpsertTableCopiedFileReq>> {
@@ -216,7 +192,7 @@ impl PipelineBuilder {
         let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
         let upsert_copied_files_request = {
-            if stage_info.copy_options.purge && force {
+            if purge && force {
                 // if `purge-after-copy` is enabled, and in `force` copy mode,
                 // we do not need to upsert copied files into meta server
                 info!(

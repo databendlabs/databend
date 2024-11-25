@@ -88,6 +88,8 @@ impl Binder {
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
             | RelOperator::MutationSource(_)
+            | RelOperator::CopyIntoTable(_)
+            | RelOperator::ValueScan(_)
             | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",

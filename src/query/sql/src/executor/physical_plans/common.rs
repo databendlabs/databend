@@ -71,13 +71,14 @@ pub enum FragmentKind {
     Merge,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy, PartialEq, Eq)]
 pub enum MutationKind {
     Delete,
     Update,
     Replace,
     Recluster,
     Insert,
+    CopyInto,
     Compact,
     MergeInto,
 }
@@ -92,6 +93,7 @@ impl Display for MutationKind {
             MutationKind::Replace => write!(f, "Replace"),
             MutationKind::Compact => write!(f, "Compact"),
             MutationKind::MergeInto => write!(f, "MergeInto"),
+            MutationKind::CopyInto => write!(f, "CopyInto"),
         }
     }
 }

@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::fmt::Formatter;
-use std::str::FromStr;
+use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -31,91 +30,24 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_metrics::storage::*;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
-use enum_as_inner::EnumAsInner;
 use log::info;
 
-use super::InsertValue;
-use crate::plans::Plan;
+use super::Operator;
+use super::RelOp;
+use crate::executor::physical_plans::CopyIntoTable;
+use crate::executor::physical_plans::MutationKind;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::SExpr;
+use crate::ColumnBinding;
 
-#[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum ValidationMode {
-    None,
-    ReturnNRows(u64),
-    ReturnErrors,
-    ReturnAllErrors,
-}
-
-impl Display for ValidationMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ValidationMode::None => write!(f, ""),
-            ValidationMode::ReturnNRows(v) => write!(f, "RETURN_ROWS={v}"),
-            ValidationMode::ReturnErrors => write!(f, "RETURN_ERRORS"),
-            ValidationMode::ReturnAllErrors => write!(f, "RETURN_ALL_ERRORS"),
-        }
-    }
-}
-
-impl FromStr for ValidationMode {
-    type Err = String;
-    fn from_str(s: &str) -> std::result::Result<Self, String> {
-        match s.to_uppercase().as_str() {
-            "" => Ok(ValidationMode::None),
-            "RETURN_ERRORS" => Ok(ValidationMode::ReturnErrors),
-            "RETURN_ALL_ERRORS" => Ok(ValidationMode::ReturnAllErrors),
-            v => {
-                let rows_str = v.replace("RETURN_", "").replace("_ROWS", "");
-                let rows = rows_str.parse::<u64>();
-                match rows {
-                    Ok(v) => Ok(ValidationMode::ReturnNRows(v)),
-                    Err(_) => Err(format!(
-                        "Unknown validation mode:{v:?}, must one of {{ RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}}"
-                    )),
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
-pub enum CopyIntoTableMode {
-    Insert { overwrite: bool },
-    Replace,
-    Copy,
-}
-
-impl Display for CopyIntoTableMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            CopyIntoTableMode::Insert { overwrite } => {
-                if *overwrite {
-                    write!(f, "INSERT OVERWRITE")
-                } else {
-                    write!(f, "INSERT")
-                }
-            }
-            CopyIntoTableMode::Replace => write!(f, "REPLACE"),
-            CopyIntoTableMode::Copy => write!(f, "COPY"),
-        }
-    }
-}
-
-impl CopyIntoTableMode {
-    pub fn is_overwrite(&self) -> bool {
-        match self {
-            CopyIntoTableMode::Insert { overwrite } => *overwrite,
-            CopyIntoTableMode::Replace => false,
-            CopyIntoTableMode::Copy => false,
-        }
-    }
-}
-
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CopyIntoTablePlan {
     pub catalog_name: String,
     pub database_name: String,
@@ -123,150 +55,142 @@ pub struct CopyIntoTablePlan {
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
+    pub project_columns: Option<Vec<ColumnBinding>>,
+    pub mutation_kind: MutationKind,
+}
+
+#[derive(Clone, Debug)]
+pub struct StageContext {
+    pub purge: bool,
     pub force: bool,
+    pub files_to_copy: Vec<StageFileInfo>,
+    pub duplicated_files_detected: Vec<String>,
+    pub stage_info: StageInfo,
 }
 
-#[derive(Clone, EnumAsInner)]
-pub enum AppendSource {
-    Query(Box<Plan>),
-    Stage(Box<StageTableInfo>),
-    Values(InsertValue),
-}
-
-impl AppendSource {
-    pub fn files_to_copy(&self) -> Vec<StageFileInfo> {
-        match self {
-            AppendSource::Stage(stage) => stage.files_to_copy.clone().unwrap_or_default(),
-            _ => vec![],
-        }
-    }
-
-    pub fn duplicated_files_detected(&self) -> Vec<String> {
-        match self {
-            AppendSource::Stage(stage) => stage.duplicated_files_detected.clone(),
-            _ => vec![],
-        }
+impl Hash for CopyIntoTablePlan {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.catalog_name.hash(state);
+        self.database_name.hash(state);
+        self.table_name.hash(state);
     }
 }
 
 impl CopyIntoTablePlan {
-    pub async fn collect_files(&mut self, ctx: &dyn TableContext) -> Result<()> {
-        // ctx.set_status_info("begin to list files");
-        // let start = Instant::now();
+    pub async fn collect_files(
+        &self,
+        ctx: &dyn TableContext,
+        stage_table_info: &mut StageTableInfo,
+        force: bool,
+    ) -> Result<()> {
+        ctx.set_status_info("begin to list files");
+        let start = Instant::now();
 
-        // let stage_table_info = self.source.as_stage().unwrap();
-        // let max_files = stage_table_info.stage_info.copy_options.max_files;
-        // let max_files = if max_files == 0 {
-        //     None
-        // } else {
-        //     Some(max_files)
-        // };
+        let max_files = stage_table_info.stage_info.copy_options.max_files;
+        let max_files = if max_files == 0 {
+            None
+        } else {
+            Some(max_files)
+        };
 
-        // let thread_num = ctx.get_settings().get_max_threads()? as usize;
-        // let operator = init_stage_operator(&stage_table_info.stage_info)?;
-        // let all_source_file_infos = if operator.info().native_capability().blocking {
-        //     if self.force {
-        //         stage_table_info
-        //             .files_info
-        //             .blocking_list(&operator, max_files)
-        //     } else {
-        //         stage_table_info.files_info.blocking_list(&operator, None)
-        //     }
-        // } else if self.force {
-        //     stage_table_info
-        //         .files_info
-        //         .list(&operator, thread_num, max_files)
-        //         .await
-        // } else {
-        //     stage_table_info
-        //         .files_info
-        //         .list(&operator, thread_num, None)
-        //         .await
-        // }?;
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+        let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        let all_source_file_infos = if operator.info().native_capability().blocking {
+            if force {
+                stage_table_info
+                    .files_info
+                    .blocking_list(&operator, max_files)
+            } else {
+                stage_table_info.files_info.blocking_list(&operator, None)
+            }
+        } else if force {
+            stage_table_info
+                .files_info
+                .list(&operator, thread_num, max_files)
+                .await
+        } else {
+            stage_table_info
+                .files_info
+                .list(&operator, thread_num, None)
+                .await
+        }?;
 
-        // let num_all_files = all_source_file_infos.len();
+        let num_all_files = all_source_file_infos.len();
 
-        // let end_get_all_source = Instant::now();
-        // let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
-        // metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+        let end_get_all_source = Instant::now();
+        let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
+        metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
 
-        // ctx.set_status_info(&format!(
-        //     "end list files: got {} files, time used {:?}",
-        //     num_all_files,
-        //     start.elapsed()
-        // ));
+        ctx.set_status_info(&format!(
+            "end list files: got {} files, time used {:?}",
+            num_all_files,
+            start.elapsed()
+        ));
 
-        // let (need_copy_file_infos, duplicated) = if self.force {
-        //     if !stage_table_info.stage_info.copy_options.purge
-        //         && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
-        //     {
-        //         return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
-        //     }
-        //     info!(
-        //         "force mode, ignore file filtering. ({}.{})",
-        //         &self.database_name, &self.table_name
-        //     );
-        //     (all_source_file_infos, vec![])
-        // } else {
-        //     // Status.
-        //     ctx.set_status_info("begin filtering out copied files");
+        let (need_copy_file_infos, duplicated) = if force {
+            if !stage_table_info.stage_info.copy_options.purge
+                && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
+            {
+                return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+            }
+            info!(
+                "force mode, ignore file filtering. ({}.{})",
+                &self.database_name, &self.table_name
+            );
+            (all_source_file_infos, vec![])
+        } else {
+            // Status.
+            ctx.set_status_info("begin filtering out copied files");
 
-        //     let filter_start = Instant::now();
-        //     let FilteredCopyFiles {
-        //         files_to_copy,
-        //         duplicated_files,
-        //     } = ctx
-        //         .filter_out_copied_files(
-        //             &self.catalog_name,
-        //             &self.database_name,
-        //             &self.table_name,
-        //             &all_source_file_infos,
-        //             max_files,
-        //         )
-        //         .await?;
-        //     ctx.set_status_info(&format!(
-        //         "end filtering out copied files: {}, time used {:?}",
-        //         num_all_files,
-        //         filter_start.elapsed()
-        //     ));
+            let filter_start = Instant::now();
+            let FilteredCopyFiles {
+                files_to_copy,
+                duplicated_files,
+            } = ctx
+                .filter_out_copied_files(
+                    &self.catalog_name,
+                    &self.database_name,
+                    &self.table_name,
+                    &all_source_file_infos,
+                    max_files,
+                )
+                .await?;
+            ctx.set_status_info(&format!(
+                "end filtering out copied files: {}, time used {:?}",
+                num_all_files,
+                filter_start.elapsed()
+            ));
 
-        //     let end_filter_out = Instant::now();
-        //     let cost_filter_out = end_filter_out
-        //         .duration_since(end_get_all_source)
-        //         .as_millis();
-        //     metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
+            let end_filter_out = Instant::now();
+            let cost_filter_out = end_filter_out
+                .duration_since(end_get_all_source)
+                .as_millis();
+            metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
 
-        //     (files_to_copy, duplicated_files)
-        // };
+            (files_to_copy, duplicated_files)
+        };
 
-        // let num_copied_files = need_copy_file_infos.len();
-        // let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+        let num_copied_files = need_copy_file_infos.len();
+        let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
 
-        // info!(
-        //     "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
-        //     max_files,
-        //     need_copy_file_infos.len(),
-        //     copied_bytes,
-        //     num_all_files - num_copied_files,
-        //     start.elapsed()
-        // );
+        info!(
+            "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
+            max_files,
+            need_copy_file_infos.len(),
+            copied_bytes,
+            num_all_files - num_copied_files,
+            start.elapsed()
+        );
 
-        // if need_copy_file_infos.is_empty() {
-        //     self.no_file_to_copy = true;
-        // }
+        stage_table_info.files_to_copy = Some(need_copy_file_infos);
+        stage_table_info.duplicated_files_detected = duplicated;
 
-        // let stage_table_info = self.source.as_stage_mut().unwrap();
-
-        // stage_table_info.files_to_copy = Some(need_copy_file_infos);
-        // stage_table_info.duplicated_files_detected = duplicated;
-
-        // Ok(())
-        todo!()
+        Ok(())
     }
 }
 
 impl Debug for CopyIntoTablePlan {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut Formatter) -> std::fmt::Result {
         // let CopyIntoTablePlan {
         //     catalog_name: catalog_info,
         //     database_name,
@@ -294,8 +218,6 @@ impl Debug for CopyIntoTablePlan {
     }
 }
 
-/// CopyPlan supports CopyIntoTable & CopyIntoStage
-
 impl CopyIntoTablePlan {
     fn copy_into_table_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
@@ -314,11 +236,41 @@ impl CopyIntoTablePlan {
     }
 
     pub fn schema(&self) -> DataSchemaRef {
-        // if self.from_attachment {
-        //     Arc::new(DataSchema::empty())
-        // } else {
-        //     Self::copy_into_table_schema()
-        // }
-        todo!()
+        match self.mutation_kind {
+            MutationKind::CopyInto => Self::copy_into_table_schema(),
+            MutationKind::Insert => Arc::new(DataSchema::empty()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Operator for CopyIntoTablePlan {
+    fn rel_op(&self) -> RelOp {
+        RelOp::CopyIntoTable
+    }
+}
+
+impl PhysicalPlanBuilder {
+    pub async fn build_copy_into_table(
+        &mut self,
+        s_expr: &SExpr,
+        plan: &crate::plans::CopyIntoTablePlan,
+    ) -> Result<PhysicalPlan> {
+        let to_table = self
+            .ctx
+            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .await?;
+
+        let source = self.build(s_expr.child(0)?, Default::default()).await?;
+
+        Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            plan_id: 0,
+            input: Box::new(source),
+            required_values_schema: plan.required_values_schema.clone(),
+            values_consts: plan.values_consts.clone(),
+            required_source_schema: plan.required_source_schema.clone(),
+            table_info: to_table.get_table_info().clone(),
+            project_columns: None,
+        })))
     }
 }

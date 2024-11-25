@@ -47,6 +47,7 @@ use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
@@ -286,40 +287,47 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
             options,
         })),
-        // Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
-        //     plan.enable_distributed = opt_ctx.enable_distributed_optimization
-        //         && opt_ctx
-        //             .table_ctx
-        //             .get_settings()
-        //             .get_enable_distributed_copy()?;
-        //     info!(
-        //         "after optimization enable_distributed_copy? : {}",
-        //         plan.enable_distributed
-        //     );
-
-        //     // if let Some(p) = &plan.query {
-        //     //     let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-        //     //     plan.query = Some(Box::new(optimized_plan));
-        //     // }
-        //     Ok(Plan::CopyIntoTable(plan))
-        // }
+        Plan::CopyIntoTable {
+            s_expr,
+            metadata,
+            stage_context,
+            overwrite,
+        } => {
+            let enable_distributed = opt_ctx.enable_distributed_optimization
+                && opt_ctx
+                    .table_ctx
+                    .get_settings()
+                    .get_enable_distributed_copy()?;
+            info!(
+                "after optimization enable_distributed_copy? : {}",
+                enable_distributed
+            );
+            let mut optimized_source =
+                optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
+            let optimized = match enable_distributed {
+                true => {
+                    if let RelOperator::Exchange(Exchange::Merge) = optimized_source.plan.as_ref() {
+                        optimized_source = optimized_source.child(0).unwrap().clone();
+                    }
+                    let copy_into = SExpr::create_unary(
+                        Arc::new(s_expr.plan().clone()),
+                        Arc::new(optimized_source),
+                    );
+                    let exchange = Arc::new(RelOperator::Exchange(Exchange::Merge));
+                    SExpr::create_unary(exchange, Arc::new(copy_into))
+                }
+                false => {
+                    SExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(optimized_source))
+                }
+            };
+            Ok(Plan::CopyIntoTable {
+                s_expr: Box::new(optimized),
+                metadata,
+                stage_context,
+                overwrite,
+            })
+        }
         Plan::DataMutation { s_expr, .. } => optimize_mutation(opt_ctx, *s_expr).await,
-
-        // distributed insert will be optimized in `physical_plan_builder`
-        // Plan::Insert(mut plan) => {
-        //     match plan.source {
-        //         InsertInputSource::SelectPlan(p) => {
-        //             let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-        //             plan.source = InsertInputSource::SelectPlan(Box::new(optimized_plan));
-        //         }
-        //         InsertInputSource::Stage(p) => {
-        //             let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-        //             plan.source = InsertInputSource::Stage(Box::new(optimized_plan));
-        //         }
-        //         _ => {}
-        //     }
-        //     Ok(Plan::Insert(plan))
-        // }
         Plan::InsertMultiTable(mut plan) => {
             plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
             Ok(Plan::InsertMultiTable(plan))

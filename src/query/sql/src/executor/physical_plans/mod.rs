@@ -56,6 +56,7 @@ mod physical_sort;
 mod physical_table_scan;
 mod physical_udf;
 mod physical_union_all;
+mod physical_value_scan;
 mod physical_window;
 
 pub use common::*;
@@ -106,5 +107,6 @@ pub use physical_table_scan::TableScan;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;
 pub use physical_union_all::UnionAll;
+pub use physical_value_scan::*;
 pub use physical_window::*;
 pub use physical_window_partition::WindowPartition;

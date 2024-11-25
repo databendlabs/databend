@@ -27,6 +27,7 @@ use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSource;
 use super::physical_plans::MutationSplit;
+use super::physical_plans::PhysicalValueScan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -45,7 +46,6 @@ use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
-use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
@@ -111,6 +111,7 @@ pub enum PhysicalPlan {
 
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
+    ValueScan(Box<PhysicalValueScan>),
     CopyIntoLocation(Box<CopyIntoLocation>),
 
     /// Replace
@@ -289,10 +290,11 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTable(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
-                match &mut plan.source {
-                    CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
-                    CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
-                };
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ValueScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
             }
             PhysicalPlan::CopyIntoLocation(plan) => {
                 plan.plan_id = *next_id;
@@ -462,6 +464,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkMerge(v) => v.plan_id,
             PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
             PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
+            PhysicalPlan::ValueScan(v) => v.plan_id,
         }
     }
 
@@ -518,6 +521,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(_) => todo!(),
             PhysicalPlan::ChunkMerge(_) => todo!(),
             PhysicalPlan::ChunkCommitInsert(_) => todo!(),
+            PhysicalPlan::ValueScan(plan) => plan.output_schema(),
         }
     }
 
@@ -580,6 +584,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(_) => "WriteData".to_string(),
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
             PhysicalPlan::ChunkCommitInsert(_) => "Commit".to_string(),
+            PhysicalPlan::ValueScan(_) => "ValueScan".to_string(),
         }
     }
 
@@ -593,6 +598,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::ValueScan(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -651,10 +657,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::CopyIntoTable(v) => match &v.source {
-                CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_ref())),
-                CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_ref())),
-            },
+            PhysicalPlan::CopyIntoTable(v) => Box::new(std::iter::once(v.input.as_ref())),
         }
     }
 
@@ -711,6 +714,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)
             | PhysicalPlan::ChunkMerge(_)
+            | PhysicalPlan::ValueScan(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
     }

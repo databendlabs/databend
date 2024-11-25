@@ -28,7 +28,6 @@ use databend_common_settings::ReplaceIntoShuffleStrategy;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
@@ -536,22 +535,12 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
     }
 
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        match &plan.source {
-            CopyIntoTableSource::Query(query_physical_plan) => {
-                let input = self.replace(query_physical_plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
-            CopyIntoTableSource::Stage(v) => {
-                let input = self.replace(v)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Stage(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
-        }
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 }
 
