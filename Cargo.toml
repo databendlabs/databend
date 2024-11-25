@@ -369,7 +369,6 @@ opendal = { version = "0.50.1", features = [
     "services-moka",
     "services-webhdfs",
     "services-huggingface",
-    "services-redis",
 ] }
 openraft = { version = "0.10.0", features = [
     "serde",
@@ -409,6 +408,7 @@ raft-log = { version = "0.2.5" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
+redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8.1"
 replace_with = "0.1.7"
 reqwest = { version = "0.12", default-features = false, features = [
@@ -536,9 +536,6 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 # Databend Integration Test
-databend-client = { version = "0.22" }
-databend-driver = { version = "0.22" }
-databend-driver-core = { version = "0.22" }
 msql-srv = "0.11.0"
 mysql_common = "0.32.4"
 quickcheck = "1.0"
@@ -573,7 +570,7 @@ incremental = true
 
 [profile.ci]
 inherits = "release"
-overflow-checks = false
+overflow-checks = true
 incremental = false
 debug-assertions = true
 
@@ -583,7 +580,7 @@ debug-assertions = true
 
 [profile.dev]
 split-debuginfo = "unpacked"
-overflow-checks = false
+overflow-checks = true
 # Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
 incremental = true
 

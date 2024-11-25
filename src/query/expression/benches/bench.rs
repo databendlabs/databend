@@ -16,6 +16,7 @@
 extern crate criterion;
 
 use criterion::Criterion;
+use databend_common_column::buffer::Buffer;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::BinaryType;
@@ -130,6 +131,81 @@ fn bench(c: &mut Criterion) {
             });
         }
     }
+
+    for length in [10240, 102400] {
+        let (left, right) = generate_random_int_data(&mut rng, length);
+
+        group.bench_function(format!("function_iterator_iterator_v1/{length}"), |b| {
+            b.iter(|| {
+                let left = left.clone();
+                let right = right.clone();
+
+                let _c = left
+                    .into_iter()
+                    .zip(right.into_iter())
+                    .map(|(a, b)| a + b)
+                    .collect::<Vec<i32>>();
+            })
+        });
+
+        group.bench_function(format!("function_iterator_iterator_v2/{length}"), |b| {
+            b.iter(|| {
+                let _c = left
+                    .iter()
+                    .cloned()
+                    .zip(right.iter().cloned())
+                    .map(|(a, b)| a + b)
+                    .collect::<Vec<i32>>();
+            })
+        });
+
+        group.bench_function(
+            format!("function_buffer_index_unchecked_iterator/{length}"),
+            |b| {
+                b.iter(|| {
+                    let _c = (0..length)
+                        .map(|i| unsafe { left.get_unchecked(i) + right.get_unchecked(i) })
+                        .collect::<Vec<i32>>();
+                })
+            },
+        );
+
+        group.bench_function(
+            format!("function_slice_index_unchecked_iterator/{length}"),
+            |b| {
+                b.iter(|| {
+                    let left = left.as_slice();
+                    let right = right.as_slice();
+
+                    let _c = (0..length)
+                        .map(|i| unsafe { left.get_unchecked(i) + right.get_unchecked(i) })
+                        .collect::<Vec<i32>>();
+                })
+            },
+        );
+
+        let left_vec: Vec<_> = left.iter().cloned().collect();
+        let right_vec: Vec<_> = right.iter().cloned().collect();
+
+        group.bench_function(
+            format!("function_vec_index_unchecked_iterator/{length}"),
+            |b| {
+                b.iter(|| {
+                    let _c = (0..length)
+                        .map(|i| unsafe { left_vec.get_unchecked(i) + right_vec.get_unchecked(i) })
+                        .collect::<Vec<i32>>();
+                })
+            },
+        );
+
+        group.bench_function(format!("function_buffer_index_iterator/{length}"), |b| {
+            b.iter(|| {
+                let _c = (0..length)
+                    .map(|i| left[i] + right[i])
+                    .collect::<Vec<i32>>();
+            })
+        });
+    }
 }
 
 criterion_group!(benches, bench);
@@ -154,4 +230,10 @@ fn generate_random_string_data(rng: &mut StdRng, length: usize) -> (Vec<String>,
         .collect();
 
     (iter_str, iter_binary)
+}
+
+fn generate_random_int_data(rng: &mut StdRng, length: usize) -> (Buffer<i32>, Buffer<i32>) {
+    let s: Buffer<i32> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
+    let b: Buffer<i32> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
+    (s, b)
 }

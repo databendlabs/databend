@@ -49,21 +49,12 @@ impl pb::TxnCondition {
 impl pb::TxnOp {
     /// Create a txn operation that puts a record.
     pub fn put(key: impl ToString, value: Vec<u8>) -> pb::TxnOp {
-        Self::put_with_expire(key, value, None)
-    }
-
-    /// Create a txn operation that puts a record with expiration time.
-    pub fn put_with_expire(
-        key: impl ToString,
-        value: Vec<u8>,
-        expire_at: Option<u64>,
-    ) -> pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
                 key: key.to_string(),
                 value,
                 prev_value: true,
-                expire_at,
+                expire_at: None,
                 ttl_ms: None,
             })),
         }

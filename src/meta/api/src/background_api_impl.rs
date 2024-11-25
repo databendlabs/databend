@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Instant;
+
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::background::background_job_id_ident::BackgroundJobId;
@@ -40,7 +42,6 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
@@ -48,6 +49,7 @@ use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
@@ -222,18 +224,18 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let meta = req.task_info.clone();
 
         let resp = self
-            .upsert_kv(UpsertKVReq::new(
+            .upsert_kv(UpsertKV::new(
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(MetaSpec::new_expire(req.expire_at)),
+                Some(MetaSpec::new_ttl(req.ttl)),
             ))
             .await?;
         // confirm a successful update
         assert!(resp.is_changed());
         Ok(UpdateBackgroundTaskReply {
             last_updated: Utc::now(),
-            expire_at: req.expire_at,
+            expire_at: Instant::now() + req.ttl,
         })
     }
 

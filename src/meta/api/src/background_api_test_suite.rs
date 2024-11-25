@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::background::BackgroundJobIdent;
@@ -127,13 +129,11 @@ impl BackgroundApiTestSuite {
 
         info!("--- create a background task");
         let create_on = Utc::now();
-        // expire after 5 secs
-        let expire_at = create_on + chrono::Duration::seconds(5);
         {
             let req = UpdateBackgroundTaskReq {
                 task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::STARTED, create_on),
-                expire_at: expire_at.timestamp() as u64,
+                ttl: Duration::from_secs(5),
             };
 
             let res = mt.update_background_task(req).await;
@@ -155,7 +155,7 @@ impl BackgroundApiTestSuite {
             let req = UpdateBackgroundTaskReq {
                 task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::DONE, create_on),
-                expire_at: expire_at.timestamp() as u64,
+                ttl: Duration::from_secs(5),
             };
 
             let res = mt.update_background_task(req).await;

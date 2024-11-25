@@ -20,20 +20,20 @@ use super::Buffer;
 /// This crates' equivalent of [`std::vec::IntoIter`] for [`Buffer`].
 #[derive(Debug, Clone)]
 pub struct IntoIter<T: Copy> {
-    values: Buffer<T>,
-    index: usize,
-    end: usize,
+    buffer: Buffer<T>,
+    current: *const T,
+    end: *const T,
 }
 
 impl<T: Copy> IntoIter<T> {
-    /// Creates a new [`Buffer`]
     #[inline]
-    pub fn new(values: Buffer<T>) -> Self {
-        let end = values.len();
+    pub fn new(buffer: Buffer<T>) -> Self {
+        let ptr = buffer.as_ptr();
+        let len = buffer.len();
         Self {
-            values,
-            index: 0,
-            end,
+            current: ptr,
+            end: unsafe { ptr.add(len) },
+            buffer,
         }
     }
 }
@@ -43,40 +43,30 @@ impl<T: Copy> Iterator for IntoIter<T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.end {
-            return None;
+        if self.current == self.end {
+            None
+        } else {
+            let value = unsafe { *self.current };
+            self.current = unsafe { self.current.add(1) };
+            Some(value)
         }
-        let old = self.index;
-        self.index += 1;
-        Some(*unsafe { self.values.get_unchecked(old) })
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.end - self.index, Some(self.end - self.index))
-    }
-
-    #[inline]
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        let new_index = self.index + n;
-        if new_index > self.end {
-            self.index = self.end;
-            None
-        } else {
-            self.index = new_index;
-            self.next()
-        }
+        let len = unsafe { self.end.offset_from(self.current) } as usize;
+        (len, Some(len))
     }
 }
 
 impl<T: Copy> DoubleEndedIterator for IntoIter<T> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.index == self.end {
+        if self.current == self.end {
             None
         } else {
-            self.end -= 1;
-            Some(*unsafe { self.values.get_unchecked(self.end) })
+            self.end = unsafe { self.end.sub(1) };
+            Some(unsafe { *self.end })
         }
     }
 }
