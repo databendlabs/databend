@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::F64;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
-use databend_common_storage::HistogramBucket;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
 use crate::optimizer::histogram_from_ndv;
@@ -319,8 +318,6 @@ impl Join {
                     let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
                         (Some(left_hist), Some(right_hist)) => {
                             // Evaluate join cardinality by histogram.
-                            let (left_hist, right_hist) =
-                                trim_buckets(left_hist, right_hist, &new_min, &new_max)?;
                             evaluate_by_histogram(&left_hist, &right_hist, &mut new_ndv)?
                         }
                         _ => evaluate_by_ndv(
@@ -852,33 +849,4 @@ fn update_statistic(
         right_col_stat.ndv = new_ndv;
     }
     (left_index, right_index)
-}
-
-fn trim_histogram_buckets(
-    hist: &Histogram,
-    min: &Option<Datum>,
-    max: &Option<Datum>,
-) -> Vec<HistogramBucket> {
-    hist.buckets
-        .iter()
-        .filter(|bucket| {
-            (min.is_none() || bucket.upper_bound() > min.as_ref().unwrap())
-                && (max.is_none() || bucket.lower_bound() <= max.as_ref().unwrap())
-        })
-        .cloned()
-        .collect()
-}
-
-fn trim_buckets(
-    left_hist: &Histogram,
-    right_hist: &Histogram,
-    min: &Option<Datum>,
-    max: &Option<Datum>,
-) -> Result<(Histogram, Histogram)> {
-    let left_buckets = trim_histogram_buckets(left_hist, min, max);
-    let right_buckets = trim_histogram_buckets(right_hist, min, max);
-    Ok((
-        Histogram::new(left_buckets, left_hist.accuracy),
-        Histogram::new(right_buckets, right_hist.accuracy),
-    ))
 }
