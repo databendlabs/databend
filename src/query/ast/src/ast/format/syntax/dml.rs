@@ -188,36 +188,39 @@ pub(crate) fn pretty_copy_into_table(copy_stmt: CopyIntoTableStmt) -> RcDoc<'sta
         } else {
             RcDoc::nil()
         })
-        .append(if !copy_stmt.validation_mode.is_empty() {
+        .append(if !copy_stmt.options.validation_mode.is_empty() {
             RcDoc::line()
                 .append(RcDoc::text("VALIDATION_MODE = "))
-                .append(RcDoc::text(copy_stmt.validation_mode))
+                .append(RcDoc::text(copy_stmt.options.validation_mode))
         } else {
             RcDoc::nil()
         })
-        .append(if copy_stmt.size_limit != 0 {
+        .append(if copy_stmt.options.size_limit != 0 {
             RcDoc::line()
                 .append(RcDoc::text("SIZE_LIMIT = "))
-                .append(RcDoc::text(format!("{}", copy_stmt.size_limit)))
+                .append(RcDoc::text(format!("{}", copy_stmt.options.size_limit)))
         } else {
             RcDoc::nil()
         })
-        .append(if copy_stmt.max_files != 0 {
+        .append(if copy_stmt.options.max_files != 0 {
             RcDoc::line()
                 .append(RcDoc::text("MAX_FILES = "))
-                .append(RcDoc::text(format!("{}", copy_stmt.max_files)))
+                .append(RcDoc::text(format!("{}", copy_stmt.options.max_files)))
         } else {
             RcDoc::nil()
         })
         .append(
             RcDoc::line()
                 .append(RcDoc::text("PURGE = "))
-                .append(RcDoc::text(format!("{}", copy_stmt.purge))),
+                .append(RcDoc::text(format!("{}", copy_stmt.options.purge))),
         )
         .append(
             RcDoc::line()
                 .append(RcDoc::text("DISABLE_VARIANT_CHECK = "))
-                .append(RcDoc::text(format!("{}", copy_stmt.disable_variant_check))),
+                .append(RcDoc::text(format!(
+                    "{}",
+                    copy_stmt.options.disable_variant_check
+                ))),
         )
 }
 

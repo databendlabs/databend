@@ -15,6 +15,7 @@
 #[macro_use]
 extern crate criterion;
 
+use arrow_buffer::ScalarBuffer;
 use criterion::Criterion;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::arrow::deserialize_column;
@@ -135,6 +136,9 @@ fn bench(c: &mut Criterion) {
     for length in [10240, 102400] {
         let (left, right) = generate_random_int_data(&mut rng, length);
 
+        let left_scalar = ScalarBuffer::from_iter(left.iter().cloned());
+        let right_scalar = ScalarBuffer::from_iter(right.iter().cloned());
+
         group.bench_function(format!("function_iterator_iterator_v1/{length}"), |b| {
             b.iter(|| {
                 let left = left.clone();
@@ -165,6 +169,19 @@ fn bench(c: &mut Criterion) {
                 b.iter(|| {
                     let _c = (0..length)
                         .map(|i| unsafe { left.get_unchecked(i) + right.get_unchecked(i) })
+                        .collect::<Vec<i32>>();
+                })
+            },
+        );
+
+        group.bench_function(
+            format!("function_buffer_scalar_index_unchecked_iterator/{length}"),
+            |b| {
+                b.iter(|| {
+                    let _c = (0..length)
+                        .map(|i| unsafe {
+                            left_scalar.get_unchecked(i) + right_scalar.get_unchecked(i)
+                        })
                         .collect::<Vec<i32>>();
                 })
             },
