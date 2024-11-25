@@ -98,6 +98,7 @@ runs:
         objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
         chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
         strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        objcopy --add-gnu-debuglink databend-query.debug databend-query
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
