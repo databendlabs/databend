@@ -63,13 +63,19 @@ pub struct Buffer<T> {
     /// the internal byte buffer.
     data: Arc<Bytes<T>>,
 
-    /// The offset into the buffer.
-    offset: usize,
+    /// Pointer into `data` valid
+    ///
+    /// We store a pointer instead of an offset to avoid pointer arithmetic
+    /// which causes LLVM to fail to vectorise code correctly
+    ptr: *const T,
 
     // the length of the buffer. Given a region `data` of N bytes, [offset..offset+length] is visible
     // to this buffer.
     length: usize,
 }
+
+unsafe impl<T: Send> Send for Buffer<T> {}
+unsafe impl<T: Sync> Sync for Buffer<T> {}
 
 impl<T: PartialEq> PartialEq for Buffer<T> {
     #[inline]
@@ -101,9 +107,10 @@ impl<T> Buffer<T> {
     /// Auxiliary method to create a new Buffer
     pub(crate) fn from_bytes(bytes: Bytes<T>) -> Self {
         let length = bytes.len();
+        let ptr = bytes.as_ptr();
         Buffer {
             data: Arc::new(bytes),
-            offset: 0,
+            ptr,
             length,
         }
     }
@@ -130,24 +137,7 @@ impl<T> Buffer<T> {
     /// Returns the byte slice stored in this buffer
     #[inline]
     pub fn as_slice(&self) -> &[T] {
-        // Safety:
-        // invariant of this struct `offset + length <= data.len()`
-        debug_assert!(self.offset + self.length <= self.data.len());
-        unsafe {
-            self.data
-                .get_unchecked(self.offset..self.offset + self.length)
-        }
-    }
-
-    /// Returns the byte slice stored in this buffer
-    /// # Safety
-    /// `index` must be smaller than `len`
-    #[inline]
-    pub(super) unsafe fn get_unchecked(&self, index: usize) -> &T {
-        // Safety:
-        // invariant of this function
-        debug_assert!(index < self.length);
-        unsafe { self.data.get_unchecked(self.offset + index) }
+        self
     }
 
     /// Returns a new [`Buffer`] that is a slice of this buffer starting at `offset`.
@@ -193,20 +183,20 @@ impl<T> Buffer<T> {
     /// The caller must ensure `offset + length <= self.len()`
     #[inline]
     pub unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
-        self.offset += offset;
+        self.ptr = self.ptr.add(offset);
         self.length = length;
     }
 
     /// Returns a pointer to the start of this buffer.
     #[inline]
     pub(crate) fn data_ptr(&self) -> *const T {
-        self.data.deref().as_ptr()
+        self.data.as_ptr()
     }
 
     /// Returns the offset of this buffer.
     #[inline]
     pub fn offset(&self) -> usize {
-        self.offset
+        unsafe { self.ptr.offset_from(self.data_ptr()) as usize }
     }
 
     /// # Safety
@@ -253,10 +243,11 @@ impl<T> Buffer<T> {
     /// * has not been imported from the c data interface (FFI)
     #[inline]
     pub fn get_mut_slice(&mut self) -> Option<&mut [T]> {
+        let offset = self.offset();
         Arc::get_mut(&mut self.data)
             .and_then(|b| b.get_vec())
             // Safety: the invariant of this struct
-            .map(|x| unsafe { x.get_unchecked_mut(self.offset..self.offset + self.length) })
+            .map(|x| unsafe { x.get_unchecked_mut(offset..offset + self.length) })
     }
 
     /// Get the strong count of underlying `Arc` data buffer.
@@ -269,28 +260,14 @@ impl<T> Buffer<T> {
         Arc::weak_count(&self.data)
     }
 
-    /// Returns its internal representation
-    #[must_use]
-    pub fn into_inner(self) -> (Arc<Bytes<T>>, usize, usize) {
-        let Self {
-            data,
-            offset,
-            length,
-        } = self;
-        (data, offset, length)
-    }
-
     /// Creates a `[Bitmap]` from its internal representation.
     /// This is the inverted from `[Bitmap::into_inner]`
     ///
     /// # Safety
     /// Callers must ensure all invariants of this struct are upheld.
     pub unsafe fn from_inner_unchecked(data: Arc<Bytes<T>>, offset: usize, length: usize) -> Self {
-        Self {
-            data,
-            offset,
-            length,
-        }
+        let ptr = data.as_ptr().add(offset);
+        Self { data, ptr, length }
     }
 }
 
@@ -313,8 +290,9 @@ impl<T> From<Vec<T>> for Buffer<T> {
     #[inline]
     fn from(p: Vec<T>) -> Self {
         let bytes: Bytes<T> = p.into();
+        let ptr = bytes.as_ptr();
         Self {
-            offset: 0,
+            ptr,
             length: bytes.len(),
             data: Arc::new(bytes),
         }
@@ -326,7 +304,15 @@ impl<T> std::ops::Deref for Buffer<T> {
 
     #[inline]
     fn deref(&self) -> &[T] {
-        self.as_slice()
+        debug_assert!(self.offset() + self.length <= self.data.len());
+        unsafe { std::slice::from_raw_parts(self.ptr, self.length) }
+    }
+}
+
+impl<T> AsRef<[T]> for Buffer<T> {
+    #[inline]
+    fn as_ref(&self) -> &[T] {
+        self
     }
 }
 
@@ -375,8 +361,9 @@ impl<T: crate::types::NativeType> From<arrow_buffer::Buffer> for Buffer<T> {
 
 impl<T: crate::types::NativeType> From<Buffer<T>> for arrow_buffer::Buffer {
     fn from(value: Buffer<T>) -> Self {
+        let offset = value.offset();
         crate::buffer::to_buffer(value.data).slice_with_length(
-            value.offset * std::mem::size_of::<T>(),
+            offset * std::mem::size_of::<T>(),
             value.length * std::mem::size_of::<T>(),
         )
     }

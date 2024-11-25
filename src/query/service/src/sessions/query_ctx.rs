@@ -1376,6 +1376,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     default_values: None,
                     copy_into_location_options: Default::default(),
+                    copy_into_table_options: Default::default(),
                 };
                 OrcTable::try_create(info).await
             }
@@ -1393,6 +1394,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     default_values: None,
                     copy_into_location_options: Default::default(),
+                    copy_into_table_options: Default::default(),
                 };
                 StageTable::try_create(info)
             }
@@ -1428,6 +1430,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     default_values: None,
                     copy_into_location_options: Default::default(),
+                    copy_into_table_options: Default::default(),
                 };
                 StageTable::try_create(info)
             }

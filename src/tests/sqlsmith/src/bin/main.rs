@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use clap::Parser;
+use databend_common_exception::Result;
 use databend_sqlsmith::Runner;
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Clone, Debug, PartialEq, Eq, Parser)]
 #[clap(about, author)]
@@ -27,7 +30,7 @@ pub struct Args {
     port: u16,
 
     /// The test database.
-    #[clap(long, default_value = "default")]
+    #[clap(long, default_value = "sqlsmith_test")]
     db: String,
 
     /// The username.
@@ -48,15 +51,26 @@ pub struct Args {
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 5)]
-async fn main() {
-    tracing_subscriber::fmt::init();
+async fn main() -> Result<()> {
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse("")
+        .unwrap();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     let args = Args::parse();
+    let host = format!("http://{}:{}", args.host, args.port);
+    let mut runner = Runner::try_new(
+        host,
+        args.user.clone(),
+        args.pass.clone(),
+        args.db.clone(),
+        args.count,
+        None,
+        args.timeout,
+    )
+    .await?;
+    runner.run().await?;
 
-    let dsn = format!(
-        "databend://{}:{}@{}:{}/{}?sslmode=disable",
-        args.user, args.pass, args.host, args.port, args.db
-    );
-    let runner = Runner::new(dsn, args.count, None, args.timeout);
-    runner.run().await;
+    Ok(())
 }

@@ -708,8 +708,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "zstd 0.13.2",
- "zstd-safe 7.2.1",
 ]
 
 [[package]]
@@ -2982,28 +2980,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-client"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0819048a792e2eac58b455bbbcf6077c81e2780b3cc4f565a6e72e92dde56bd1"
-dependencies = [
- "async-trait",
- "log",
- "once_cell",
- "parking_lot 0.12.3",
- "percent-encoding",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tokio-retry",
- "tokio-stream",
- "tokio-util",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "databend-codegen"
 version = "0.1.0"
 dependencies = [
@@ -3266,7 +3242,7 @@ dependencies = [
  "backtrace",
  "bincode 2.0.0-rc.3",
  "databend-common-ast",
- "geozero 0.14.0",
+ "geozero",
  "gimli 0.31.1",
  "http 1.1.0",
  "libc",
@@ -3322,7 +3298,7 @@ dependencies = [
  "ethnum",
  "futures",
  "geo",
- "geozero 0.14.0",
+ "geozero",
  "goldenfile",
  "hex",
  "hyper-util",
@@ -3368,7 +3344,7 @@ dependencies = [
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "geozero 0.14.0",
+ "geozero",
  "hex",
  "jiff",
  "jsonb",
@@ -3409,7 +3385,7 @@ dependencies = [
  "ethnum",
  "geo",
  "geohash",
- "geozero 0.14.0",
+ "geozero",
  "goldenfile",
  "h3o",
  "hex",
@@ -3507,7 +3483,7 @@ dependencies = [
  "enumflags2",
  "ethnum",
  "geo",
- "geozero 0.14.0",
+ "geozero",
  "hex",
  "jiff",
  "lexical-core",
@@ -4097,6 +4073,7 @@ dependencies = [
  "async-backtrace",
  "chrono",
  "dashmap 6.1.0",
+ "databend-common-ast",
  "databend-common-auth",
  "databend-common-base",
  "databend-common-exception",
@@ -4485,6 +4462,7 @@ dependencies = [
  "async-trait",
  "bstr",
  "csv-core",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
  "databend-common-catalog",
@@ -4658,64 +4636,6 @@ dependencies = [
  "approx",
  "databend-common-exception",
  "ndarray",
-]
-
-[[package]]
-name = "databend-driver"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbea10312fa203003b572b701b6121cecd8eaf260e7ec7687796b552044541c6"
-dependencies = [
- "arrow",
- "async-compression 0.4.12",
- "async-trait",
- "chrono",
- "csv",
- "databend-client",
- "databend-driver-core",
- "databend-driver-macros",
- "dyn-clone",
- "glob",
- "log",
- "once_cell",
- "percent-encoding",
- "serde_json",
- "tokio",
- "tokio-stream",
- "url",
-]
-
-[[package]]
-name = "databend-driver-core"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b8f3bf7bb87d0f2fce8a1992eea4a0b442c01165a0d68aab2727a386c945ab"
-dependencies = [
- "arrow",
- "chrono",
- "databend-client",
- "geozero 0.13.0",
- "glob",
- "hex",
- "itertools 0.12.1",
- "jsonb",
- "lexical-core",
- "memchr",
- "roaring",
- "serde",
- "serde_json",
- "tokio-stream",
- "url",
-]
-
-[[package]]
-name = "databend-driver-macros"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40bed5c66f36e79baea7c95d2d0dc8433671606ca7152012562c7145e3b909a1"
-dependencies = [
- "quote",
- "syn 2.0.58",
 ]
 
 [[package]]
@@ -5212,24 +5132,26 @@ version = "0.1.0"
 dependencies = [
  "chrono-tz 0.8.6",
  "clap",
- "databend-client",
+ "cookie",
  "databend-common-ast",
+ "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
  "databend-common-functions",
  "databend-common-io",
  "databend-common-sql",
- "databend-driver",
- "databend-driver-core",
  "ethnum",
  "itertools 0.13.0",
  "jiff",
  "jsonb",
  "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
- "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -6881,21 +6803,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "geozero"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cd8fb67347739a057fd607b6d8b43ba4ed93619ed84b8f429fa3296f8ae504c"
-dependencies = [
- "geo-types",
- "geojson",
- "log",
- "scroll 0.11.0",
- "serde_json",
- "thiserror",
- "wkt 0.10.3",
 ]
 
 [[package]]
@@ -9716,16 +9623,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
-name = "mime_guess"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
-dependencies = [
- "mime",
- "unicase",
-]
-
-[[package]]
 name = "minijinja"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12325,7 +12222,6 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
- "mime_guess",
  "native-tls",
  "once_cell",
  "percent-encoding",
@@ -14585,17 +14481,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-retry"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
-dependencies = [
- "pin-project",
- "rand",
- "tokio",
-]
-
-[[package]]
 name = "tokio-retry2"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15089,15 +14974,6 @@ name = "uncased"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
-dependencies = [
- "version_check",
-]
-
-[[package]]
-name = "unicase"
-version = "2.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7d2d4dafb69621809a81864c9c1b864479e1235c0dd4e199924b9742439ed89"
 dependencies = [
  "version_check",
 ]
