@@ -36,7 +36,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS UINT8)
-  | ^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `UInt8`
+  | ^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `UInt8`, during run expr: `CAST(NULL AS UInt8)`
 
 
 
@@ -53,7 +53,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS STRING)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `String`
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `String`, during run expr: `CAST(NULL AS String)`
 
 
 
@@ -206,7 +206,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS VARIANT)
-  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Variant`
+  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Variant`, during run expr: `CAST(NULL AS Variant)`
 
 
 
@@ -1891,7 +1891,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS BINARY)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: `CAST(NULL AS Binary)`
 
 
 
@@ -1987,7 +1987,7 @@ error:
   --> SQL:1:6
   |
 1 | CAST(CAST(NULL AS BINARY) AS STRING)
-  |      ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`
+  |      ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: `to_string(CAST(NULL AS Binary))`
 
 
 

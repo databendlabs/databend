@@ -188,7 +188,7 @@ pub fn check_cast<Index: ColumnIndex>(
         }
 
         match (expr.data_type(), dest_type) {
-            (DataType::Null, DataType::Nullable(_))
+            (DataType::Null, _)
             | (DataType::Nullable(_), DataType::Nullable(_))
             | (DataType::Nullable(_), _)
             | (_, DataType::Nullable(_))
