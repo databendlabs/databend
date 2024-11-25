@@ -275,4 +275,10 @@ select * from (select number from numbers(5)) t2 full outer join (select a, 'A' 
 3 3 A
 
 statement ok
+select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number and 123;
+
+statement error
+select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number and 11981933213501947393::DATE;
+
+statement ok
 drop table if exists t;
