@@ -238,6 +238,8 @@ impl PipelineBuilder {
         transform_len: usize,
         block_thresholds: BlockThresholds,
     ) -> Result<()> {
+        // we should avoid too much little block write, because for s3 write, there are too many
+        // little blocks, it will cause high latency.
         let mut origin_len = transform_len;
         let mut resize_len = 1;
         let mut pipe_items = Vec::with_capacity(2);
