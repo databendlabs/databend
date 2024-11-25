@@ -188,6 +188,7 @@ impl FuseTable {
 
         if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
             let sender = part_info_tx.clone();
+            info!("prune pipeline: get prune result from cache");
             source_pipeline.set_on_init(move || {
                 ctx.get_runtime()?.try_spawn(
                     async move {
@@ -268,6 +269,7 @@ impl FuseTable {
                 });
 
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
+            info!("prune snapshot block: get prune result from cache");
             return Ok(cached_result);
         }
 

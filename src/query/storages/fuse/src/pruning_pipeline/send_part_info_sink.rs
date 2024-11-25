@@ -185,6 +185,8 @@ impl AsyncSink for SendPartInfoSink {
                     },
                 };
 
+                self.partitions.partitions.extend(info_ptr.clone());
+
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {
                         let _ = sender.send(Ok(info)).await;
