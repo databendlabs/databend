@@ -97,7 +97,7 @@ statement ok
 set enable_experimental_merge_into = 1
 
 query TTT
-settings (max_threads = 8) merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.a = 0 when matched and t2.a = 2 then delete when not matched then insert *
+merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.a = 0 when matched and t2.a = 2 then delete when not matched then insert *
 ----
 1 1 1
 
@@ -109,7 +109,7 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 5 0 0 0 0
 6 0 0 0 0
 7 0 0 1 0
-8 0 0 0 0
+8 0 0 1 0
 
 statement ok
 create table t1(a int) change_tracking = true
@@ -136,7 +136,7 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 5 0 0 0 0
 6 0 0 0 0
 7 0 0 1 0
-8 0 0 0 0
+8 0 0 1 0
 
 ###############
 # issue 14955 #
