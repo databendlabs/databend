@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
@@ -147,9 +147,10 @@ impl AggregateFunction for AggregateStringAggFunction {
         let builder = StringType::try_downcast_builder(builder).unwrap();
         if !state.values.is_empty() {
             let len = state.values.len() - self.delimiter.len();
-            builder.put_str(&state.values[..len]);
+            builder.put_and_commit(&state.values[..len]);
+        } else {
+            builder.put_and_commit("");
         }
-        builder.commit_row();
         Ok(())
     }
 

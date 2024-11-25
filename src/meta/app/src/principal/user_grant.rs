@@ -21,6 +21,33 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
+// some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
+// rewritten to the queries on the system tables, we need to skip the privilege check on
+// these tables.
+pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
+    "catalogs",
+    "columns",
+    "databases",
+    "databases_with_history",
+    "dictionaries",
+    "tables",
+    "views",
+    "tables_with_history",
+    "views_with_history",
+    "password_policies",
+    "streams",
+    "streams_terse",
+    "virtual_columns",
+    "users",
+    "roles",
+    "stages",
+    "one",
+    "processes",
+    "user_functions",
+    "functions",
+    "indexes",
+];
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,

@@ -13,6 +13,5 @@
 // limitations under the License.
 
 pub mod arrow;
-pub mod arrow2;
 pub mod datavalues;
 pub mod meta;

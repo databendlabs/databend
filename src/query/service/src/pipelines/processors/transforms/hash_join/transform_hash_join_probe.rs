@@ -126,7 +126,6 @@ impl TransformHashJoinProbe {
         func_ctx: FunctionContext,
         join_type: &JoinType,
         with_conjunct: bool,
-        has_string_column: bool,
     ) -> Result<Box<dyn Processor>> {
         join_probe_state.probe_attach();
         // Create a hash join spiller.
@@ -153,7 +152,6 @@ impl TransformHashJoinProbe {
             max_block_size,
             join_type,
             with_conjunct,
-            has_string_column,
             func_ctx,
             other_predicate,
         );

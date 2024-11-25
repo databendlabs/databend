@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use arrow_array::ArrayRef;
 use arrow_ord::sort::LexicographicalComparator;
 use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use databend_common_base::base::OrderedFloat;
-use databend_common_expression::converts::arrow2::set_validities;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -69,31 +66,6 @@ fn test_fixed_width() {
     .unwrap();
 
     let rows = converter.convert_columns(&cols, cols[0].len());
-
-    assert_eq!(
-        rows.offsets().clone(),
-        vec![0, 8, 16, 24, 32, 40, 48, 56].into()
-    );
-    assert_eq!(
-        rows.data().clone(),
-        vec![
-            1, 128, 1, //
-            1, 191, 166, 102, 102, //
-            1, 128, 2, //
-            1, 192, 32, 0, 0, //
-            0, 0, 0, //
-            0, 0, 0, 0, 0, //
-            1, 127, 251, //
-            1, 192, 128, 0, 0, //
-            1, 128, 2, //
-            1, 189, 204, 204, 205, //
-            1, 128, 2, //
-            1, 63, 127, 255, 255, //
-            1, 128, 0, //
-            1, 127, 255, 255, 255 //
-        ]
-        .into()
-    );
 
     unsafe {
         assert!(rows.index_unchecked(3) < rows.index_unchecked(6));
@@ -544,31 +516,9 @@ fn fuzz_test() {
 
         let order_columns = columns
             .iter()
-            .map(|col| {
-                let arrow2 = match col {
-                    // arrow_ord does not support LargeBinary converted from Databend String
-                    Column::Nullable(c) => match &c.column {
-                        Column::String(sc) => {
-                            let offsets =
-                                sc.offsets().iter().map(|offset| *offset as i64).collect();
-                            let array = Box::new(
-                                databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
-                                    databend_common_arrow::arrow::datatypes::DataType::LargeUtf8,
-                                    unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                                    sc.data().clone(),
-                                    None,
-                                )
-                                .unwrap(),
-                            );
-                            set_validities(array, &c.validity)
-                        }
-                        _ => col.as_arrow(),
-                    },
-                    col => col.as_arrow(),
-                };
-                arrow2.into()
-            })
-            .collect::<Vec<Arc<dyn arrow_array::Array>>>();
+            .map(|col| col.clone().into_arrow_rs())
+            .collect::<Vec<ArrayRef>>();
+
         let sort_columns = options
             .iter()
             .zip(order_columns.iter())

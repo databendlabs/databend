@@ -32,7 +32,17 @@ select trim_leading('aaabbaaa', '')
 aaabbaaa
 
 query T
+select ltrim('aaabbaaa', 'aa')
+----
+abbaaa
+
+query T
 select trim_trailing('aaabbaaa', 'aa')
+----
+aaabba
+
+query T
+select rtrim('aaabbaaa', 'aa')
 ----
 aaabba
 
@@ -40,3 +50,101 @@ query T
 select trim_trailing('aaabbaaa', '')
 ----
 aaabbaaa
+
+query T
+select trim(leading ' ' from '      abc')
+----
+abc
+
+
+query T
+select trim(leading ' ' from '')
+----
+(empty)
+
+statement ok
+select trim(leading 'ab' from 'abab')
+
+
+query T
+select trim(leading 'ab' from 'abc')
+----
+c
+
+
+query T
+select trim(leading ' ' from NULL)
+----
+NULL
+
+
+query T
+select trim(leading NULL from 'aaa')
+----
+NULL
+
+
+query T
+select trim(trailing ' ' from 'abc    ')
+----
+abc
+
+
+query T
+select trim(trailing ' ' from '')
+----
+(empty)
+
+query T
+select trim(trailing 'ab' from 'abab')
+----
+(empty)
+
+query T
+select trim(trailing 'ab' from 'cab')
+----
+c
+
+
+query T
+select trim(trailing ' ' from NULL)
+----
+NULL
+
+
+query T
+select trim(trailing NULL from 'aaa')
+----
+NULL
+
+
+query T
+select trim(both 'ab' from 'abab')
+----
+(empty)
+
+query T
+select trim(both 'ab' from 'abcab')
+----
+c
+
+query T
+select trim('abcab', 'ab')
+----
+c
+
+query T
+select trim(both ' ' from NULL)
+----
+NULL
+
+
+query T
+select trim(both NULL from 'aaa')
+----
+NULL
+
+query T
+select trim(NULL)
+----
+NULL

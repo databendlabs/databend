@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectStrategy;
@@ -239,48 +239,19 @@ impl<'a> Selector<'a> {
                     Some(validity) => {
                         // search the whole string buffer
                         if let LikePattern::SurroundByPercent(searcher) = like_pattern {
-                            let needle = searcher.needle();
-                            let needle_byte_len = needle.len();
-                            let data = column.data().as_slice();
-                            let offsets = column.offsets().as_slice();
-                            let mut idx = 0;
-                            let mut pos = (*offsets.first().unwrap()) as usize;
-                            let end = (*offsets.last().unwrap()) as usize;
-
-                            while pos < end && idx < count {
-                                if let Some(p) = searcher.search(&data[pos..end]) {
-                                    while offsets[idx + 1] as usize <= pos + p {
-                                        let ret = NOT && validity.get_bit_unchecked(idx);
-                                        update_index(
-                                            ret,
-                                            idx as u32,
-                                            true_selection,
-                                            false_selection,
-                                        );
-                                        idx += 1;
-                                    }
-
-                                    // check if the substring is in bound
-                                    let ret =
-                                        pos + p + needle_byte_len <= offsets[idx + 1] as usize;
-
-                                    let ret = if NOT {
-                                        validity.get_bit_unchecked(idx) && !ret
-                                    } else {
-                                        validity.get_bit_unchecked(idx) && ret
-                                    };
-                                    update_index(ret, idx as u32, true_selection, false_selection);
-
-                                    pos = offsets[idx + 1] as usize;
-                                    idx += 1;
+                            for idx in 0u32..count as u32 {
+                                let ret = if NOT {
+                                    validity.get_bit_unchecked(idx as usize)
+                                        && searcher
+                                            .search(column.index_unchecked_bytes(idx as usize))
+                                            .is_none()
                                 } else {
-                                    break;
-                                }
-                            }
-                            while idx < count {
-                                let ret = NOT && validity.get_bit_unchecked(idx);
-                                update_index(ret, idx as u32, true_selection, false_selection);
-                                idx += 1;
+                                    validity.get_bit_unchecked(idx as usize)
+                                        && searcher
+                                            .search(column.index_unchecked_bytes(idx as usize))
+                                            .is_some()
+                                };
+                                update_index(ret, idx, true_selection, false_selection);
                             }
                         } else {
                             for idx in 0u32..count as u32 {
@@ -300,40 +271,17 @@ impl<'a> Selector<'a> {
                     None => {
                         // search the whole string buffer
                         if let LikePattern::SurroundByPercent(searcher) = like_pattern {
-                            let needle = searcher.needle();
-                            let needle_byte_len = needle.len();
-                            let data = column.data().as_slice();
-                            let offsets = column.offsets().as_slice();
-                            let mut idx = 0;
-                            let mut pos = (*offsets.first().unwrap()) as usize;
-                            let end = (*offsets.last().unwrap()) as usize;
-
-                            while pos < end && idx < count {
-                                if let Some(p) = searcher.search(&data[pos..end]) {
-                                    while offsets[idx + 1] as usize <= pos + p {
-                                        update_index(
-                                            NOT,
-                                            idx as u32,
-                                            true_selection,
-                                            false_selection,
-                                        );
-                                        idx += 1;
-                                    }
-                                    // check if the substring is in bound
-                                    let ret =
-                                        pos + p + needle_byte_len <= offsets[idx + 1] as usize;
-                                    let ret = if NOT { !ret } else { ret };
-                                    update_index(ret, idx as u32, true_selection, false_selection);
-
-                                    pos = offsets[idx + 1] as usize;
-                                    idx += 1;
+                            for idx in 0u32..count as u32 {
+                                let ret = if NOT {
+                                    searcher
+                                        .search(column.index_unchecked_bytes(idx as usize))
+                                        .is_none()
                                 } else {
-                                    break;
-                                }
-                            }
-                            while idx < count {
-                                update_index(NOT, idx as u32, true_selection, false_selection);
-                                idx += 1;
+                                    searcher
+                                        .search(column.index_unchecked_bytes(idx as usize))
+                                        .is_some()
+                                };
+                                update_index(ret, idx, true_selection, false_selection);
                             }
                         } else {
                             for idx in 0u32..count as u32 {

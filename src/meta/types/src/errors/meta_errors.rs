@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+
 use databend_common_exception::ErrorCode;
 use databend_common_meta_stoerr::MetaStorageError;
 use thiserror::Error;
@@ -48,6 +50,13 @@ impl MetaError {
             MetaError::ClientError(err) => err.name(),
             MetaError::APIError(err) => err.name(),
         }
+    }
+}
+
+impl From<io::Error> for MetaError {
+    fn from(e: io::Error) -> Self {
+        let net_err = MetaStorageError::from(e);
+        MetaError::StorageError(net_err)
     }
 }
 

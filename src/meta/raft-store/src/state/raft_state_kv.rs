@@ -58,6 +58,29 @@ pub enum RaftStateValue {
     Committed(Option<LogId>),
 }
 
+impl RaftStateValue {
+    pub fn node_id(&self) -> NodeId {
+        match self {
+            RaftStateValue::NodeId(x) => *x,
+            _ => panic!("expect NodeId"),
+        }
+    }
+
+    pub fn vote(&self) -> Vote {
+        match self {
+            RaftStateValue::HardState(x) => *x,
+            _ => panic!("expect HardState"),
+        }
+    }
+
+    pub fn committed(&self) -> Option<LogId> {
+        match self {
+            RaftStateValue::Committed(x) => *x,
+            _ => panic!("expect Committed"),
+        }
+    }
+}
+
 impl fmt::Display for RaftStateKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)

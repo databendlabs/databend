@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use jwt_simple::prelude::Serialize;
+use log::info;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
@@ -32,6 +33,12 @@ pub struct LogoutResponse {
 #[async_backtrace::framed]
 pub async fn logout_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
     if let Some(id) = &ctx.client_session_id {
+        info!(
+            "logout with user={}, client session id={}, credential type={:?}",
+            ctx.user_name,
+            id,
+            ctx.credential.type_name()
+        );
         ClientSessionManager::instance()
             .drop_client_session_state(&ctx.session.get_current_tenant(), &ctx.user_name, id)
             .await

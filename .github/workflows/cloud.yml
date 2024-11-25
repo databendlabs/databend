@@ -45,7 +45,7 @@ jobs:
 
   build:
     needs: info
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
     strategy:
       matrix:
         include:
@@ -59,6 +59,8 @@ jobs:
       - name: Build Release
         uses: ./.github/actions/build_linux
         timeout-minutes: 60
+        env:
+          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
@@ -69,7 +71,7 @@ jobs:
   docker:
     needs: [info, build]
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
+    runs-on: [self-hosted, X64, Linux, 2c8g, aws]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:

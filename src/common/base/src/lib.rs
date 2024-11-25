@@ -25,6 +25,7 @@
 #![feature(slice_swap_unchecked)]
 #![feature(variant_count)]
 #![feature(ptr_alignment_type)]
+#![feature(vec_into_raw_parts)]
 
 pub mod base;
 pub mod containers;
@@ -35,7 +36,6 @@ pub mod http_client;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
-pub mod slice_ext;
 pub mod vec_ext;
 pub mod version;
 

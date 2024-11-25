@@ -144,6 +144,7 @@ impl CopyIntoTableInterpreter {
             (
                 CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
                     plan_id: 0,
+                    scan_id: 0,
                     name_mapping,
                     stat_info: None,
                     table_index: None,

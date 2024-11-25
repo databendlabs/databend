@@ -255,9 +255,9 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // if alter column from string to binary, we don't need to rebuild table
-        let is_alter_column_string_to_binary =
-            schema
+        // if alter column from string to binary in parquet, we don't need to rebuild table
+        let is_alter_column_string_to_binary = table.storage_format_as_parquet()
+            && schema
                 .fields()
                 .iter()
                 .zip(new_schema.fields())

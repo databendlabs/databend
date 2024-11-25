@@ -153,6 +153,11 @@ impl Catalog for ImmutableCatalog {
         CatalogInfo::default().into()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        let me = self.as_ref().clone();
+        Ok(Arc::new(me))
+    }
+
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {
@@ -163,6 +168,10 @@ impl Catalog for ImmutableCatalog {
                 db_name
             ))),
         }
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
     }
 
     #[async_backtrace::framed]

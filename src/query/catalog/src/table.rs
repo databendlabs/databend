@@ -152,6 +152,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn storage_format_as_parquet(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,

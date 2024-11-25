@@ -28,7 +28,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -50,6 +49,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -60,7 +60,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::date_helper::TzFactory;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -115,6 +114,8 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -152,8 +153,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    snapshot: Arc<RwLock<Option<Arc<TableSnapshot>>>>,
-    lazy_mutaion_delete: Arc<RwLock<bool>>,
 }
 
 impl QueryContext {
@@ -179,8 +178,6 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
-            snapshot: Arc::new(RwLock::new(None)),
-            lazy_mutaion_delete: Arc::new(RwLock::new(false)),
         })
     }
 
@@ -533,22 +530,6 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
-    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>) {
-        *self.snapshot.write() = Some(snapshot);
-    }
-
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        self.snapshot.read().clone()
-    }
-
-    fn set_lazy_mutation_delete(&self, lazy: bool) {
-        *self.lazy_mutaion_delete.write() = lazy;
-    }
-
-    fn get_lazy_mutation_delete(&self) -> bool {
-        *self.lazy_mutaion_delete.read()
-    }
-
     fn partition_num(&self) -> usize {
         self.partition_queue.read().len()
     }
@@ -713,8 +694,14 @@ impl TableContext for QueryContext {
         self.get_current_session().get_id()
     }
 
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        self.shared.session.get_visibility_checker().await
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        self.shared
+            .session
+            .get_visibility_checker(ignore_ownership)
+            .await
     }
 
     fn get_fuse_version(&self) -> String {
@@ -731,11 +718,15 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
+        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
         let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
+            jiff_timezone,
             geometry_format,
             enable_dst_hour_fix,
             format_null_as_str,
@@ -754,15 +745,22 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let settings = self.get_settings();
 
-        let tz = settings.get_timezone()?;
-        let tz = TzFactory::instance().get_by_name(&tz)?;
-        let now = Utc::now();
+        let tz_string = settings.get_timezone()?;
+        let tz = tz_string.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        let jiff_tz = TimeZone::get(&tz_string).map_err(|e| {
+            ErrorCode::InvalidTimezone(format!(
+                "Timezone has been checked and should be valid but got error: {}",
+                e
+            ))
+        })?;
+        let now = Zoned::now().with_time_zone(TimeZone::UTC);
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
-        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
         let random_function_seed = settings.get_random_function_seed()?;
@@ -770,6 +768,7 @@ impl TableContext for QueryContext {
         Ok(FunctionContext {
             tz,
             now,
+            jiff_tz,
             rounding_mode,
             disable_variant_check,
 
@@ -782,7 +781,6 @@ impl TableContext for QueryContext {
 
             geometry_output_format,
             parse_datetime_ignore_remainder,
-            enable_dst_hour_fix,
             enable_strict_datetime_parser,
             random_function_seed,
         })
@@ -1196,6 +1194,39 @@ impl TableContext for QueryContext {
                     v.get_mut().add_bloom(filter);
                 }
             }
+        }
+    }
+
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
+        let mut runtime_filter_ready = self.shared.runtime_filter_ready.write();
+        match runtime_filter_ready.entry(table_index) {
+            Entry::Vacant(v) => {
+                v.insert(vec![ready]);
+            }
+            Entry::Occupied(mut v) => {
+                v.get_mut().push(ready);
+            }
+        }
+    }
+
+    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        let runtime_filter_ready = self.shared.runtime_filter_ready.read();
+        match runtime_filter_ready.get(&table_index) {
+            Some(v) => v.to_vec(),
+            None => vec![],
+        }
+    }
+
+    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool) {
+        let mut wait_runtime_filter = self.shared.wait_runtime_filter.write();
+        wait_runtime_filter.insert(table_index, need_to_wait);
+    }
+
+    fn get_wait_runtime_filter(&self, table_index: usize) -> bool {
+        let wait_runtime_filter = self.shared.wait_runtime_filter.read();
+        match wait_runtime_filter.get(&table_index) {
+            Some(v) => *v,
+            None => false,
         }
     }
 

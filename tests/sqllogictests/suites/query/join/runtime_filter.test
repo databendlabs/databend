@@ -1,12 +1,12 @@
 statement ok
-CREATE TABLE table1 (
+CREATE OR REPLACE TABLE table1 (
     key1 String,
     key2 String,
     key3 String
 );
 
 statement ok
-CREATE TABLE table2 (
+CREATE OR REPLACE TABLE table2 (
     key1 String,
     key2 String,
     key3 String

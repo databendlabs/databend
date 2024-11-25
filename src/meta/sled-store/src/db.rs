@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
+use log::warn;
 use tempfile::TempDir;
 
 pub(crate) struct GlobalSledDb {
@@ -30,17 +31,6 @@ pub(crate) struct GlobalSledDb {
 }
 
 impl GlobalSledDb {
-    pub(crate) fn new_temp(temp_dir: TempDir) -> Self {
-        let temp_path = temp_dir.path().to_str().unwrap().to_string();
-
-        GlobalSledDb {
-            temp_dir: Some(temp_dir),
-            path: temp_path.clone(),
-            db: sled::open(temp_path.clone())
-                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", temp_path, e)),
-        }
-    }
-
     pub(crate) fn new(path: String, cache_size: u64) -> Self {
         let db = sled::Config::default()
             .path(&path)
@@ -60,28 +50,6 @@ impl GlobalSledDb {
 static GLOBAL_SLED: LazyLock<Arc<Mutex<Option<GlobalSledDb>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
 
-/// Open a db at a temp dir. For test purpose only.
-pub fn init_temp_sled_db(temp_dir: TempDir) {
-    let temp_path = temp_dir.path().to_str().unwrap().to_string();
-
-    let (inited_as_temp, curr_path) = {
-        let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
-        if let Some(gdb) = g.as_ref() {
-            (gdb.temp_dir.is_some(), gdb.path.clone())
-        } else {
-            *g = Some(GlobalSledDb::new_temp(temp_dir));
-            return;
-        }
-    };
-
-    if !inited_as_temp {
-        panic!(
-            "sled db is already initialized with specified path: {}, can not re-init with temp path {}",
-            curr_path, temp_path
-        );
-    }
-}
-
 pub fn init_sled_db(path: String, cache_size: u64) {
     let (inited_as_temp, curr_path) = {
         let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
@@ -94,7 +62,7 @@ pub fn init_sled_db(path: String, cache_size: u64) {
     };
 
     if inited_as_temp {
-        panic!(
+        warn!(
             "sled db is already initialized with temp dir: {}, can not re-init with path {}",
             curr_path, path
         );
@@ -112,4 +80,19 @@ pub fn get_sled_db() -> sled::Db {
     }
 
     panic!("init_sled_db() or init_temp_sled_db() has to be called before using get_sled_db()");
+}
+
+pub fn init_get_sled_db(path: String, cache_size: u64) -> sled::Db {
+    init_sled_db(path, cache_size);
+    get_sled_db()
+}
+
+/// Drop the global sled db.
+///
+/// Which means this program will not use sled db anymore.
+pub fn drop_sled_db() {
+    {
+        let mut guard = GLOBAL_SLED.as_ref().lock().unwrap();
+        *guard = None;
+    }
 }

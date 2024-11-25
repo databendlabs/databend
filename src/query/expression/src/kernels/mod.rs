@@ -28,6 +28,7 @@ mod utils;
 
 pub use filter::FilterVisitor;
 pub use filter::IterationStrategy;
+pub use filter::SELECTIVITY_THRESHOLD;
 pub use group_by_hash::*;
 pub use sort::*;
 pub use sort_compare::*;

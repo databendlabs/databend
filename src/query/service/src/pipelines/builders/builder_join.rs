@@ -163,6 +163,7 @@ impl PipelineBuilder {
             join_state.clone(),
             output_len,
         )?;
+        build_state.add_runtime_filter_ready();
 
         let create_sink_processor = |input| {
             Ok(ProcessorPtr::create(TransformHashJoinBuild::try_create(
@@ -197,10 +198,6 @@ impl PipelineBuilder {
             self.main_pipeline.output_len(),
             barrier,
         )?);
-        let mut has_string_column = false;
-        for field in join.output_schema()?.fields() {
-            has_string_column |= field.data_type().is_string_column();
-        }
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformHashJoinProbe::create(
@@ -212,7 +209,6 @@ impl PipelineBuilder {
                 self.func_ctx.clone(),
                 &join.join_type,
                 !join.non_equi_conditions.is_empty(),
-                has_string_column,
             )?))
         })?;
 

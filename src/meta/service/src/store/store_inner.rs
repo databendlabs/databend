@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs;
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
@@ -22,28 +23,25 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::tokio::sync::RwLockWriteGuard;
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::key_spaces::RaftStateKV;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
-use databend_common_meta_raft_store::log::RaftLog;
+use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
+use databend_common_meta_raft_store::raft_log_v004;
+use databend_common_meta_raft_store::raft_log_v004::util;
+use databend_common_meta_raft_store::raft_log_v004::Cw;
+use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::SMV003;
-use databend_common_meta_raft_store::state::RaftState;
-use databend_common_meta_raft_store::state::RaftStateKey;
-use databend_common_meta_raft_store::state::RaftStateValue;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
-use databend_common_meta_sled_store::get_sled_db;
-use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
-use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::StorageError;
-use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaNetworkError;
@@ -53,87 +51,82 @@ use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
+use raft_log::api::raft_log_writer::RaftLogWriter;
 use tokio::time::sleep;
 
-use crate::export::vec_kv_to_json;
-use crate::Opened;
-
-/// This is the inner store that provides support utilities for implementing the raft storage API.
-///
-/// This store is backed by a sled db, contents are stored in 3 trees:
-///   state:
-///       id
-///       vote
-///   log
-///   state_machine
-pub struct StoreInner {
+/// This is the inner store that implements the raft log storage API.
+pub struct RaftStoreInner {
     /// The ID of the Raft node for which this storage instances is configured.
-    /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
+    /// ID is also stored in raft-log.
+    ///
+    /// `id` never changes, this is a cache for fast access.
     pub id: NodeId,
 
     pub(crate) config: RaftConfig,
 
     /// If the instance is opened from an existent state(e.g. load from fs) or created.
-    is_opened: bool,
-
-    /// The sled db for log, raft_state and state machine.
-    pub(crate) db: sled::Db,
-
-    /// Raft state includes:
-    /// id: NodeId,
-    ///     vote,      // the last `Vote`
-    ///     committed, // last `LogId` that is known committed
-    pub raft_state: RwLock<RaftState>,
+    pub is_opened: bool,
 
     /// A series of raft logs.
-    pub log: RwLock<RaftLog>,
+    pub log: Arc<RwLock<RaftLogV004>>,
 
     /// The Raft state machine.
     pub state_machine: Arc<RwLock<SMV003>>,
 }
 
-impl AsRef<StoreInner> for StoreInner {
-    fn as_ref(&self) -> &StoreInner {
+impl AsRef<RaftStoreInner> for RaftStoreInner {
+    fn as_ref(&self) -> &RaftStoreInner {
         self
     }
 }
 
-impl Opened for StoreInner {
-    /// If the instance is opened(true) from an existent state(e.g. load from fs) or created(false).
-    fn is_opened(&self) -> bool {
-        self.is_opened
-    }
-}
-
-impl StoreInner {
-    /// Open an existent `metasrv` instance or create an new one:
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create one.
-    /// Otherwise it panic
+impl RaftStoreInner {
+    /// Open an existent raft-store or create a new one.
     #[fastrace::trace]
-    pub async fn open_create(
-        config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
-    ) -> Result<StoreInner, MetaStartupError> {
-        info!(config_id :% =(&config.config_id); "open: {:?}, create: {:?}", open, create);
-
-        let db = get_sled_db();
-
-        let raft_state = RaftState::open_create(&db, config, open, create).await?;
-        let is_open = raft_state.is_open();
-        info!("RaftState opened is_open: {}", is_open);
-
-        let log = RaftLog::open(&db, config).await?;
-        info!("RaftLog opened");
+    pub async fn open(config: &RaftConfig) -> Result<RaftStoreInner, MetaStartupError> {
+        info!("open_or_create StoreInner: id={}", config.id);
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);
-            let store_err = MetaStorageError::Damaged(ae);
+            let store_err = MetaStorageError(ae);
             MetaStartupError::StoreOpenError(store_err)
         }
 
-        let ss_store = SnapshotStoreV003::new(config.clone());
+        let raft_log_config = Arc::new(config.to_raft_log_config());
+
+        let dir = &raft_log_config.dir;
+
+        fs::create_dir_all(dir).map_err(|e| {
+            let err = io::Error::new(
+                e.kind(),
+                format!("{}; when:(create raft log dir: {}", e, dir),
+            );
+            to_startup_err(err)
+        })?;
+
+        let mut log = RaftLogV004::open(raft_log_config.clone()).map_err(to_startup_err)?;
+        info!("RaftLog opened at: {}", raft_log_config.dir);
+
+        let state = log.log_state();
+        let stored_node_id = state.user_data.as_ref().and_then(|x| x.node_id);
+
+        let is_open = stored_node_id.is_some();
+
+        // If id is stored, ignore the id in config.
+        let id = stored_node_id.unwrap_or(config.id);
+
+        if !is_open {
+            log.save_user_data(Some(raft_log_v004::log_store_meta::LogStoreMeta {
+                node_id: Some(config.id),
+            }))
+            .map_err(to_startup_err)?;
+
+            util::blocking_flush(&mut log)
+                .await
+                .map_err(to_startup_err)?;
+        }
+
+        let ss_store = SnapshotStoreV004::new(config.clone());
         let loader = ss_store.new_loader();
         let last = loader.load_last_snapshot().await.map_err(to_startup_err)?;
 
@@ -157,12 +150,10 @@ impl StoreInner {
         };
 
         let store = Self {
-            id: raft_state.id,
+            id,
             config: config.clone(),
             is_opened: is_open,
-            db,
-            raft_state: RwLock::new(raft_state),
-            log: RwLock::new(log),
+            log: Arc::new(RwLock::new(log)),
             state_machine: Arc::new(RwLock::new(sm)),
         };
 
@@ -170,8 +161,8 @@ impl StoreInner {
     }
 
     /// Return a snapshot store of this instance.
-    pub fn snapshot_store(&self) -> SnapshotStoreV003 {
-        SnapshotStoreV003::new(self.config.clone())
+    pub fn snapshot_store(&self) -> SnapshotStoreV004 {
+        SnapshotStoreV004::new(self.config.clone())
     }
 
     async fn rebuild_state_machine(id: &MetaSnapshotId, snapshot: DB) -> Result<SMV003, io::Error> {
@@ -285,7 +276,7 @@ impl StoreInner {
     /// Return snapshot id and meta of the last snapshot.
     ///
     /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
-    pub(crate) async fn try_get_snapshot_key_num(&self) -> Option<u64> {
+    pub(crate) async fn try_get_snapshot_key_count(&self) -> Option<u64> {
         let sm = self.state_machine.read().await;
         let db = sm.levels().persisted()?;
         Some(db.stat().key_num)
@@ -296,7 +287,7 @@ impl StoreInner {
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
         sm.install_snapshot_v003(db).await.map_err(|e| {
-            MetaStorageError::Damaged(
+            MetaStorageError(
                 AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
             )
         })?;
@@ -308,12 +299,20 @@ impl StoreInner {
     ///
     /// Returns a `BoxStream<'a, Result<String, io::Error>>` that yields a series of JSON strings.
     #[futures_async_stream::try_stream(boxed, ok = String, error = io::Error)]
-    pub async fn export(self: Arc<StoreInner>) {
+    pub async fn export(self: Arc<RaftStoreInner>) {
         info!("StoreInner::export start");
 
         // Convert an error occurred during export to `io::Error(InvalidData)`.
         fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> io::Error {
             io::Error::new(ErrorKind::InvalidData, e)
+        }
+
+        fn encode_entry(tree_name: &str, ent: &RaftStoreEntry) -> Result<String, io::Error> {
+            let name_entry = (tree_name, ent);
+
+            let line = serde_json::to_string(&name_entry)
+                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            Ok(line)
         }
 
         // Lock all data components so that we have a consistent view.
@@ -344,71 +343,59 @@ impl StoreInner {
             }
         };
 
-        let raft_state = self.raft_state.read().await;
-        let log = self.log.read().await;
+        let mut dump = {
+            let log = self.log.read().await;
+            log.dump_data()
+        };
+
+        // Log is dumped thus there won't be a gap between sm and log.
+        // It is now safe to release the compactor.
+        let db = compactor.db().cloned();
+        drop(compactor);
 
         // Export data header first
         {
-            let header_tree = SledTree::open(&self.db, TREE_HEADER, false).map_err(invalid_data)?;
-
-            let header_kvs = header_tree.export()?;
-
-            for kv in header_kvs.iter() {
-                let line = vec_kv_to_json(TREE_HEADER, kv)?;
-                yield line;
-            }
+            let entry = RaftStoreEntry::new_header(Header::this_version());
+            yield encode_entry(TREE_HEADER, &entry)?;
         }
+
+        let state = dump.state();
 
         // Export raft state
         {
-            let tree_name = &raft_state.inner.name;
+            let tree_name = "raft_log";
 
-            let ks = raft_state.inner.key_space::<RaftStateKV>();
+            let node_id = state.user_data.as_ref().and_then(|ud| ud.node_id);
+            let entry = RaftStoreEntry::NodeId(node_id);
+            yield encode_entry(tree_name, &entry)?;
 
-            let id = ks.get(&RaftStateKey::Id)?.map(NodeId::from);
+            let vote = state.vote().map(Cw::to_inner);
+            let entry = RaftStoreEntry::Vote(vote);
+            yield encode_entry(tree_name, &entry)?;
 
-            if let Some(id) = id {
-                let ent_id = RaftStoreEntry::RaftStateKV {
-                    key: RaftStateKey::Id,
-                    value: RaftStateValue::NodeId(id),
-                };
-
-                let s = serde_json::to_string(&(tree_name, ent_id)).map_err(invalid_data)?;
-                yield s;
-            }
-
-            let vote = ks.get(&RaftStateKey::HardState)?.map(Vote::from);
-
-            if let Some(vote) = vote {
-                let ent_vote = RaftStoreEntry::RaftStateKV {
-                    key: RaftStateKey::HardState,
-                    value: RaftStateValue::HardState(vote),
-                };
-
-                let s = serde_json::to_string(&(tree_name, ent_vote)).map_err(invalid_data)?;
-                yield s;
-            }
-
-            let committed = ks
-                .get(&RaftStateKey::Committed)?
-                .and_then(Option::<LogId>::from);
-
-            let ent_committed = RaftStoreEntry::RaftStateKV {
-                key: RaftStateKey::Committed,
-                value: RaftStateValue::Committed(committed),
-            };
-
-            let s = serde_json::to_string(&(tree_name, ent_committed)).map_err(invalid_data)?;
-            yield s;
+            let committed = state.committed().map(Cw::to_inner);
+            let entry = RaftStoreEntry::Committed(committed);
+            yield encode_entry(tree_name, &entry)?;
         };
 
-        drop(raft_state);
+        {
+            let tree_name = "raft_log";
 
-        // Dump logs that has smaller or equal leader id as `vote`
-        let log_tree_name = log.inner.name.clone();
-        let log_kvs = log.inner.export()?;
+            let purged = state.purged().map(Cw::to_inner);
+            let entry = RaftStoreEntry::Purged(purged);
+            yield encode_entry(tree_name, &entry)?;
 
-        drop(log);
+            for res in dump.iter() {
+                let (log_id, payload) = res?;
+                let log_id = log_id.unpack();
+                let payload = payload.unpack();
+
+                let log_entry = Entry { log_id, payload };
+
+                let entry = RaftStoreEntry::LogEntry(log_entry);
+                yield encode_entry(tree_name, &entry)?;
+            }
+        }
 
         // Dump snapshot of state machine
 
@@ -416,16 +403,6 @@ impl StoreInner {
         // The name in form of "state_machine/[0-9]+" had been used by the sled tree based sm.
         // Do not change it for keeping compatibility.
         let sm_tree_name = "state_machine/0";
-        let db = compactor.db().cloned();
-        drop(compactor);
-
-        for kv in log_kvs.iter() {
-            let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
-
-            let tree_kv = (&log_tree_name, kv_entry);
-            let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
-            yield line;
-        }
 
         info!("StoreInner::export db: {:?}", db);
 

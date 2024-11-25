@@ -80,7 +80,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             .iter()
             .map(|e| (e.name(), e.clone()))
             .collect::<Vec<_>>();
-        let visibility_checker = ctx.get_visibility_checker().await?;
+        let visibility_checker = ctx.get_visibility_checker(false).await?;
         let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];

@@ -16,8 +16,7 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
-use crate::types::binary::BinaryIterator;
-use crate::BinaryKeyAccessor;
+use crate::types::binary::BinaryColumnIter;
 use crate::Column;
 use crate::HashMethod;
 use crate::InputColumns;
@@ -30,7 +29,7 @@ pub struct HashMethodSerializer {}
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
 
-    type HashKeyIter<'a> = BinaryIterator<'a>;
+    type HashKeyIter<'a> = BinaryColumnIter<'a>;
 
     fn name(&self) -> String {
         "Serializer".to_string()
@@ -51,7 +50,7 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
-            KeysState::Column(Column::Binary(col)) => Ok(col.iter()),
+            KeysState::Column(Column::Binary(state)) => Ok(state.iter()),
             _ => unreachable!(),
         }
     }
@@ -61,18 +60,15 @@ impl HashMethod for HashMethodSerializer {
         keys_state: KeysState,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
-            KeysState::Column(Column::Binary(col)) => {
-                let (data, offsets) = col.into_buffer();
-                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
-            }
+            KeysState::Column(Column::Binary(state)) => Ok(Box::new(state)),
             _ => unreachable!(),
         }
     }
 
     fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
         match keys_state {
-            KeysState::Column(Column::Binary(col)) => {
-                hashes.extend(col.iter().map(hash_join_fast_string_hash));
+            KeysState::Column(Column::Binary(state)) => {
+                hashes.extend(state.iter().map(hash_join_fast_string_hash));
             }
             _ => unreachable!(),
         }

@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
@@ -150,8 +150,8 @@ pub(crate) fn update_bitmap_with_bloom_filter(
                     }
                     idx += 1;
                 }),
-                KeysState::Column(Column::String(col)) => col.iter_binary().for_each(|key| {
-                    let hash = key.fast_hash();
+                KeysState::Column(Column::String(col)) => col.iter().for_each(|key| {
+                    let hash = key.as_bytes().fast_hash();
                     if filter.contains(&hash) {
                         bitmap.set(idx, true);
                     }

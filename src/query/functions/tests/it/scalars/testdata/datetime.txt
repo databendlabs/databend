@@ -210,13 +210,12 @@ evaluation (internal):
 +--------+-----------------------------------------+
 
 
-ast            : add_years(to_date(0), 10000)
-raw expr       : add_years(to_date(0), 10000)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -354285
-output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+error: 
+  --> SQL:1:1
+  |
+1 | add_years(to_date(0), 10000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : add_years(to_date(0), 100)
@@ -502,13 +501,12 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : add_years(to_timestamp(0), 10000)
-raw expr       : add_years(to_timestamp(0), 10000)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -30610224000000000
-output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+error: 
+  --> SQL:1:1
+  |
+1 | add_years(to_timestamp(0), 10000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : add_years(to_timestamp(0), 100)
@@ -995,13 +993,12 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
-ast            : date_add(year, 10000, to_date(0))
-raw expr       : add_years(to_date(0), 10000)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -354285
-output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+error: 
+  --> SQL:1:1
+  |
+1 | date_add(year, 10000, to_date(0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : date_add(year, 100, to_date(0))
@@ -1260,13 +1257,12 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : date_add(year, 10000, to_timestamp(0))
-raw expr       : add_years(to_timestamp(0), 10000)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -30610224000000000
-output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+error: 
+  --> SQL:1:1
+  |
+1 | date_add(year, 10000, to_timestamp(0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : date_add(year, 100, to_timestamp(0))
@@ -1717,13 +1713,12 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
-ast            : to_date(0) + interval 10000 year
-raw expr       : add_years(to_date(0), 10000)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -354285
-output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+error: 
+  --> SQL:1:12
+  |
+1 | to_date(0) + interval 10000 year
+  |            ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : to_date(0) + interval 100 year
@@ -1982,13 +1977,12 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : to_timestamp(0) + interval 10000 year
-raw expr       : add_years(to_timestamp(0), 10000)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
-optimized expr : -30610224000000000
-output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+error: 
+  --> SQL:1:17
+  |
+1 | to_timestamp(0) + interval 10000 year
+  |                 ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+
 
 
 ast            : to_timestamp(0) + interval 100 year
@@ -3357,6 +3351,168 @@ optimized expr : 1630812366000000
 output type    : Timestamp
 output domain  : {1630812366000000..=1630812366000000}
 output         : '2021-09-05 03:26:06.000000'
+
+
+ast            : last_day(to_timestamp(1630812366), year)
+raw expr       : to_last_of_year(to_timestamp(1630812366))
+checked expr   : to_last_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18992
+output type    : Date
+output domain  : {18992..=18992}
+output         : '2021-12-31'
+
+
+ast            : last_day(to_timestamp(1630812366), quarter)
+raw expr       : to_last_of_quarter(to_timestamp(1630812366))
+checked expr   : to_last_of_quarter<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18900
+output type    : Date
+output domain  : {18900..=18900}
+output         : '2021-09-30'
+
+
+ast            : last_day(to_timestamp(1630812366), month)
+raw expr       : to_last_of_month(to_timestamp(1630812366))
+checked expr   : to_last_of_month<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18900
+output type    : Date
+output domain  : {18900..=18900}
+output         : '2021-09-30'
+
+
+ast            : last_day(to_timestamp(1630812366), week)
+raw expr       : to_last_of_week(to_timestamp(1630812366))
+checked expr   : to_last_of_week<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18875
+output type    : Date
+output domain  : {18875..=18875}
+output         : '2021-09-05'
+
+
+ast            : previous_day(to_timestamp(1630812366), monday)
+raw expr       : to_previous_monday(to_timestamp(1630812366))
+checked expr   : to_previous_monday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18869
+output type    : Date
+output domain  : {18869..=18869}
+output         : '2021-08-30'
+
+
+ast            : previous_day(to_timestamp(1630812366), tuesday)
+raw expr       : to_previous_tuesday(to_timestamp(1630812366))
+checked expr   : to_previous_tuesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18870
+output type    : Date
+output domain  : {18870..=18870}
+output         : '2021-08-31'
+
+
+ast            : previous_day(to_timestamp(1630812366), wednesday)
+raw expr       : to_previous_wednesday(to_timestamp(1630812366))
+checked expr   : to_previous_wednesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18871
+output type    : Date
+output domain  : {18871..=18871}
+output         : '2021-09-01'
+
+
+ast            : previous_day(to_timestamp(1630812366), thursday)
+raw expr       : to_previous_thursday(to_timestamp(1630812366))
+checked expr   : to_previous_thursday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18872
+output type    : Date
+output domain  : {18872..=18872}
+output         : '2021-09-02'
+
+
+ast            : previous_day(to_timestamp(1630812366), friday)
+raw expr       : to_previous_friday(to_timestamp(1630812366))
+checked expr   : to_previous_friday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18873
+output type    : Date
+output domain  : {18873..=18873}
+output         : '2021-09-03'
+
+
+ast            : previous_day(to_timestamp(1630812366), saturday)
+raw expr       : to_previous_saturday(to_timestamp(1630812366))
+checked expr   : to_previous_saturday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18874
+output type    : Date
+output domain  : {18874..=18874}
+output         : '2021-09-04'
+
+
+ast            : previous_day(to_timestamp(1630812366), sunday)
+raw expr       : to_previous_sunday(to_timestamp(1630812366))
+checked expr   : to_previous_sunday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18868
+output type    : Date
+output domain  : {18868..=18868}
+output         : '2021-08-29'
+
+
+ast            : next_day(to_timestamp(1630812366), monday)
+raw expr       : to_next_monday(to_timestamp(1630812366))
+checked expr   : to_next_monday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18876
+output type    : Date
+output domain  : {18876..=18876}
+output         : '2021-09-06'
+
+
+ast            : next_day(to_timestamp(1630812366), tuesday)
+raw expr       : to_next_tuesday(to_timestamp(1630812366))
+checked expr   : to_next_tuesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18877
+output type    : Date
+output domain  : {18877..=18877}
+output         : '2021-09-07'
+
+
+ast            : next_day(to_timestamp(1630812366), wednesday)
+raw expr       : to_next_wednesday(to_timestamp(1630812366))
+checked expr   : to_next_wednesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18878
+output type    : Date
+output domain  : {18878..=18878}
+output         : '2021-09-08'
+
+
+ast            : next_day(to_timestamp(1630812366), thursday)
+raw expr       : to_next_thursday(to_timestamp(1630812366))
+checked expr   : to_next_thursday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18879
+output type    : Date
+output domain  : {18879..=18879}
+output         : '2021-09-09'
+
+
+ast            : next_day(to_timestamp(1630812366), friday)
+raw expr       : to_next_friday(to_timestamp(1630812366))
+checked expr   : to_next_friday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18880
+output type    : Date
+output domain  : {18880..=18880}
+output         : '2021-09-10'
+
+
+ast            : next_day(to_timestamp(1630812366), saturday)
+raw expr       : to_next_saturday(to_timestamp(1630812366))
+checked expr   : to_next_saturday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18881
+output type    : Date
+output domain  : {18881..=18881}
+output         : '2021-09-11'
+
+
+ast            : next_day(to_timestamp(1630812366), sunday)
+raw expr       : to_next_sunday(to_timestamp(1630812366))
+checked expr   : to_next_sunday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 18882
+output type    : Date
+output domain  : {18882..=18882}
+output         : '2021-09-12'
 
 
 ast            : date_diff(year, to_date(0), to_date(10000))

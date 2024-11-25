@@ -1,0 +1,141 @@
+statement ok
+DROP CATALOG IF EXISTS ctl;
+
+statement ok
+CREATE CATALOG ctl
+TYPE=ICEBERG
+CONNECTION=(
+    TYPE='rest'
+    ADDRESS='http://127.0.0.1:8181'
+    WAREHOUSE='s3://iceberg-tpch'
+    "s3.region"='us-east-1'
+    "s3.endpoint"='http://127.0.0.1:9000'
+);
+
+## note: the tests only cover standalone mode
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1;
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true(lineitem.l_orderkey (#0) < 1)]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── output columns: [l_orderkey (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(lineitem.l_orderkey (#0) < 1)], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 or l_commitdate < '1992-01-31';
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true((lineitem.l_orderkey (#0) < 1 OR lineitem.l_commitdate (#11) < '1992-01-31'))]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true((lineitem.l_orderkey (#0) < 1 OR lineitem.l_commitdate (#11) < '1992-01-31'))], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 and l_commitdate > '1992-01-31';
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true(lineitem.l_orderkey (#0) < 1), is_true(lineitem.l_commitdate (#11) > '1992-01-31')]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [and_filters(lineitem.l_orderkey (#0) < 1, lineitem.l_commitdate (#11) > '1992-01-31')], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey > 1 and l_commitdate = '1992-01-22';
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true(lineitem.l_orderkey (#0) > 1), is_true(lineitem.l_commitdate (#11) = '1992-01-22')]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [and_filters(lineitem.l_orderkey (#0) > 1, lineitem.l_commitdate (#11) = '1992-01-22')], limit: NONE]
+        └── estimated rows: 0.00
+
+
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey is null;
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [NOT is_not_null(lineitem.l_orderkey (#0))]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── output columns: [l_orderkey (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [NOT is_not_null(lineitem.l_orderkey (#0))], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey is null or l_commitdate is not null;
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
+        ├── read rows: 600572
+        ├── read size: 14.27 MiB
+        ├── partitions total: 4
+        ├── partitions scanned: 4
+        ├── push downs: [filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))], limit: NONE]
+        └── estimated rows: 0.00

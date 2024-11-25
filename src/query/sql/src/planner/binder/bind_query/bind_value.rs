@@ -30,7 +30,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Evaluator;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use indexmap::IndexMap;
 
 use crate::binder::wrap_cast;
 use crate::optimizer::ColumnSet;
@@ -389,8 +388,6 @@ pub fn bind_values(
         name_resolution_ctx,
         metadata.clone(),
         &[],
-        HashMap::new(),
-        Box::new(IndexMap::new()),
     );
 
     let num_values = values.len();

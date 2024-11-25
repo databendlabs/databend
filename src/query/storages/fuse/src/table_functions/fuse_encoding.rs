@@ -14,11 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::native::read::reader::NativeReader;
-use databend_common_arrow::native::stat::stat_simple;
-use databend_common_arrow::native::stat::ColumnInfo;
-use databend_common_arrow::native::stat::PageBody;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
@@ -49,6 +44,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_native::read::reader::NativeReader;
+use databend_common_native::stat::stat_simple;
+use databend_common_native::stat::ColumnInfo;
+use databend_common_native::stat::PageBody;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -175,7 +174,6 @@ impl<'a> FuseEncodingImpl<'a> {
                                 continue;
                             }
                             let column_id = field.column_id;
-                            let arrow_field: Field = field.into();
                             let column_meta = block.col_metas.get(&column_id).unwrap();
                             let (offset, len) = column_meta.offset_length();
                             let ranges = vec![(column_id, offset..(offset + len))];
@@ -200,7 +198,7 @@ impl<'a> FuseEncodingImpl<'a> {
                             let pages = std::io::Cursor::new(pages);
                             let page_metas = column_meta.as_native().unwrap().pages.clone();
                             let reader = NativeReader::new(pages, page_metas, vec![]);
-                            let this_column_info = stat_simple(reader, arrow_field.clone())?;
+                            let this_column_info = stat_simple(reader, field.clone())?;
                             columns_info.push((field.data_type.sql_name(), this_column_info));
                         }
                     }
@@ -233,11 +231,11 @@ impl<'a> FuseEncodingImpl<'a> {
         let mut validity_size = Vec::new();
         let mut compressed_size = Vec::new();
         let mut uncompressed_size = Vec::new();
-        let mut l1 = StringColumnBuilder::with_capacity(0, 0);
+        let mut l1 = StringColumnBuilder::with_capacity(0);
         let mut l2 = NullableColumnBuilder::<StringType>::with_capacity(0, &[]);
-        let mut table_name = StringColumnBuilder::with_capacity(0, 0);
-        let mut column_name = StringColumnBuilder::with_capacity(0, 0);
-        let mut column_type = StringColumnBuilder::with_capacity(0, 0);
+        let mut table_name = StringColumnBuilder::with_capacity(0);
+        let mut column_name = StringColumnBuilder::with_capacity(0);
+        let mut column_type = StringColumnBuilder::with_capacity(0);
         let mut all_num_rows = 0;
         for (table, columns_info) in info {
             for (type_str, column_info) in columns_info {
@@ -254,8 +252,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     validity_size.push(p.validity_size);
                     compressed_size.push(p.compressed_size);
                     uncompressed_size.push(p.uncompressed_size);
-                    l1.put_str(&encoding_to_string(&p.body));
-                    l1.commit_row();
+                    l1.put_and_commit(encoding_to_string(&p.body));
                     let l2_encoding = match &p.body {
                         PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
                         PageBody::Freq(freq) => freq

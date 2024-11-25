@@ -242,6 +242,7 @@ pub trait PhysicalPlanReplacer {
             partition_by: plan.partition_by.clone(),
             order_by: plan.order_by.clone(),
             after_exchange: plan.after_exchange,
+            top_n: plan.top_n.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

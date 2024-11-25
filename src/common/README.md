@@ -1,6 +1,5 @@
 # Databend Common
 
-- [`arrow`](./arrow/), a simple wrapper for reading and writing parquet.
 - [`auth`](./auth/), a simple wrapper for authentication layer.
 - [`base`](./base/) contains runtime, pool, allocator and rangemap.
 - [`building`](./building/) sets up the environment for building components and internal use.

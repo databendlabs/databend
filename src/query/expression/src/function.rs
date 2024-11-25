@@ -19,20 +19,20 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use chrono_tz::Tz;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
@@ -97,8 +97,9 @@ pub enum FunctionEval {
 
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: TzLUT,
-    pub now: DateTime<Utc>,
+    pub tz: Tz,
+    pub jiff_tz: TimeZone,
+    pub now: Zoned,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
 
@@ -111,7 +112,6 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
-    pub enable_dst_hour_fix: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
 }
@@ -119,7 +119,8 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: Default::default(),
+            tz: Tz::UTC,
+            jiff_tz: TimeZone::UTC,
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,
@@ -132,7 +133,6 @@ impl Default for FunctionContext {
 
             geometry_output_format: Default::default(),
             parse_datetime_ignore_remainder: false,
-            enable_dst_hour_fix: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,
         }
@@ -679,7 +679,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             // If the original value is NULL, we can ignore the error.
             let rhs: Bitmap = bitmap.clone().not().into();
             let res = error_bitmap.clone().bitor(&rhs);
-            if res.unset_bits() == 0 {
+            if res.null_count() == 0 {
                 ctx.errors = None;
             } else {
                 *error_bitmap = res;
@@ -697,8 +697,8 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             Value::Column(column) => {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
-                        let validity = bitmap.into();
-                        let validity = databend_common_arrow::arrow::bitmap::and(
+                        let validity: Bitmap = bitmap.into();
+                        let validity = databend_common_column::bitmap::and(
                             &nullable_column.validity,
                             &validity,
                         );

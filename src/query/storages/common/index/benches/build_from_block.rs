@@ -198,7 +198,7 @@ fn rand_str_column(n: i32, len: i32) -> Column {
                             abcdefghijklmnopqrstuvwxyz\
                             0123456789)(*&^%$#@!~";
 
-    let mut builder = StringColumnBuilder::with_capacity(n as usize, 0);
+    let mut builder = StringColumnBuilder::with_capacity(n as usize);
     for _ in 0..n {
         for _ in (len / 2)..len {
             let idx = rng.gen_range(0..CHARSET.len());

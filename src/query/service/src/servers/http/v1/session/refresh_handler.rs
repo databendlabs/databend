@@ -22,6 +22,7 @@ use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
 use crate::servers::http::v1::session::consts::SESSION_TOKEN_TTL;
+use crate::servers::http::v1::session::login_handler::TokensInfo;
 use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Deserialize, Clone)]
@@ -32,9 +33,7 @@ struct RefreshRequest {
 
 #[derive(Serialize, Debug, Clone)]
 pub struct RefreshResponse {
-    session_token: Option<String>,
-    refresh_token: Option<String>,
-    session_token_ttl_in_secs: u64,
+    tokens: TokensInfo,
 }
 
 #[poem::handler]
@@ -43,17 +42,29 @@ pub async fn refresh_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<RefreshRequest>,
 ) -> PoemResult<impl IntoResponse> {
+    let client_session_id = ctx
+        .client_session_id
+        .as_ref()
+        .expect("login_handler expect session id in ctx")
+        .clone();
     let mgr = ClientSessionManager::instance();
     match &ctx.credential {
         Credential::DatabendToken { token, .. } => {
             let (_, token_pair) = mgr
-                .new_token_pair(&ctx.session, Some(token.clone()), req.session_token)
+                .new_token_pair(
+                    &ctx.session,
+                    client_session_id,
+                    Some(token.clone()),
+                    req.session_token,
+                )
                 .await
                 .map_err(HttpErrorCode::server_error)?;
             Ok(Json(RefreshResponse {
-                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
-                session_token: Some(token_pair.session.clone()),
-                refresh_token: Some(token_pair.refresh.clone()),
+                tokens: TokensInfo {
+                    session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                    session_token: token_pair.session.clone(),
+                    refresh_token: token_pair.refresh.clone(),
+                },
             }))
         }
         _ => {

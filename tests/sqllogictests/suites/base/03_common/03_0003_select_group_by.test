@@ -21,6 +21,13 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 1
 2
 
+query I
+SELECT try_cast(number % 3 as string) c1, count()  FROM numbers_mt(10) where number > 2 group by c1 order by c1
+----
+0 3
+1 2
+2 2
+
 query III
 SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3
 ----
@@ -226,6 +233,50 @@ select number % 3 a, max(number) - 3,  number % 2 b, sum(number) + 4 from number
 1 994 1 83337
 2 995 0 83504
 2 992 1 83004
+
+statement ok
+CREATE OR REPLACE TABLE t_str (col1 string, col2 string);
+
+statement ok
+INSERT INTO t_str VALUES ('test', 'a1,a2'),('test', 'a1,a2,a3');
+
+query TT
+SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2;
+----
+test a1
+test a1
+test a2
+test a2
+test a3
+
+query TT
+SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3;
+----
+test a1
+test a2
+test a3
+
+query T
+SELECT max(unnest(split(t.col2, ','))) FROM t_str AS t;
+----
+a3
+
+query T
+SELECT unnest(split(max(t.col2), ',')) FROM t_str AS t;
+----
+a1
+a2
+a3
+
+query T
+SELECT distinct unnest(split(col2, ',')) AS col3 FROM t_str ORDER BY col3;
+----
+a1
+a2
+a3
+
+statement ok
+DROP TABLE t_str
 
 query TTT rowsort
 SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all

@@ -19,6 +19,7 @@ mod export_from_grpc;
 pub mod admin;
 pub mod export_from_disk;
 pub mod import;
+pub mod import_v004;
 pub(crate) mod reading;
 pub mod upgrade;
 
@@ -33,7 +34,6 @@ use databend_common_base::base::tokio;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_sled_store::init_sled_db;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
@@ -236,8 +236,25 @@ impl App {
         let res = client.get_cluster_status().await?;
         println!("BinaryVersion: {}", res.binary_version);
         println!("DataVersion: {}", res.data_version);
-        println!("DBSize: {}", res.db_size);
-        println!("KeyNumber: {}", res.key_num);
+        println!("RaftLogSize: {}", res.raft_log_size);
+        if let Some(s) = res.raft_log_status {
+            println!("RaftLog:");
+            println!("  - CacheItems: {}", s.cache_items);
+            println!("  - CacheUsedSize: {}", s.cache_used_size);
+            println!("  - WALTotalSize: {}", s.wal_total_size);
+            println!("  - WALOpenChunkSize: {}", s.wal_open_chunk_size);
+            println!("  - WALOffset: {}", s.wal_offset);
+            println!("  - WALClosedChunkCount: {}", s.wal_closed_chunk_count);
+            println!(
+                "  - WALClosedChunkTotalSize: {}",
+                s.wal_closed_chunk_total_size
+            );
+            println!("  - WALClosedChunkSizes:");
+            for (k, v) in s.wal_closed_chunk_sizes {
+                println!("    - {}: {}", k, v);
+            }
+        }
+        println!("SnapshotKeyCount: {}", res.snapshot_key_count);
         println!("Node: id={} raft={}", res.id, res.endpoint);
         println!("State: {}", res.state);
         if let Some(leader) = res.leader {
@@ -312,8 +329,7 @@ impl App {
             None => {
                 export_from_grpc::export_from_running_node(args).await?;
             }
-            Some(ref dir) => {
-                init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
+            Some(ref _dir) => {
                 export_from_disk::export_from_dir(args).await?;
             }
         }

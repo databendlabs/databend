@@ -15,8 +15,9 @@
 use databend_common_base::vec_ext::VecExt;
 use databend_common_base::vec_ext::VecU8Ext;
 
-use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::BinaryColumn;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -29,21 +30,19 @@ pub fn serialize_group_columns(
     num_rows: usize,
     serialize_size: usize,
 ) -> BinaryColumn {
-    // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-    // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
-    let mut data: Vec<u8> = Vec::with_capacity(serialize_size);
-    let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-    unsafe {
-        offsets.push_unchecked(0);
-        for i in 0..num_rows {
-            for col in columns.iter() {
-                serialize_column_binary(col, i, &mut data);
-            }
-            offsets.push_unchecked(data.len() as u64);
-        }
-    }
+    let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 
-    BinaryColumn::new(data.into(), offsets.into())
+    for i in 0..num_rows {
+        for col in columns.iter() {
+            unsafe {
+                serialize_column_binary(col, i, &mut builder.data);
+            }
+        }
+        builder.commit_row();
+    }
+    // For nulllable column it will only serialize valid row data
+    debug_assert!(builder.data.len() <= serialize_size);
+    builder.build()
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.

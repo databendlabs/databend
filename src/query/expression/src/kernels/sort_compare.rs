@@ -15,14 +15,15 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use memchr::memchr;
 
 use crate::types::AnyType;
 use crate::types::NullableColumn;
 use crate::types::Number;
+use crate::types::StringColumn;
 use crate::types::ValueType;
 use crate::visitor::ValueVisitor;
 use crate::LimitType;
@@ -36,6 +37,7 @@ pub struct SortCompare {
     current_column_index: usize,
     validity: Option<Bitmap>,
     equality_index: Vec<u8>,
+    force_equality: bool,
 }
 
 macro_rules! do_sorter {
@@ -111,12 +113,25 @@ impl SortCompare {
             current_column_index: 0,
             validity: None,
             equality_index,
+            force_equality: matches!(limit, LimitType::LimitRank(_)),
+        }
+    }
+
+    pub fn with_force_equality(ordering_descs: Vec<SortColumnDescription>, rows: usize) -> Self {
+        Self {
+            rows,
+            limit: LimitType::None,
+            permutation: (0..rows as u32).collect(),
+            ordering_descs,
+            current_column_index: 0,
+            validity: None,
+            equality_index: vec![1; rows as _],
+            force_equality: true,
         }
     }
 
     fn need_update_equality_index(&self) -> bool {
-        self.current_column_index != self.ordering_descs.len() - 1
-            || matches!(self.limit, LimitType::LimitRank(_))
+        self.force_equality || self.current_column_index != self.ordering_descs.len() - 1
     }
 
     pub fn increment_column_index(&mut self) {
@@ -253,6 +268,11 @@ impl SortCompare {
             }
         }
     }
+
+    pub fn equality_index(&self) -> &[u8] {
+        debug_assert!(self.force_equality);
+        &self.equality_index
+    }
 }
 
 impl ValueVisitor for SortCompare {
@@ -276,18 +296,28 @@ impl ValueVisitor for SortCompare {
         self.visit_number(buffer)
     }
 
+    fn visit_string(&mut self, column: StringColumn) -> Result<()> {
+        assert!(column.len() == self.rows);
+        self.generic_sort(
+            &column,
+            |col, idx| (col, idx as usize),
+            |(col1, idx1), (col2, idx2)| StringColumn::compare(col1, idx1, col2, idx2),
+        );
+        Ok(())
+    }
+
     fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
         assert!(T::column_len(&col) == self.rows);
         self.generic_sort(
             &col,
-            |c, idx| -> T::ScalarRef<'_> { unsafe { T::index_column_unchecked(c, idx as _) } },
+            |c, idx| unsafe { T::index_column_unchecked(c, idx as _) },
             |a, b| T::compare(a, b),
         );
         Ok(())
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        if column.validity.unset_bits() > 0 {
+        if column.validity.null_count() > 0 {
             self.validity = Some(column.validity.clone());
         }
         self.visit_column(column.column.clone())

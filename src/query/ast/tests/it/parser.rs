@@ -87,6 +87,8 @@ fn test_statement() {
     let file = &mut mint.new_goldenfile("stmt.txt").unwrap();
     let cases = &[
         r#"show databases"#,
+        r#"show drop databases"#,
+        r#"show drop databases like 'db%'"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
         r#"show drop tables"#,

@@ -246,6 +246,33 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self
+            .ctx
+            .meta
+            .get_tenant_history_databases(
+                ListDatabaseReq {
+                    tenant: tenant.clone(),
+                },
+                false,
+            )
+            .await?;
+
+        dbs.iter()
+            .try_fold(vec![], |mut acc, item: &Arc<DatabaseInfo>| {
+                let db_result = self.build_db_instance(item);
+                match db_result {
+                    Ok(db) => acc.push(db),
+                    Err(err) => {
+                        // Ignore the error and continue, allow partial failure.
+                        warn!("Failed to build database '{:?}': {:?}", item, err);
+                    }
+                }
+                Ok(acc)
+            })
+    }
+
+    #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self
             .ctx

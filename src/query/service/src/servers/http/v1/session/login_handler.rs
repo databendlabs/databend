@@ -36,15 +36,19 @@ struct LoginRequest {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct TokensInfo {
+    pub(crate) session_token_ttl_in_secs: u64,
+    pub(crate) session_token: String,
+    pub(crate) refresh_token: String,
+}
+
 #[derive(Serialize, Debug, Clone)]
 pub struct LoginResponse {
     version: String,
     session_id: String,
-    session_token_ttl_in_secs: u64,
-
-    /// for now, only use session token when authed by user-password
-    session_token: Option<String>,
-    refresh_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tokens: Option<TokensInfo>,
 }
 
 /// Although theses can be checked for each /v1/query for now,
@@ -89,18 +93,20 @@ pub async fn login_handler(
     Json(req): Json<LoginRequest>,
     Query(query): Query<LoginQuery>,
 ) -> PoemResult<impl IntoResponse> {
+    let session_id = ctx
+        .client_session_id
+        .as_ref()
+        .expect("login_handler expect session id in ctx")
+        .clone();
     let version = DATABEND_SEMVER.to_string();
     check_login(ctx, &req)
         .await
         .map_err(HttpErrorCode::bad_request)?;
     let id_only = || {
-        let session_id = uuid::Uuid::new_v4().to_string();
         Ok(Json(LoginResponse {
             version: version.clone(),
-            session_id,
-            session_token_ttl_in_secs: 0,
-            session_token: None,
-            refresh_token: None,
+            session_id: session_id.clone(),
+            tokens: None,
         }))
     };
 
@@ -111,16 +117,17 @@ pub async fn login_handler(
                 id_only()
             } else {
                 let (session_id, token_pair) = ClientSessionManager::instance()
-                    .new_token_pair(&ctx.session, None, None)
+                    .new_token_pair(&ctx.session, session_id, None, None)
                     .await
                     .map_err(HttpErrorCode::server_error)?;
                 Ok(Json(LoginResponse {
                     version,
                     session_id,
-
-                    session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
-                    session_token: Some(token_pair.session.clone()),
-                    refresh_token: Some(token_pair.refresh.clone()),
+                    tokens: Some(TokensInfo {
+                        session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                        session_token: token_pair.session.clone(),
+                        refresh_token: token_pair.refresh.clone(),
+                    }),
                 }))
             }
         }

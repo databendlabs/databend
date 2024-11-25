@@ -18,7 +18,6 @@
 
 pub mod api;
 pub mod configs;
-pub mod export;
 pub mod message;
 pub mod meta_service;
 pub mod metrics;
@@ -28,9 +27,3 @@ pub(crate) mod request_handling;
 pub mod store;
 pub mod version;
 pub mod watcher;
-
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
-}

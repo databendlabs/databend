@@ -47,7 +47,7 @@ pub struct MetaForwarder<'a> {
 impl<'a> MetaForwarder<'a> {
     pub fn new(meta_node: &'a MetaNode) -> Self {
         Self {
-            sto: &meta_node.sto,
+            sto: &meta_node.raft_store,
             raft: &meta_node.raft,
         }
     }

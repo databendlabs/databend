@@ -1014,8 +1014,6 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &[],
-                        self.m_cte_bound_ctx.clone(),
-                        self.ctes_map.clone(),
                     );
                     scalar_binder.forbid_udf();
                     let (scalar, _) = scalar_binder.bind(expr)?;
@@ -1654,8 +1652,6 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();

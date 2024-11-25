@@ -17,8 +17,8 @@ use std::marker::PhantomData;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::ColumnBuilder;
@@ -32,6 +32,23 @@ macro_rules! with_simple_no_number_mapped_type {
         match_template::match_template! {
             $t = [
                 String => StringType,
+                Boolean => BooleanType,
+                Timestamp => TimestampType,
+                Null => NullType,
+                EmptyArray => EmptyArrayType,
+                EmptyMap => EmptyMapType,
+                Date => DateType,
+            ],
+            $($tail)*
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! with_simple_no_number_no_string_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
                 Boolean => BooleanType,
                 Timestamp => TimestampType,
                 Null => NullType,
@@ -64,6 +81,7 @@ macro_rules! with_compare_mapped_type {
 
 pub trait ChangeIf<T: ValueType>: Send + Sync + 'static {
     fn change_if(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool;
+    fn change_if_ordering(ordering: Ordering) -> bool;
 }
 
 #[derive(Default)]
@@ -77,6 +95,11 @@ where
     #[inline]
     fn change_if<'a>(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool {
         matches!(l.partial_cmp(r), Some(Ordering::Greater))
+    }
+
+    #[inline]
+    fn change_if_ordering(ordering: Ordering) -> bool {
+        ordering == Ordering::Greater
     }
 }
 
@@ -92,6 +115,11 @@ where
     fn change_if<'a>(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool {
         matches!(l.partial_cmp(r), Some(Ordering::Less))
     }
+
+    #[inline]
+    fn change_if_ordering(ordering: Ordering) -> bool {
+        ordering == Ordering::Less
+    }
 }
 
 #[derive(Default)]
@@ -100,6 +128,11 @@ pub struct CmpAny;
 impl<T: ValueType> ChangeIf<T> for CmpAny {
     #[inline]
     fn change_if(_: &T::ScalarRef<'_>, _: &T::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline]
+    fn change_if_ordering(_: Ordering) -> bool {
         false
     }
 }
@@ -173,7 +206,7 @@ where
         }
 
         if let Some(validity) = validity {
-            if validity.unset_bits() == column_len {
+            if validity.null_count() == column_len {
                 return Ok(());
             }
 

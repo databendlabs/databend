@@ -82,6 +82,11 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                 Ok(Some(x))
             }
 
+            RaftStoreEntry::LogEntry(entry) => {
+                let x = RaftStoreEntry::LogEntry(unwrap_or_return!(self.proc_raft_entry(entry)?));
+                Ok(Some(x))
+            }
+
             RaftStoreEntry::GenericKV { key, value } => {
                 let data = (self.process_pb)(&key, value.data)?;
 
@@ -104,6 +109,11 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             RaftStoreEntry::Sequences { .. } => Ok(None),
             RaftStoreEntry::ClientLastResps { .. } => Ok(None),
             RaftStoreEntry::LogMeta { .. } => Ok(None),
+
+            RaftStoreEntry::NodeId(_) => Ok(None),
+            RaftStoreEntry::Vote(_) => Ok(None),
+            RaftStoreEntry::Committed(_) => Ok(None),
+            RaftStoreEntry::Purged(_) => Ok(None),
         }
     }
 
@@ -177,6 +187,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                 }))
             }
             Operation::Delete => Ok(None),
+            #[allow(deprecated)]
             Operation::AsIs => Ok(None),
         }
     }
