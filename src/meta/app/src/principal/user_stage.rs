@@ -455,40 +455,6 @@ impl FromStr for OnErrorMode {
     }
 }
 
-impl Display for OnErrorMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            OnErrorMode::Continue => {
-                write!(f, "continue")
-            }
-            OnErrorMode::SkipFileNum(n) => {
-                if *n <= 1 {
-                    write!(f, "skipfile")
-                } else {
-                    write!(f, "skipfile_{}", n)
-                }
-            }
-            OnErrorMode::AbortNum(n) => {
-                if *n <= 1 {
-                    write!(f, "abort")
-                } else {
-                    write!(f, "abort_{}", n)
-                }
-            }
-        }
-    }
-}
-
-impl From<databend_common_ast::ast::OnErrorMode> for OnErrorMode {
-    fn from(opt: databend_common_ast::ast::OnErrorMode) -> Self {
-        match opt {
-            databend_common_ast::ast::OnErrorMode::Continue => OnErrorMode::Continue,
-            databend_common_ast::ast::OnErrorMode::SkipFileNum(n) => OnErrorMode::SkipFileNum(n),
-            databend_common_ast::ast::OnErrorMode::AbortNum(n) => OnErrorMode::AbortNum(n),
-        }
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct CopyOptions {
