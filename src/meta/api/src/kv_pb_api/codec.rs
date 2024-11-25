@@ -36,7 +36,9 @@ where T: FromToProto {
             Ok(Operation::Update(buf))
         }
         Operation::Delete => Ok(Operation::Delete),
-        Operation::AsIs => Ok(Operation::AsIs),
+        _ => {
+            unreachable!("Operation::AsIs is not supported")
+        }
     }
 }
 

@@ -16,8 +16,8 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::UpsertKV;
 use log::info;
 use pretty_assertions::assert_eq;
 use regex::Regex;
@@ -42,7 +42,7 @@ async fn test_export() -> anyhow::Result<()> {
     info!("--- upsert kv");
     {
         for k in ["foo", "bar", "wow"] {
-            client.upsert_kv(UpsertKVReq::update(k, &b(k))).await?;
+            client.upsert_kv(UpsertKV::update(k, &b(k))).await?;
         }
     }
 

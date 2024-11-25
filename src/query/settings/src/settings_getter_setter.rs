@@ -504,6 +504,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
     }
 
+    pub fn set_enable_table_lock(&self, value: u64) -> Result<()> {
+        self.try_set_u64("enable_table_lock", value)
+    }
+
     pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }

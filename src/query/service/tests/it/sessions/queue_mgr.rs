@@ -18,6 +18,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::Planner;
@@ -307,6 +308,7 @@ async fn test_heavy_actions() -> Result<()> {
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_enable_table_lock(0)?;
 
     // Create table and stage.
     {

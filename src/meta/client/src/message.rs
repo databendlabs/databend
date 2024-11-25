@@ -20,7 +20,6 @@ use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::ExportedChunk;
@@ -31,6 +30,7 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use fastrace::Span;
 use tonic::codegen::BoxStream;
 
@@ -81,7 +81,7 @@ pub enum Request {
     StreamList(Streamed<ListKVReq>),
 
     /// Update or insert KV
-    Upsert(UpsertKVReq),
+    Upsert(UpsertKV),
 
     /// Run a transaction on remote
     Txn(TxnRequest),
