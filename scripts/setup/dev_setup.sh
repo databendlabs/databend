@@ -409,7 +409,7 @@ function install_binutils {
 		# skip
 		;;
 	*)
-		echo "Unable to install libtiff with package manager: $PACKAGE_MANAGER"
+		echo "Unable to install binutils with package manager: $PACKAGE_MANAGER"
 		exit 1
 		;;
 	esac
