@@ -4164,6 +4164,8 @@ Functions overloads:
 7 to_timestamp(Date NULL) :: Timestamp NULL
 8 to_timestamp(Int64) :: Timestamp
 9 to_timestamp(Int64 NULL) :: Timestamp NULL
+10 to_timestamp(Int64, UInt64) :: Timestamp
+11 to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
 0 to_uint16(Variant) :: UInt16
 1 to_uint16(Variant NULL) :: UInt16 NULL
 2 to_uint16(String) :: UInt16
@@ -4614,6 +4616,8 @@ Functions overloads:
 7 try_to_timestamp(Date NULL) :: Timestamp NULL
 8 try_to_timestamp(Int64) :: Timestamp NULL
 9 try_to_timestamp(Int64 NULL) :: Timestamp NULL
+10 try_to_timestamp(Int64, UInt64) :: Timestamp
+11 try_to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
 0 try_to_uint16(Variant) :: UInt16 NULL
 1 try_to_uint16(Variant NULL) :: UInt16 NULL
 2 try_to_uint16(String) :: UInt16 NULL

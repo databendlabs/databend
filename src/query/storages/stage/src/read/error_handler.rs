@@ -15,9 +15,9 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_storage::FileParseError;
 use databend_common_storage::FileStatus;
 
