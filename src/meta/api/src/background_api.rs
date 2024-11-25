@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundTaskIdent;
 use databend_common_meta_app::background::BackgroundTaskInfo;
 use databend_common_meta_app::background::CreateBackgroundJobReply;
 use databend_common_meta_app::background::CreateBackgroundJobReq;
@@ -70,7 +71,7 @@ pub trait BackgroundApi: Send + Sync {
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
-    ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError>;
+    ) -> Result<Vec<(BackgroundTaskIdent, SeqV<BackgroundTaskInfo>)>, KVAppError>;
 
     async fn update_background_task(
         &self,

@@ -197,7 +197,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 }
 
 async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), MetaAPIError> {
-    let node_id = meta_node.sto.id;
+    let node_id = meta_node.raft_store.id;
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
         .with_grpc_advertise_address(conf.grpc_api_advertise_address());

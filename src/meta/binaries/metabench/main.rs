@@ -41,10 +41,10 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::StderrConfig;
@@ -171,7 +171,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     let value = Operation::Update(node_key().as_bytes().to_vec());
 
     let res = client
-        .upsert_kv(UpsertKVReq::new(node_key(), seq, value, None))
+        .upsert_kv(UpsertKV::new(node_key(), seq, value, None))
         .await;
 
     print_res(i, "upsert_kv", &res);

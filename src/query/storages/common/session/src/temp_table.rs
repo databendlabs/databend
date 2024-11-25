@@ -123,7 +123,10 @@ impl TempTblMgr {
                     .as_ref()
                     .map(|o| format!("{}.{}", name_ident.db_name, o))
                     .unwrap_or(desc);
-                self.name_to_id.insert(desc, table_id);
+                let old_id = self.name_to_id.insert(desc, table_id);
+                if let Some(old_id) = old_id {
+                    self.id_to_table.remove(&old_id);
+                }
                 self.id_to_table.insert(table_id, TempTable {
                     db_name: name_ident.db_name,
                     table_name: orphan_table_name.clone().unwrap_or(name_ident.table_name),
@@ -157,7 +160,9 @@ impl TempTblMgr {
         let desc = format!("{}.{}", req.name_ident.db_name, req.name_ident.table_name);
         match self.name_to_id.remove(&orphan_desc) {
             Some(id) => {
-                self.name_to_id.insert(desc, id);
+                if let Some(old_id) = self.name_to_id.insert(desc, id) {
+                    self.id_to_table.remove(&old_id);
+                }
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = req.name_ident.db_name.clone();
                 table.table_name = req.name_ident.table_name.clone();
@@ -182,6 +187,12 @@ impl TempTblMgr {
         match self.name_to_id.remove(&desc) {
             Some(id) => {
                 let new_desc = format!("{}.{}", new_db_name, new_table_name);
+                if self.name_to_id.contains_key(&new_desc) {
+                    return Err(ErrorCode::TableAlreadyExists(format!(
+                        "Temporary table {} already exists",
+                        new_desc
+                    )));
+                }
                 self.name_to_id.insert(new_desc, id);
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = new_db_name.clone();

@@ -130,7 +130,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     assert!(expire_ms - now_ms >= 59_000);
 
     let now_ms = SeqV::<()>::now_ms();
-    cluster_api.heartbeat(&node_info, MatchSeq::GE(1)).await?;
+    cluster_api.heartbeat(&node_info).await?;
 
     let value = kv_api
         .get_kv("__fd_clusters_v4/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")

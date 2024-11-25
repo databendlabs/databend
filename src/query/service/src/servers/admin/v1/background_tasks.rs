@@ -61,30 +61,33 @@ async fn load_background_tasks(
         tasks.len()
     );
     let mut task_infos = Vec::with_capacity(tasks.len());
-    for (_, name, task) in tasks {
-        if params.task_state.is_some() && task.task_state != *params.task_state.as_ref().unwrap() {
+    for (name, seq_task) in tasks {
+        if params.task_state.is_some()
+            && seq_task.task_state != *params.task_state.as_ref().unwrap()
+        {
             continue;
         }
-        if params.task_type.is_some() && task.task_type != *params.task_type.as_ref().unwrap() {
+        if params.task_type.is_some() && seq_task.task_type != *params.task_type.as_ref().unwrap() {
             continue;
         }
-        if task.task_type == BackgroundTaskType::COMPACTION {
-            if task.compaction_task_stats.is_none() {
+        if seq_task.task_type == BackgroundTaskType::COMPACTION {
+            if seq_task.compaction_task_stats.is_none() {
                 continue;
             }
             if params.table_id.is_some()
-                && task.compaction_task_stats.as_ref().unwrap().table_id != params.table_id.unwrap()
+                && seq_task.compaction_task_stats.as_ref().unwrap().table_id
+                    != params.table_id.unwrap()
             {
                 continue;
             }
         }
         if params.timestamp.as_ref().is_some()
-            && task.last_updated.is_some()
-            && task.last_updated.unwrap() < params.timestamp.unwrap()
+            && seq_task.last_updated.is_some()
+            && seq_task.last_updated.unwrap() < params.timestamp.unwrap()
         {
             continue;
         }
-        task_infos.push((name, task));
+        task_infos.push((name.name().to_string(), seq_task.data));
     }
     Ok(ListBackgroundTasksResponse {
         task_infos,

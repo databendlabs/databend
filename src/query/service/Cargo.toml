@@ -150,6 +150,7 @@ poem = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
+redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }

@@ -54,14 +54,8 @@ use log::info;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 use tokio::time::sleep;
 
-use crate::Opened;
-
-/// This is the inner store that provides support utilities for implementing the raft storage API.
-///
-/// This store include two parts:
-///   log(including id, vote, committed, and purged)
-///   state_machine
-pub struct StoreInner {
+/// This is the inner store that implements the raft log storage API.
+pub struct RaftStoreInner {
     /// The ID of the Raft node for which this storage instances is configured.
     /// ID is also stored in raft-log.
     ///
@@ -71,7 +65,7 @@ pub struct StoreInner {
     pub(crate) config: RaftConfig,
 
     /// If the instance is opened from an existent state(e.g. load from fs) or created.
-    is_opened: bool,
+    pub is_opened: bool,
 
     /// A series of raft logs.
     pub log: Arc<RwLock<RaftLogV004>>,
@@ -80,27 +74,17 @@ pub struct StoreInner {
     pub state_machine: Arc<RwLock<SMV003>>,
 }
 
-impl AsRef<StoreInner> for StoreInner {
-    fn as_ref(&self) -> &StoreInner {
+impl AsRef<RaftStoreInner> for RaftStoreInner {
+    fn as_ref(&self) -> &RaftStoreInner {
         self
     }
 }
 
-impl Opened for StoreInner {
-    /// If the instance is opened(true) from an existent state(e.g. load from fs) or created(false).
-    fn is_opened(&self) -> bool {
-        self.is_opened
-    }
-}
-
-impl StoreInner {
+impl RaftStoreInner {
     /// Open an existent raft-store or create a new one.
     #[fastrace::trace]
-    pub async fn open(config: &RaftConfig) -> Result<StoreInner, MetaStartupError> {
-        info!(
-            "open_or_create StoreInner: id={}, config_id={}",
-            config.id, config.config_id
-        );
+    pub async fn open(config: &RaftConfig) -> Result<RaftStoreInner, MetaStartupError> {
+        info!("open_or_create StoreInner: id={}", config.id);
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);
@@ -315,7 +299,7 @@ impl StoreInner {
     ///
     /// Returns a `BoxStream<'a, Result<String, io::Error>>` that yields a series of JSON strings.
     #[futures_async_stream::try_stream(boxed, ok = String, error = io::Error)]
-    pub async fn export(self: Arc<StoreInner>) {
+    pub async fn export(self: Arc<RaftStoreInner>) {
         info!("StoreInner::export start");
 
         // Convert an error occurred during export to `io::Error(InvalidData)`.

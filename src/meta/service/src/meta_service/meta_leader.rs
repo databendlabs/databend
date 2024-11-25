@@ -167,7 +167,7 @@ impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
 impl<'a> MetaLeader<'a> {
     pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
         MetaLeader {
-            sto: &meta_node.sto,
+            sto: &meta_node.raft_store,
             raft: &meta_node.raft,
         }
     }
