@@ -318,7 +318,7 @@ impl Join {
                     let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
                         (Some(left_hist), Some(right_hist)) => {
                             // Evaluate join cardinality by histogram.
-                            evaluate_by_histogram(&left_hist, &right_hist, &mut new_ndv)?
+                            evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
                         }
                         _ => evaluate_by_ndv(
                             left_col_stat,
