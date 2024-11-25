@@ -2955,6 +2955,83 @@ CreateCatalog(
 
 
 ---------- Input ----------
+select current_catalog();
+---------- Output ---------
+SELECT current_catalog()
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..24,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..24,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..24,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..22,
+                                    ),
+                                    name: "current_catalog",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+use catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            12..15,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a

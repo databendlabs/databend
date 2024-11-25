@@ -518,7 +518,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let use_catalog = map(
         rule! {
-            (USE ~ CATALOG) ~ #ident
+            USE ~ CATALOG ~ #ident
         },
         |(_, _, catalog)| Statement::UseCatalog { catalog },
     );
