@@ -184,10 +184,11 @@ impl Binder {
             Engine::Memory
         };
         let database = self.ctx.get_current_database();
+        let catalog = self.ctx.get_current_catalog();
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::CreateOrReplace,
-            catalog: None,
-            database: Some(Identifier::from_name(Span::None, database)),
+            catalog: Some(Identifier::from_name(Span::None, catalog.clone())),
+            database: Some(Identifier::from_name(Span::None, database.clone())),
             table: cte.alias.name.clone(),
             source: None,
             engine: Some(engine),
@@ -210,7 +211,8 @@ impl Binder {
         };
 
         // Todo: clear the table with the same name in table cache
-        
+        self.ctx
+            .remove_table_from_cache(&catalog, &database, &cte.alias.name.name);
         Ok(())
     }
 }

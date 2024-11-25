@@ -818,6 +818,10 @@ impl TableContext for CtxDelegation {
         }
     }
 
+    fn remove_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) {
+        todo!()
+    }
+
     async fn get_table_with_batch(
         &self,
         catalog: &str,
