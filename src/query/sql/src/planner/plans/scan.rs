@@ -238,12 +238,14 @@ impl Operator for Scan {
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
                 let ndv = col_stat.ndv.unwrap();
-                let histogram = if let Some(histogram) = self.statistics.histograms.get(k) {
+                let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
+                    && histogram.is_some()
+                {
                     histogram.clone()
                 } else {
                     histogram_from_ndv(
                         ndv,
-                        num_rows,
+                        num_rows - col_stat.null_count,
                         Some((min.clone(), max.clone())),
                         DEFAULT_HISTOGRAM_BUCKETS,
                     )
