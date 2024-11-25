@@ -46,6 +46,7 @@ jobs:
 
   linux:
     needs: changes
+    if: needs.changes.outputs.any_src_changed == 'true'
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
