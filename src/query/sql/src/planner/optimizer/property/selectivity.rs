@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -27,8 +28,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::Datum;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::F64;
 
+use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Statistics;
 use crate::plans::BoundColumnRef;
@@ -323,8 +326,10 @@ impl<'a> SelectivityEstimator<'a> {
                 column_stat.ndv = new_ndv;
                 if let Some(histogram) = &mut column_stat.histogram {
                     if histogram.accuracy {
+                        // If selectivity < 0.2, most buckets are invalid and
+                        // the accuracy histogram can be discarded.
                         // Todo: find a better way to update histogram.
-                        if selectivity < 0.8 {
+                        if selectivity < 0.2 {
                             column_stat.histogram = None;
                         }
                         continue;
@@ -349,13 +354,14 @@ impl<'a> SelectivityEstimator<'a> {
         column_stat: &mut ColumnStat,
         updated_column_indexes: &mut HashSet<IndexType>,
     ) -> Result<f64> {
-        let col_hist = column_stat.histogram.as_ref();
+        let histogram = column_stat.histogram.as_ref();
 
-        if col_hist.is_none() && const_datum.is_numeric() {
+        if histogram.is_none() && const_datum.is_numeric() {
             // If there is no histogram and the column isn't numeric, return default selectivity.
-            if !column_stat.min.is_numeric() {
+            if !column_stat.min.is_numeric() || !column_stat.max.is_numeric() {
                 return Ok(DEFAULT_SELECTIVITY);
             }
+
             let min = column_stat.min.to_double()?;
             let max = column_stat.max.to_double()?;
             let ndv = column_stat.ndv;
@@ -427,10 +433,10 @@ impl<'a> SelectivityEstimator<'a> {
             return Ok(percent);
         }
 
-        if col_hist.is_none() {
+        let Some(histogram) = histogram else {
             return Ok(DEFAULT_SELECTIVITY);
-        }
-        let col_hist = col_hist.unwrap();
+        };
+
         let (mut num_greater, new_min, new_max) = match comparison_op {
             ComparisonOp::GT | ComparisonOp::GTE => {
                 let new_min = const_datum.clone();
@@ -445,7 +451,7 @@ impl<'a> SelectivityEstimator<'a> {
             _ => unreachable!(),
         };
 
-        for bucket in col_hist.buckets_iter() {
+        for bucket in histogram.buckets_iter() {
             if let Ok(ord) = bucket.upper_bound().compare(const_datum) {
                 match comparison_op {
                     ComparisonOp::GT => {
@@ -484,8 +490,8 @@ impl<'a> SelectivityEstimator<'a> {
         }
 
         let selectivity = match comparison_op {
-            ComparisonOp::GT | ComparisonOp::GTE => 1.0 - num_greater / col_hist.num_values(),
-            ComparisonOp::LT | ComparisonOp::LTE => num_greater / col_hist.num_values(),
+            ComparisonOp::GT | ComparisonOp::GTE => 1.0 - num_greater / histogram.num_values(),
+            ComparisonOp::LT | ComparisonOp::LTE => num_greater / histogram.num_values(),
             _ => unreachable!(),
         };
 
@@ -575,11 +581,31 @@ fn update_statistic(
         new_min = Datum::Float(F64::from(new_min.to_double()?));
         new_max = Datum::Float(F64::from(new_max.to_double()?));
     }
-    if selectivity < 0.8 {
-        // Todo: support unfixed buckets number for histogram and prune the histogram.
-        column_stat.histogram = None;
-    }
     column_stat.min = new_min.clone();
     column_stat.max = new_max.clone();
+
+    if let Some(histogram) = &column_stat.histogram {
+        // If selectivity < 0.2, most buckets are invalid and
+        // the accuracy histogram can be discarded.
+        // Todo: support unfixed buckets number for histogram and prune the histogram.
+        column_stat.histogram = if histogram.accuracy && selectivity >= 0.2 {
+            Some(histogram.clone())
+        } else {
+            let num_values = histogram.num_values();
+            let new_num_values = (num_values * selectivity).ceil() as u64;
+            let new_ndv = new_ndv as u64;
+            if new_ndv <= 2 {
+                column_stat.histogram = None;
+                return Ok(());
+            }
+            Some(histogram_from_ndv(
+                new_ndv,
+                max(new_num_values, new_ndv),
+                Some((new_min, new_max)),
+                DEFAULT_HISTOGRAM_BUCKETS,
+            )?)
+        }
+    }
+
     Ok(())
 }
