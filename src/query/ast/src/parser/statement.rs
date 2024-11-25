@@ -2287,11 +2287,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
             | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
-        // use 
+        // use
         rule!(
-            #use_catalog: "`USE CATALOG <catalog>`"
-            | #use_database : "`USE <database>`"
-    ),
+                #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_database : "`USE <database>`"
+        ),
         // database
         rule!(
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
