@@ -382,6 +382,12 @@ rustc-demangle = { opt-level = 3 }
 debug = true
 overflow-checks = false
 
+[profile.ci]
+inherits = "release"
+overflow-checks = true
+incremental = false
+debug-assertions = true
+
 [profile.test]
 opt-level = 0
 debug = true
