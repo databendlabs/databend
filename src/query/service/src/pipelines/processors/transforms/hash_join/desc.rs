@@ -103,8 +103,14 @@ impl HashJoinDesc {
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
             });
+        // For RIGHT MARK join, we can't use is_true to cast filter into non_null boolean
         match expr {
-            Ok(Some(expr)) => Ok(Some(cast_expr_to_non_null_boolean(expr)?)),
+            Ok(Some(expr)) => match expr {
+                Expr::Constant { ref scalar, .. } if !scalar.is_null() => {
+                    Ok(Some(cast_expr_to_non_null_boolean(expr)?))
+                }
+                _ => Ok(Some(expr)),
+            },
             other => other,
         }
     }
