@@ -55,7 +55,7 @@ fn test_fixed_width() {
             Some(OrderedFloat(4.)),
             Some(OrderedFloat(0.1)),
             Some(OrderedFloat(-4.)),
-            Some(OrderedFlo: Vec<BlockEntry>at(-0.)),
+            Some(OrderedFloat(-0.)),
         ]),
     ];
 
