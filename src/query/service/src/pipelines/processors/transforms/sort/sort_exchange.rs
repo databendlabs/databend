@@ -24,15 +24,15 @@ use super::sort_simple::SortSimpleState;
 
 pub struct SortRangeExchange {
     sort_desc: Arc<Vec<SortColumnDescription>>,
-    num_partitions: usize,
     state: Arc<SortSimpleState>,
 }
 
 impl Exchange for SortRangeExchange {
     const NAME: &'static str = "SortRange";
-    fn partition(&self, data: DataBlock, _n: usize) -> Result<Vec<DataBlock>> {
+    fn partition(&self, data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let bounds = self.state.bounds().unwrap();
-        debug_assert!(bounds.num_rows() < self.num_partitions);
+        debug_assert_eq!(n, self.state.partitions());
+        debug_assert!(bounds.num_rows() < n);
 
         let max_bound = bounds.num_rows();
         let mut indices = vec![max_bound as u32; data.num_rows()];
@@ -52,21 +52,16 @@ impl Exchange for SortRangeExchange {
             }
         }
 
-        DataBlock::scatter(&data, &indices, self.num_partitions)
+        DataBlock::scatter(&data, &indices, n)
     }
 }
 
 impl SortRangeExchange {
     pub fn new(
-        num_partitions: usize,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         state: Arc<SortSimpleState>,
     ) -> Arc<Self> {
-        Arc::new(Self {
-            sort_desc,
-            num_partitions,
-            state,
-        })
+        Arc::new(Self { sort_desc, state })
     }
 
     fn cmp(&self, block: &DataBlock, row: usize, bounds: &DataBlock, bound_idx: usize) -> Ordering {

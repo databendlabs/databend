@@ -23,19 +23,30 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortCompare;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::create_multi_sort_merge_processor;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::sort_exchange::SortRangeExchange;
-use super::sort_spill::TransformSortSimpleWait;
+use crate::pipelines::processors::PartitionProcessor;
 
 pub struct SortSimpleState {
     inner: RwLock<StateInner>,
     pub(super) done: WatchNotify,
+}
+
+impl SortSimpleState {
+    pub fn partitions(&self) -> usize {
+        self.inner.read().unwrap().partitions
+    }
 }
 
 struct StateInner {
@@ -98,12 +109,14 @@ impl StateInner {
 }
 
 impl SortSimpleState {
-    fn new(
+    pub fn new(
         inputs: usize,
         partitions: usize,
-        empty_block: DataBlock,
+        schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
     ) -> Arc<SortSimpleState> {
+        let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
+        let empty_block = DataBlock::empty_with_schema(Arc::new(schema.project(&columns)));
         let sort_desc = sort_desc
             .iter()
             .enumerate()
@@ -186,30 +199,82 @@ impl Transform for TransformSortSimple {
     }
 }
 
-pub fn add_range_shuffle_exchange(
+pub fn add_sort_simple(
     pipeline: &mut Pipeline,
-    schema: DataSchemaRef,
+    state: Arc<SortSimpleState>,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     k: usize,
 ) -> Result<()> {
     use std::sync::atomic;
     let i = atomic::AtomicUsize::new(0);
-    let n = pipeline.output_len();
     let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
-    let empty_block = DataBlock::empty_with_schema(Arc::new(schema.project(&columns)));
-    let state = SortSimpleState::new(n, n, empty_block, sort_desc.clone());
     pipeline.add_transformer(|| {
         let id = i.fetch_add(1, atomic::Ordering::AcqRel);
         TransformSortSimple::new(id, k, columns.clone(), state.clone())
     });
+    Ok(())
+}
 
-    pipeline.add_transform(|input, output| {
-        Ok(ProcessorPtr::create(Box::new(
-            TransformSortSimpleWait::new(input, output, state.clone()),
-        )))
-    })?;
+pub fn add_range_shuffle(
+    pipeline: &mut Pipeline,
+    state: Arc<SortSimpleState>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    schema: DataSchemaRef,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+) -> Result<()> {
+    let input_len = pipeline.output_len();
+    let mut items = Vec::with_capacity(input_len);
 
-    pipeline.exchange(n, SortRangeExchange::new(n, sort_desc, state));
+    let n = state.partitions();
+    let exchange = SortRangeExchange::new(sort_desc.clone(), state);
+
+    for _ in 0..input_len {
+        let input = InputPort::create();
+        let outputs: Vec<_> = (0..input_len).map(|_| OutputPort::create()).collect();
+        items.push(PipeItem::create(
+            PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+            vec![input],
+            outputs,
+        ));
+    }
+
+    // partition data block
+    pipeline.add_pipe(Pipe::create(input_len, input_len * n, items));
+
+    let reorder_edges = (0..input_len * n)
+        .map(|index| (index % n) * input_len + (index / n))
+        .collect::<Vec<_>>();
+
+    pipeline.reorder_inputs(reorder_edges);
+
+    let mut items = Vec::with_capacity(input_len);
+    for _ in 0..input_len {
+        let output = OutputPort::create();
+        let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
+
+        let proc = create_multi_sort_merge_processor(
+            inputs.clone(),
+            output.clone(),
+            schema.clone(),
+            block_size,
+            limit,
+            sort_desc.clone(),
+            remove_order_col,
+            enable_loser_tree,
+        )?;
+
+        items.push(PipeItem::create(ProcessorPtr::create(proc), inputs, vec![
+            output,
+        ]));
+    }
+
+    // merge partition
+    pipeline.add_pipe(Pipe::create(input_len * n, n, items));
+
+    // todo limit
     Ok(())
 }
 

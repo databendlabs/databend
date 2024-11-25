@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::ArgType;
-use databend_query::pipelines::processors::transforms::sort::add_range_shuffle_exchange;
+use databend_query::pipelines::processors::transforms::sort::add_sort_simple;
 
 use super::*;
 
@@ -33,7 +33,8 @@ fn create_pipeline(
         asc: true,
         nulls_first: true,
     }]);
-    add_range_shuffle_exchange(&mut pipeline, schema, sort_desc, k)?;
+    let state = todo!();
+    add_sort_simple(&mut pipeline, state, sort_desc, k)?;
 
     pipeline.resize(1, false)?;
 

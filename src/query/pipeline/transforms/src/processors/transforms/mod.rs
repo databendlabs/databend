@@ -41,7 +41,7 @@ pub use transform_compact_builder::*;
 pub use transform_compact_no_split_builder::*;
 pub use transform_dummy::*;
 pub use transform_k_way_merge_sort::*;
-pub use transform_multi_sort_merge::try_add_multi_sort_merge;
+pub use transform_multi_sort_merge::*;
 pub use transform_pipeline_helper::TransformPipelineHelper;
 pub use transform_retry_async::*;
 pub use transform_sort_merge::sort_merge;
