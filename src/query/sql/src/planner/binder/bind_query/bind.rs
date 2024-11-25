@@ -208,6 +208,9 @@ impl Binder {
         } else {
             return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
         };
+
+        // Todo: clear the table with the same name in table cache
+        
         Ok(())
     }
 }
