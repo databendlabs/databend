@@ -18,11 +18,13 @@ use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
 use databend_common_ast::ast::CTE;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -181,11 +183,11 @@ impl Binder {
         } else {
             Engine::Memory
         };
-
+        let database = self.ctx.get_current_database();
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::CreateOrReplace,
             catalog: None,
-            database: None,
+            database: Some(Identifier::from_name(Span::None, database)),
             table: cte.alias.name.clone(),
             source: None,
             engine: Some(engine),
