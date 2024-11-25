@@ -74,6 +74,9 @@ pub struct Buffer<T> {
     length: usize,
 }
 
+unsafe impl<T: Send> Send for Buffer<T> {}
+unsafe impl<T: Sync> Sync for Buffer<T> {}
+
 impl<T: PartialEq> PartialEq for Buffer<T> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
