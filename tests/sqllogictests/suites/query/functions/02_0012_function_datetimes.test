@@ -1466,3 +1466,23 @@ query T
 select TRY_TO_TIMESTAMP(1, 0), TRY_TO_TIMESTAMP(1, null);
 ----
 1970-01-01 00:00:01.000000 NULL
+
+query T
+SELECT add_hours(to_date(710455), 1512263452497496403);
+----
+1000-01-01 00:00:00.000000
+
+query T
+SELECT add_hours(to_timestamp(710455), 1512263452497496403);
+----
+1000-01-01 00:00:00.000000
+
+query T
+SELECT add_hours(to_date(710455), 2147483647);
+----
+1000-01-01 00:00:00.000000
+
+query T
+SELECT add_hours(to_timestamp(710455), 2147483647);
+----
+1000-01-01 00:00:00.000000
