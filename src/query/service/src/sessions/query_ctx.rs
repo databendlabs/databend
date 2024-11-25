@@ -965,6 +965,11 @@ impl TableContext for QueryContext {
             .await
     }
 
+    fn remove_table_from_cache(&self, catalog: &str, database: &str, table: &str) {
+        self.shared
+            .remove_table_from_cache(catalog, database, table)
+    }
+
     #[async_backtrace::framed]
     async fn get_table_with_batch(
         &self,
