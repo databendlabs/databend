@@ -423,6 +423,8 @@ pub enum TokenKind {
     CALL,
     #[token("CASE", ignore(ascii_case))]
     CASE,
+    #[token("CASE_SENSITIVE", ignore(ascii_case))]
+    CASE_SENSITIVE,
     #[token("CAST", ignore(ascii_case))]
     CAST,
     #[token("CATALOG", ignore(ascii_case))]
@@ -455,6 +457,8 @@ pub enum TokenKind {
     CHAR,
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
+    #[token("COLUMN_MATCH_MODE", ignore(ascii_case))]
+    COLUMN_MATCH_MODE,
     #[token("COLUMNS", ignore(ascii_case))]
     COLUMNS,
     #[token("CHARACTER", ignore(ascii_case))]
