@@ -32,6 +32,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -154,7 +155,7 @@ pub async fn do_refresh_virtual_column(
             let virtual_loc =
                 TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
 
-            let schema = match storage_format {
+            let arrow_schema = match storage_format {
                 FuseStorageFormat::Parquet => {
                     read_parquet_schema_async_rs(operator, &virtual_loc, None)
                         .await
@@ -168,10 +169,14 @@ pub async fn do_refresh_virtual_column(
             };
 
             // if all virtual columns has be generated, we can ignore this block
-            let all_generated = if let Some(schema) = schema {
-                virtual_columns
-                    .iter()
-                    .all(|v| schema.fields.iter().any(|f| *f.name() == v.0))
+            let all_generated = if let Some(arrow_schema) = arrow_schema {
+                let virtual_table_schema = TableSchema::try_from(&arrow_schema)?;
+                virtual_columns.iter().all(|v| {
+                    virtual_table_schema
+                        .fields
+                        .iter()
+                        .any(|f| *f.name() == v.0 && *f.data_type() == v.1)
+                })
             } else {
                 false
             };
@@ -352,6 +357,7 @@ impl AsyncTransform for VirtualColumnTransform {
         let virtual_block = DataBlock::new(virtual_entries, len);
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+
         let _ = serialize_block(
             &self.write_settings,
             &self.virtual_schema,

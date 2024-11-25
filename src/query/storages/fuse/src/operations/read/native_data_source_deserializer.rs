@@ -440,8 +440,7 @@ impl NativeDeserializeDataTransform {
                     .find(|c| c.0 == src_index)
                     .map(|c| c.1.clone())
                 {
-                    let data_type: DataType =
-                        (*self.src_schema.field(src_index).data_type()).clone();
+                    let data_type: DataType = virtual_column_field.data_type.as_ref().into();
                     let num_rows = column.len();
                     let column = BlockEntry::new(data_type.clone(), Value::Column(column.clone()));
                     // If the source column is the default value, num_rows may be zero
@@ -643,7 +642,7 @@ impl NativeDeserializeDataTransform {
 
             // Add optional virtual columns' column_iters.
             if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                for (index, virtual_column_info) in virtual_reader
+                for (index, virtual_column_field) in virtual_reader
                     .virtual_column_info
                     .virtual_column_fields
                     .iter()
@@ -652,10 +651,11 @@ impl NativeDeserializeDataTransform {
                     let virtual_index = index + self.block_reader.project_column_nodes.len();
                     if let Some(readers) = columns.remove(&virtual_index) {
                         let column_iter = BlockReader::build_virtual_column_iter(
-                            virtual_column_info.name.clone(),
+                            virtual_column_field.name.clone(),
+                            *virtual_column_field.data_type.clone(),
                             readers,
                         )?;
-                        let index = self.src_schema.index_of(&virtual_column_info.name)?;
+                        let index = self.src_schema.index_of(&virtual_column_field.name)?;
                         self.read_state.column_iters.insert(index, column_iter);
                         self.read_state.column_skip_pages.insert(index, 0);
                     }

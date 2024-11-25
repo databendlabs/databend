@@ -14,6 +14,7 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::io::BlockReader;
@@ -56,6 +57,10 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         (
             "v[0]".to_string(),
             TableDataType::Nullable(Box::new(TableDataType::Variant)),
+        ),
+        (
+            "v['b']".to_string(),
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
         ),
     ];
     let table_ctx = fixture.new_query_ctx().await?;
@@ -121,9 +126,10 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
             };
             assert!(schema.is_some());
             let schema = schema.unwrap();
-            assert_eq!(schema.fields.len(), 2);
+            assert_eq!(schema.fields.len(), 3);
             assert_eq!(schema.fields[0].name(), "v['a']");
             assert_eq!(schema.fields[1].name(), "v[0]");
+            assert_eq!(schema.fields[2].name(), "v['b']");
         }
     }
 

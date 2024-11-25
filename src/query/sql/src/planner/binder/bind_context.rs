@@ -15,6 +15,7 @@
 use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -32,6 +33,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableDataType;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -108,6 +110,25 @@ pub enum NameResolutionResult {
     Alias { alias: String, scalar: ScalarExpr },
 }
 
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
+pub struct VirtualColumnContext {
+    /// Whether allow rewrite as virtual column and pushdown.
+    pub allow_pushdown: bool,
+    /// The table indics of the virtual column has been readed,
+    /// used to avoid repeated reading
+    pub table_indices: HashSet<IndexType>,
+    /// Mapping: (table index) -> (derived virtual column indices)
+    /// This is used to add virtual column indices to Scan plan
+    pub virtual_column_indices: HashMap<IndexType, Vec<IndexType>>,
+    /// Mapping: (table index) -> (virtual column names and data types)
+    /// This is used to check whether the virtual column has be created
+    pub virtual_column_names: HashMap<IndexType, HashMap<String, TableDataType>>,
+    /// Mapping: (table index) -> (next virtual column id)
+    /// The is used to generate virtual column id for virtual columns.
+    /// Not a real column id, only used to identify a virtual column.
+    pub next_column_ids: HashMap<IndexType, u32>,
+}
+
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -145,6 +166,8 @@ pub struct BindContext {
     pub have_udf_server: bool,
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
+
+    pub virtual_column_context: VirtualColumnContext,
 
     pub expr_context: ExprContext,
 
@@ -259,6 +282,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            virtual_column_context: VirtualColumnContext::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -280,6 +304,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            virtual_column_context: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),

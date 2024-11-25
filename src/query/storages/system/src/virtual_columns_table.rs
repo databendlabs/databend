@@ -84,7 +84,13 @@ impl AsyncSystemTable for VirtualColumnsTable {
                             virtual_column_meta
                                 .virtual_columns
                                 .iter()
-                                .map(|col| format!("{} {}", col.0, col.1))
+                                .map(|(name, ty)| {
+                                    if ty.remove_nullable() == TableDataType::Variant {
+                                        name.to_string()
+                                    } else {
+                                        format!("{}::{}", name, ty.remove_nullable())
+                                    }
+                                })
                                 .join(", "),
                         );
                         created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
