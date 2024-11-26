@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
 use databend_common_ast::ast::CreateStageStmt;
 use databend_common_ast::ast::FileFormatOptions;
 use databend_common_ast::ast::UriLocation;
@@ -21,7 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_operator;
 
@@ -59,9 +56,6 @@ impl Binder {
             stage_name,
             location,
             file_format_options,
-            on_error,
-            size_limit,
-            validation_mode: _,
             comments: _,
         } = stmt;
 
@@ -102,16 +96,6 @@ impl Binder {
         if !file_format_options.is_empty() {
             stage_info.file_format_params =
                 self.try_resolve_file_format(file_format_options).await?;
-        }
-        // Copy options.
-        {
-            // on_error.
-            if !on_error.is_empty() {
-                stage_info.copy_options.on_error =
-                    OnErrorMode::from_str(on_error).map_err(ErrorCode::SyntaxException)?;
-            }
-
-            stage_info.copy_options.size_limit = *size_limit;
         }
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {

@@ -332,7 +332,7 @@ impl CompactionJob {
             .update_background_task(UpdateBackgroundTaskReq {
                 task_name: task_ident.clone(),
                 task_info: info.clone(),
-                expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
+                ttl: Duration::from_secs(EXPIRE_SEC),
             })
             .await?;
 
@@ -359,7 +359,7 @@ impl CompactionJob {
                     .update_background_task(UpdateBackgroundTaskReq {
                         task_name: task_ident,
                         task_info: info.clone(),
-                        expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
+                        ttl: Duration::from_secs(EXPIRE_SEC),
                     })
                     .await?;
             }
@@ -370,7 +370,7 @@ impl CompactionJob {
                     .update_background_task(UpdateBackgroundTaskReq {
                         task_name: task_ident,
                         task_info: info.clone(),
-                        expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
+                        ttl: Duration::from_secs(EXPIRE_SEC),
                     })
                     .await?;
             }

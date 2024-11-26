@@ -15,26 +15,22 @@
 use std::future::Future;
 use std::time::Duration;
 
-use databend_client::error::Error as ClientError;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
+use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_sql::resolve_type_name;
-use databend_driver::Client;
-use databend_driver::Connection;
-use databend_driver::Error;
-use databend_driver_core::value::Value;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
-use tokio_stream::StreamExt;
 
-use crate::reducer::try_reduce_query;
+use crate::http_client::HttpClient;
+use crate::http_client::QueryResponse;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
@@ -74,25 +70,37 @@ const KNOWN_ERRORS: &[&str] = &[
     "Expected Number, Date or Timestamp type, but got",
     "Unsupported data type for generate_series",
     "Having clause can't contain window functions",
+    "Cannot find common type for",
+    "null value in column",
 ];
 
 pub struct Runner {
     count: usize,
     seed: Option<u64>,
-    client: Client,
+    pub(crate) client: HttpClient,
+    db: String,
     timeout: u64,
 }
 
 impl Runner {
-    pub fn new(dsn: String, count: usize, seed: Option<u64>, timeout: u64) -> Self {
-        let client = Client::new(dsn);
+    pub async fn try_new(
+        host: String,
+        username: String,
+        password: String,
+        db: String,
+        count: usize,
+        seed: Option<u64>,
+        timeout: u64,
+    ) -> Result<Self> {
+        let client = HttpClient::create(host, username, password).await?;
 
-        Self {
+        Ok(Self {
             count,
             seed,
             client,
+            db,
             timeout,
-        }
+        })
     }
 
     fn generate_rng(seed: Option<u64>) -> impl Rng {
@@ -103,20 +111,18 @@ impl Runner {
         }
     }
 
-    #[allow(clippy::borrowed_box)]
     async fn create_base_table(
-        &self,
-        conn: &Box<dyn Connection>,
+        &mut self,
         table_stmts: Vec<(DropTableStmt, CreateTableStmt)>,
-    ) -> Vec<Table> {
+    ) -> Result<Vec<Table>> {
         let mut tables = Vec::with_capacity(table_stmts.len());
         for (drop_table_stmt, create_table_stmt) in table_stmts {
             let drop_table_sql = drop_table_stmt.to_string();
             tracing::info!("drop_table_sql: {}", drop_table_sql);
-            Self::check_res(conn.exec(&drop_table_sql).await);
+            Self::check_res(self.client.query(&drop_table_sql).await);
             let create_table_sql = create_table_stmt.to_string();
             tracing::info!("create_table_sql: {}", create_table_sql);
-            Self::check_res(conn.exec(&create_table_sql).await);
+            Self::check_res(self.client.query(&create_table_sql).await);
 
             let table_name = create_table_stmt.table.name.clone();
             let mut fields = Vec::new();
@@ -132,75 +138,83 @@ impl Runner {
             let table = Table::new(table_name, schema);
             tables.push(table);
         }
-        tables
+        Ok(tables)
     }
 
-    #[allow(clippy::borrowed_box)]
-    async fn get_settings(&self, conn: &Box<dyn Connection>) -> Vec<(String, DataType)> {
-        let mut settings = vec![];
+    async fn get_settings(&mut self) -> Result<Vec<(String, DataType)>> {
         let show_settings = "show settings".to_string();
-        let rows = conn.query_iter(&show_settings).await;
-        match rows {
-            Ok(mut rows) => {
-                while let Some(row) = rows.next().await {
-                    if let Ok(row) = row {
-                        match (row.values().first(), row.values().get(5)) {
-                            (Some(Value::String(name)), Some(Value::String(ty))) => {
-                                let data_type = match ty.as_str() {
-                                    "UInt64" => DataType::Number(NumberDataType::UInt64),
-                                    "String" => DataType::String,
-                                    _ => DataType::String,
-                                };
-                                settings.push((name.clone(), data_type));
-                            }
-                            (_, _) => {
-                                continue;
-                            }
-                        }
+        let responses = self.client.query(&show_settings).await?;
+
+        let mut settings = vec![];
+        for response in responses {
+            if let Some(serde_json::Value::Array(arr)) = response.data {
+                for row in arr {
+                    let name = row.get(0);
+                    let ty = row.get(6);
+                    if let (
+                        Some(serde_json::Value::String(name)),
+                        Some(serde_json::Value::String(ty)),
+                    ) = (name, ty)
+                    {
+                        let data_type = match ty.as_str() {
+                            "UInt64" => DataType::Number(NumberDataType::UInt64),
+                            "String" => DataType::String,
+                            _ => DataType::String,
+                        };
+                        settings.push((name.clone(), data_type));
                     }
                 }
             }
-            Err(e) => {
-                let err = format!("show settings exec err: {}", e);
+        }
+        Ok(settings)
+    }
+
+    async fn check_timeout<F>(future: F, sec: u64, timeout_err: &mut Option<String>)
+    where F: Future {
+        if let Err(e) = tokio::time::timeout(Duration::from_secs(sec), future).await {
+            *timeout_err = Some(format!("{}", e));
+        }
+    }
+
+    fn check_res(responses: Result<Vec<QueryResponse>>) {
+        match responses {
+            Ok(responses) => {
+                if let Some(error) = &responses[0].error {
+                    let value = error.as_object().unwrap();
+                    let code = value["code"].as_u64().unwrap();
+                    let message = value["message"].as_str().unwrap();
+                    if code == 1005 || code == 1065 {
+                        return;
+                    }
+                    if KNOWN_ERRORS
+                        .iter()
+                        .any(|known_err| message.starts_with(known_err))
+                    {
+                        return;
+                    }
+                    let err = format!("sql exec err code: {} message: {}", code, message);
+                    tracing::error!(err);
+                }
+            }
+            Err(err) => {
+                let err = format!("http err: {}", err);
                 tracing::error!(err);
             }
         }
-        settings
     }
 
-    async fn check_timeout<F>(future: F, sql: String, sec: u64)
-    where F: Future {
-        if let Err(e) = tokio::time::timeout(Duration::from_secs(sec), future).await {
-            tracing::info!("sql: {}", sql);
-            let err = format!("sql timeout: {}", e);
-            tracing::error!(err);
-        }
-    }
+    pub async fn run(&mut self) -> Result<()> {
+        let create_db_sql = format!("CREATE OR REPLACE database {}", self.db);
+        let _ = self.client.query(&create_db_sql).await?;
+        let use_db_sql = format!("USE {}", self.db);
+        let _ = self.client.query(&use_db_sql).await?;
 
-    fn check_res(res: databend_driver::Result<i64>) {
-        if let Err(Error::Api(ClientError::InvalidResponse(err))) = res {
-            if err.code == 1005 || err.code == 1065 {
-                return;
-            }
-            if KNOWN_ERRORS
-                .iter()
-                .any(|known_err| err.message.starts_with(known_err))
-            {
-                return;
-            }
-            let err = format!("sql exec err: {}", err.message);
-            tracing::error!(err);
-        }
-    }
-
-    pub async fn run(&self) {
-        let conn = self.client.get_conn().await.unwrap();
-        let settings = self.get_settings(&conn).await;
+        let settings = self.get_settings().await?;
 
         let mut rng = Self::generate_rng(self.seed);
         let mut generator = SqlGenerator::new(&mut rng, settings);
         let table_stmts = generator.gen_base_tables();
-        let tables = self.create_base_table(&conn, table_stmts).await;
+        let tables = self.create_base_table(table_stmts).await?;
         let row_count = 10;
 
         let mut new_tables = tables.clone();
@@ -208,7 +222,7 @@ impl Runner {
             let insert_stmt = generator.gen_insert(table, row_count);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
-            Self::check_res(conn.exec(&insert_sql).await);
+            Self::check_res(self.client.query(&insert_sql).await);
 
             let alter_stmt_opt = generator.gen_alter(table, row_count);
             if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
@@ -222,24 +236,24 @@ impl Runner {
                     };
                     let drop_table_sql = drop_table_stmt.to_string();
                     tracing::info!("drop_table_sql: {}", drop_table_sql);
-                    Self::check_res(conn.exec(&drop_table_sql).await);
+                    Self::check_res(self.client.query(&drop_table_sql).await);
                 }
                 let alter_sql = alter_stmt.to_string();
                 tracing::info!("alter_sql: {}", alter_sql);
-                Self::check_res(conn.exec(&alter_sql).await);
+                Self::check_res(self.client.query(&alter_sql).await);
                 // save new table schema
                 new_tables[i] = new_table;
                 if let Some(insert_stmt) = insert_stmt_opt {
                     let insert_sql = insert_stmt.to_string();
                     tracing::info!("after alter insert_sql: {}", insert_sql);
-                    Self::check_res(conn.exec(&insert_sql).await);
+                    Self::check_res(self.client.query(&insert_sql).await);
                 }
             }
         }
         generator.tables = new_tables;
 
         let enable_merge = "set enable_experimental_merge_into = 1".to_string();
-        Self::check_res(conn.exec(&enable_merge).await);
+        Self::check_res(self.client.query(&enable_merge).await);
         // generate merge, replace, update, delete
         for _ in 0..20 {
             let sql = match generator.rng.gen_range(0..=20) {
@@ -249,56 +263,74 @@ impl Runner {
                 20 => generator.gen_delete().to_string(),
                 _ => unreachable!(),
             };
-            tracing::info!("sql: {}", sql);
+            let mut timeout_err = None;
+            tracing::info!("dml sql: {}", sql);
             Self::check_timeout(
-                async { Self::check_res(conn.exec(&sql.clone()).await) },
-                sql.clone(),
+                async { Self::check_res(self.client.query(&sql).await) },
                 self.timeout,
+                &mut timeout_err,
             )
             .await;
+            if let Some(timeout_err) = timeout_err {
+                tracing::error!("sql timeout: {}", timeout_err);
+            }
         }
 
         // generate query
         for _ in 0..self.count {
             let query = generator.gen_query();
             let query_sql = query.to_string();
+            let mut timeout_err = None;
+            let mut is_error = false;
             let mut try_reduce = false;
             let mut err_code = 0;
-            let mut err = String::new();
+            let mut err_message = String::new();
             Self::check_timeout(
                 async {
-                    if let Err(e) = conn.exec(&query_sql).await {
-                        if let Error::Api(ClientError::InvalidResponse(err)) = &e {
-                            // TODO: handle Syntax, Semantic and InvalidArgument errors
-                            if err.code == 1005
-                                || err.code == 1065
-                                || err.code == 2004
-                                || err.code == 1010
-                            {
-                                return;
+                    match self.client.query(&query_sql).await {
+                        Ok(responses) => {
+                            if let Some(error) = &responses[0].error {
+                                let value = error.as_object().unwrap();
+                                let code = value["code"].as_u64().unwrap();
+                                let message = value["message"].as_str().unwrap();
+                                if code == 1005 || code == 1065 || code == 2004 || code == 1010 {
+                                    return;
+                                }
+                                if KNOWN_ERRORS
+                                    .iter()
+                                    .any(|known_err| message.starts_with(known_err))
+                                {
+                                    return;
+                                }
+                                is_error = true;
+                                err_code = code;
+                                err_message = format!("error: {}", message);
+                                try_reduce = true;
                             }
-                            if KNOWN_ERRORS
-                                .iter()
-                                .any(|known_err| err.message.starts_with(known_err))
-                            {
-                                return;
-                            }
-                            err_code = err.code;
                         }
-                        err = format!("error: {}", e);
-                        try_reduce = true;
+                        Err(err) => {
+                            is_error = true;
+                            err_message = format!("http err: {}", err);
+                        }
                     }
                 },
-                query_sql.clone(),
                 self.timeout,
+                &mut timeout_err,
             )
             .await;
-            if try_reduce {
+
+            if let Some(timeout_err) = timeout_err {
                 tracing::info!("query_sql: {}", query_sql);
-                let reduced_query = try_reduce_query(conn.clone(), err_code, query).await;
-                tracing::info!("reduced query_sql: {}", reduced_query.to_string());
-                tracing::error!(err);
+                tracing::error!("sql timeout: {}", timeout_err);
+            } else if is_error {
+                tracing::info!("query_sql: {}", query_sql);
+                if try_reduce {
+                    let reduced_query = self.try_reduce_query(err_code, query).await;
+                    tracing::info!("reduced query_sql: {}", reduced_query.to_string());
+                }
+                tracing::error!(err_message);
             }
         }
+        Ok(())
     }
 }

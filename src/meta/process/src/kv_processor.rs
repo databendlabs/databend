@@ -187,6 +187,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                 }))
             }
             Operation::Delete => Ok(None),
+            #[allow(deprecated)]
             Operation::AsIs => Ok(None),
         }
     }

@@ -476,7 +476,7 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
+                        let heartbeat = cluster_api.heartbeat(&node);
                         if let Err(failure) = heartbeat.await {
                             metric_incr_cluster_heartbeat_count(
                                 &node.id,
