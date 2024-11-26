@@ -1217,7 +1217,7 @@ impl Binder {
                 }
             },
             AstOptimizeTableAction::ClusterBy { exprs } => {
-                self.bind_optimize_cluster_by(bind_context, exprs, catalog, database, table, limit)
+                self.bind_optimize_cluster_by(bind_context, exprs, catalog, database, table)
                     .await?
             }
         };
@@ -1233,7 +1233,6 @@ impl Binder {
         catalog_name: String,
         database_name: String,
         table_name: String,
-        limit: Option<usize>,
     ) -> Result<Plan> {
         let schema = self
             .ctx
@@ -1304,12 +1303,12 @@ impl Binder {
         let (s_expr, new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
         // Wrap `LogicalMaterializedCte` to `s_expr`
         let s_expr = new_bind_context.cte_context.wrap_m_cte(s_expr);
-        bind_context.parent = Some(Box::new(new_bind_context));
         let cluster_by = OptimizeClusterBy {
             catalog_name,
             database_name,
             table_name,
-            num_segment_limit: limit,
+            metadata: self.metadata.clone(),
+            bind_context: Box::new(new_bind_context),
         };
         let s_expr = SExpr::create_unary(
             Arc::new(RelOperator::OptimizeClusterBy(cluster_by)),

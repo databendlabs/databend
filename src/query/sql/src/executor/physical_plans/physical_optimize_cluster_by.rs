@@ -14,14 +14,22 @@
 
 use databend_common_exception::Result;
 
+use crate::executor::physical_plans::CommitSink;
+use crate::executor::physical_plans::MutationKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ColumnSet;
+use crate::optimizer::SExpr;
 
 impl PhysicalPlanBuilder {
     pub async fn build_optimize_cluster_by(
         &mut self,
-        _plan: &crate::plans::OptimizeClusterBy,
+        s_expr: &SExpr,
+        _optimize: &crate::plans::OptimizeClusterBy,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        todo!()
+        let mut plan = self.build(s_expr.child(0)?, required).await?;
+        plan.adjust_plan_id(&mut 0);
+        Ok(plan)
     }
 }

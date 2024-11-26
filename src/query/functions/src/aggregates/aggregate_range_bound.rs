@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_columns;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
@@ -125,7 +125,7 @@ where
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let column_len = T::column_len(&other);
-        let unset_bits = validity.map_or(0, |v| v.unset_bits());
+        let unset_bits = validity.map_or(0, |v| v.null_count());
         if unset_bits == column_len {
             return Ok(());
         }
