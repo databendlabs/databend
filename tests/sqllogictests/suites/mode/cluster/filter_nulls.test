@@ -44,7 +44,7 @@ Exchange
     ├── build keys: [table2.value (#1)]
     ├── probe keys: [table1.value (#0)]
     ├── filters: []
-    ├── estimated rows: 2000.00
+    ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
@@ -89,8 +89,8 @@ Exchange
     ├── build keys: [table3.value (#2)]
     ├── probe keys: [table1.value (#0)]
     ├── filters: []
-    ├── estimated rows: 4000.00
-    ├── HashJoin(Build)
+    ├── estimated rows: 200.00
+    ├── Exchange(Build)
     │   ├── output columns: [table3.value (#2), table2.value (#1)]
     │   ├── join type: INNER
     │   ├── build keys: [table2.value (#1)]
@@ -162,7 +162,7 @@ Exchange
     ├── build keys: [table2.value (#1)]
     ├── probe keys: [table1.value (#0)]
     ├── filters: []
-    ├── estimated rows: 2000.00
+    ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
@@ -207,7 +207,7 @@ Exchange
     ├── build keys: [table2.value (#1)]
     ├── probe keys: [table1.value (#0)]
     ├── filters: []
-    ├── estimated rows: 1000.00
+    ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Hash(table2.value (#1))
