@@ -180,7 +180,7 @@ impl StreamTable {
             (0, None)
         };
 
-        let Some(location) = fuse_table.snapshot_loc().await? else {
+        let Some(location) = fuse_table.snapshot_loc() else {
             return Ok(source);
         };
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());

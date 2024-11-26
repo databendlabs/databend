@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::TimeDelta;
-use databend_common_base::base::tokio;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -83,7 +83,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::info;
@@ -133,9 +132,6 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
-
-    // A table instance level cache of snapshot_location, if this table is attaching to someone else.
-    attached_table_location: tokio::sync::OnceCell<String>,
 }
 
 impl FuseTable {
@@ -172,7 +168,7 @@ impl FuseTable {
         }
     }
 
-    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
+    pub fn do_create(mut table_info: TableInfo) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
@@ -184,13 +180,35 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
 
+                        let operator = init_operator(&sp)?;
+
+                        // Extract snapshot location from last snapshot hit file.
                         let table_type = if Self::is_table_attached(table_meta_options) {
+                            let location = GlobalIORuntime::instance().block_on(async {
+                                let hint =
+                                    format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+                                let hint_content = operator.read(&hint).await?.to_vec();
+                                let snapshot_full_path = String::from_utf8(hint_content)?;
+                                let operator_info = operator.info();
+                                Ok::<_, ErrorCode>(
+                                    snapshot_full_path[operator_info.root().len()..].to_string(),
+                                )
+                            })?;
+
+                            info!(
+                                "extracted snapshot location {} of table {}, with id {:?} from the last snapshot hint file.",
+                                location, table_info.desc, table_info.ident
+                            );
+
+                            // Adjust snapshot location to the values extracted from the last snapshot hint
+                            table_info
+                                .options_mut()
+                                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
                         };
 
-                        let operator = init_operator(&sp)?;
                         (operator, table_type)
                     }
                     // Normal table.
@@ -242,7 +260,6 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
-            attached_table_location: Default::default(),
         }))
     }
 
@@ -338,8 +355,8 @@ impl FuseTable {
         &self,
         reader: TableSnapshotReader,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc().await? {
-            let ver = self.snapshot_format_version(Some(loc.clone())).await?;
+        if let Some(loc) = self.snapshot_loc() {
+            let ver = self.snapshot_format_version(Some(loc.clone()))?;
             let params = LoadParams {
                 location: loc,
                 len_hint: None,
@@ -353,11 +370,11 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
+    pub fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
         let location_opt = if location_opt.is_some() {
             location_opt
         } else {
-            self.snapshot_loc().await?
+            self.snapshot_loc()
         };
         // If no snapshot location here, indicates that there are no data of this table yet
         // in this case, we just return the current snapshot version
@@ -366,41 +383,13 @@ impl FuseTable {
         }))
     }
 
-    #[async_backtrace::framed]
-    pub async fn snapshot_loc(&self) -> Result<Option<String>> {
-        match self.table_info.db_type {
-            DatabaseType::NormalDB => {
-                let options = self.table_info.options();
-
-                if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
-                    // If the table is attaching to someone else,
-                    // parse the snapshot location from the hint file.
-                    //
-                    // The snapshot location is allowed
-                    // to be fetched from the table level instance cache.
-                    let snapshot_location = self
-                        .attached_table_location
-                        .get_or_try_init(|| async {
-                            let hint =
-                                format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                            let hint_content = self.operator.read(&hint).await?.to_vec();
-                            let snapshot_full_path = String::from_utf8(hint_content)?;
-                            let operator_info = self.operator.info();
-                            Ok::<_, ErrorCode>(
-                                snapshot_full_path[operator_info.root().len()..].to_string(),
-                            )
-                        })
-                        .await?;
-                    Ok(Some(snapshot_location.to_owned()))
-                } else {
-                    Ok(options
-                        .get(OPT_KEY_SNAPSHOT_LOCATION)
-                        // for backward compatibility, we check the legacy table option
-                        .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                        .cloned())
-                }
-            }
-        }
+    pub fn snapshot_loc(&self) -> Option<String> {
+        let options = self.table_info.options();
+        options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            // for backward compatibility, we check the legacy table option
+            .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+            .cloned()
     }
 
     pub fn get_operator(&self) -> Operator {
@@ -601,7 +590,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
+        let prev_version = self.snapshot_format_version(None)?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let prev_statistics_location = prev
@@ -655,7 +644,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
+        let prev_version = self.snapshot_format_version(None)?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
