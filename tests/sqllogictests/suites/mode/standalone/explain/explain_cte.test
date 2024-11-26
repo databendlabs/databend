@@ -1,0 +1,36 @@
+query T
+EXPLAIN WITH t AS MATERIALIZED (SELECT * FROM numbers(5)) SELECT * FROM t;
+----
+MaterializedCTE
+├── output columns: [number (#1)]
+├── TableScan
+│   ├── table: default.system.numbers
+│   ├── output columns: [number (#0)]
+│   ├── read rows: 5
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 5.00
+└── CTEScan
+    ├── CTE index: 0, sub index: 1
+    └── estimated rows: 5.00
+
+statement ok
+set enable_materialized_cte = 0;
+
+query T
+EXPLAIN WITH t AS MATERIALIZED (SELECT * FROM numbers(5)) SELECT * FROM t;
+----
+TableScan
+├── table: default.system.numbers
+├── output columns: [number (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 5.00
+
+statement ok
+set enable_materialized_cte = 1;
