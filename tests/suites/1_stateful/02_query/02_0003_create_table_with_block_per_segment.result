@@ -1,1 +1,1 @@
-Error: APIError: ResponseError with 1301: invalid block_per_segment option, can't be over 1000
+Error: APIError: QueryFailed: [1301]invalid block_per_segment option, can't be over 1000

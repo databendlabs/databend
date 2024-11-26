@@ -60,7 +60,6 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::KeysRef;
 use databend_common_hashtable::StackHashSet;
@@ -129,7 +128,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(|args, ctx| {
                     let len = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
 
@@ -139,10 +138,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     for idx in 0..(len.unwrap_or(1)) {
                         for arg in args {
                             match arg {
-                                ValueRef::Scalar(scalar) => {
-                                    builder.put_item(scalar.clone());
+                                Value::Scalar(scalar) => {
+                                    builder.put_item(scalar.as_ref());
                                 }
-                                ValueRef::Column(col) => unsafe {
+                                Value::Column(col) => unsafe {
                                     builder.put_item(col.index_unchecked(idx));
                                 },
                             }
@@ -503,22 +502,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     );
 
-    fn eval_contains<T: ArgType>(
-        lhs: ValueRef<ArrayType<T>>,
-        rhs: ValueRef<T>,
-    ) -> Value<BooleanType>
-    where
-        T::Scalar: HashtableKeyable,
-    {
+    fn eval_contains<T: ArgType>(lhs: Value<ArrayType<T>>, rhs: Value<T>) -> Value<BooleanType>
+    where T::Scalar: HashtableKeyable {
         match lhs {
-            ValueRef::Scalar(array) => {
+            Value::Scalar(array) => {
                 let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(&array));
                 for val in T::iter_column(&array) {
                     let _ = set.set_insert(T::to_owned_scalar(val));
                 }
                 match rhs {
-                    ValueRef::Scalar(c) => Value::Scalar(set.contains(&T::to_owned_scalar(c))),
-                    ValueRef::Column(col) => {
+                    Value::Scalar(c) => Value::Scalar(set.contains(&c)),
+                    Value::Column(col) => {
                         let result = BooleanType::column_from_iter(
                             T::iter_column(&col).map(|c| set.contains(&T::to_owned_scalar(c))),
                             &[],
@@ -527,15 +521,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
             }
-            ValueRef::Column(array_column) => {
+            Value::Column(array_column) => {
                 let result = match rhs {
-                    ValueRef::Scalar(c) => BooleanType::column_from_iter(
-                        array_column.iter().map(|array| {
-                            T::iter_column(&array).contains(&T::upcast_gat(c.clone()))
-                        }),
+                    Value::Scalar(c) => BooleanType::column_from_iter(
+                        array_column
+                            .iter()
+                            .map(|array| T::iter_column(&array).contains(&T::to_scalar_ref(&c))),
                         &[],
                     ),
-                    ValueRef::Column(col) => BooleanType::column_from_iter(
+                    Value::Column(col) => BooleanType::column_from_iter(
                         array_column
                             .iter()
                             .zip(T::iter_column(&col))
@@ -573,18 +567,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| {
             match lhs {
-                ValueRef::Scalar(array) => {
+                Value::Scalar(array) => {
                     let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(&array));
                     for val in array.iter() {
                         let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                         let _ = set.set_insert(key_ref);
                     }
                     match rhs {
-                        ValueRef::Scalar(val) =>  {
+                        Value::Scalar(val) =>  {
                             let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                             Value::Scalar(set.contains( &key_ref))
                         },
-                        ValueRef::Column(col) => {
+                        Value::Column(col) => {
                             let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
                                 let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                                 set.contains(&key_ref)
@@ -593,12 +587,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 },
-                ValueRef::Column(array_column) => {
+                Value::Column(array_column) => {
                     let result = match rhs {
-                        ValueRef::Scalar(c) => BooleanType::column_from_iter(array_column
+                        Value::Scalar(c) => BooleanType::column_from_iter(array_column
                             .iter()
-                            .map(|array| StringType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) => BooleanType::column_from_iter(array_column
+                            .map(|array| StringType::iter_column(&array).contains(&c.as_str())), &[]),
+                        Value::Column(col) => BooleanType::column_from_iter(array_column
                             .iter()
                             .zip(StringType::iter_column(&col))
                             .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
@@ -652,16 +646,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| {
             match lhs {
-                ValueRef::Scalar(array) => {
+                Value::Scalar(array) => {
                     let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(&array));
                     for val in array.iter() {
                         let _ = set.set_insert(val as u8);
                     }
                     match rhs {
-                        ValueRef::Scalar(val) =>  {
+                        Value::Scalar(val) =>  {
                             Value::Scalar(set.contains(&(val as u8)))
                         },
-                        ValueRef::Column(col) => {
+                        Value::Column(col) => {
                             let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
                                 set.contains(&(val as u8))
                             }), &[]);
@@ -669,12 +663,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 },
-                ValueRef::Column(array_column) => {
+                Value::Column(array_column) => {
                     let result = match rhs {
-                        ValueRef::Scalar(c) => BooleanType::column_from_iter(array_column
+                        Value::Scalar(c) => BooleanType::column_from_iter(array_column
                             .iter()
                             .map(|array| BooleanType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) => BooleanType::column_from_iter(array_column
+                        Value::Column(col) => BooleanType::column_from_iter(array_column
                             .iter()
                             .zip(BooleanType::iter_column(&col))
                             .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
@@ -761,19 +755,19 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn register_array_aggr(registry: &mut FunctionRegistry) {
     fn eval_array_aggr(
         name: &str,
-        args: &[ValueRef<AnyType>],
+        args: &[Value<AnyType>],
         ctx: &mut EvalContext,
     ) -> Value<AnyType> {
         match &args[0] {
-            ValueRef::Scalar(scalar) => match scalar {
-                ScalarRef::EmptyArray | ScalarRef::Null => {
+            Value::Scalar(scalar) => match &scalar {
+                Scalar::EmptyArray | Scalar::Null => {
                     if name == "count" {
                         Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
                     } else {
                         Value::Scalar(Scalar::Null)
                     }
                 }
-                ScalarRef::Array(col) => {
+                Scalar::Array(col) => {
                     let len = col.len();
                     match eval_aggr(name, vec![], &[col.clone()], len) {
                         Ok((res_col, _)) => {
@@ -788,7 +782,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 }
                 _ => unreachable!(),
             },
-            ValueRef::Column(column) => {
+            Value::Column(column) => {
                 let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
                 for arr in column.iter() {
