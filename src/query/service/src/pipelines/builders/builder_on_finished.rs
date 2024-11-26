@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -34,7 +35,7 @@ impl PipelineBuilder {
     pub fn set_purge_files_on_finished(
         ctx: Arc<QueryContext>,
         files: Vec<String>,
-        copy_purge_option: bool,
+        options: &CopyIntoTableOptions,
         stage_info: StageInfo,
         main_pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -42,11 +43,14 @@ impl PipelineBuilder {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();
             let is_active = txn_mgr.is_active();
-            if is_active && copy_purge_option {
+            if is_active && options.purge {
                 txn_mgr.add_need_purge_files(stage_info.clone(), files.clone());
             }
             is_active
         };
+
+        let on_error_mode = options.on_error.clone();
+        let purge = options.purge;
         // set on_finished callback.
         main_pipeline.set_on_finished(move |info: &ExecutionInfo| {
             match &info.res {
@@ -58,7 +62,7 @@ impl PipelineBuilder {
                             for (file_name, e) in error_map {
                                 error!(
                                     "copy(on_error={}): file {} encounter error {},",
-                                    stage_info.copy_options.on_error,
+                                    on_error_mode,
                                     file_name,
                                     e.to_string()
                                 );
@@ -67,7 +71,7 @@ impl PipelineBuilder {
 
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                        if !is_active && copy_purge_option {
+                        if !is_active && purge {
                             Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
                         }
 

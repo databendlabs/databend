@@ -163,7 +163,6 @@ pub(crate) fn format_insert_source(
                     required_source_schema,
                     write_mode,
                     validation_mode,
-                    force,
                     stage_table_info,
                     enable_distributed,
                     ..
@@ -191,7 +190,6 @@ pub(crate) fn format_insert_source(
                     )),
                     FormatTreeNode::new(format!("write_mode: {write_mode}")),
                     FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
-                    FormatTreeNode::new(format!("force: {force}")),
                     FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
                     FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
                 ];

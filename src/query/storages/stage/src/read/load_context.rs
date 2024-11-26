@@ -57,14 +57,15 @@ impl LoadContext {
         pos_projection: Option<Vec<usize>>,
         block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
-        let copy_options = &stage_table_info.stage_info.copy_options;
         let settings = ctx.get_settings();
         let func_ctx = ctx.get_function_context()?;
         let is_select = stage_table_info.is_select;
         let mut file_format_options_ext =
             FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
-        file_format_options_ext.disable_variant_check = copy_options.disable_variant_check;
-        let on_error_mode = copy_options.on_error.clone();
+        file_format_options_ext.disable_variant_check = stage_table_info
+            .copy_into_table_options
+            .disable_variant_check;
+        let on_error_mode = stage_table_info.copy_into_table_options.on_error.clone();
         let fields = stage_table_info
             .schema
             .fields()

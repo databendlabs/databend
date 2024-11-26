@@ -27,6 +27,9 @@ fn from_slice() {
     let buffer = Buffer::<i32>::from(vec![0, 1, 2]);
     assert_eq!(buffer.len(), 3);
     assert_eq!(buffer.as_slice(), &[0, 1, 2]);
+
+    assert_eq!(unsafe { *buffer.get_unchecked(1) }, 1);
+    assert_eq!(unsafe { *buffer.get_unchecked(2) }, 2);
 }
 
 #[test]
