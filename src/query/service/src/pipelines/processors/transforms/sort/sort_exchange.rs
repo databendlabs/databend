@@ -13,77 +13,129 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Exchange;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::processors::sort::select_row_type;
+use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
+use databend_common_pipeline_transforms::processors::sort::Rows;
 
 use super::sort_simple::SortSimpleState;
+use crate::pipelines::processors::PartitionProcessor;
 
-pub struct SortRangeExchange {
+pub struct SortRangeExchange<R: Rows> {
     sort_desc: Arc<Vec<SortColumnDescription>>,
     state: Arc<SortSimpleState>,
+    _r: PhantomData<R>,
 }
 
-impl Exchange for SortRangeExchange {
+unsafe impl<R: Rows> Send for SortRangeExchange<R> {}
+
+unsafe impl<R: Rows> Sync for SortRangeExchange<R> {}
+
+impl<R: Rows + 'static> Exchange for SortRangeExchange<R> {
     const NAME: &'static str = "SortRange";
     fn partition(&self, data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let bounds = self.state.bounds().unwrap();
         debug_assert_eq!(n, self.state.partitions());
-        debug_assert!(bounds.num_rows() < n);
+        debug_assert!(bounds.len() < n);
 
-        let max_bound = bounds.num_rows();
-        let mut indices = vec![max_bound as u32; data.num_rows()];
-        for bound_idx in 0..bounds.num_rows() {
-            let mut finish = true;
-            for (row, partition) in indices.iter_mut().enumerate() {
-                if *partition < max_bound as u32 {
+        if data.is_empty() {
+            return Ok(vec![]);
+        }
+
+        if bounds.len() == 0 {
+            return Ok(vec![data]);
+        }
+
+        let bounds = R::from_column(&bounds, &self.sort_desc)?;
+        let rows = R::from_column(data.get_last_column(), &self.sort_desc)?;
+
+        let mut i = 0;
+        let mut j = 0;
+        let mut v = rows.row(i);
+        let mut bound = bounds.row(j);
+        let mut indices = Vec::new();
+        while i < rows.len() {
+            match v.cmp(&bound) {
+                Ordering::Less => indices.push(j as u32),
+                Ordering::Greater if j + 1 < bounds.len() => {
+                    j += 1;
+                    bound = bounds.row(j);
                     continue;
                 }
-                if self.cmp(&data, row, &bounds, bound_idx) == Ordering::Less {
-                    *partition = bound_idx as u32
-                }
-                finish = false
+                _ => indices.push(j as u32 + 1),
             }
-            if finish {
-                break;
-            }
+            i += 1;
+            v = rows.row(i);
         }
 
         DataBlock::scatter(&data, &indices, n)
     }
 }
 
-impl SortRangeExchange {
-    pub fn new(
-        sort_desc: Arc<Vec<SortColumnDescription>>,
-        state: Arc<SortSimpleState>,
-    ) -> Arc<Self> {
-        Arc::new(Self { sort_desc, state })
+pub fn create_exchange_pipeitems(
+    inputs: usize,
+    partitions: usize,
+    schema: DataSchemaRef,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    state: Arc<SortSimpleState>,
+) -> Vec<PipeItem> {
+    let mut builder = Builder {
+        inputs,
+        partitions,
+        sort_desc,
+        schema,
+        state,
+        items: Vec::new(),
+    };
+
+    select_row_type(&mut builder);
+
+    builder.items
+}
+
+struct Builder {
+    inputs: usize,
+    partitions: usize,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    schema: DataSchemaRef,
+    state: Arc<SortSimpleState>,
+    items: Vec<PipeItem>,
+}
+
+impl RowsTypeVisitor for Builder {
+    fn call<R: Rows + 'static>(&mut self) {
+        let exchange = Arc::new(SortRangeExchange::<R> {
+            sort_desc: self.sort_desc.clone(),
+            state: self.state.clone(),
+            _r: PhantomData,
+        });
+        let mut items = Vec::with_capacity(self.inputs);
+        for _ in 0..self.partitions {
+            let input = InputPort::create();
+            let outputs: Vec<_> = (0..self.partitions).map(|_| OutputPort::create()).collect();
+            items.push(PipeItem::create(
+                PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+                vec![input],
+                outputs,
+            ));
+        }
     }
 
-    fn cmp(&self, block: &DataBlock, row: usize, bounds: &DataBlock, bound_idx: usize) -> Ordering {
-        use databend_common_expression::Value;
-        for (i, desc) in self.sort_desc.iter().enumerate() {
-            let data = match &block.get_by_offset(desc.offset).value {
-                Value::Scalar(scalar) => scalar.as_ref(),
-                Value::Column(column) => column.index(row).unwrap(),
-            };
-            let bound = bounds
-                .get_by_offset(i)
-                .value
-                .as_column()
-                .unwrap()
-                .index(bound_idx)
-                .unwrap();
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
 
-            let o = data.cmp(&bound);
-            if o != Ordering::Equal {
-                return o;
-            }
-        }
-        Ordering::Equal
+    fn sort_desc(&self) -> &[SortColumnDescription] {
+        &self.sort_desc
     }
 }

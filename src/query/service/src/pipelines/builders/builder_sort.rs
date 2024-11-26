@@ -215,12 +215,15 @@ impl SortPipelineBuilder {
         pipeline: &mut Pipeline,
         k: usize,
     ) -> Result<()> {
-        let n = pipeline.output_len();
+        let inputs = pipeline.output_len();
+        let settings = self.ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
-        let simple =
-            SortSimpleState::new(n, max_threads, self.schema.clone(), self.sort_desc.clone());
-
-        add_sort_simple(pipeline, simple.clone(), self.sort_desc.clone(), k)?;
+        let simple = SortSimpleState::new(
+            inputs,
+            max_threads,
+            self.schema.clone(),
+            self.sort_desc.clone(),
+        );
 
         // Partial sort
         pipeline.add_transformer(|| {
@@ -229,6 +232,8 @@ impl SortPipelineBuilder {
                 self.sort_desc.clone(),
             )
         });
+
+        add_sort_simple(pipeline, simple.clone(), self.sort_desc.clone(), k)?;
 
         self.build_merge_sort(pipeline, false)?;
 

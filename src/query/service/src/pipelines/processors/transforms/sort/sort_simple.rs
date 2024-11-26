@@ -19,6 +19,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::Result;
 use databend_common_expression::simpler::Simpler;
 use databend_common_expression::visitor::ValueVisitor;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -30,13 +31,14 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_multi_sort_merge_processor;
+use databend_common_pipeline_transforms::processors::sort::convert_rows;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-use super::sort_exchange::SortRangeExchange;
-use crate::pipelines::processors::PartitionProcessor;
+use super::sort_exchange::create_exchange_pipeitems;
+use super::sort_wait::TransformSortSimpleWait;
 
 pub struct SortSimpleState {
     inner: RwLock<StateInner>,
@@ -51,10 +53,10 @@ impl SortSimpleState {
 
 struct StateInner {
     partitions: usize,
-    empty_block: DataBlock,
+    schema: DataSchemaRef,
     sort_desc: Vec<SortColumnDescription>,
     partial: Vec<Option<DataBlock>>,
-    bounds: Option<DataBlock>,
+    bounds: Option<Column>,
 }
 
 impl StateInner {
@@ -68,12 +70,19 @@ impl StateInner {
             .collect::<Vec<_>>();
 
         if partial.is_empty() {
-            self.bounds = Some(self.empty_block.clone());
+            let bounds = convert_rows(
+                self.schema.clone(),
+                self.sort_desc.clone().into(),
+                DataBlock::empty_with_schema(self.schema.clone()),
+            )?;
+
+            self.bounds = Some(bounds);
             return Ok(());
         }
 
         let candidates = DataBlock::concat(&partial)?;
         let rows = candidates.num_rows();
+
         let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.clone(), rows);
 
         for desc in &self.sort_desc {
@@ -103,7 +112,12 @@ impl StateInner {
             }
         }
 
-        self.bounds = Some(candidates.take(&bounds)?);
+        let bounds = convert_rows(
+            self.schema.clone(),
+            self.sort_desc.clone().into(),
+            candidates.take(&bounds)?,
+        )?;
+        self.bounds = Some(bounds);
         Ok(())
     }
 }
@@ -116,7 +130,7 @@ impl SortSimpleState {
         sort_desc: Arc<Vec<SortColumnDescription>>,
     ) -> Arc<SortSimpleState> {
         let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
-        let empty_block = DataBlock::empty_with_schema(Arc::new(schema.project(&columns)));
+        let schema = schema.project(&columns).into();
         let sort_desc = sort_desc
             .iter()
             .enumerate()
@@ -129,7 +143,7 @@ impl SortSimpleState {
         Arc::new(SortSimpleState {
             inner: RwLock::new(StateInner {
                 partitions,
-                empty_block,
+                schema,
                 sort_desc,
                 partial: vec![None; inputs],
                 bounds: None,
@@ -138,7 +152,7 @@ impl SortSimpleState {
         })
     }
 
-    pub fn bounds(&self) -> Option<DataBlock> {
+    pub fn bounds(&self) -> Option<Column> {
         if let Some(bounds) = &self.inner.read().unwrap().bounds {
             return Some(bounds.clone());
         }
@@ -147,7 +161,8 @@ impl SortSimpleState {
 
     fn commit_simple(&self, id: usize, block: Option<DataBlock>) -> Result<bool> {
         let mut inner = self.inner.write().unwrap();
-        let block = block.unwrap_or(inner.empty_block.clone());
+
+        let block = block.unwrap_or(DataBlock::empty_with_schema(inner.schema.clone())); // todo check
         let x = inner.partial[id].replace(block);
         debug_assert!(x.is_none());
         let done = inner.partial.iter().all(|x| x.is_some());
@@ -226,20 +241,15 @@ pub fn add_range_shuffle(
     enable_loser_tree: bool,
 ) -> Result<()> {
     let input_len = pipeline.output_len();
-    let mut items = Vec::with_capacity(input_len);
+
+    pipeline.add_transform(|input, output| {
+        Ok(ProcessorPtr::create(Box::new(
+            TransformSortSimpleWait::new(input, output, state.clone()),
+        )))
+    })?;
 
     let n = state.partitions();
-    let exchange = SortRangeExchange::new(sort_desc.clone(), state);
-
-    for _ in 0..input_len {
-        let input = InputPort::create();
-        let outputs: Vec<_> = (0..input_len).map(|_| OutputPort::create()).collect();
-        items.push(PipeItem::create(
-            PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
-            vec![input],
-            outputs,
-        ));
-    }
+    let items = create_exchange_pipeitems(input_len, n, schema.clone(), sort_desc.clone(), state);
 
     // partition data block
     pipeline.add_pipe(Pipe::create(input_len, input_len * n, items));
@@ -251,7 +261,7 @@ pub fn add_range_shuffle(
     pipeline.reorder_inputs(reorder_edges);
 
     let mut items = Vec::with_capacity(input_len);
-    for _ in 0..input_len {
+    for _ in 0..n {
         let output = OutputPort::create();
         let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
 
@@ -302,6 +312,7 @@ mod tests {
         let schema = DataSchemaRefExt::create(vec![DataField::new("a", Int32Type::data_type())]);
         let mut inner = StateInner {
             partitions: 3,
+            schema,
             sort_desc: vec![SortColumnDescription {
                 offset: 0,
                 asc: true,
@@ -309,15 +320,11 @@ mod tests {
             }],
             partial,
             bounds: None,
-            empty_block: DataBlock::empty_with_schema(schema),
         };
 
         inner.determine_bounds().unwrap();
 
         // 0 1 2 2 | 3 4 4 4 | 5 5 6 7
-        assert_eq!(
-            &Int32Type::from_data(vec![3, 5]),
-            inner.bounds.unwrap().get_last_column()
-        )
+        assert_eq!(Int32Type::from_data(vec![3, 5]), inner.bounds.unwrap())
     }
 }
