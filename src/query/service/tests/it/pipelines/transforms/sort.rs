@@ -137,5 +137,3 @@ fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
 
 mod k_way;
 mod spill;
-
-mod simple;
