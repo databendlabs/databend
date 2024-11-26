@@ -20,13 +20,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 
 use crate::cluster::ClusterApi;
 
@@ -72,24 +72,16 @@ impl ClusterMgr {
 impl ClusterApi for ClusterMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_node(&self, node: NodeInfo) -> Result<u64> {
-        // Only when there are no record, i.e. seq=0
-        let seq = MatchSeq::Exact(0);
+    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<Change<Vec<u8>>> {
         let meta = Some(self.new_lift_time());
         let value = Operation::Update(serde_json::to_vec(&node)?);
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
         let upsert_node = self
             .metastore
-            .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
+            .upsert_kv(UpsertKV::new(&node_key, seq, value, meta));
 
-        let res_seq = upsert_node.await?.added_seq_or_else(|_v| {
-            ErrorCode::ClusterNodeAlreadyExists(format!(
-                "Node with ID '{}' already exists in the cluster.",
-                node.id
-            ))
-        })?;
-
-        Ok(res_seq)
+        let transition = upsert_node.await?;
+        Ok(transition)
     }
 
     #[async_backtrace::framed]
@@ -114,7 +106,7 @@ impl ClusterApi for ClusterMgr {
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node_id)?);
         let upsert_node =
             self.metastore
-                .upsert_kv(UpsertKVReq::new(&node_key, seq, Operation::Delete, None));
+                .upsert_kv(UpsertKV::new(&node_key, seq, Operation::Delete, None));
 
         match upsert_node.await? {
             UpsertKVReply {
@@ -126,26 +118,6 @@ impl ClusterApi for ClusterMgr {
                 "Node with ID '{}' does not exist in the cluster.",
                 node_id
             ))),
-        }
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn heartbeat(&self, node: &NodeInfo, seq: MatchSeq) -> Result<u64> {
-        let meta = Some(self.new_lift_time());
-        let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
-
-        let upsert_meta =
-            self.metastore
-                .upsert_kv(UpsertKVReq::new(&node_key, seq, Operation::AsIs, meta));
-
-        match upsert_meta.await? {
-            UpsertKVReply {
-                ident: None,
-                prev: Some(_),
-                result: Some(SeqV { seq: s, .. }),
-            } => Ok(s),
-            UpsertKVReply { .. } => self.add_node(node.clone()).await,
         }
     }
 

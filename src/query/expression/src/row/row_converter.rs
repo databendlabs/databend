@@ -57,15 +57,17 @@ impl RowConverter {
 
     fn support_data_type(d: &DataType) -> bool {
         match d {
-            DataType::Array(_)
-            | DataType::EmptyArray
-            | DataType::EmptyMap
-            | DataType::Map(_)
-            | DataType::Bitmap
-            | DataType::Tuple(_)
-            | DataType::Generic(_) => false,
+            DataType::Null
+            | DataType::Boolean
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Binary
+            | DataType::String
+            | DataType::Variant => true,
             DataType::Nullable(inner) => Self::support_data_type(inner.as_ref()),
-            _ => true,
+            _ => false,
         }
     }
 

@@ -223,11 +223,15 @@ impl<R: Rows> List for Option<R> {
     }
 
     fn cmp_value<'a>(&'a self, i: usize, target: &R::Item<'a>) -> Ordering {
-        self.as_ref().unwrap().row(i).cmp(target)
+        let rows = self.as_ref().unwrap();
+        assert!(i < rows.len(), "len {}, index {}", rows.len(), i);
+        rows.row(i).cmp(target)
     }
 
     fn index(&self, i: usize) -> R::Item<'_> {
-        self.as_ref().unwrap().row(i)
+        let rows = self.as_ref().unwrap();
+        assert!(i < rows.len(), "len {}, index {}", rows.len(), i);
+        rows.row(i)
     }
 }
 

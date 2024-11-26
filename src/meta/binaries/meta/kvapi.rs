@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use databend_meta::configs::Config;
 
 pub enum KvApiCommand {
     Get(String),
-    Upsert(UpsertKVReq),
+    Upsert(UpsertKV),
     MGet(Vec<String>),
     List(String),
 }
@@ -36,7 +36,7 @@ impl KvApiCommand {
                     return Err("The number of keys must be 1".to_string());
                 }
 
-                let req = UpsertKVReq::update(config.key[0].as_str(), config.value.as_bytes());
+                let req = UpsertKV::update(config.key[0].as_str(), config.value.as_bytes());
 
                 let req = if let Some(expire_after) = config.expire_after {
                     req.with(MetaSpec::new_ttl(std::time::Duration::from_secs(
@@ -52,7 +52,7 @@ impl KvApiCommand {
                 if config.key.len() != 1 {
                     return Err("The number of keys must be 1".to_string());
                 }
-                Self::Upsert(UpsertKVReq::delete(&config.key[0]))
+                Self::Upsert(UpsertKV::delete(&config.key[0]))
             }
             "get" => {
                 if config.key.len() != 1 {

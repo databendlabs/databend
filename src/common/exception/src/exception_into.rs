@@ -410,3 +410,9 @@ impl From<sqlx::Error> for ErrorCode {
         ErrorCode::DictionarySourceError(format!("Dictionary Sqlx Error, cause: {}", error))
     }
 }
+
+impl From<redis::RedisError> for ErrorCode {
+    fn from(error: redis::RedisError) -> Self {
+        ErrorCode::DictionarySourceError(format!("Dictionary Redis Error, cause: {}", error))
+    }
+}
