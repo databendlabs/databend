@@ -14,11 +14,11 @@
 
 use std::io;
 
+use databend_common_meta_types::raft_types::Membership;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::Membership;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use maplit::btreemap;
@@ -365,7 +365,7 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await?;
 
-    sm.levels.freeze_writable();
+    sm.map_mut().freeze_writable();
 
     let mut a = sm.new_applier();
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))

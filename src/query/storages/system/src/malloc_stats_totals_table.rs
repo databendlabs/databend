@@ -92,7 +92,7 @@ impl MallocStatsTotalsTable {
     }
 
     fn build_columns(node_name: &str) -> BuildResult {
-        let mut names = StringColumnBuilder::with_capacity(6, 6 * 4);
+        let mut names = StringColumnBuilder::with_capacity(6);
         let mut values: Vec<u64> = vec![];
 
         let e = epoch::mib()?;

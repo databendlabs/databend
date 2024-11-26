@@ -23,10 +23,8 @@ pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
+    // simd is enabled by default now
     match (build_semver, git_sha, rustc_semver, timestamp) {
-        #[cfg(not(feature = "simd"))]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-        #[cfg(feature = "simd")]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => {
             format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
         }
@@ -56,7 +54,9 @@ pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 });
 
 /// Oldest compatible nightly meta-client version
-pub static MIN_METACLI_SEMVER: Version = Version::new(0, 9, 41);
+///
+/// It should be 1.2.287 but 1.2.287 does not contain complete binaries
+pub static MIN_METACLI_SEMVER: Version = Version::new(1, 2, 288);
 
 /// The min meta-server version that can be deployed together in a cluster,
 /// i.e., the network APIs are compatible.
@@ -147,7 +147,7 @@ pub(crate) mod raft {
             del_require( ("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
             del_require( ("install_snapshot", 1), "2024-07-02", (1,  2, 552)),
             add_require( ("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
-            
+
         ];
 
         /// Feature set provided by raft client.

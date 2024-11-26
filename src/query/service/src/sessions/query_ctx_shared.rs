@@ -31,6 +31,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
@@ -132,6 +133,11 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
 
+    pub(in crate::sessions) runtime_filter_ready:
+        Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
+
+    pub(in crate::sessions) wait_runtime_filter: Arc<RwLock<HashMap<IndexType, bool>>>,
+
     pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
     // Records query level data cache metrics
@@ -189,6 +195,8 @@ impl QueryContextShared {
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
+            runtime_filter_ready: Default::default(),
+            wait_runtime_filter: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
@@ -229,7 +237,7 @@ impl QueryContextShared {
     }
 
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.on_error_mode.read().clone()
+        *self.on_error_mode.read()
     }
 
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {

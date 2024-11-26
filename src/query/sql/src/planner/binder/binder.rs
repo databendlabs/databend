@@ -42,7 +42,14 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
-use indexmap::IndexMap;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
+use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
+use databend_common_storage::init_stage_operator;
+use databend_storages_common_io::Files;
+use databend_storages_common_session::TxnManagerRef;
+use log::error;
+use log::info;
 use log::warn;
 
 use super::Finder;
@@ -50,7 +57,6 @@ use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::query_executor::QueryExecutor;
@@ -63,7 +69,6 @@ use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUserPlan;
-use crate::plans::MaterializedCte;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
@@ -74,7 +79,6 @@ use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -95,13 +99,6 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
-    // Save the bound context for materialized cte, the key is cte_idx
-    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
-    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
-    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
-    /// Use `IndexMap` because need to keep the insertion order
-    /// Then wrap materialized ctes to main plan.
-    pub ctes_map: Box<IndexMap<String, CteInfo>>,
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
@@ -132,10 +129,6 @@ impl<'a> Binder {
             catalogs,
             name_resolution_ctx,
             metadata,
-            m_cte_bound_ctx: Default::default(),
-            m_cte_bound_s_expr: Default::default(),
-            m_cte_materialized_indexes: Default::default(),
-            ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
             enable_result_cache,
@@ -154,6 +147,15 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        if !stmt.allowed_in_multi_statement() {
+            execute_commit_statement(self.ctx.clone()).await?;
+        }
+        if !stmt.is_transaction_command() && self.ctx.txn_mgr().lock().is_fail() {
+            let err = ErrorCode::CurrentTransactionIsAborted(
+                "current transaction is aborted, commands ignored until end of transaction block",
+            );
+            return Err(err);
+        }
         let start = Instant::now();
         self.ctx.set_status_info("binding");
         let mut bind_context = BindContext::new();
@@ -177,19 +179,7 @@ impl<'a> Binder {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                for (_, cte_info) in self.ctes_map.iter().rev() {
-                    if !cte_info.materialized || cte_info.used_count == 0 {
-                        continue;
-                    }
-                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-                    let materialized_output_columns = cte_info.columns.clone();
-                    s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: self.m_cte_materialized_indexes.clone() })),
-                        Arc::new(s_expr),
-                        Arc::new(cte_s_expr.clone()),
-                    );
-                }
-
+                s_expr = bind_context.cte_context.wrap_m_cte(s_expr);
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
@@ -268,6 +258,7 @@ impl<'a> Binder {
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
+            Statement::ShowDropDatabases(stmt) => self.bind_show_drop_databases(bind_context, stmt).await?,
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
@@ -309,6 +300,7 @@ impl<'a> Binder {
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
             Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -717,15 +709,6 @@ impl<'a> Binder {
             .set_batch_settings(&hint_settings, true)
     }
 
-    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
-    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
-        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
-    }
-
-    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
-        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
-    }
-
     pub fn set_bind_recursive_cte(&mut self, val: bool) {
         self.bind_recursive_cte = val;
     }
@@ -985,5 +968,107 @@ impl<'a> Binder {
             );
         }
         Ok(s_expr)
+    }
+}
+
+struct ClearTxnManagerGuard(TxnManagerRef);
+
+impl Drop for ClearTxnManagerGuard {
+    fn drop(&mut self) {
+        self.0.lock().clear();
+    }
+}
+
+pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> {
+    // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
+    // Use this guard to clear txn manager before return.
+    let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
+    let is_active = ctx.txn_mgr().lock().is_active();
+    if is_active {
+        let catalog = ctx.get_default_catalog()?;
+
+        let req = ctx.txn_mgr().lock().req();
+
+        let update_summary = {
+            let table_descriptions = req
+                .update_table_metas
+                .iter()
+                .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
+                .collect::<Vec<_>>();
+            let stream_descriptions = req
+                .update_stream_metas
+                .iter()
+                .map(|s| (s.stream_id, s.seq, "stream"))
+                .collect::<Vec<_>>();
+            (table_descriptions, stream_descriptions)
+        };
+
+        let mismatched_tids = {
+            ctx.txn_mgr().lock().set_auto_commit();
+            let ret = catalog.retryable_update_multi_table_meta(req).await;
+            if let Err(ref e) = ret {
+                // other errors may occur, especially the version mismatch of streams,
+                // let's log it here for the convenience of diagnostics
+                error!(
+                    "Non-recoverable fault occurred during updating tables. {}",
+                    e
+                );
+            }
+            ret?
+        };
+
+        match &mismatched_tids {
+            Ok(_) => {
+                info!(
+                    "COMMIT: Commit explicit transaction success, targets updated {:?}",
+                    update_summary
+                );
+            }
+            Err(e) => {
+                let err_msg = format!(
+                    "COMMIT: Table versions mismatched in multi statement transaction, conflict tables: {:?}",
+                    e.iter()
+                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
+                        .collect::<Vec<_>>()
+                );
+                return Err(ErrorCode::TableVersionMismatched(err_msg));
+            }
+        }
+        let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
+        for (stage_info, files) in need_purge_files {
+            try_purge_files(ctx.clone(), &stage_info, &files).await;
+        }
+    }
+    Ok(())
+}
+
+#[async_backtrace::framed]
+async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, files: &[String]) {
+    let start = Instant::now();
+    let op = init_stage_operator(stage_info);
+
+    match op {
+        Ok(op) => {
+            let file_op = Files::create(ctx, op);
+            if let Err(e) = file_op.remove_file_in_batch(files).await {
+                error!("Failed to delete file: {:?}, error: {}", files, e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to get stage table op, error: {}", e);
+        }
+    }
+
+    let elapsed = start.elapsed();
+    info!(
+        "purged files: number {}, time used {:?} ",
+        files.len(),
+        elapsed
+    );
+
+    // Perf.
+    {
+        metrics_inc_copy_purge_files_counter(files.len() as u32);
+        metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
     }
 }

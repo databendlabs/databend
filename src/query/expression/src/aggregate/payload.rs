@@ -237,8 +237,8 @@ impl Payload {
         for col in group_columns.iter() {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
-                if bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len() {
-                    let val: u8 = if bitmap.unset_bits() == 0 { 1 } else { 0 };
+                if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
+                    let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
                     // faster path
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {

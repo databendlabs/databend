@@ -33,6 +33,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::bind_table_reference::JoinConditions;
+use crate::binder::project_set::SetReturningRewriter;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
@@ -49,6 +50,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
+use crate::plans::VisitorMut;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Visibility;
@@ -83,10 +85,14 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
-        let (scalar, _) = scalar_binder.bind(expr)?;
+        let (mut scalar, _) = scalar_binder.bind(expr)?;
+
+        // rewrite Set-returning functions as columns.
+        if !bind_context.srf_info.srfs.is_empty() {
+            let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
+            srf_rewriter.visit(&mut scalar)?;
+        }
 
         let f = |scalar: &ScalarExpr| {
             matches!(
@@ -130,7 +136,7 @@ impl Binder {
                 ));
             }
             // Add recursive cte's columns to cte info
-            let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            let mut_cte_info = bind_context.cte_context.cte_map.get_mut(cte_name).unwrap();
             // The recursive cte may be used by multiple times in main query, so clear cte_info's columns
             mut_cte_info.columns.clear();
             for column in left_bind_context.columns.iter() {
@@ -145,6 +151,10 @@ impl Binder {
                 mut_cte_info.columns.push(col);
             }
         }
+        // Merge cte info from left context to `bind_context`
+        bind_context
+            .cte_context
+            .merge(left_bind_context.cte_context.clone());
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None)?;
 
@@ -256,16 +266,19 @@ impl Binder {
             left_span,
             right_span,
             left_context,
-            right_context,
+            right_context.clone(),
             coercion_types,
         )?;
-
         if let Some(cte_name) = &cte_name {
-            for (col, cte_col) in new_bind_context
-                .columns
-                .iter_mut()
-                .zip(self.ctes_map.get(cte_name).unwrap().columns.iter())
-            {
+            for (col, cte_col) in new_bind_context.columns.iter_mut().zip(
+                new_bind_context
+                    .cte_context
+                    .cte_map
+                    .get(cte_name)
+                    .unwrap()
+                    .columns
+                    .iter(),
+            ) {
                 col.table_name = cte_col.table_name.clone();
                 col.column_name = cte_col.column_name.clone();
             }
@@ -283,10 +296,11 @@ impl Binder {
         );
 
         if distinct {
+            let columns = new_bind_context.all_column_bindings().to_vec();
             new_expr = self.bind_distinct(
                 left_span,
-                &new_bind_context,
-                new_bind_context.all_column_bindings(),
+                &mut new_bind_context,
+                &columns,
                 &mut HashMap::new(),
                 new_expr,
             )?;
@@ -340,16 +354,17 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_context: BindContext,
+        mut left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
+        let columns = left_context.all_column_bindings().to_vec();
         let left_expr = self.bind_distinct(
             left_span,
-            &left_context,
-            left_context.all_column_bindings(),
+            &mut left_context,
+            &columns,
             &mut HashMap::new(),
             left_expr,
         )?;
@@ -384,6 +399,9 @@ impl Binder {
         };
         let s_expr =
             self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
+        left_context
+            .cte_context
+            .set_cte_context(right_context.cte_context);
         Ok((s_expr, left_context))
     }
 
@@ -404,6 +422,10 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
+        new_bind_context
+            .cte_context
+            .set_cte_context(right_bind_context.cte_context);
+
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()

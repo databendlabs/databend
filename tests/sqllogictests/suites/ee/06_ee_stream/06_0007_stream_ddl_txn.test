@@ -1,0 +1,36 @@
+statement ok
+create or replace table t(a int);
+
+statement ok
+create or replace table t1(a int);
+
+statement ok
+create or replace stream s on table t;
+
+statement ok
+insert into t values(1);
+
+statement ok 
+begin;
+
+statement ok
+insert into t1 select a from s;
+
+statement ok
+create or replace table t2 as select a from s;
+
+statement ok
+commit;
+
+query I
+select * from t1;
+----
+1
+
+
+query I
+select count(*) from t2;
+----
+0
+
+

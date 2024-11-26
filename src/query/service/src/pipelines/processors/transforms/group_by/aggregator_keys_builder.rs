@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 use byteorder::BigEndian;
 use byteorder::WriteBytesExt;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::number::Number;

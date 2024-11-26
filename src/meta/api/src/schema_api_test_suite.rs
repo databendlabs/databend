@@ -99,6 +99,7 @@ use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -129,7 +130,6 @@ use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
@@ -237,7 +237,7 @@ async fn upsert_test_data(
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
     let res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: key.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Update(value),
@@ -254,7 +254,7 @@ async fn delete_test_data(
     key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: key.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Delete,
@@ -349,7 +349,6 @@ impl SchemaApiTestSuite {
         suite.test_sequence(&b.build().await).await?;
 
         suite.dictionary_create_list_drop(&b.build().await).await?;
-
         Ok(())
     }
 
@@ -7304,6 +7303,7 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
         let dict_name1 = "dict1";
         let dict_name2 = "dict2";
+        let dict_name3 = "dict3";
         let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
@@ -7361,6 +7361,8 @@ impl SchemaApiTestSuite {
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name2.to_string()),
         );
+        let dict3 = DictionaryIdentity::new(db_id, dict_name3.to_string());
+        let dict_ident3 = DictionaryNameIdent::new(dict_tenant.clone(), dict3.clone());
 
         {
             info!("--- create dictionary");
@@ -7459,8 +7461,36 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- drop dictionary");
+            info!("--- rename dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            mt.rename_dictionary(rename_req).await?;
             let req = dict_ident1.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_none());
+
+            let req = dict_ident3.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_some());
+
+            let dict_reply = res.unwrap();
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.source, "postgresql".to_string());
+
+            info!("--- rename unknown dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            let res = mt.rename_dictionary(rename_req).await;
+            assert!(res.is_err());
+        }
+
+        {
+            info!("--- drop dictionary");
+            let req = dict_ident3.clone();
             let res = mt.drop_dictionary(req).await?;
             assert!(res.is_some());
         }

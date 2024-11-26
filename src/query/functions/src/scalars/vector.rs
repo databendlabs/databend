@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::StringType;
@@ -188,16 +188,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<StringType, StringType>(|data, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
-                    output.put_str("");
-                    output.commit_row();
+                    output.put_and_commit("");
                     return;
                 }
             }
 
             if ctx.func_ctx.openai_api_key.is_empty() {
                 ctx.set_error(output.len(), "openai_api_key is empty".to_string());
-                output.put_str("");
-                output.commit_row();
+                output.put_and_commit("");
                 return;
             }
             let api_base = ctx.func_ctx.openai_api_chat_base_url.clone();
@@ -216,17 +214,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             let result = openai.completion_text_request(data.to_string());
             match result {
                 Ok((resp, _)) => {
-                    output.put_str(&resp);
+                    output.put_and_commit(resp);
                 }
                 Err(e) => {
                     ctx.set_error(
                         output.len(),
                         format!("openai completion request error:{:?}", e),
                     );
-                    output.put_str("");
+                    output.put_and_commit("");
                 }
             }
-            output.commit_row();
         }),
     );
 }

@@ -89,7 +89,7 @@ EXPLAIN SELECT * FROM t1, t2 ORDER BY a, b;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM t1, t2 ORDER BY a, b
 ├── Number of rows: 9
-└── Result size: 125
+└── Result size: 144
 
 
 
@@ -225,7 +225,7 @@ SELECT * FROM t1 ORDER BY a;
 # Because the cache key is generated from AST.
 
 query I
-select * FRoM t1 OrDER bY a; 
+select * FRoM t1 OrDER bY a;
 ----
 1
 2

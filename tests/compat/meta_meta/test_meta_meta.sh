@@ -134,28 +134,71 @@ curl -qs $(admin_addr 2)/v1/cluster/status
 
 echo " === Check consistency between leader and follower"
 echo ""
-echo " === Export leader meta data to ./.databend/leader"
+
+echo " === Export leader meta data to ./.databend/leader-tmp"
+./bins/$leader_meta_ver/bin/databend-metactl \
+    --export \
+    --grpc-api-address $(grpc_addr 1) \
+    > ./.databend/leader-tmp
+
+echo " === Export follower meta data to ./.databend/follower-tmp"
+./bins/$follower_meta_ver/bin/databend-metactl \
+    --export \
+    --grpc-api-address $(grpc_addr 2) \
+    > ./.databend/follower-tmp
+
+echo " === Shutdown databend-meta servers"
+killall databend-meta
+sleep 3
+
+# Old version SM exported data contains DataHeader
+
+cat ./.databend/leader-tmp   | grep 'state_machine' | grep -v DataHeader | sort > ./.databend/leader-sm
+cat ./.databend/follower-tmp | grep 'state_machine' | grep -v DataHeader | sort > ./.databend/follower-sm
+
+echo " === diff SM data between Leader and Follower"
+diff ./.databend/leader-sm ./.databend/follower-sm
+
+
+
+echo " === mkdir to import with latest datbend-metactl"
+mkdir -p ./.databend/_upgrade_meta_1
+mkdir -p ./.databend/_upgrade_meta_2
+
+
+# Exported log data format has changed, re-import them and compare.
+#
+# SM data in V002 does not output in correct order: exp- is after kv-,
+# which is out of order when import to rotbl.
+#
+# Thus we skip all state machine data, but keeps log data and SM meta.
+
+echo " === Import Leader's log data"
+cat ./.databend/leader-tmp \
+    | grep -v '"Expire":\|"GenericKV":' \
+    | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_1
+
+echo " === Import Follower's log data"
+cat ./.databend/follower-tmp \
+    | grep -v '"Expire":\|"GenericKV":' \
+    | ./bins/current/bin/databend-metactl --import --raft-dir ./.databend/_upgrade_meta_2
 
 # skip DataHeader that contains distinguished version info
 # skip NodeId
 # sort because newer version export `Sequence` in different order
-./bins/$leader_meta_ver/bin/databend-metactl \
-    --export \
-    --grpc-api-address $(grpc_addr 1) \
+
+echo " === Export Leader's data"
+./bins/current/bin/databend-metactl --export --raft-dir ./.databend/_upgrade_meta_1 \
     | grep -v 'NodeId\|DataHeader' \
     | sort \
     > ./.databend/leader
 
-echo " === Export follower meta data to ./.databend/follower"
-./bins/$follower_meta_ver/bin/databend-metactl \
-    --export \
-    --grpc-api-address $(grpc_addr 2) \
+echo " === Export Follower's data"
+./bins/current/bin/databend-metactl --export --raft-dir ./.databend/_upgrade_meta_2 \
     | grep -v 'NodeId\|DataHeader' \
     | sort \
     > ./.databend/follower
 
+
 echo " === diff leader exported and follower exported"
 diff ./.databend/leader ./.databend/follower
-
-
-

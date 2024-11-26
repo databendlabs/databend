@@ -274,7 +274,7 @@ pub(crate) async fn dump_tables(
         }
     }
 
-    let visibility_checker = ctx.get_visibility_checker().await?;
+    let visibility_checker = ctx.get_visibility_checker(false).await?;
 
     let mut final_dbs: Vec<(String, u64)> = Vec::new();
 

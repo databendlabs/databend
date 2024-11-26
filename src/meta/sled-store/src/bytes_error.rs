@@ -46,6 +46,6 @@ impl From<std::string::FromUtf8Error> for SledBytesError {
 // TODO: remove this: after refactoring, sled should not use MetaStorageError directly.
 impl From<SledBytesError> for MetaStorageError {
     fn from(e: SledBytesError) -> Self {
-        MetaStorageError::Damaged(AnyError::new(&e))
+        MetaStorageError(AnyError::new(&e))
     }
 }

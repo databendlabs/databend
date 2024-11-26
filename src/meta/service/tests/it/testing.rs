@@ -56,9 +56,6 @@ where F: FnOnce() -> anyhow::Result<()> + 'static {
 fn setup_test() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
-        databend_common_meta_sled_store::init_temp_sled_db(t);
-
         let mut config = Config::new_testing();
         config.file.prefix_filter = "".to_string();
 

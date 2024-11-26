@@ -16,10 +16,11 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ptr::NonNull;
 
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;
+use either::Either;
 use ethnum::i256;
 use ethnum::u256;
 
@@ -28,6 +29,7 @@ use crate::types::decimal::Decimal;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
+use crate::types::StringColumn;
 use crate::Column;
 use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
@@ -46,7 +48,7 @@ pub enum KeysState {
     U128(Buffer<u128>),
     U256(Buffer<u256>),
     Dictionary {
-        columns: Vec<BinaryColumn>,
+        columns: Vec<Either<StringColumn, BinaryColumn>>,
         keys_point: Vec<NonNull<[u8]>>,
         dictionaries: Vec<DictionaryKeys>,
     },

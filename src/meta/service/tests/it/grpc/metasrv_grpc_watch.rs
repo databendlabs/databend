@@ -23,7 +23,6 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::Event;
 use databend_common_meta_types::protobuf::KvMeta;
@@ -38,6 +37,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::UpsertKV;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
@@ -48,7 +48,7 @@ async fn test_watch_main(
     addr: String,
     watch: WatchRequest,
     mut watch_events: Vec<Event>,
-    updates: Vec<UpsertKVReq>,
+    updates: Vec<UpsertKV>,
 ) -> anyhow::Result<()> {
     let client = make_client(&addr)?;
     let mut watch_stream = client.request(watch).await?;
@@ -171,12 +171,12 @@ async fn test_watch() -> anyhow::Result<()> {
         seq = 4;
         // update kv
         let updates = vec![
-            UpsertKVReq::new("a", MatchSeq::GE(0), Operation::Update(val_a), None),
+            UpsertKV::new("a", MatchSeq::GE(0), Operation::Update(val_a), None),
             // upsert key z, because z in key_end and the range is [key_start, key_end), so key z MUST not be notified in watch events.
-            UpsertKVReq::new("z", MatchSeq::GE(0), Operation::Update(val_z), None),
-            UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Update(val_b), None),
-            UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Update(val_new), None),
-            UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Delete, None),
+            UpsertKV::new("z", MatchSeq::GE(0), Operation::Update(val_z), None),
+            UpsertKV::new("b", MatchSeq::GE(0), Operation::Update(val_b), None),
+            UpsertKV::new("b", MatchSeq::GE(0), Operation::Update(val_new), None),
+            UpsertKV::new("b", MatchSeq::GE(0), Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, watch_events, updates).await?;
     }
@@ -213,10 +213,10 @@ async fn test_watch() -> anyhow::Result<()> {
 
         // update and delete twice
         let updates = vec![
-            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Update(val), None),
-            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Delete, None),
-            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Update(val_new), None),
-            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Delete, None),
+            UpsertKV::new(key_str, MatchSeq::GE(0), Operation::Update(val), None),
+            UpsertKV::new(key_str, MatchSeq::GE(0), Operation::Delete, None),
+            UpsertKV::new(key_str, MatchSeq::GE(0), Operation::Update(val_new), None),
+            UpsertKV::new(key_str, MatchSeq::GE(0), Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, watch_events, updates).await?;
     }
@@ -230,8 +230,8 @@ async fn test_watch() -> anyhow::Result<()> {
             let client = make_client(&addr)?;
 
             let updates = vec![
-                UpsertKVReq::update(delete_key, &b(delete_key)),
-                UpsertKVReq::update(watch_delete_by_prefix_key, &b(watch_delete_by_prefix_key)),
+                UpsertKV::update(delete_key, &b(delete_key)),
+                UpsertKV::update(watch_delete_by_prefix_key, &b(watch_delete_by_prefix_key)),
             ];
 
             for update in updates {
@@ -332,24 +332,30 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             txn.if_then
-                .push(TxnOp::put_with_expire(&k, b(&k), Some(expire - 10)));
+                .push(TxnOp::put_with_ttl(&k, b(&k), Some(Duration::from_secs(1))));
         }
 
-        // Expired key wont be cleaned when they are read, although read returns None.
+        // Expired key won't be cleaned when they are read, although read returns None.
 
-        txn.if_then
-            .push(TxnOp::put_with_expire("w_b1", b("w_b1"), Some(expire - 5)));
-        txn.if_then
-            .push(TxnOp::put_with_expire("w_b2", b("w_b2"), Some(expire - 5)));
-        txn.if_then.push(TxnOp::put_with_expire(
+        txn.if_then.push(TxnOp::put_with_ttl(
+            "w_b1",
+            b("w_b1"),
+            Some(Duration::from_secs(6)),
+        ));
+        txn.if_then.push(TxnOp::put_with_ttl(
+            "w_b2",
+            b("w_b2"),
+            Some(Duration::from_secs(6)),
+        ));
+        txn.if_then.push(TxnOp::put_with_ttl(
             "w_b3a",
             b("w_b3a"),
-            Some(expire - 5),
+            Some(Duration::from_secs(6)),
         ));
-        txn.if_then.push(TxnOp::put_with_expire(
+        txn.if_then.push(TxnOp::put_with_ttl(
             "w_b3b",
             b("w_b3b"),
-            Some(expire + 5),
+            Some(Duration::from_secs(11)),
         ));
 
         client.transaction(txn).await?;
@@ -368,7 +374,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     };
 
     info!("--- sleep {} for expiration", expire - now_sec);
-    tokio::time::sleep(Duration::from_secs(expire - now_sec)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     info!("--- apply another txn in another thread to override keys");
     {
@@ -397,7 +403,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         // 32 expired keys are auto cleaned.
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
-            let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(expire - 10)));
+            let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 1)));
             let msg = client_stream.message().await?.unwrap();
             assert_eq!(Some(want), msg.event);
         }
@@ -406,31 +412,46 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 
         let seq = 34;
         let watch_events = vec![
-            del_event("w_b1", seq, "w_b1", Some(KvMeta::new_expire(expire - 5))), // expired
+            del_event("w_b1", seq, "w_b1", Some(KvMeta::new_expire(now_sec + 6))), // expired
             del_event(
                 "w_b2",
                 seq + 1,
                 "w_b2",
-                Some(KvMeta::new_expire(expire - 5)),
+                Some(KvMeta::new_expire(now_sec + 6)),
             ), // expired
             del_event(
                 "w_b3a",
                 seq + 2,
                 "w_b3a",
-                Some(KvMeta::new_expire(expire - 5)),
+                Some(KvMeta::new_expire(now_sec + 6)),
             ), // expired
-            add_event("w_b1", seq + 4, "w_b1_override", Some(KvMeta::default())), // override
+            add_event("w_b1", seq + 4, "w_b1_override", Some(KvMeta::default())),  // override
             del_event(
                 "w_b3b",
                 seq + 3,
                 "w_b3b",
-                Some(KvMeta::new_expire(expire + 5)),
+                Some(KvMeta::new_expire(now_sec + 16)),
             ), // expired
         ];
 
+        // remove the millisecond part of expire_at
+        fn tidy(mut ev: Event) -> Event {
+            if let Some(ref mut prev) = ev.prev {
+                if let Some(ref mut meta) = prev.meta {
+                    meta.expire_at = meta.expire_at.map(|x| x / 1000 * 1000);
+                }
+            }
+            if let Some(ref mut current) = ev.current {
+                if let Some(ref mut meta) = current.meta {
+                    meta.expire_at = meta.expire_at.map(|x| x / 1000 * 1000);
+                }
+            }
+            ev
+        }
+
         for ev in watch_events {
             let msg = client_stream.message().await?.unwrap();
-            assert_eq!(Some(ev), msg.event);
+            assert_eq!(Some(tidy(ev)), msg.event.map(tidy));
         }
     }
 

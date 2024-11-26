@@ -57,15 +57,17 @@ impl RowConverter {
 
     fn support_data_type(d: &DataType) -> bool {
         match d {
-            DataType::Array(_)
-            | DataType::EmptyArray
-            | DataType::EmptyMap
-            | DataType::Map(_)
-            | DataType::Bitmap
-            | DataType::Tuple(_)
-            | DataType::Generic(_) => false,
+            DataType::Null
+            | DataType::Boolean
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Binary
+            | DataType::String
+            | DataType::Variant => true,
             DataType::Nullable(inner) => Self::support_data_type(inner.as_ref()),
-            _ => true,
+            _ => false,
         }
     }
 
@@ -84,10 +86,7 @@ impl RowConverter {
             encode_column(&mut builder, column, field.asc, field.nulls_first);
         }
 
-        let rows = builder.build();
-        debug_assert_eq!(*rows.offsets().last().unwrap(), rows.data().len() as u64);
-        debug_assert!(rows.offsets().windows(2).all(|w| w[0] <= w[1]));
-        rows
+        builder.build()
     }
 
     fn new_empty_rows(&self, cols: &[Column], num_rows: usize) -> BinaryColumnBuilder {

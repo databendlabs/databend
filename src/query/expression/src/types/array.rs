@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::iter::once;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -232,6 +232,7 @@ impl<T: ValueType> ArrayColumn<T> {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
+        // We need keep the last offsets in slice
         let offsets = self
             .offsets
             .clone()

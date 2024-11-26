@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -117,7 +117,7 @@ where
             return Ok(());
         }
         let acc = if let Some(bit) = validity {
-            if bit.unset_bits() == column_len {
+            if bit.null_count() == column_len {
                 return Ok(());
             }
 

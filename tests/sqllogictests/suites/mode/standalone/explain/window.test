@@ -57,8 +57,8 @@ CompoundBlockOperator(Project) × 1
         Merge to Resize × 4
           Transform Window × 1
             TransformWindowPartitionCollect × 1
-              ShuffleMergePartition × 1
-                ShufflePartition × 1
+              ShuffleMergePartition(Window) × 1
+                ShufflePartition(Window) × 1
                   DeserializeDataTransform × 1
                     SyncReadParquetDataTransform × 1
                       BlockPartitionSource × 1
@@ -79,8 +79,8 @@ CompoundBlockOperator(Project) × 1
           Merge to Resize × 4
             Transform Window × 1
               TransformWindowPartitionCollect × 1
-                ShuffleMergePartition × 1
-                  ShufflePartition × 1
+                ShuffleMergePartition(Window) × 1
+                  ShufflePartition(Window) × 1
                     DeserializeDataTransform × 1
                       SyncReadParquetDataTransform × 1
                         BlockPartitionSource × 1
@@ -367,8 +367,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -385,8 +385,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -404,8 +404,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -418,8 +418,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -432,8 +432,8 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
               SyncReadParquetDataTransform × 1
                 BlockPartitionSource × 1
@@ -452,8 +452,8 @@ CompoundBlockOperator(Project) × 1
             Merge to Resize × 4
               Transform Window × 1
                 TransformWindowPartitionCollect × 1
-                  ShuffleMergePartition × 1
-                    ShufflePartition × 1
+                  ShuffleMergePartition(Window) × 1
+                    ShufflePartition(Window) × 1
                       DeserializeDataTransform × 1
                         SyncReadParquetDataTransform × 1
                           BlockPartitionSource × 1
@@ -471,8 +471,8 @@ CompoundBlockOperator(Project) × 1
             Merge to Resize × 4
               Transform Window × 1
                 TransformWindowPartitionCollect × 1
-                  ShuffleMergePartition × 1
-                    ShufflePartition × 1
+                  ShuffleMergePartition(Window) × 1
+                    ShufflePartition(Window) × 1
                       TransformFilter × 1
                         AddInternalColumnsTransform × 1
                           DeserializeDataTransform × 1
@@ -535,15 +535,23 @@ CompoundBlockOperator(Project) × 1
     TransformFilter × 1
       Transform Window × 1
         TransformWindowPartitionCollect × 1
-          ShuffleMergePartition × 1
-            ShufflePartition × 1
+          ShuffleMergePartition(WindowTopN) × 1
+            ShufflePartition(WindowTopN) × 1
               DeserializeDataTransform × 1
                 SyncReadParquetDataTransform × 1
                   BlockPartitionSource × 1
 
+# top n 0
+query T
+explain optimized select time, rowkey from (select *, row_number() over(partition by rowkey order by time desc) as rn from table43764_orc) a where rn < 1
+----
+EvalScalar
+├── scalars: [a.rowkey (#0) AS (#0), table43764_orc.rowkey (#0) AS (#0), a.time (#1) AS (#1), table43764_orc.time (#1) AS (#1), table43764_orc.sirc_action (#2) AS (#2), table43764_orc.sirc_operation_count (#3) AS (#3), table43764_orc.akc087 (#4) AS (#4), table43764_orc.aae035 (#5) AS (#5), row_number() OVER ( PARTITION BY rowkey ORDER BY time DESC ) (#6) AS (#6), a.rn (#6) AS (#7)]
+└── EmptyResultScan
+
 # same order multi window
 query T
-explain  pipeline select *,lead(number,1, 42) over (order by number), lead(number,2,44) over (order by number), lead(number,3,44) over (order by number) from numbers(5);
+explain pipeline select *,lead(number,1, 42) over (order by number), lead(number,2,44) over (order by number), lead(number,3,44) over (order by number) from numbers(5);
 ----
 CompoundBlockOperator(Project) × 1
   Transform Window × 1
@@ -565,8 +573,8 @@ CompoundBlockOperator(Project) × 1
   Transform Window × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        ShuffleMergePartition × 1
-          ShufflePartition × 1
+        ShuffleMergePartition(Window) × 1
+          ShufflePartition(Window) × 1
             CompoundBlockOperator(Map) × 1
               NumbersSourceTransform × 1
 

@@ -51,7 +51,6 @@ use md5::Md5;
 
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
-use super::interpreter_txn_commit::CommitInterpreter;
 use super::InterpreterMetrics;
 use super::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
@@ -100,18 +99,7 @@ pub trait Interpreter: Sync + Send {
 
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
-        if self.is_ddl() {
-            CommitInterpreter::try_create(ctx.clone())?
-                .execute2()
-                .await?;
-            ctx.clear_tables_cache();
-        }
-        if !self.is_txn_command() && ctx.txn_mgr().lock().is_fail() {
-            let err = ErrorCode::CurrentTransactionIsAborted(
-                "current transaction is aborted, commands ignored until end of transaction block",
-            );
-            return Err(err);
-        }
+
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(err) => {

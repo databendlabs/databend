@@ -372,7 +372,7 @@ impl<E> HTTPSessionEndpoint<E> {
             (None, None) => {
                 if cookie_enabled {
                     let id = Uuid::new_v4().to_string();
-                    info!("new cookie session id: {}", id);
+                    info!("new session id: {}", id);
                     req.cookie()
                         .add(Cookie::new_with_str(COOKIE_SESSION_ID, &id));
                     Some(id)

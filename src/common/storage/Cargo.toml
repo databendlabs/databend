@@ -15,13 +15,14 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true, features = ["serde"] }
-databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-auth = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
+databend-common-native = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 flagset = { workspace = true }
 futures = { workspace = true }
@@ -34,6 +35,7 @@ regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 

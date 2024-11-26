@@ -18,13 +18,13 @@ use databend_common_meta_api::reply::reply_to_api_result;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::NodeId;
 use log::debug;
 use tonic::codegen::BoxStream;
 use tonic::transport::Channel;
@@ -47,7 +47,7 @@ pub struct MetaForwarder<'a> {
 impl<'a> MetaForwarder<'a> {
     pub fn new(meta_node: &'a MetaNode) -> Self {
         Self {
-            sto: &meta_node.sto,
+            sto: &meta_node.raft_store,
             raft: &meta_node.raft,
         }
     }

@@ -18,10 +18,10 @@ use crate::protobuf::SnapshotChunkRequest;
 use crate::protobuf::SnapshotChunkRequestV003;
 use crate::protobuf::SnapshotChunkV1;
 use crate::protobuf::SnapshotResponseV003;
-use crate::InstallSnapshotRequest;
-use crate::NetworkError;
-use crate::SnapshotMeta;
-use crate::Vote;
+use crate::raft_types::InstallSnapshotRequest;
+use crate::raft_types::NetworkError;
+use crate::raft_types::SnapshotMeta;
+use crate::raft_types::Vote;
 
 impl SnapshotChunkRequest {
     /// Return the length of the data in the chunk.

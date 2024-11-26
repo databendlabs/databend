@@ -516,13 +516,13 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-    use databend_common_meta_kvapi::kvapi::UpsertKVReq;
     use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_meta_types::seq_value::SeqV;
     use databend_common_meta_types::seq_value::SeqValue;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::TxnReply;
     use databend_common_meta_types::TxnRequest;
+    use databend_common_meta_types::UpsertKV;
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
     use futures::TryStreamExt;
@@ -541,7 +541,7 @@ mod tests {
     impl KVApi for FooKV {
         type Error = MetaError;
 
-        async fn upsert_kv(&self, _req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
+        async fn upsert_kv(&self, _req: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
             unimplemented!()
         }
 

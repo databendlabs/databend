@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::tenant::Tenant;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
-    async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>>;
+    async fn execute_sql(&self, sql: String) -> Result<Option<DataBlock>>;
 
     async fn execute_scheduled_job(
         &self,
@@ -43,7 +43,7 @@ impl BackgroundServiceHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
+    pub async fn execute_sql(&self, sql: String) -> Result<Option<DataBlock>> {
         self.handler.execute_sql(sql).await
     }
 

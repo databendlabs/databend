@@ -105,7 +105,7 @@ impl RulePushDownRankLimitAggregate {
                 limit: Some(count),
                 after_exchange: None,
                 pre_projection: None,
-                window_partition: vec![],
+                window_partition: None,
             };
 
             let agg = SExpr::create_unary(

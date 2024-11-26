@@ -17,6 +17,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::IndexType;
 use parking_lot::RwLock;
@@ -96,11 +97,21 @@ impl HashJoinDesc {
     }
 
     fn join_predicate(non_equi_conditions: &[RemoteExpr]) -> Result<Option<Expr>> {
-        non_equi_conditions
+        let expr = non_equi_conditions
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-            })
+            });
+        // For RIGHT MARK join, we can't use is_true to cast filter into non_null boolean
+        match expr {
+            Ok(Some(expr)) => match expr {
+                Expr::Constant { ref scalar, .. } if !scalar.is_null() => {
+                    Ok(Some(cast_expr_to_non_null_boolean(expr)?))
+                }
+                _ => Ok(Some(expr)),
+            },
+            other => other,
+        }
     }
 }

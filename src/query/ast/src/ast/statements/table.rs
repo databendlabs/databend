@@ -116,7 +116,7 @@ pub struct ShowDropTablesStmt {
 
 impl Display for ShowDropTablesStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "SHOW DROP TABLE")?;
+        write!(f, "SHOW DROP TABLES")?;
         if let Some(database) = &self.database {
             write!(f, " FROM {database}")?;
         }

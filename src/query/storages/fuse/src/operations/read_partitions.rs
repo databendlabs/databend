@@ -39,7 +39,6 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
-use log::debug;
 use log::info;
 use sha2::Digest;
 use sha2::Sha256;
@@ -61,7 +60,7 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        debug!("fuse table do read partitions, push downs:{:?}", push_downs);
+        let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
             let change_type = push_downs.as_ref().map_or(ChangeType::Insert, |v| {
@@ -73,6 +72,13 @@ impl FuseTable {
         }
 
         let snapshot = self.read_table_snapshot().await?;
+
+        info!(
+            "fuse table {} do read partitions, push downs:{:?}, snapshot id: {:?}",
+            self.name(),
+            push_downs,
+            snapshot.as_ref().map(|sn| sn.snapshot_id)
+        );
         match snapshot {
             Some(snapshot) => {
                 let snapshot_loc = self
@@ -86,7 +92,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if !dry_run && snapshot.segments.len() > nodes_num {
+                if !dry_run && snapshot.segments.len() > nodes_num && distributed_pruning {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
