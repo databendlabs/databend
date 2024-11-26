@@ -375,7 +375,7 @@ openraft = { version = "0.10.0", features = [
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
-opensrv-mysql = { version = "0.7.0", features = ["tls"] }
+opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
 orc-rust = "0.5.0"
 ordered-float = { version = "4.5.0", default-features = false }
 ordq = "0.2.0"
@@ -424,7 +424,7 @@ roaring = { version = "0.10.1", features = ["serde"] }
 rotbl = { version = "0.1.2", features = [] }
 rust_decimal = "1.26"
 rustix = "0.38.37"
-rustls = "0.22" # FIXME: we should bump to 0.23
+rustls = { version = "0.23.18", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 rustyline = "14"
@@ -536,7 +536,7 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 # Databend Integration Test
-msql-srv = "0.11.0"
+msql-srv = { git = "https://github.com/databendlabs/msql-srv.git", rev = "cd443dd" }
 mysql_common = "0.32.4"
 quickcheck = "1.0"
 sqllogictest = "0.21.0"

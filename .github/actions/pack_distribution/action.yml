@@ -1,0 +1,94 @@
+name: "Pack Deb"
+description: "Pack releases deb"
+inputs:
+  arch:
+    description: "Release arch"
+    required: true
+  packager:
+    description: "Release default/hdfs/udf/testsuite"
+    required: false
+    default: default
+  version:
+    description: "Release version"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install nfpm@latest
+      shell: bash
+      run: |
+        curl -sSLo nfpm.tar.gz https://github.com/goreleaser/nfpm/releases/download/v2.26.0/nfpm_2.26.0_Linux_x86_64.tar.gz
+        tar xf nfpm.tar.gz
+        sudo mv nfpm /usr/local/bin
+        sudo chmod a+x /usr/local/bin/nfpm
+        rm nfpm.tar.gz
+    - name: Get target
+      id: target
+      shell: bash
+      run: |
+        echo 'target=${{ inputs.arch }}-unknown-linux-gnu' >> $GITHUB_OUTPUT
+    - name: Download artifacts
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ steps.target.outputs.target }}
+        category: default
+        artifacts: metactl,meta,query,query.debug
+        path: distro/bin
+    - name: Build Packages
+      shell: bash
+      id: build_packages
+      run: |
+        export name="databend"
+        export version="${{ inputs.version }}"
+        export path="distro"
+        case "${{ inputs.arch }}" in
+          x86_64)
+            export arch="amd64"
+            ;;
+          aarch64)
+            export arch="arm64"
+            ;;
+        esac
+
+        deb_version=${version/-/.}
+        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}.${{ inputs.packager }}"
+        mkdir -p distro/{bin,configs,systemd,scripts}
+        cp ./scripts/distribution/systemd/databend-* distro/systemd/
+        cp ./scripts/distribution/configs/databend-* distro/configs/
+        cp ./scripts/distribution/release-readme.txt distro/readme.txt
+        cp -r ./scripts/distribution/local-scripts/* distro/scripts/
+        cp -r ./scripts/distribution/package-scripts/* distro/scripts/
+        nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
+    - name: Build dbg Packages
+      shell: bash
+      id: build_dbg_packages
+      run: |
+        export name="databend_dbg"
+        export version="${{ inputs.version }}"
+        export path="distro"
+        case "${{ inputs.arch }}" in
+          x86_64)
+            export arch="amd64"
+            ;;
+          aarch64)
+            export arch="arm64"
+            ;;
+        esac
+
+        deb_version=${version/-/.}
+        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}_dbg.${{ inputs.packager }}"
+        nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
+    - name: Update release to github
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      # Reference: https://cli.github.com/manual/gh_release_upload
+      run: |
+        version="${{ inputs.version }}"
+        # name looks like: `databend_0.8.144~nightly_amd64.deb`
+        gh release upload ${version} ${{ steps.build_packages.outputs.pkg_name }} --clobber
+        gh release upload ${version} ${{ steps.build_dbg_packages.outputs.pkg_name }} --clobber
