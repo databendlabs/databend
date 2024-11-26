@@ -1557,9 +1557,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #stage_name )
             ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
-            ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
-            ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
-            ~ ( VALIDATION_MODE ~ ^"=" ~ ^#ident )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1570,9 +1567,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             stage,
             url_opt,
             file_format_opt,
-            on_error_opt,
-            size_limit_opt,
-            validation_mode_opt,
             comment_opt,
         )| {
             let create_option =
@@ -1582,11 +1576,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 stage_name: stage.to_string(),
                 location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
-                on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
-                size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
-                validation_mode: validation_mode_opt
-                    .map(|v| v.2.to_string())
-                    .unwrap_or_default(),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
             }))
         },

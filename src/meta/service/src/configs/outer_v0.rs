@@ -279,7 +279,6 @@ pub struct ConfigViaEnv {
     pub grpc_tls_server_cert: String,
     pub grpc_tls_server_key: String,
 
-    pub config_id: String,
     pub kvsrv_listen_host: String,
     pub kvsrv_advertise_host: String,
     pub kvsrv_api_port: u16,
@@ -338,7 +337,6 @@ impl From<Config> for ConfigViaEnv {
             metasrv_grpc_api_advertise_host: cfg.grpc_api_advertise_host,
             grpc_tls_server_cert: cfg.grpc_tls_server_cert,
             grpc_tls_server_key: cfg.grpc_tls_server_key,
-            config_id: cfg.raft_config.config_id,
             kvsrv_listen_host: cfg.raft_config.raft_listen_host,
             kvsrv_advertise_host: cfg.raft_config.raft_advertise_host,
             kvsrv_api_port: cfg.raft_config.raft_api_port,
@@ -377,7 +375,6 @@ impl From<Config> for ConfigViaEnv {
 impl Into<Config> for ConfigViaEnv {
     fn into(self) -> Config {
         let raft_config = RaftConfig {
-            config_id: self.config_id,
             raft_listen_host: self.kvsrv_listen_host,
             raft_advertise_host: self.kvsrv_advertise_host,
             raft_api_port: self.kvsrv_api_port,
@@ -457,11 +454,6 @@ impl Into<Config> for ConfigViaEnv {
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct RaftConfig {
-    /// Identify a config.
-    /// This is only meant to make debugging easier with more than one Config involved.
-    #[clap(long, default_value = "")]
-    pub config_id: String,
-
     /// The local listening host for metadata communication.
     /// This config does not need to be stored in raft-store,
     /// only used when metasrv startup and listen to.
@@ -610,7 +602,7 @@ impl Default for RaftConfig {
 impl From<RaftConfig> for InnerRaftConfig {
     fn from(x: RaftConfig) -> InnerRaftConfig {
         InnerRaftConfig {
-            config_id: x.config_id,
+            config_id: "".to_string(),
             raft_listen_host: x.raft_listen_host,
             raft_advertise_host: x.raft_advertise_host,
             raft_api_port: x.raft_api_port,
@@ -649,7 +641,6 @@ impl From<RaftConfig> for InnerRaftConfig {
 impl From<InnerRaftConfig> for RaftConfig {
     fn from(inner: InnerRaftConfig) -> Self {
         Self {
-            config_id: inner.config_id,
             raft_listen_host: inner.raft_listen_host,
             raft_advertise_host: inner.raft_advertise_host,
             raft_api_port: inner.raft_api_port,

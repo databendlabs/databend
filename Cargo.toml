@@ -369,14 +369,13 @@ opendal = { version = "0.50.1", features = [
     "services-moka",
     "services-webhdfs",
     "services-huggingface",
-    "services-redis",
 ] }
 openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
-opensrv-mysql = { version = "0.7.0", features = ["tls"] }
+opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
 orc-rust = "0.5.0"
 ordered-float = { version = "4.5.0", default-features = false }
 ordq = "0.2.0"
@@ -405,10 +404,11 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
 quanta = "0.11.1"
-raft-log = { version = "0.2.3" }
+raft-log = { version = "0.2.5" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.9.0"
 recursive = "0.1.1"
+redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8.1"
 replace_with = "0.1.7"
 reqwest = { version = "0.12", default-features = false, features = [
@@ -424,7 +424,7 @@ roaring = { version = "0.10.1", features = ["serde"] }
 rotbl = { version = "0.1.2", features = [] }
 rust_decimal = "1.26"
 rustix = "0.38.37"
-rustls = "0.22" # FIXME: we should bump to 0.23
+rustls = { version = "0.23.18", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 rustyline = "14"
@@ -536,10 +536,7 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 # Databend Integration Test
-databend-client = { version = "0.22" }
-databend-driver = { version = "0.22" }
-databend-driver-core = { version = "0.22" }
-msql-srv = "0.11.0"
+msql-srv = { git = "https://github.com/databendlabs/msql-srv.git", rev = "cd443dd" }
 mysql_common = "0.32.4"
 quickcheck = "1.0"
 sqllogictest = "0.21.0"
@@ -573,7 +570,7 @@ incremental = true
 
 [profile.ci]
 inherits = "release"
-overflow-checks = false
+overflow-checks = true
 incremental = false
 debug-assertions = true
 
@@ -581,13 +578,9 @@ debug-assertions = true
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
 
-[profile.bench]
-debug = true
-overflow-checks = false
-
 [profile.dev]
 split-debuginfo = "unpacked"
-overflow-checks = false
+overflow-checks = true
 # Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
 incremental = true
 
@@ -599,6 +592,10 @@ miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 databend-common-exception = { opt-level = 3 }
+
+[profile.bench]
+debug = true
+overflow-checks = false
 
 [profile.test]
 opt-level = 0

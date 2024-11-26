@@ -537,6 +537,30 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
         error_to_null(eval_number_to_timestamp),
     );
 
+    registry.register_passthrough_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
+        "to_timestamp",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Int64Type, UInt64Type, TimestampType>(
+            |val, scale, output, _| {
+                let mut n = val * 10i64.pow(6 - scale.clamp(0, 6) as u32);
+                clamp_timestamp(&mut n);
+                output.push(n)
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
+        "try_to_timestamp",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Int64Type, UInt64Type, TimestampType>(
+            |val, scale, output, _| {
+                let mut n = val * 10i64.pow(6 - scale.clamp(0, 6) as u32);
+                clamp_timestamp(&mut n);
+                output.push(n);
+            },
+        ),
+    );
+
     fn eval_number_to_timestamp(
         val: Value<Int64Type>,
         ctx: &mut EvalContext,

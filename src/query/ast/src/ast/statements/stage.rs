@@ -35,9 +35,6 @@ pub struct CreateStageStmt {
     pub location: Option<UriLocation>,
 
     pub file_format_options: FileFormatOptions,
-    pub on_error: String,
-    pub size_limit: usize,
-    pub validation_mode: String,
     pub comments: String,
 }
 
@@ -59,18 +56,6 @@ impl Display for CreateStageStmt {
 
         if !self.file_format_options.is_empty() {
             write!(f, " FILE_FORMAT = ({})", self.file_format_options)?;
-        }
-
-        if !self.on_error.is_empty() {
-            write!(f, " ON_ERROR = '{}'", self.on_error)?;
-        }
-
-        if self.size_limit != 0 {
-            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
-        }
-
-        if !self.validation_mode.is_empty() {
-            write!(f, " VALIDATION_MODE = {}", self.validation_mode)?;
         }
 
         if !self.comments.is_empty() {

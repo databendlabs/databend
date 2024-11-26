@@ -32,7 +32,6 @@ use crate::kvapi::GetKVReply;
 use crate::kvapi::ListKVReply;
 use crate::kvapi::MGetKVReply;
 use crate::kvapi::UpsertKVReply;
-use crate::kvapi::UpsertKVReq;
 
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]
@@ -139,7 +138,7 @@ pub trait KVApi: Send + Sync {
 impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
     type Error = U::Error;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
         self.deref().upsert_kv(act).await
     }
 
