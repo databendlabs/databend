@@ -30,12 +30,10 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_metrics::storage::*;
 use databend_common_storage::init_stage_operator;
-use databend_common_storage::StageFileInfo;
 use log::info;
 
 use super::Operator;
@@ -59,15 +57,6 @@ pub struct CopyIntoTablePlan {
     pub mutation_kind: MutationKind,
 }
 
-#[derive(Clone, Debug)]
-pub struct StageContext {
-    pub purge: bool,
-    pub force: bool,
-    pub files_to_copy: Vec<StageFileInfo>,
-    pub duplicated_files_detected: Vec<String>,
-    pub stage_info: StageInfo,
-}
-
 impl Hash for CopyIntoTablePlan {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.catalog_name.hash(state);
@@ -81,13 +70,10 @@ impl CopyIntoTablePlan {
         &self,
         ctx: &dyn TableContext,
         stage_table_info: &mut StageTableInfo,
-        force: bool,
     ) -> Result<()> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
-        let max_files = stage_table_info.stage_info.copy_options.max_files;
-        let stage_table_info = &self.stage_table_info;
         let max_files = stage_table_info.copy_into_table_options.max_files;
         let max_files = if max_files == 0 {
             None
@@ -191,26 +177,26 @@ impl CopyIntoTablePlan {
 }
 
 impl Debug for CopyIntoTablePlan {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let CopyIntoTablePlan {
-            catalog_info,
-            database_name,
-            table_name,
-            no_file_to_copy,
-            validation_mode,
-            stage_table_info,
-            query,
-            ..
-        } = self;
-        write!(
-            f,
-            "Copy into {:}.{database_name:}.{table_name:}",
-            catalog_info.catalog_name()
-        )?;
-        write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
-        write!(f, ", validation_mode: {validation_mode:?}")?;
-        write!(f, ", from: {stage_table_info:?}")?;
-        write!(f, " query: {query:?}")?;
+    fn fmt(&self, _f: &mut Formatter) -> std::fmt::Result {
+        // let CopyIntoTablePlan {
+        //     catalog_info,
+        //     database_name,
+        //     table_name,
+        //     no_file_to_copy,
+        //     validation_mode,
+        //     stage_table_info,
+        //     query,
+        //     ..
+        // } = self;
+        // write!(
+        //     f,
+        //     "Copy into {:}.{database_name:}.{table_name:}",
+        //     catalog_info.catalog_name()
+        // )?;
+        // write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
+        // write!(f, ", validation_mode: {validation_mode:?}")?;
+        // write!(f, ", from: {stage_table_info:?}")?;
+        // write!(f, " query: {query:?}")?;
         Ok(())
     }
 }

@@ -51,7 +51,6 @@ use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
-use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -374,47 +373,48 @@ impl ReplaceInterpreter {
     #[async_backtrace::framed]
     async fn connect_input_source<'a>(
         &'a self,
-        ctx: Arc<QueryContext>,
-        source: &'a InsertInputSource,
-        schema: DataSchemaRef,
-        purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
+        _ctx: Arc<QueryContext>,
+        _source: &'a InsertInputSource,
+        _schema: DataSchemaRef,
+        _purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     ) -> Result<ReplaceSourceCtx> {
-        match source {
-            InsertInputSource::Values(source) => self
-                .connect_value_source(schema.clone(), source)
-                .map(|root| ReplaceSourceCtx {
-                    root,
-                    select_ctx: None,
-                    update_stream_meta: vec![],
-                    bind_context: None,
-                }),
+        // match source {
+        //     InsertInputSource::Values(source) => self
+        //         .connect_value_source(schema.clone(), source)
+        //         .map(|root| ReplaceSourceCtx {
+        //             root,
+        //             select_ctx: None,
+        //             update_stream_meta: vec![],
+        //             bind_context: None,
+        //         }),
 
-            InsertInputSource::SelectPlan(plan) => {
-                self.connect_query_plan_source(ctx.clone(), plan).await
-            }
-            InsertInputSource::Stage(plan) => match *plan.clone() {
-                Plan::CopyIntoTable(copy_plan) => {
-                    let interpreter =
-                        CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
+        //     InsertInputSource::SelectPlan(plan) => {
+        //         self.connect_query_plan_source(ctx.clone(), plan).await
+        //     }
+        //     InsertInputSource::Stage(plan) => match *plan.clone() {
+        //         Plan::CopyIntoTable(copy_plan) => {
+        //             let interpreter =
+        //                 CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
+        //             let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
 
-                    // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
+        //             // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 
-                    *purge_info = Some((
-                        copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
-                        copy_plan.stage_table_info.stage_info.clone(),
-                        copy_plan.stage_table_info.copy_into_table_options.clone(),
-                    ));
-                    Ok(ReplaceSourceCtx {
-                        root: Box::new(physical_plan),
-                        select_ctx: None,
-                        update_stream_meta: vec![],
-                        bind_context: None,
-                    })
-                }
-                _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
-            },
-        }
+        //             *purge_info = Some((
+        //                 copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
+        //                 copy_plan.stage_table_info.stage_info.clone(),
+        //                 copy_plan.stage_table_info.copy_into_table_options.clone(),
+        //             ));
+        //             Ok(ReplaceSourceCtx {
+        //                 root: Box::new(physical_plan),
+        //                 select_ctx: None,
+        //                 update_stream_meta: vec![],
+        //                 bind_context: None,
+        //             })
+        //         }
+        //         _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
+        //     },
+        // }
+        todo!()
     }
 
     fn connect_value_source(

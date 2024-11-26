@@ -290,7 +290,7 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
         Plan::CopyIntoTable {
             s_expr,
             metadata,
-            stage_context,
+            stage_table_info,
             overwrite,
         } => {
             let enable_distributed = opt_ctx.enable_distributed_optimization
@@ -323,7 +323,7 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             Ok(Plan::CopyIntoTable {
                 s_expr: Box::new(optimized),
                 metadata,
-                stage_context,
+                stage_table_info,
                 overwrite,
             })
         }

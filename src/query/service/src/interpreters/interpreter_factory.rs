@@ -159,13 +159,13 @@ impl InterpreterFactory {
             Plan::CopyIntoTable {
                 s_expr,
                 metadata,
-                stage_context,
+                stage_table_info,
                 overwrite,
             } => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
                 *s_expr.clone(),
                 metadata.clone(),
-                stage_context.clone(),
+                stage_table_info.clone(),
                 *overwrite,
             )?)),
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(

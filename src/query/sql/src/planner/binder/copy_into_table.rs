@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
@@ -69,7 +68,6 @@ use crate::executor::physical_plans::MutationKind;
 use crate::optimizer::SExpr;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
-use crate::plans::StageContext;
 use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
@@ -88,13 +86,12 @@ impl<'a> Binder {
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
                 copy_into_table_plan
-                    .collect_files(self.ctx.as_ref(), &mut stage_table_info, stmt.force)
+                    .collect_files(self.ctx.as_ref(), &mut stage_table_info)
                     .await?;
                 self.bind_copy_into_table_from_location(
                     bind_context,
                     copy_into_table_plan,
                     stage_table_info,
-                    stmt.force,
                 )
                 .await
             }
@@ -112,7 +109,7 @@ impl<'a> Binder {
                     .await?;
 
                 copy_into_table_plan
-                    .collect_files(self.ctx.as_ref(), &mut stage_table_info, stmt.force)
+                    .collect_files(self.ctx.as_ref(), &mut stage_table_info)
                     .await?;
                 self.bind_copy_from_query_into_table(
                     bind_context,
@@ -120,7 +117,6 @@ impl<'a> Binder {
                     stage_table_info,
                     select_list,
                     alias,
-                    stmt.force,
                 )
                 .await
             }
@@ -213,6 +209,7 @@ impl<'a> Binder {
             is_select: false,
             default_values,
             copy_into_location_options: Default::default(),
+            copy_into_table_options: stmt.options.clone(),
         };
         let copy_into_plan = CopyIntoTablePlan {
             catalog_name,
@@ -234,7 +231,6 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         copy_into_table_plan: CopyIntoTablePlan,
         stage_table_info: StageTableInfo,
-        force: bool,
     ) -> Result<Plan> {
         let use_query = matches!(&stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
@@ -277,7 +273,6 @@ impl<'a> Binder {
                 stage_table_info,
                 &select_list,
                 &None,
-                force,
             )
             .await
         } else {
@@ -297,13 +292,7 @@ impl<'a> Binder {
             Ok(Plan::CopyIntoTable {
                 s_expr: Box::new(copy_into),
                 metadata: self.metadata.clone(),
-                stage_context: Some(Box::new(StageContext {
-                    purge: stage_table_info.stage_info.copy_options.purge,
-                    force,
-                    files_to_copy: stage_table_info.files_to_copy.unwrap_or_default(),
-                    duplicated_files_detected: stage_table_info.duplicated_files_detected,
-                    stage_info: stage_table_info.stage_info,
-                })),
+                stage_table_info: Some(Box::new(stage_table_info)),
                 overwrite: false,
             })
         }
@@ -398,6 +387,7 @@ impl<'a> Binder {
             is_select: false,
             default_values: Some(default_values),
             copy_into_location_options: Default::default(),
+            copy_into_table_options: options,
         };
 
         let copy_into_table_plan = CopyIntoTablePlan {
@@ -415,7 +405,6 @@ impl<'a> Binder {
             bind_context,
             copy_into_table_plan,
             stage_table_info,
-            true,
         )
         .await
     }
@@ -429,7 +418,6 @@ impl<'a> Binder {
         stage_table_info: StageTableInfo,
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
-        force: bool,
     ) -> Result<Plan> {
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -483,10 +471,6 @@ impl<'a> Binder {
 
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = stage_table_info
-            .stage_info
-            .copy_options
-        let disable_variant_check = plan
-            .stage_table_info
             .copy_into_table_options
             .disable_variant_check;
         if disable_variant_check {
@@ -513,13 +497,7 @@ impl<'a> Binder {
         Ok(Plan::CopyIntoTable {
             s_expr: Box::new(copy_into),
             metadata: self.metadata.clone(),
-            stage_context: Some(Box::new(StageContext {
-                purge: stage_table_info.stage_info.copy_options.purge,
-                force,
-                files_to_copy: stage_table_info.files_to_copy.unwrap_or_default(),
-                duplicated_files_detected: stage_table_info.duplicated_files_detected,
-                stage_info: stage_table_info.stage_info,
-            })),
+            stage_table_info: Some(Box::new(stage_table_info)),
             overwrite: false,
         })
     }

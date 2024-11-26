@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -28,7 +29,6 @@ use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
-use super::StageContext;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -241,7 +241,7 @@ pub enum Plan {
     CopyIntoTable {
         s_expr: Box<SExpr>,
         metadata: MetadataRef,
-        stage_context: Option<Box<StageContext>>,
+        stage_table_info: Option<Box<StageTableInfo>>,
         overwrite: bool,
     },
     CopyIntoLocation(CopyIntoLocationPlan),

@@ -183,7 +183,7 @@ impl Binder {
                 Arc::new(source),
             )),
             metadata: self.metadata.clone(),
-            stage_context: None,
+            stage_table_info: None,
             overwrite: *overwrite,
         })
     }
