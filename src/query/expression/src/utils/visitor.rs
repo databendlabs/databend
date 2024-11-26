@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use decimal::DecimalType;
 use geometry::GeometryType;
@@ -36,11 +36,23 @@ pub trait ValueVisitor {
         self.visit_typed_column::<EmptyMapType>(len)
     }
 
+    fn visit_any_number(&mut self, column: NumberColumn) -> Result<()> {
+        with_number_type!(|NUM_TYPE| match column {
+            NumberColumn::NUM_TYPE(b) => self.visit_number(b),
+        })
+    }
+
     fn visit_number<T: Number>(
         &mut self,
         column: <NumberType<T> as ValueType>::Column,
     ) -> Result<()> {
         self.visit_typed_column::<NumberType<T>>(column)
+    }
+
+    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
+        with_decimal_type!(|DECIMAL_TYPE| match column {
+            DecimalColumn::DECIMAL_TYPE(b, size) => self.visit_decimal(b, size),
+        })
     }
 
     fn visit_decimal<T: Decimal>(&mut self, column: Buffer<T>, _size: DecimalSize) -> Result<()> {
@@ -113,16 +125,8 @@ pub trait ValueVisitor {
             Column::Null { len } => self.visit_null(len),
             Column::EmptyArray { len } => self.visit_empty_array(len),
             Column::EmptyMap { len } => self.visit_empty_map(len),
-            Column::Number(column) => {
-                with_number_type!(|NUM_TYPE| match column {
-                    NumberColumn::NUM_TYPE(b) => self.visit_number(b),
-                })
-            }
-            Column::Decimal(column) => {
-                with_decimal_type!(|DECIMAL_TYPE| match column {
-                    DecimalColumn::DECIMAL_TYPE(b, size) => self.visit_decimal(b, size),
-                })
-            }
+            Column::Number(column) => self.visit_any_number(column),
+            Column::Decimal(column) => self.visit_any_decimal(column),
             Column::Boolean(bitmap) => self.visit_boolean(bitmap),
             Column::Binary(column) => self.visit_binary(column),
             Column::String(column) => self.visit_string(column),

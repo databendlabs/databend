@@ -55,7 +55,7 @@ impl HashJoinProbeState {
             .get_by_offset(0)
             .to_column(process_state.input.num_rows());
         // Check if there is any null in the probe column.
-        if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
+        if matches!(probe_column.validity().1, Some(x) if x.null_count() > 0) {
             let mut has_null = self
                 .hash_join_state
                 .hash_join_desc
@@ -153,7 +153,7 @@ impl HashJoinProbeState {
             .get_by_offset(0)
             .to_column(process_state.input.num_rows());
         // Check if there is any null in the probe column.
-        if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
+        if matches!(probe_column.validity().1, Some(x) if x.null_count() > 0) {
             let mut has_null = self
                 .hash_join_state
                 .hash_join_desc
@@ -341,11 +341,7 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if probe_state.is_probe_projected {
-            Some(DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.string_items_buf,
-            )?)
+            Some(DataBlock::take(input, &probe_indexes[0..matched_idx])?)
         } else {
             None
         };
@@ -355,7 +351,6 @@ impl HashJoinProbeState {
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,
                 &build_state.build_num_rows,
-                &mut probe_state.string_items_buf,
             )?)
         } else {
             None

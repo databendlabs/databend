@@ -5,10 +5,10 @@ statement ok
 drop table if exists t2 all
 
 statement ok
-create table t1 as select number as a, number as b from numbers(1)
+create OR REPLACE table t1 as select number as a, number as b from numbers(1)
 
 statement ok
-create table t2 as select number as a, number as b from numbers(5)
+create OR REPLACE table t2 as select number as a, number as b from numbers(5)
 
 statement error 1005
 explain explain select t1.a from t1 where a > 0
@@ -236,7 +236,7 @@ query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
 COPY
-INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
+INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
     field_delimiter = ',',
@@ -247,9 +247,9 @@ FILE_FORMAT = (
 SINGLE = false
 
 query T
-explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
+explain syntax create OR REPLACE table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
-CREATE TABLE t3 (
+CREATE OR REPLACE TABLE t3 (
     a Int64,
     b UInt64,
     c Float64,
@@ -409,9 +409,9 @@ explain syntax create database db1 engine=default
 CREATE DATABASE db1 ENGINE = DEFAULT
 
 query T
-explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
+explain syntax create OR REPLACE table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
-CREATE TABLE t3 (
+CREATE OR REPLACE TABLE t3 (
     a Int64,
     b UInt64,
     c Float64,
@@ -584,7 +584,7 @@ statement ok
 drop table if exists t3
 
 statement ok
-create table t3 as select number as a, number as b from numbers(10)
+create OR REPLACE table t3 as select number as a, number as b from numbers(10)
 
 query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
@@ -750,7 +750,7 @@ Limit
                     ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
                     └── estimated rows: 5.00
 
-query 
+query
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 HashJoin
@@ -785,7 +785,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
-query 
+query
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
@@ -817,7 +817,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
@@ -849,7 +849,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -863,28 +863,28 @@ drop table t1
 statement ok
 drop table t2
 
-query 
+query
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3')
 
-query 
+query
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query 
+query
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query 
+query
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
@@ -895,9 +895,9 @@ statement ok
 drop table if exists t4
 
 statement ok
-create table t4(a int, b string);
+create OR REPLACE table t4(a int, b string);
 
-query 
+query
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 Filter
@@ -920,7 +920,7 @@ drop view if exists v4
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query 
+query
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
@@ -969,10 +969,10 @@ statement ok
 drop table if exists b
 
 statement ok
-create table a(id int, c1 INT NULL)
+create OR REPLACE table a(id int, c1 INT NULL)
 
 statement ok
-create table b(id int, c1 INT NULL)
+create OR REPLACE table b(id int, c1 INT NULL)
 
 statement ok
 insert into a values(1, 1683648000)
@@ -1095,10 +1095,10 @@ statement ok
 drop table if exists b
 
 statement ok
-create table a(id int, c1 INT NULL)
+create OR REPLACE table a(id int, c1 INT NULL)
 
 statement ok
-create table b(id int, c1 INT NULL)
+create OR REPLACE table b(id int, c1 INT NULL)
 
 statement ok
 insert into a values (1, 2), (2, 4), (3, 6)
@@ -1129,7 +1129,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(b.id (#2) = b.id (#2), b.id (#2) = b.id (#2))], limit: NONE]
+│       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
 │       └── estimated rows: 2.00
 └── TableScan(Probe)
     ├── table: default.default.a
@@ -1149,7 +1149,7 @@ statement ok
 drop table b;
 
 statement ok
-create table t1(a int, b int);
+create OR REPLACE table t1(a int, b int);
 
 statement ok
 insert into t1 values(1, 2), (2, 3), (3, 4);
@@ -1234,10 +1234,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-CREATE TABLE t1(i int, j int);
+CREATE OR REPLACE TABLE t1(i int, j int);
 
 statement ok
-CREATE TABLE t2(k int, l int);
+CREATE OR REPLACE TABLE t2(k int, l int);
 
 statement ok
 INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
@@ -1293,7 +1293,7 @@ statement ok
 drop table if exists t3;
 
 statement ok
-CREATE TABLE t3(a int, b map(string, string) null, c map(string, variant) null);
+CREATE OR REPLACE TABLE t3(a int, b map(string, string) null, c map(string, variant) null);
 
 statement ok
 INSERT INTO t3 VALUES (1, {'k1':'a', 'k2':'b'}, {'k1':'"a"', 'k2':'100'}), (2, null, null), (3, {'k3':'z'}, {'k3':'"z"'});
@@ -1365,7 +1365,7 @@ statement ok
 drop table t3;
 
 statement ok
-CREATE TABLE customers AS SELECT
+CREATE OR REPLACE TABLE customers AS SELECT
   number % 100 AS customer_id,
   concat('Customer ', to_string(number % 100)) AS customer_name,
   CASE WHEN (rand() * 10000)::int % 3 = 0 THEN 'Small'
@@ -1378,7 +1378,7 @@ FROM numbers(100);
 
 
 statement ok
-CREATE TABLE products AS SELECT
+CREATE OR REPLACE TABLE products AS SELECT
   number % 10 AS product_id,
   concat('Product ', to_string(number % 10)) AS product_name,
   (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS price,
@@ -1390,7 +1390,7 @@ CREATE TABLE products AS SELECT
 FROM numbers(10);
 
 statement ok
-CREATE TABLE sales AS SELECT
+CREATE OR REPLACE TABLE sales AS SELECT
   number % 500 AS sale_id,
   number % 100 AS product_id,
   number % 100 AS customer_id,
@@ -1452,10 +1452,10 @@ statement ok
 drop table sales;
 
 statement ok
-create table t1 (a int);
+create OR REPLACE table t1 (a int);
 
 statement ok
-create table t2 (b int);
+create OR REPLACE table t2 (b int);
 
 query T
 explain select date from (select *, 'year' as date from t1 left join t2 on t1.a = t2.b) where date = '';
@@ -1506,10 +1506,10 @@ statement ok
 drop table t2;
 
 statement ok
-create table t1(a int, b int, c varchar(20));
+create OR REPLACE table t1(a int, b int, c varchar(20));
 
 statement ok
-create table t2(a int, b int, c varchar(20));
+create OR REPLACE table t2(a int, b int, c varchar(20));
 
 # scalar subquery and sort plan contains count() agg function.
 query T

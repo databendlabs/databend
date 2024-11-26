@@ -79,7 +79,10 @@ pub async fn main() -> Result<()> {
 
     // Run mock sources for dictionary test.
     run_mock_sources();
-
+    println!(
+        "Run sqllogictests with args: {}",
+        std::env::args().skip(1).collect::<Vec<String>>().join(" ")
+    );
     let args = SqlLogicTestArgs::parse();
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),

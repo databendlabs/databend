@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 
+#[derive(Debug)]
 pub struct LoadParams {
     pub location: String,
     pub len_hint: Option<u64>,

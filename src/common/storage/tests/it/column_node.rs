@@ -66,7 +66,7 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
 
     for (i, column_leaf) in column_leaves.column_nodes.iter().enumerate() {
         let expected_column_id = expected_column_ids[i];
-        assert_eq!(expected_column_id.0.to_string(), column_leaf.field.name);
+        assert_eq!(expected_column_id.0, column_leaf.field.name());
         assert_eq!(*expected_column_id.1, column_leaf.leaf_column_ids);
     }
 
@@ -88,7 +88,7 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
         .iter()
         .zip(new_column_leaves.column_nodes.iter())
     {
-        assert_eq!(old_leaf.field.name, new_leaf.field.name);
+        assert_eq!(old_leaf.field.name(), new_leaf.field.name());
         assert_eq!(old_leaf.leaf_indices, new_leaf.leaf_indices);
 
         // assert new column node column ids equal to old column node leaf ids.

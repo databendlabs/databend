@@ -98,8 +98,10 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                             let (_, validity) = c.validity();
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
-                            let mut builder =
-                                BinaryColumnBuilder::with_capacity(col.len(), col.data().len());
+                            let mut builder = BinaryColumnBuilder::with_capacity(
+                                col.len(),
+                                col.total_bytes_len(),
+                            );
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {
                                     if unsafe { !validity.get_bit_unchecked(i) } {

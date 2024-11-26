@@ -451,12 +451,12 @@ pub fn push_string_column(
     if let Column::Nullable(box nullable_column) = column {
         if let Column::String(string_column) = nullable_column.column {
             let validity = nullable_column.validity;
-            if validity.unset_bits() == 0 {
+            if validity.null_count() == 0 {
                 for idx in 0..repeat_times {
                     builder.push(unsafe { string_column.index_unchecked(idx) });
                 }
                 builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.unset_bits() == validity.len() {
+            } else if validity.null_count() == validity.len() {
                 builder.push_repeat_null(num_rows);
             } else {
                 for idx in 0..repeat_times {
@@ -485,12 +485,12 @@ fn push_variant_column(
     if let Column::Nullable(box nullable_column) = column {
         if let Column::Variant(variant_column) = nullable_column.column {
             let validity = nullable_column.validity;
-            if validity.unset_bits() == 0 {
+            if validity.null_count() == 0 {
                 for idx in 0..repeat_times {
                     builder.push(unsafe { variant_column.index_unchecked(idx) });
                 }
                 builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.unset_bits() == validity.len() {
+            } else if validity.null_count() == validity.len() {
                 builder.push_repeat_null(num_rows);
             } else {
                 for idx in 0..repeat_times {
@@ -519,12 +519,12 @@ fn push_number_column(
     if let Column::Nullable(box nullable_column) = column {
         if let Column::Number(NumberColumn::UInt64(number_column)) = nullable_column.column {
             let validity = nullable_column.validity;
-            if validity.unset_bits() == 0 {
+            if validity.null_count() == 0 {
                 for idx in 0..repeat_times {
                     builder.push(unsafe { *number_column.get_unchecked(idx) });
                 }
                 builder.push_repeat_null(num_rows - repeat_times);
-            } else if validity.unset_bits() == validity.len() {
+            } else if validity.null_count() == validity.len() {
                 builder.push_repeat_null(num_rows);
             } else {
                 for idx in 0..repeat_times {

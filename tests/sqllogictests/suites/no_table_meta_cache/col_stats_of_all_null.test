@@ -1,0 +1,53 @@
+statement ok
+create or replace database col_stats_all_null;
+
+statement ok
+use col_stats_all_null;
+
+
+statement ok
+create or replace table t(c int) STORAGE_FORMAT=parquet;
+
+statement ok
+insert into t values(NULL);
+
+# segments should be pruned
+query T
+explain select * from t where c > 6;
+----
+Filter
+├── output columns: [t.c (#0)]
+├── filters: [is_true(t.c (#0) > 6)]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.col_stats_all_null.t
+    ├── output columns: [c (#0)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
+    └── estimated rows: 1.00
+
+
+statement ok
+create or replace table t(c int) STORAGE_FORMAT=native;
+
+statement ok
+insert into t values(NULL);
+
+# segments should be pruned
+query T
+explain select * from t where c > 6;
+----
+TableScan
+├── table: default.col_stats_all_null.t
+├── output columns: [c (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0>]
+├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
+└── estimated rows: 0.00

@@ -264,7 +264,7 @@ async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Resul
 }
 
 mod thrift_file_meta_read {
-    use databend_common_arrow::parquet::error::Error;
+    use parquet::errors::ParquetError;
     use thrift::protocol::TCompactInputProtocol;
 
     use super::*;
@@ -308,7 +308,7 @@ mod thrift_file_meta_read {
             let meta = op
                 .stat(path)
                 .await
-                .map_err(|err| Error::OutOfSpec(err.to_string()))?;
+                .map_err(|err| ParquetError::General(err.to_string()))?;
             meta.content_length()
         };
 
@@ -326,7 +326,7 @@ mod thrift_file_meta_read {
             .read_with(path)
             .range(file_size - default_end_len as u64..file_size)
             .await
-            .map_err(|err| Error::OutOfSpec(err.to_string()))?
+            .map_err(|err| ParquetError::General(err.to_string()))?
             .to_vec();
 
         // check this is indeed a parquet file

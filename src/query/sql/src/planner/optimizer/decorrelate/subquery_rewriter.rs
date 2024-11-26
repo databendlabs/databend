@@ -162,10 +162,13 @@ impl SubqueryRewriter {
 
             RelOperator::Sort(mut sort) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
-                for item in sort.window_partition.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                    input = res.1;
-                    item.scalar = res.0;
+
+                if let Some(window) = &mut sort.window_partition {
+                    for item in window.partition_by.iter_mut() {
+                        let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+                        input = res.1;
+                        item.scalar = res.0;
+                    }
                 }
 
                 Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(input)))

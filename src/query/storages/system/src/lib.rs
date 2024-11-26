@@ -39,7 +39,9 @@ mod functions_table;
 mod indexes_table;
 mod locks_table;
 mod log_queue;
+#[cfg(feature = "jemalloc")]
 mod malloc_stats_table;
+#[cfg(feature = "jemalloc")]
 mod malloc_stats_totals_table;
 mod metrics_table;
 mod notification_history_table;
@@ -82,6 +84,8 @@ pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use credits_table::CreditsTable;
 pub use databases_table::DatabasesTable;
+pub use databases_table::DatabasesTableWithHistory;
+pub use databases_table::DatabasesTableWithoutHistory;
 pub use dictionaries_table::DictionariesTable;
 pub use engines_table::EnginesTable;
 pub use functions_table::FunctionsTable;
@@ -90,7 +94,9 @@ pub use locks_table::LocksTable;
 pub use log_queue::SystemLogElement;
 pub use log_queue::SystemLogQueue;
 pub use log_queue::SystemLogTable;
+#[cfg(feature = "jemalloc")]
 pub use malloc_stats_table::MallocStatsTable;
+#[cfg(feature = "jemalloc")]
 pub use malloc_stats_totals_table::MallocStatsTotalsTable;
 pub use metrics_table::MetricsTable;
 pub use notification_history_table::NotificationHistoryTable;

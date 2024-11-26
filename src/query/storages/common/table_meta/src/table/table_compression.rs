@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::native;
-use databend_common_arrow::parquet as databend_parquet;
 use databend_common_exception::ErrorCode;
+use databend_common_native;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::GzipLevel;
 use parquet::basic::ZstdLevel;
@@ -49,28 +48,14 @@ impl TryFrom<&str> for TableCompression {
     }
 }
 
-/// Convert to parquet CompressionOptions.
-impl From<TableCompression> for databend_parquet::compression::CompressionOptions {
-    fn from(value: TableCompression) -> Self {
-        match value {
-            TableCompression::None => {
-                databend_parquet::compression::CompressionOptions::Uncompressed
-            }
-            TableCompression::LZ4 => databend_parquet::compression::CompressionOptions::Lz4Raw,
-            TableCompression::Snappy => databend_parquet::compression::CompressionOptions::Snappy,
-            TableCompression::Zstd => databend_parquet::compression::CompressionOptions::Zstd(None),
-        }
-    }
-}
-
 /// Convert to native Compression.
-impl From<TableCompression> for native::CommonCompression {
+impl From<TableCompression> for databend_common_native::CommonCompression {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => native::CommonCompression::None,
-            TableCompression::LZ4 => native::CommonCompression::Lz4,
-            TableCompression::Snappy => native::CommonCompression::Snappy,
-            TableCompression::Zstd => native::CommonCompression::Zstd,
+            TableCompression::None => databend_common_native::CommonCompression::None,
+            TableCompression::LZ4 => databend_common_native::CommonCompression::Lz4,
+            TableCompression::Snappy => databend_common_native::CommonCompression::Snappy,
+            TableCompression::Zstd => databend_common_native::CommonCompression::Zstd,
         }
     }
 }

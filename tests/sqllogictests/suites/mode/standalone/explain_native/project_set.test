@@ -23,7 +23,7 @@ AggregateFinal
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
     └── ProjectSet
-        ├── output columns: [unnest (#2)]
+        ├── output columns: [unnest(fold_count.id (#0)) (#2)]
         ├── estimated rows: 1.00
         ├── set returning functions: unnest(fold_count.id (#0))
         └── TableScan
@@ -53,7 +53,7 @@ query T
 explain select number from (select unnest([1,2,3]), number from numbers(10)) t
 ----
 ProjectSet
-├── output columns: [numbers.number (#0), unnest (#1)]
+├── output columns: [numbers.number (#0), unnest([1, 2, 3]) (#1)]
 ├── estimated rows: 10.00
 ├── set returning functions: unnest([1, 2, 3])
 └── TableScan
@@ -70,7 +70,7 @@ query T
 explain select number from (select unnest([1,2,3,number]), number from numbers(10)) t
 ----
 ProjectSet
-├── output columns: [numbers.number (#0), unnest (#1)]
+├── output columns: [numbers.number (#0), unnest(array(1, 2, 3, numbers.number (#0))) (#1)]
 ├── estimated rows: 10.00
 ├── set returning functions: unnest(CAST(array(1, 2, 3, numbers.number (#0)) AS Array(UInt64 NULL)))
 └── TableScan

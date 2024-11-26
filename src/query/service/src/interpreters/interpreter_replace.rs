@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -50,6 +51,7 @@ use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
+use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -97,11 +99,11 @@ impl Interpreter for ReplaceInterpreter {
             .add_lock_guard(self.plan.lock_guard.clone());
 
         // purge
-        if let Some((files, stage_info)) = purge_info {
+        if let Some((files, stage_info, options)) = purge_info {
             PipelineBuilder::set_purge_files_on_finished(
                 self.ctx.clone(),
                 files.into_iter().map(|v| v.path).collect(),
-                stage_info.copy_options.purge,
+                &options,
                 stage_info,
                 &mut pipeline.main_pipeline,
             )?;
@@ -127,7 +129,10 @@ impl Interpreter for ReplaceInterpreter {
 impl ReplaceInterpreter {
     async fn build_physical_plan(
         &self,
-    ) -> Result<(Box<PhysicalPlan>, Option<(Vec<StageFileInfo>, StageInfo)>)> {
+    ) -> Result<(
+        Box<PhysicalPlan>,
+        Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
+    )> {
         let plan = &self.plan;
         let table = self
             .ctx
@@ -213,8 +218,6 @@ impl ReplaceInterpreter {
                 &name_resolution_ctx,
                 metadata,
                 &[],
-                Default::default(),
-                Default::default(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
             let columns = scalar.used_columns();
@@ -374,7 +377,7 @@ impl ReplaceInterpreter {
         ctx: Arc<QueryContext>,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
-        _purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
+        purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     ) -> Result<ReplaceSourceCtx> {
         match source {
             InsertInputSource::Values(source) => self
@@ -389,29 +392,28 @@ impl ReplaceInterpreter {
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
             }
-            _ => todo!(),
-            // InsertInputSource::Stage(plan) => match *plan.clone() {
-            //     Plan::CopyIntoTable(_copy_plan) => {
-            //         // let interpreter =
-            //         //     CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-            //         // let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
+            InsertInputSource::Stage(plan) => match *plan.clone() {
+                Plan::CopyIntoTable(copy_plan) => {
+                    let interpreter =
+                        CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
+                    let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
 
-            //         // // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
+                    // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 
-            //         // *purge_info = Some((
-            //         //     copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
-            //         //     copy_plan.stage_table_info.stage_info.clone(),
-            //         // ));
-            //         // Ok(ReplaceSourceCtx {
-            //         //     root: Box::new(physical_plan),
-            //         //     select_ctx: None,
-            //         //     update_stream_meta: vec![],
-            //         //     bind_context: None,
-            //         // })
-            //         todo!()
-            //     }
-            //     _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
-            // },
+                    *purge_info = Some((
+                        copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
+                        copy_plan.stage_table_info.stage_info.clone(),
+                        copy_plan.stage_table_info.copy_into_table_options.clone(),
+                    ));
+                    Ok(ReplaceSourceCtx {
+                        root: Box::new(physical_plan),
+                        select_ctx: None,
+                        update_stream_meta: vec![],
+                        bind_context: None,
+                    })
+                }
+                _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
+            },
         }
     }
 

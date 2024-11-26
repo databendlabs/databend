@@ -16,7 +16,7 @@ use tonic::Status;
 
 use crate::protobuf as pb;
 use crate::raft_types::TransferLeaderRequest;
-use crate::Vote;
+use crate::raft_types::Vote;
 
 impl From<TransferLeaderRequest> for pb::TransferLeaderRequest {
     fn from(req: TransferLeaderRequest) -> Self {

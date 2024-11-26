@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::Range;
 
-use arrow::datatypes::Schema as ArrowSchema;
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
 use databend_common_expression::types::DataType;
@@ -25,42 +21,37 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::parquet_rs::infer_schema_with_extension;
-use databend_common_storage::parquet_rs::read_metadata_sync;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_pruner::VirtualBlockMetaIndex;
+use databend_storages_common_table_meta::meta::Compression;
 
 use super::VirtualColumnReader;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
-use crate::io::read::utils::build_columns_meta;
 use crate::BlockReadResult;
-use crate::FuseBlockPartInfo;
 
 pub struct VirtualBlockReadResult {
-    pub part: PartInfoPtr,
-    // The schema of virtual columns
-    pub schema: ArrowSchema,
+    pub num_rows: usize,
+    pub compression: Compression,
+    pub data: BlockReadResult,
     // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
-    pub data: BlockReadResult,
 }
 
 impl VirtualBlockReadResult {
     pub fn create(
-        part: PartInfoPtr,
-        schema: ArrowSchema,
-        ignore_column_ids: Option<HashSet<ColumnId>>,
+        num_rows: usize,
+        compression: Compression,
         data: BlockReadResult,
+        ignore_column_ids: Option<HashSet<ColumnId>>,
     ) -> VirtualBlockReadResult {
         VirtualBlockReadResult {
-            part,
-            schema,
-            ignore_column_ids,
+            num_rows,
+            compression,
             data,
+            ignore_column_ids,
         }
     }
 }
@@ -69,118 +60,72 @@ impl VirtualColumnReader {
     pub fn sync_read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,
-        loc: &str,
+        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
+        num_rows: usize,
     ) -> Option<VirtualBlockReadResult> {
-        let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
-        debug_assert_eq!(metadata.num_row_groups(), 1);
-        let row_group = &metadata.row_groups()[0];
-        let schema = infer_schema_with_extension(metadata.file_metadata()).ok()?;
-        let columns_meta = build_columns_meta(row_group);
+        let Some(virtual_block_meta) = virtual_block_meta else {
+            return None;
+        };
 
-        let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
-
-        if !ranges.is_empty() {
-            let part = FuseBlockPartInfo::create(
-                loc.to_string(),
-                row_group.num_rows() as u64,
-                columns_meta,
-                None,
-                self.compression.into(),
-                None,
-                None,
-                None,
-            );
-
-            let merge_io_result =
-                MergeIOReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
-                    .ok()?;
-
-            let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
-
-            Some(VirtualBlockReadResult::create(
-                part,
-                schema,
-                ignore_column_ids,
-                block_read_res,
-            ))
-        } else {
-            None
+        let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
+        for (virtual_column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
+            let (offset, len) = virtual_column_meta.offset_length();
+            ranges.push((*virtual_column_id, offset..(offset + len)));
         }
+
+        let virtual_loc = &virtual_block_meta.virtual_block_location;
+        let merge_io_result = MergeIOReader::sync_merge_io_read(
+            read_settings,
+            self.dal.clone(),
+            virtual_loc,
+            &ranges,
+        )
+        .ok()?;
+
+        let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
+        let ignore_column_ids =
+            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
+
+        Some(VirtualBlockReadResult::create(
+            num_rows,
+            self.compression.into(),
+            block_read_res,
+            ignore_column_ids,
+        ))
     }
 
     pub async fn read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,
-        loc: &str,
+        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
+        num_rows: usize,
     ) -> Option<VirtualBlockReadResult> {
-        let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
-        let schema = infer_schema_with_extension(metadata.file_metadata()).ok()?;
-        debug_assert_eq!(metadata.num_row_groups(), 1);
-        let row_group = &metadata.row_groups()[0];
-        let columns_meta = build_columns_meta(row_group);
-
-        let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
-
-        if !ranges.is_empty() {
-            let part = FuseBlockPartInfo::create(
-                loc.to_string(),
-                row_group.num_rows() as u64,
-                columns_meta,
-                None,
-                self.compression.into(),
-                None,
-                None,
-                None,
-            );
-
-            let merge_io_result =
-                MergeIOReader::merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
-                    .await
-                    .ok()?;
-
-            let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
-
-            Some(VirtualBlockReadResult::create(
-                part,
-                schema,
-                ignore_column_ids,
-                block_read_res,
-            ))
-        } else {
-            None
-        }
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn read_columns_meta(
-        &self,
-        schema: &ArrowSchema,
-        columns_meta: &HashMap<u32, ColumnMeta>,
-    ) -> (Vec<(ColumnId, Range<u64>)>, Option<HashSet<ColumnId>>) {
-        let mut ranges = vec![];
-        let mut virtual_src_cnts = self.virtual_src_cnts.clone();
-        for virtual_column in self.virtual_column_infos.iter() {
-            for (i, f) in schema.fields.iter().enumerate() {
-                if f.name() == &virtual_column.name {
-                    if let Some(column_meta) = columns_meta.get(&(i as u32)) {
-                        let (offset, len) = column_meta.offset_length();
-                        ranges.push((i as u32, offset..(offset + len)));
-                        if let Some(cnt) = virtual_src_cnts.get_mut(&virtual_column.source_name) {
-                            *cnt -= 1;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-
-        let ignore_column_ids = if !ranges.is_empty() {
-            self.generate_ignore_column_ids(virtual_src_cnts)
-        } else {
-            None
+        let Some(virtual_block_meta) = virtual_block_meta else {
+            return None;
         };
 
-        (ranges, ignore_column_ids)
+        let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
+        for (virtual_column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
+            let (offset, len) = virtual_column_meta.offset_length();
+            ranges.push((*virtual_column_id, offset..(offset + len)));
+        }
+
+        let virtual_loc = &virtual_block_meta.virtual_block_location;
+        let merge_io_result =
+            MergeIOReader::merge_io_read(read_settings, self.dal.clone(), virtual_loc, &ranges)
+                .await
+                .ok()?;
+
+        let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
+        let ignore_column_ids =
+            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
+
+        Some(VirtualBlockReadResult::create(
+            num_rows,
+            self.compression.into(),
+            block_read_res,
+            ignore_column_ids,
+        ))
     }
 
     pub fn deserialize_virtual_columns(
@@ -191,14 +136,11 @@ impl VirtualColumnReader {
         let record_batch = virtual_data
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
-                let part = FuseBlockPartInfo::from_part(&virtual_data.part)?;
-                let schema = virtual_data.schema;
-                let table_schema = TableSchema::try_from(&schema).unwrap();
                 column_chunks_to_record_batch(
-                    &table_schema,
-                    part.nums_rows,
+                    &self.virtual_column_info.schema,
+                    virtual_data.num_rows,
                     &columns_chunks,
-                    &part.compression,
+                    &virtual_data.compression,
                 )
             })
             .transpose()?;
@@ -206,26 +148,24 @@ impl VirtualColumnReader {
         // If the virtual column has already generated, add it directly,
         // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
-        for virtual_column in self.virtual_column_infos.iter() {
+        for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
             if let Some(arrow_array) = record_batch
                 .as_ref()
-                .and_then(|r| r.column_by_name(&virtual_column.name).cloned())
+                .and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
             {
-                let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
-                    arrow_array.into();
-                let data_type: DataType = virtual_column.data_type.as_ref().into();
-                let value = Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?);
+                let data_type: DataType = virtual_column_field.data_type.as_ref().into();
+                let value = Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?);
                 data_block.add_column(BlockEntry::new(data_type, value));
                 continue;
             }
             let src_index = self
                 .source_schema
-                .index_of(&virtual_column.source_name)
+                .index_of(&virtual_column_field.source_name)
                 .unwrap();
             let source = data_block.get_by_offset(src_index);
             let src_arg = (source.value.clone(), source.data_type.clone());
             let path_arg = (
-                Value::Scalar(virtual_column.key_paths.clone()),
+                Value::Scalar(virtual_column_field.key_paths.clone()),
                 DataType::String,
             );
 

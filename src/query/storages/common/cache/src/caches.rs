@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -58,10 +59,7 @@ pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 /// In memory object cache of table column array
 pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
 pub type ArrayRawDataUncompressedSize = usize;
-pub type SizedColumnArray = (
-    Box<dyn databend_common_arrow::arrow::array::Array>,
-    ArrayRawDataUncompressedSize,
-);
+pub type SizedColumnArray = (ArrayRef, ArrayRawDataUncompressedSize);
 
 // Bind Type of cached objects to Caches
 //

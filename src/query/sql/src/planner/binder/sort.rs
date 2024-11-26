@@ -105,8 +105,6 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         aliases,
-                        self.m_cte_bound_ctx.clone(),
-                        self.ctes_map.clone(),
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr)?;
 
@@ -217,7 +215,7 @@ impl Binder {
             limit: None,
             after_exchange: None,
             pre_projection: None,
-            window_partition: vec![],
+            window_partition: None,
         };
         let new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child));
         Ok(new_expr)

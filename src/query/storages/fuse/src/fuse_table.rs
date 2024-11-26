@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -36,11 +37,11 @@ use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -130,8 +131,11 @@ pub struct FuseTable {
 
     table_type: FuseTableType,
 
-    // If this is set, reading from fuse_table should only returns the increment blocks
+    // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    // A table instance level cache of snapshot_location, if this table is attaching to someone else.
+    attached_table_location: tokio::sync::OnceCell<String>,
 }
 
 impl FuseTable {
@@ -219,10 +223,13 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
-        let part_prefix = table_info.meta.part_prefix.clone();
+        if !table_info.meta.part_prefix.is_empty() {
+            return Err(ErrorCode::StorageOther(
+                "Location_prefix no longer supported. The last version that supports it is: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
+            ));
+        }
 
-        let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+        let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -235,6 +242,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            attached_table_location: Default::default(),
         }))
     }
 
@@ -365,15 +373,25 @@ impl FuseTable {
                 let options = self.table_info.options();
 
                 if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
-                    // if table is attached, parse snapshot location from hint file
-                    let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                    let snapshot_loc = {
-                        let hint_content = self.operator.read(&hint).await?.to_vec();
-                        let snapshot_full_path = String::from_utf8(hint_content)?;
-                        let operator_info = self.operator.info();
-                        snapshot_full_path[operator_info.root().len()..].to_string()
-                    };
-                    Ok(Some(snapshot_loc))
+                    // If the table is attaching to someone else,
+                    // parse the snapshot location from the hint file.
+                    //
+                    // The snapshot location is allowed
+                    // to be fetched from the table level instance cache.
+                    let snapshot_location = self
+                        .attached_table_location
+                        .get_or_try_init(|| async {
+                            let hint =
+                                format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+                            let hint_content = self.operator.read(&hint).await?.to_vec();
+                            let snapshot_full_path = String::from_utf8(hint_content)?;
+                            let operator_info = self.operator.info();
+                            Ok::<_, ErrorCode>(
+                                snapshot_full_path[operator_info.root().len()..].to_string(),
+                            )
+                        })
+                        .await?;
+                    Ok(Some(snapshot_location.to_owned()))
                 } else {
                     Ok(options
                         .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -499,6 +517,10 @@ impl Table for FuseTable {
 
     fn has_exact_total_row_count(&self) -> bool {
         true
+    }
+
+    fn storage_format_as_parquet(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Parquet)
     }
 
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {

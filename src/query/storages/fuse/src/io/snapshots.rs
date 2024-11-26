@@ -85,6 +85,7 @@ impl SnapshotsIO {
             ver,
             put_cache: true,
         };
+        info!("read_snapshot will read: {:?}", load_params);
         let snapshot = reader.read(&load_params).await?;
         Ok((snapshot, ver))
     }

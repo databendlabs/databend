@@ -15,8 +15,8 @@ ignored = ["xorfilter-rs", "match-template"]
 
 [dependencies]
 anyerror = { workspace = true }
-cbordata = { version = "0.6.0" }
-databend-common-arrow = { workspace = true }
+cbordata = { workspace = true }
+
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -24,21 +24,21 @@ databend-common-functions = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
 jsonb = { workspace = true }
-levenshtein_automata = "0.2.1"
+levenshtein_automata = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 parquet = { workspace = true }
-roaring = "0.10.1"
+roaring = { workspace = true }
 serde = { workspace = true }
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
-tantivy-fst = "0.5"
+tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
 xorfilter-rs = { workspace = true, features = ["cbordata"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
-databend-common-arrow = { workspace = true }
+
 rand = { workspace = true }
 
 [[bench]]

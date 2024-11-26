@@ -40,6 +40,8 @@ impl RaftTypeConfig for TypeConfig {
     type Responder = OneshotResponder<TypeConfig>;
 }
 
+pub type IOFlushed = openraft::storage::IOFlushed<TypeConfig>;
+
 pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;
 pub type LogId = openraft::LogId<NodeId>;
 pub type Vote = openraft::Vote<NodeId>;
@@ -58,6 +60,7 @@ pub type SnapshotSegmentId = openraft::SnapshotSegmentId;
 pub type RaftMetrics = openraft::RaftMetrics<TypeConfig>;
 
 pub type ErrorSubject = openraft::ErrorSubject<TypeConfig>;
+pub type ErrorVerb = openraft::ErrorVerb;
 
 pub type RPCError<E = openraft::error::Infallible> = openraft::error::RPCError<TypeConfig, E>;
 pub type RemoteError<E> = openraft::error::RemoteError<TypeConfig, E>;

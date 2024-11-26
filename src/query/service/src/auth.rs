@@ -34,6 +34,14 @@ pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
+#[derive(Debug)]
+pub enum CredentialType {
+    DatabendToken,
+    Jwt,
+    Password,
+    NoNeed,
+}
+
 #[derive(Clone)]
 pub enum Credential {
     DatabendToken {
@@ -52,8 +60,13 @@ pub enum Credential {
 }
 
 impl Credential {
-    pub fn need_refresh(&self) -> bool {
-        matches!(self, Credential::DatabendToken { .. })
+    pub fn type_name(&self) -> CredentialType {
+        match self {
+            Credential::DatabendToken { .. } => CredentialType::DatabendToken,
+            Credential::Jwt { .. } => CredentialType::Jwt,
+            Credential::Password { .. } => CredentialType::Password,
+            Credential::NoNeed => CredentialType::NoNeed,
+        }
     }
 }
 

@@ -16,7 +16,7 @@ use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
@@ -117,27 +117,6 @@ impl MetaServiceImpl {
                 let res = m
                     .upsert_kv(a.clone())
                     .log_elapsed_info(format!("UpsertKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::GetKV(a) => {
-                let res = m
-                    .get_kv(&a.key)
-                    .log_elapsed_info(format!("GetKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::MGetKV(a) => {
-                let res = m
-                    .mget_kv(&a.keys)
-                    .log_elapsed_info(format!("MGetKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::ListKV(a) => {
-                let res = m
-                    .prefix_list_kv(&a.prefix)
-                    .log_elapsed_info(format!("ListKV: {:?}", a))
                     .await;
                 RaftReply::from(res)
             }
@@ -362,7 +341,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let strm = meta_node.sto.inner().export();
+        let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = 32;
         // - Chunk up upto 32 Ok items inside a Vec<String>;
@@ -390,7 +369,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let strm = meta_node.sto.inner().export();
+        let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
         // - Chunk up upto `chunk_size` Ok items inside a Vec<String>;
@@ -462,8 +441,21 @@ impl MetaService for MetaServiceImpl {
             binary_version: status.binary_version,
             data_version: status.data_version.to_string(),
             endpoint: status.endpoint,
-            db_size: status.db_size,
-            key_num: status.key_num as u64,
+
+            raft_log_size: status.raft_log.wal_total_size,
+
+            raft_log_status: Some(pb::RaftLogStatus {
+                cache_items: status.raft_log.cache_items,
+                cache_used_size: status.raft_log.cache_used_size,
+                wal_total_size: status.raft_log.wal_total_size,
+                wal_open_chunk_size: status.raft_log.wal_open_chunk_size,
+                wal_offset: status.raft_log.wal_offset,
+                wal_closed_chunk_count: status.raft_log.wal_closed_chunk_count,
+                wal_closed_chunk_total_size: status.raft_log.wal_closed_chunk_total_size,
+                wal_closed_chunk_sizes: status.raft_log.wal_closed_chunk_sizes,
+            }),
+
+            snapshot_key_count: status.snapshot_key_count as u64,
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,

@@ -16,15 +16,14 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
 use databend_common_ast::Span;
 use geozero::error::GeozeroError;
 
-use crate::exception::ErrorCodeBacktrace;
 use crate::exception_backtrace::capture;
 use crate::ErrorCode;
 use crate::ErrorFrame;
+use crate::StackTrace;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {
@@ -104,22 +103,6 @@ impl From<std::num::ParseFloatError> for ErrorCode {
 
 impl From<std::num::TryFromIntError> for ErrorCode {
     fn from(error: std::num::TryFromIntError) -> Self {
-        ErrorCode::from_std_error(error)
-    }
-}
-
-impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::arrow::error::Error) -> Self {
-        use databend_common_arrow::arrow::error::Error;
-        match error {
-            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
-            v => ErrorCode::from_std_error(v),
-        }
-    }
-}
-
-impl From<databend_common_arrow::parquet::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::parquet::error::Error) -> Self {
         ErrorCode::from_std_error(error)
     }
 }
@@ -279,7 +262,7 @@ pub struct SerializedError {
     pub name: String,
     pub message: String,
     pub span: Span,
-    pub backtrace: String,
+    pub backtrace: StackTrace,
     pub stacks: Vec<SerializedErrorFrame>,
 }
 
@@ -291,12 +274,13 @@ impl Display for SerializedError {
 
 impl From<&ErrorCode> for SerializedError {
     fn from(e: &ErrorCode) -> Self {
+        // let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();
         SerializedError {
             code: e.code(),
             name: e.name(),
             message: e.message(),
             span: e.span(),
-            backtrace: e.backtrace_str(),
+            backtrace: e.backtrace.to_physical(),
             stacks: e.stacks().iter().map(|f| f.into()).collect(),
         }
     }
@@ -304,19 +288,13 @@ impl From<&ErrorCode> for SerializedError {
 
 impl From<&SerializedError> for ErrorCode {
     fn from(se: &SerializedError) -> Self {
-        let backtrace = match se.backtrace.len() {
-            0 => None,
-            _ => Some(ErrorCodeBacktrace::Serialized(Arc::new(
-                se.backtrace.clone(),
-            ))),
-        };
         ErrorCode::create(
             se.code,
             se.name.clone(),
             se.message.clone(),
             String::new(),
             None,
-            backtrace,
+            se.backtrace.clone(),
         )
         .set_span(se.span)
         .set_stacks(se.stacks.iter().map(|f| f.into()).collect())
@@ -383,28 +361,15 @@ impl From<tonic::Status> for ErrorCode {
                 }
                 match serde_json::from_slice::<SerializedError>(details) {
                     Err(error) => ErrorCode::from(error),
-                    Ok(serialized_error) => match serialized_error.backtrace.len() {
-                        0 => ErrorCode::create(
-                            serialized_error.code,
-                            serialized_error.name,
-                            serialized_error.message,
-                            String::new(),
-                            None,
-                            None,
-                        )
-                        .set_span(serialized_error.span),
-                        _ => ErrorCode::create(
-                            serialized_error.code,
-                            serialized_error.name,
-                            serialized_error.message,
-                            String::new(),
-                            None,
-                            Some(ErrorCodeBacktrace::Serialized(Arc::new(
-                                serialized_error.backtrace,
-                            ))),
-                        )
-                        .set_span(serialized_error.span),
-                    },
+                    Ok(serialized_error) => ErrorCode::create(
+                        serialized_error.code,
+                        serialized_error.name,
+                        serialized_error.message,
+                        String::new(),
+                        None,
+                        serialized_error.backtrace,
+                    )
+                    .set_span(serialized_error.span),
                 }
             }
             _ => ErrorCode::Unimplemented(status.to_string()),
@@ -414,18 +379,16 @@ impl From<tonic::Status> for ErrorCode {
 
 impl From<ErrorCode> for tonic::Status {
     fn from(err: ErrorCode) -> Self {
-        let error_json = serde_json::to_vec::<SerializedError>(&SerializedError {
+        let serialized_error = SerializedError {
             code: err.code(),
             name: err.name(),
             message: err.message(),
             span: err.span(),
-            backtrace: {
-                let mut str = err.backtrace_str();
-                str.truncate(2 * 1024);
-                str
-            },
             stacks: err.stacks().iter().map(|f| f.into()).collect(),
-        });
+            backtrace: err.backtrace,
+        };
+
+        let error_json = serde_json::to_vec::<SerializedError>(&serialized_error);
 
         match error_json {
             Ok(serialized_error_json) => {
@@ -433,7 +396,7 @@ impl From<ErrorCode> for tonic::Status {
                 // To distinguish from that, we use Code::Unknown here
                 tonic::Status::with_details(
                     tonic::Code::Unknown,
-                    err.message(),
+                    serialized_error.message.clone(),
                     serialized_error_json.into(),
                 )
             }
@@ -445,5 +408,11 @@ impl From<ErrorCode> for tonic::Status {
 impl From<sqlx::Error> for ErrorCode {
     fn from(error: sqlx::Error) -> Self {
         ErrorCode::DictionarySourceError(format!("Dictionary Sqlx Error, cause: {}", error))
+    }
+}
+
+impl From<redis::RedisError> for ErrorCode {
+    fn from(error: redis::RedisError) -> Self {
+        ErrorCode::DictionarySourceError(format!("Dictionary Redis Error, cause: {}", error))
     }
 }

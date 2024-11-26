@@ -133,75 +133,74 @@ pub(crate) fn format_insert_source(
     //             let sub_tree = s_expr.to_format_tree(metadata, verbose)?;
     //             children.push(sub_tree);
 
-    //             return Ok(FormatTreeNode::with_children(
-    //                 format!("{plan_name} (subquery):"),
-    //                 children,
-    //             )
-    //             .format_pretty()?);
-    //         }
-    //         Ok(String::new())
-    //     }
-    //     InsertInputSource::Values(values) => match values {
-    //         InsertValue::Values { .. } => Ok(FormatTreeNode::with_children(
-    //             format!("{plan_name} (values):"),
-    //             children,
-    //         )
-    //         .format_pretty()?),
-    //         InsertValue::RawValues { .. } => Ok(FormatTreeNode::with_children(
-    //             format!("{plan_name} (rawvalues):"),
-    //             children,
-    //         )
-    //         .format_pretty()?),
-    //     },
-    //     InsertInputSource::Stage(plan) => match *plan.clone() {
-    //         Plan::CopyIntoTable(copy_plan) => {
-    //             let CopyIntoTablePlan {
-    //                 no_file_to_copy,
-    //                 from_attachment,
-    //                 required_values_schema,
-    //                 required_source_schema,
-    //                 write_mode,
-    //                 validation_mode,
-    //                 stage_table_info,
-    //                 enable_distributed,
-    //                 ..
-    //             } = &*copy_plan;
-    //             let required_values_schema = required_values_schema
-    //                 .fields()
-    //                 .iter()
-    //                 .map(|field| field.name().to_string())
-    //                 .collect::<Vec<_>>()
-    //                 .join(",");
-    //             let required_source_schema = required_source_schema
-    //                 .fields()
-    //                 .iter()
-    //                 .map(|field| field.name().to_string())
-    //                 .collect::<Vec<_>>()
-    //                 .join(",");
-    //             let stage_node = vec![
-    //                 FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
-    //                 FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
-    //                 FormatTreeNode::new(format!(
-    //                     "required_values_schema: [{required_values_schema}]"
-    //                 )),
-    //                 FormatTreeNode::new(format!(
-    //                     "required_source_schema: [{required_source_schema}]"
-    //                 )),
-    //                 FormatTreeNode::new(format!("write_mode: {write_mode}")),
-    //                 FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
-    //                 FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
-    //                 FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
-    //             ];
-    //             children.extend(stage_node);
-    //             Ok(
-    //                 FormatTreeNode::with_children(format!("{plan_name} (stage):"), children)
-    //                     .format_pretty()?,
-    //             )
-    //         }
-    //         _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
-    //     },
-    // }
-    todo!()
+                return Ok(FormatTreeNode::with_children(
+                    format!("{plan_name} (subquery):"),
+                    children,
+                )
+                .format_pretty()?);
+            }
+            Ok(String::new())
+        }
+        InsertInputSource::Values(values) => match values {
+            InsertValue::Values { .. } => Ok(FormatTreeNode::with_children(
+                format!("{plan_name} (values):"),
+                children,
+            )
+            .format_pretty()?),
+            InsertValue::RawValues { .. } => Ok(FormatTreeNode::with_children(
+                format!("{plan_name} (rawvalues):"),
+                children,
+            )
+            .format_pretty()?),
+        },
+        InsertInputSource::Stage(plan) => match *plan.clone() {
+            Plan::CopyIntoTable(copy_plan) => {
+                let CopyIntoTablePlan {
+                    no_file_to_copy,
+                    from_attachment,
+                    required_values_schema,
+                    required_source_schema,
+                    write_mode,
+                    validation_mode,
+                    stage_table_info,
+                    enable_distributed,
+                    ..
+                } = &*copy_plan;
+                let required_values_schema = required_values_schema
+                    .fields()
+                    .iter()
+                    .map(|field| field.name().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let required_source_schema = required_source_schema
+                    .fields()
+                    .iter()
+                    .map(|field| field.name().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let stage_node = vec![
+                    FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
+                    FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
+                    FormatTreeNode::new(format!(
+                        "required_values_schema: [{required_values_schema}]"
+                    )),
+                    FormatTreeNode::new(format!(
+                        "required_source_schema: [{required_source_schema}]"
+                    )),
+                    FormatTreeNode::new(format!("write_mode: {write_mode}")),
+                    FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
+                    FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
+                    FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
+                ];
+                children.extend(stage_node);
+                Ok(
+                    FormatTreeNode::with_children(format!("{plan_name} (stage):"), children)
+                        .format_pretty()?,
+                )
+            }
+            _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
+        },
+    }
 }
 
 impl std::fmt::Debug for Insert {

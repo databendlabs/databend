@@ -17,6 +17,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use futures_util::stream;
@@ -31,6 +32,7 @@ const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
+    abort_checker: AbortChecker,
     temporary_dir: String,
     retain: Option<Duration>,
     limit: usize,
@@ -66,6 +68,7 @@ pub async fn do_vacuum_temporary_files(
         let mut batch_size = 0;
 
         while let Some(de) = ds.try_next().await? {
+            abort_checker.try_check_aborting()?;
             if de.path() == temporary_dir {
                 continue;
             }
@@ -81,6 +84,7 @@ pub async fn do_vacuum_temporary_files(
                         };
 
                     vacuum_finished_query(
+                        &abort_checker,
                         start_time,
                         &mut removed_temp_files,
                         &mut total_cleaned_size,
@@ -159,6 +163,7 @@ pub async fn do_vacuum_temporary_files(
 }
 
 async fn vacuum_finished_query(
+    abort_checker: &AbortChecker,
     total_instant: Instant,
     removed_temp_files: &mut usize,
     total_cleaned_size: &mut usize,
@@ -184,6 +189,7 @@ async fn vacuum_finished_query(
         let mut remove_temp_files_path = Vec::with_capacity(1001);
 
         while let Some(de) = ds.try_next().await? {
+            abort_checker.try_check_aborting()?;
             if de.path() == parent.path() {
                 continue;
             }

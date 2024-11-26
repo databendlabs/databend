@@ -17,10 +17,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Not;
 
-use databend_common_arrow::arrow::bitmap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -34,6 +33,7 @@ use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::boolean;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
@@ -379,7 +379,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => {
                     let has_valid = validity
-                        .map(|validity| validity.unset_bits() < validity.len())
+                        .map(|validity| validity.null_count() < validity.len())
                         .unwrap_or(true);
                     if has_valid {
                         Err(ErrorCode::BadArguments(format!(
@@ -397,9 +397,9 @@ impl<'a> Evaluator<'a> {
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
-                            (validity & (&col.validity)).unset_bits() > validity.unset_bits()
+                            (validity & (&col.validity)).null_count() > validity.null_count()
                         })
-                        .unwrap_or_else(|| col.validity.unset_bits() > 0);
+                        .unwrap_or_else(|| col.validity.null_count() > 0);
                     if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
@@ -465,7 +465,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -613,10 +613,9 @@ impl<'a> Evaluator<'a> {
                         };
                         let validity = None;
 
-                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len(), 0);
+                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len());
                         for k in obj.keys() {
-                            key_builder.put_str(k.as_str());
-                            key_builder.commit_row();
+                            key_builder.put_and_commit(k.as_str());
                         }
                         let key_column = Column::String(key_builder.build());
 
@@ -659,8 +658,7 @@ impl<'a> Evaluator<'a> {
                             };
 
                             for (k, v) in obj.iter() {
-                                key_builder.put_str(k.as_str());
-                                key_builder.commit_row();
+                                key_builder.put_and_commit(k.as_str());
                                 v.write_to_vec(&mut value_builder.builder.data);
                                 value_builder.builder.commit_row();
                             }
@@ -712,7 +710,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -860,7 +858,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    let validity = bitmap::and(&col.validity, &new_col.validity);
+                    let validity = boolean::and(&col.validity, &new_col.validity);
                     Ok(Value::Column(NullableColumn::new_column(
                         new_col.column,
                         validity,

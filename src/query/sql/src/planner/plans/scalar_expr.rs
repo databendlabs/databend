@@ -801,8 +801,8 @@ pub enum AsyncFunctionArgument {
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct RedisSource {
-    // Redis source connection URL, like `tcp://127.0.0.1:6379`
-    pub connection_url: String,
+    pub host: String,
+    pub port: u16,
     pub username: Option<String>,
     pub password: Option<String>,
     pub db_index: Option<i64>,

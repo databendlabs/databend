@@ -38,7 +38,9 @@ runs:
 
     - name: Check toml format
       shell: bash
-      run: taplo fmt --check
+      run: |
+        taplo check
+        taplo fmt --check
 
     - name: Audit dependencies
       shell: bash

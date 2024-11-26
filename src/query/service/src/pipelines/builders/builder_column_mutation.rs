@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -25,10 +24,8 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::ColumnMutation;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -68,21 +65,6 @@ impl PipelineBuilder {
                 )?;
                 proc.into_processor()
             })?;
-
-            if self.ctx.get_lazy_mutation_delete() {
-                self.main_pipeline.try_resize(1)?;
-                self.main_pipeline.add_async_accumulating_transformer(|| {
-                    TableMutationAggregator::create(
-                        table,
-                        self.ctx.clone(),
-                        self.ctx.get_table_snapshot().unwrap().segments.clone(),
-                        vec![],
-                        vec![],
-                        Statistics::default(),
-                        MutationKind::Delete,
-                    )
-                });
-            }
         } else {
             let block_thresholds = table.get_block_thresholds();
             let cluster_stats_gen = table.cluster_gen_for_append(

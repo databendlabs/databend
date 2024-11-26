@@ -313,7 +313,7 @@ fn decimal_to_string(
 
             match arg {
                 ValueRef::Column(col) => {
-                    let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
+                    let mut builder = StringColumnBuilder::with_capacity(col.len());
                     for x in DecimalType::<DECIMAL_TYPE>::iter_column(&col) {
                         builder.put_str(&DECIMAL_TYPE::display(x, from_size.scale));
                         builder.commit_row();

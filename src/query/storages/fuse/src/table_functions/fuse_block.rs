@@ -79,7 +79,7 @@ impl TableMetaFunc for FuseBlock {
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
-        let mut block_location = StringColumnBuilder::with_capacity(len, len);
+        let mut block_location = StringColumnBuilder::with_capacity(len);
         let mut block_size = Vec::with_capacity(len);
         let mut file_size = Vec::with_capacity(len);
         let mut row_count = Vec::with_capacity(len);
@@ -102,8 +102,7 @@ impl TableMetaFunc for FuseBlock {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_location.put_str(&block.location.0);
-                    block_location.commit_row();
+                    block_location.put_and_commit(&block.location.0);
                     block_size.push(block.block_size);
                     file_size.push(block.file_size);
                     row_count.push(block.row_count);

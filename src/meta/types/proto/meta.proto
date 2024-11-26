@@ -36,9 +36,9 @@ message TransferLeaderRequest {
   LogId last_log_id = 3;
 }
 
-message MemberListRequest { string data = 1; }
+message MemberListRequest {string data = 1;}
 
-message MemberListReply { repeated string data = 1; }
+message MemberListReply {repeated string data = 1;}
 
 message HandshakeRequest {
   uint64 protocol_version = 1;
@@ -94,7 +94,7 @@ message Event {
   optional SeqV prev = 3;
 }
 
-message WatchResponse { Event event = 1; }
+message WatchResponse {Event event = 1;}
 
 // messages for txn
 message TxnCondition {
@@ -167,7 +167,7 @@ message ClusterStatus {
   string binary_version = 2;
   string data_version = 3;
   string endpoint = 4;
-  uint64 db_size = 5;
+  uint64 raft_log_size = 5;
   string state = 6;
   bool is_leader = 7;
   uint64 current_term = 8;
@@ -180,7 +180,20 @@ message ClusterStatus {
   repeated string voters = 15;
   repeated string non_voters = 16;
   uint64 last_seq = 17;
-  uint64 key_num = 18;
+  uint64 snapshot_key_count = 18;
+  RaftLogStatus raft_log_status = 19;
+}
+
+// Status about local raft-log storage
+message RaftLogStatus {
+  uint64 cache_items = 1;
+  uint64 cache_used_size = 2;
+  uint64 wal_total_size = 3;
+  uint64 wal_open_chunk_size = 4;
+  uint64 wal_offset = 5;
+  uint64 wal_closed_chunk_count = 6;
+  uint64 wal_closed_chunk_total_size = 7;
+  map<string, uint64> wal_closed_chunk_sizes = 8;
 }
 
 message ClientInfo {

@@ -14,21 +14,21 @@ SELECT c FROM t ORDER BY c;
 
 INSERT INTO temp_files_count SELECT COUNT() as count, 2 as number FROM system.temp_files;
 
-SELECT '===================';
+SELECT '==Test if the spill is activated==';
 
 -- Test if the spill is activated.
 set sort_spilling_bytes_threshold_per_proc = 0;
 SELECT any_if(count, number = 2) - any_if(count, number = 1) FROM temp_files_count;
 set sort_spilling_bytes_threshold_per_proc = 8;
 
-SELECT '===================';
+SELECT '==Enable sort_spilling_bytes_threshold_per_proc==';
 INSERT INTO temp_files_count SELECT COUNT() as count, 3 as number FROM system.temp_files;
 
 SELECT c FROM t ORDER BY c;
 SELECT c FROM t ORDER BY c DESC;
 SELECT a, b FROM t ORDER BY b;
 
-SELECT '===================';
+SELECT '==Test abc==';
 
 drop table if exists abc;
 CREATE TABLE abc (  a INT,  b INT,  c INT,  d VARCHAR);
@@ -36,7 +36,7 @@ INSERT INTO abc VALUES (1, 2, 3, 'one'), (4, 5, 6, 'Two');
 SELECT d FROM abc ORDER BY lower(d);
 SELECT a FROM abc ORDER BY a DESC;
 
-SELECT '===================';
+SELECT '==Test xy==';
 
 drop table if exists xy;
 CREATE TABLE xy(x INT NULL, y INT NULL);
@@ -46,13 +46,13 @@ SELECT x, y FROM xy ORDER BY y NULLS LAST;
 SELECT x, y FROM xy ORDER BY y DESC NULLS FIRST;
 
 INSERT INTO temp_files_count SELECT COUNT() as count, 4 as number FROM system.temp_files;
-SELECT '===================';
+SELECT '==Test a==';
 
 set sort_spilling_bytes_threshold_per_proc = 0;
 SELECT any_if(count, number = 4) - any_if(count, number = 3) FROM temp_files_count;
 set sort_spilling_bytes_threshold_per_proc = 8;
 
-SELECT '===================';
+SELECT '==Test b==';
 
 -- Test single thread
 set max_threads = 1;
@@ -70,11 +70,11 @@ SELECT '==TEST TOP-N SORT==';
 
 INSERT INTO temp_files_count SELECT COUNT() as count, 5 as number FROM system.temp_files;
 
-SELECT '===================';
+SELECT '==Test c==';
 
 SELECT c FROM t ORDER BY c limit 1;
 
-SELECT '===================';
+SELECT '==Test d==';
 
 INSERT INTO temp_files_count SELECT COUNT() as count, 6 as number FROM system.temp_files;
 
@@ -82,7 +82,7 @@ set sort_spilling_bytes_threshold_per_proc = 0;
 SELECT any_if(count, number = 6) - any_if(count, number = 5) FROM temp_files_count;
 set sort_spilling_bytes_threshold_per_proc = 60;
 
-SELECT '===================';
+SELECT '==Test e==';
 
 INSERT INTO temp_files_count SELECT COUNT() as count, 7 as number FROM system.temp_files;
 
@@ -90,7 +90,8 @@ SELECT x, y FROM xy ORDER BY x, y DESC NULLS FIRST LIMIT 3;
 SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST LIMIT 3;
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST LIMIT 3;
 
-SELECT '===================';
+SELECT '==Test f==';
+
 INSERT INTO temp_files_count SELECT COUNT() as count, 8 as number FROM system.temp_files;
 
 unset max_vacuum_temp_files_after_query;

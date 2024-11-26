@@ -566,7 +566,7 @@ async fn show_object_grant(
     let tenant = ctx.get_tenant();
     let user_api = UserApiProvider::instance();
     let roles = user_api.get_roles(&tenant).await?;
-    let visibility_checker = ctx.get_visibility_checker().await?;
+    let visibility_checker = ctx.get_visibility_checker(false).await?;
     let current_user = ctx.get_current_user()?.identity().username;
     let (object, owner_object, object_id, object_name) = match grant_type {
         "table" => {

@@ -18,17 +18,17 @@ use std::io;
 use std::io::BufWriter;
 use std::io::Write;
 
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_sled_store::openraft::error::Fatal;
 use databend_common_meta_sled_store::openraft::ErrorSubject;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::SnapshotId;
 use databend_common_meta_sled_store::openraft::SnapshotSegmentId;
-use databend_common_meta_types::InstallSnapshotError;
-use databend_common_meta_types::InstallSnapshotRequest;
-use databend_common_meta_types::RaftError;
-use databend_common_meta_types::SnapshotMismatch;
-use databend_common_meta_types::StorageError;
+use databend_common_meta_types::raft_types::InstallSnapshotError;
+use databend_common_meta_types::raft_types::InstallSnapshotRequest;
+use databend_common_meta_types::raft_types::RaftError;
+use databend_common_meta_types::raft_types::SnapshotMismatch;
+use databend_common_meta_types::raft_types::StorageError;
 use fastrace::func_name;
 use log::info;
 
@@ -100,7 +100,7 @@ impl ReceiverV1 {
 
 pub(crate) async fn receive_snapshot_v1(
     receiver: &mut Option<ReceiverV1>,
-    ss_store: &SnapshotStoreV003,
+    ss_store: &SnapshotStoreV004,
     req: InstallSnapshotRequest,
 ) -> Result<Option<String>, RaftError<InstallSnapshotError>> {
     let snapshot_id = req.meta.snapshot_id.clone();

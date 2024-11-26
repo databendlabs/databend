@@ -19,10 +19,6 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::native::read::reader::infer_schema_async;
-use databend_common_arrow::native::read::reader::NativeReader;
-use databend_common_arrow::native::read::NativeReadBuf;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -34,6 +30,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
+use databend_common_native::read::reader::read_meta_async;
+use databend_common_native::read::reader::NativeReader;
+use databend_common_native::read::NativeReadBuf;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -217,23 +216,23 @@ impl BlockReader {
 
     pub fn build_block(
         &self,
-        chunks: &[(usize, Box<dyn Array>)],
+        columns: &[(usize, Column)],
         default_val_indices: Option<HashSet<usize>>,
     ) -> Result<DataBlock> {
         let mut nums_rows: Option<usize> = None;
         let mut entries = Vec::with_capacity(self.project_column_nodes.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
-            if let Some(array) = chunks.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
+            if let Some(column) = columns.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
                 let data_type: DataType = self.projected_schema.field(index).data_type().into();
                 entries.push(BlockEntry::new(
                     data_type.clone(),
-                    Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
+                    Value::Column(column.clone()),
                 ));
                 match nums_rows {
                     Some(rows) => {
-                        debug_assert_eq!(rows, array.len(), "Column array lengths are not equal")
+                        debug_assert_eq!(rows, column.len(), "Column  lengths are not equal")
                     }
-                    None => nums_rows = Some(array.len()),
+                    None => nums_rows = Some(column.len()),
                 }
             } else if let Some(ref default_val_indices) = default_val_indices {
                 if default_val_indices.contains(&index) {
@@ -250,14 +249,22 @@ impl BlockReader {
     }
 
     #[async_backtrace::framed]
-    pub async fn async_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let op = &self.operator;
-        let stat = op.stat(loc).await.ok()?;
-        let reader = op.reader(loc).await.ok()?;
-        let schema = infer_schema_async(reader, stat.content_length())
-            .await
-            .ok()?;
-        let schema = DataSchema::try_from(&schema).ok()?;
-        Some(ArrowSchema::from(&schema))
+    pub async fn async_read_native_schema(
+        operator: &Operator,
+        loc: &str,
+    ) -> Option<(Vec<ColumnMeta>, ArrowSchema)> {
+        let stat = operator.stat(loc).await.ok()?;
+        let reader = operator.reader(loc).await.ok()?;
+
+        let (native_metas, schema) =
+            read_meta_async(reader.clone(), stat.content_length() as usize)
+                .await
+                .ok()?;
+        let metas = native_metas
+            .into_iter()
+            .map(ColumnMeta::Native)
+            .collect::<Vec<ColumnMeta>>();
+        let schema = DataSchema::from(&schema);
+        Some((metas, ArrowSchema::from(&schema)))
     }
 }

@@ -30,17 +30,19 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
         // Filter
+        RuleID::FilterNulls,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
+        RuleID::PushDownFilterWindowTopN,
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
-        // Limit
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
+        // Limit
         RuleID::PushDownLimit,
         RuleID::PushDownLimitUnion,
         RuleID::PushDownSortEvalScalar,
@@ -82,12 +84,14 @@ pub enum RuleID {
     NormalizeScalarFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
+    FilterNulls,
     PushDownFilterUnion,
     PushDownFilterJoin,
     PushDownFilterScan,
     PushDownFilterSort,
     PushDownFilterProjectSet,
     PushDownFilterWindow,
+    PushDownFilterWindowTopN,
     PushDownLimit,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
@@ -119,6 +123,7 @@ pub enum RuleID {
 impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            RuleID::FilterNulls => write!(f, "FilterNulls"),
             RuleID::PushDownFilterUnion => write!(f, "PushDownFilterUnion"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
@@ -137,6 +142,7 @@ impl Display for RuleID {
             RuleID::PushDownSortEvalScalar => write!(f, "PushDownSortEvalScalar"),
             RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
             RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
+            RuleID::PushDownFilterWindowTopN => write!(f, "PushDownFilterWindowTopN"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateSort => write!(f, "EliminateSort"),

@@ -132,7 +132,7 @@ async fn test_fuse_navigate() -> Result<()> {
     ctx.get_current_session()
         .force_kill_query(ErrorCode::AbortedQuery("mission aborted"));
     let checker = ctx.clone().get_abort_checker();
-    assert!(checker.is_aborting());
+    assert!(checker.try_check_aborting().is_err());
     let res = fuse_table
         .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
         .await;
@@ -168,7 +168,7 @@ async fn test_navigate_for_purge() -> Result<()> {
 
     // keep the first snapshot of the insertion
     let table = fixture.latest_default_table().await?;
-    let first_snapshot = FuseTable::try_from_table(table.as_ref())?
+    let _first_snapshot = FuseTable::try_from_table(table.as_ref())?
         .snapshot_loc()
         .await?
         .unwrap();
@@ -233,7 +233,7 @@ async fn test_navigate_for_purge() -> Result<()> {
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot.
     let (navigate, files) = fuse_table.list_by_time_point(time_point).await?;
     assert_eq!(2, files.len());
-    assert_eq!(navigate, first_snapshot);
+    assert_eq!(navigate, third_snapshot);
 
     // 5. navigate by snapshot id.
     let snapshot_id = snapshots[1].0.snapshot_id.simple().to_string();

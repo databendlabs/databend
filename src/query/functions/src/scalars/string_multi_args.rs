@@ -14,13 +14,12 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
@@ -34,6 +33,7 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
+use string::StringColumnBuilder;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("concat", |_, args_type| {
@@ -114,7 +114,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .collect::<Vec<_>>();
 
                     let size = len.unwrap_or(1);
-                    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+                    let mut builder = StringColumnBuilder::with_capacity(size);
 
                     match &args[0] {
                         ValueRef::Scalar(sep) => {
@@ -430,7 +430,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> 
         .collect::<Vec<_>>();
 
     let size = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut builder = StringColumnBuilder::with_capacity(size);
     for idx in 0..size {
         for arg in &args {
             builder.put_str(unsafe { arg.index_unchecked(idx) });
@@ -641,7 +641,7 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
     };
 
     let size = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut builder = StringColumnBuilder::with_capacity(size);
 
     let cached_reg = match (&pat_arg, &mt_arg) {
         (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
@@ -691,8 +691,7 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         }
 
         if source.is_empty() || pat.is_empty() {
-            builder.put_str(source);
-            builder.commit_row();
+            builder.put_and_commit(source);
             continue;
         }
 
@@ -766,7 +765,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
     };
 
     let size = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut builder = StringColumnBuilder::with_capacity(size);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };

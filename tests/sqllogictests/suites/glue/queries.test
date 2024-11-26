@@ -1,0 +1,9 @@
+statement ok
+CREATE CATALOG ctl
+TYPE = ICEBERG
+CONNECTION = (
+    TYPE = 'glue',
+    WAREHOUSE = 's3://bucket'
+);
+
+SHOW CREATE CATALOG ctl;

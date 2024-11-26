@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check Source File Changes
-        uses: tj-actions/changed-files@v39
+        uses: tj-actions/changed-files@v45
         id: src
         with:
           files_ignore: |
@@ -50,8 +50,9 @@ jobs:
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
-      build_profile: debug
+      build_profile: ci
       runner_provider: aws
+      license_type: trial
 
   linux_hive:
     needs: changes
@@ -59,7 +60,7 @@ jobs:
     uses: ./.github/workflows/reuse.linux.hive.yml
     secrets: inherit
     with:
-      build_profile: debug
+      build_profile: ci
       runner_provider: aws
 
   ready:

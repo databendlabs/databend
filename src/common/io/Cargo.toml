@@ -22,8 +22,9 @@ enquote = { workspace = true }
 enumflags2 = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
-geos = { workspace = true }
 geozero = { workspace = true }
+hex = { workspace = true }
+jiff = { workspace = true }
 lexical-core = { workspace = true }
 micromarshal = { workspace = true }
 roaring = { workspace = true, features = ["serde"] }
@@ -35,9 +36,6 @@ wkt = { workspace = true }
 aho-corasick = { workspace = true }
 rand = { workspace = true }
 rmp-serde = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["geos"]
 
 [lints]
 workspace = true

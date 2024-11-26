@@ -393,14 +393,24 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
 
         while let Some(key) = access.next_key::<ColumnId>()? {
             if let Ok(value) = access.next_value::<ColumnStatistics>() {
-                let data_type = value.max.as_ref().infer_data_type();
-                if supported_stat_type(&data_type) {
+                if value.max.is_null() && value.min.is_null() {
+                    // If scalar values of min and max are all NULL, they should be retained.
+                    //
+                    // This ensures that columns with only NULL values have their column statistics
+                    // recorded, which is essential for pruning on these columns, and without this,
+                    // column statistics like NDV (Number of Distinct Values) and null_count
+                    // would be missing as well.
                     map.insert(key, value);
                 } else {
-                    info!(
-                        "column of id {} is excluded from column statistics, unsupported data type {}",
-                        key, data_type
-                    );
+                    let data_type = value.max.as_ref().infer_data_type();
+                    if supported_stat_type(&data_type) {
+                        map.insert(key, value);
+                    } else {
+                        info!(
+                            "column of id {} is excluded from column statistics, unsupported data type {}",
+                            key, data_type
+                        );
+                    }
                 }
             }
         }

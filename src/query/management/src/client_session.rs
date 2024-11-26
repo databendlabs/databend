@@ -26,10 +26,10 @@ use databend_common_meta_app::principal::user_token_ident::TokenIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 
 pub struct ClientSessionMgr {
@@ -94,7 +94,7 @@ impl ClientSessionMgr {
 
         // simply ignore the result
         self.kv_api
-            .upsert_kv(UpsertKVReq::new(
+            .upsert_kv(UpsertKV::new(
                 &key,
                 MatchSeq::GE(0),
                 Operation::Delete,
@@ -150,7 +150,7 @@ impl ClientSessionMgr {
 
         // simply ignore the result
         self.kv_api
-            .upsert_kv(UpsertKVReq::new(
+            .upsert_kv(UpsertKV::new(
                 &key,
                 MatchSeq::GE(0),
                 Operation::Delete,

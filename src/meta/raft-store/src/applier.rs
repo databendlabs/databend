@@ -17,6 +17,9 @@ use std::time::Duration;
 
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition;
@@ -27,13 +30,10 @@ use databend_common_meta_types::Change;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::Interval;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -54,21 +54,26 @@ use log::error;
 use log::info;
 use num::FromPrimitive;
 
-use crate::sm_v003::SMV003;
+use crate::state_machine_api::StateMachineApi;
+use crate::state_machine_api_ext::StateMachineApiExt;
 
 /// A helper that applies raft log `Entry` to the state machine.
-pub struct Applier<'a> {
-    sm: &'a mut SMV003,
+pub struct Applier<'a, SM>
+where SM: StateMachineApi + 'static
+{
+    sm: &'a mut SM,
 
     /// The context of the current applying log.
-    cmd_ctx: CmdContext,
+    pub(crate) cmd_ctx: CmdContext,
 
-    /// The changes has been made by the applying one log entry
+    /// The changes have been made by the applying one log entry
     changes: Vec<Change<Vec<u8>, String>>,
 }
 
-impl<'a> Applier<'a> {
-    pub fn new(sm: &'a mut SMV003) -> Self {
+impl<'a, SM> Applier<'a, SM>
+where SM: StateMachineApi + 'static
+{
+    pub fn new(sm: &'a mut SM) -> Self {
         Self {
             sm,
             cmd_ctx: CmdContext::from_millis(0),
@@ -114,7 +119,7 @@ impl<'a> Applier<'a> {
         };
 
         // Send queued change events to subscriber
-        if let Some(subscriber) = &self.sm.subscriber {
+        if let Some(subscriber) = self.sm.get_subscriber() {
             for event in self.changes.drain(..) {
                 subscriber.kv_changed(event);
             }
@@ -236,7 +241,7 @@ impl<'a> Applier<'a> {
     }
 
     #[fastrace::trace]
-    async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
+    pub(crate) async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
         debug!(txn :% =(req); "apply txn cmd");
 
         let success = self.eval_txn_conditions(&req.condition).await?;
@@ -461,7 +466,7 @@ impl<'a> Applier<'a> {
     /// All expired keys will be removed before applying a log.
     /// This is different from the sled based implementation.
     #[fastrace::trace]
-    async fn clean_expired_kvs(&mut self, log_time_ms: u64) -> Result<(), io::Error> {
+    pub(crate) async fn clean_expired_kvs(&mut self, log_time_ms: u64) -> Result<(), io::Error> {
         if log_time_ms == 0 {
             return Ok(());
         }

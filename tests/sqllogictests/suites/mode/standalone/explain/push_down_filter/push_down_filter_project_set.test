@@ -13,14 +13,14 @@ explain select name, json_path_query(details, '$.features.*') as all_features, j
 ----
 EvalScalar
 ├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
-├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
+├── expressions: [get(1)(json_path_query(products.details (#1), '$.features.*') (#2)), json_path_query_first(products.details (#1), '$.features.*')]
 ├── estimated rows: 0.12
 └── Filter
-    ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
-    ├── filters: [is_true(TRY_CAST(get(1)(json_path_query (#2)) AS String NULL) = '512GB')]
+    ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
+    ├── filters: [is_true(TRY_CAST(get(1)(json_path_query(products.details (#1), '$.features.*') (#2)) AS String NULL) = '512GB')]
     ├── estimated rows: 0.12
     └── ProjectSet
-        ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
+        ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
         ├── estimated rows: 0.60
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
         └── Filter
@@ -48,10 +48,10 @@ explain select name, json_path_query(details, '$.features.*') as all_features, j
 ----
 EvalScalar
 ├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
-├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
+├── expressions: [get(1)(json_path_query(products.details (#1), '$.features.*') (#2)), json_path_query_first(products.details (#1), '$.features.*')]
 ├── estimated rows: 0.60
 └── ProjectSet
-    ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
+    ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
     ├── estimated rows: 0.60
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
     └── Filter

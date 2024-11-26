@@ -13,6 +13,36 @@ ShowDatabases(
 
 
 ---------- Input ----------
+show drop databases
+---------- Output ---------
+SHOW DROP DATABASES
+---------- AST ------------
+ShowDropDatabases(
+    ShowDropDatabasesStmt {
+        catalog: None,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show drop databases like 'db%'
+---------- Output ---------
+SHOW DROP DATABASES LIKE 'db%'
+---------- AST ------------
+ShowDropDatabases(
+    ShowDropDatabasesStmt {
+        catalog: None,
+        limit: Some(
+            Like {
+                pattern: "db%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show databases format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
 SHOW DATABASES
@@ -49,7 +79,7 @@ ShowTables(
 ---------- Input ----------
 show drop tables
 ---------- Output ---------
-SHOW DROP TABLE
+SHOW DROP TABLES
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -62,7 +92,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables like 't%'
 ---------- Output ---------
-SHOW DROP TABLE LIKE 't%'
+SHOW DROP TABLES LIKE 't%'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -79,7 +109,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables where name='t'
 ---------- Output ---------
-SHOW DROP TABLE WHERE name = 't'
+SHOW DROP TABLES WHERE name = 't'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -2759,81 +2789,6 @@ CreateTable(
                 protocol: "s3",
                 name: "testbucket",
                 path: "/admin/data/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "aws_key_id": "minioadmin",
-                        "aws_secret_key": "minioadmin",
-                        "endpoint_url": "http://127.0.0.1:9900",
-                    },
-                },
-            },
-        ),
-        cluster_by: None,
-        table_options: {},
-        as_query: None,
-        table_type: Normal,
-    },
-)
-
-
----------- Input ----------
-create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-    connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-    location_prefix = 'db';
----------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
----------- AST ------------
-CreateTable(
-    CreateTableStmt {
-        create_option: CreateIfNotExists,
-        catalog: None,
-        database: Some(
-            Identifier {
-                span: Some(
-                    27..28,
-                ),
-                name: "a",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        table: Identifier {
-            span: Some(
-                29..30,
-            ),
-            name: "b",
-            quote: None,
-            ident_type: None,
-        },
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            span: Some(
-                                32..33,
-                            ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        data_type: Int32,
-                        expr: None,
-                        comment: None,
-                    },
-                ],
-                None,
-            ),
-        ),
-        engine: None,
-        uri_location: Some(
-            UriLocation {
-                protocol: "s3",
-                name: "testbucket",
-                path: "/admin/data/",
-                part_prefix: "db",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11277,9 +11232,6 @@ CreateStage(
         file_format_options: FileFormatOptions {
             options: {},
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11299,7 +11251,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11322,9 +11273,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11344,7 +11292,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11367,9 +11314,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11389,7 +11333,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11412,9 +11355,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11434,7 +11374,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11457,9 +11396,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -13947,15 +13883,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14014,15 +13954,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14050,7 +13994,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14091,15 +14034,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 10,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 10,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14127,7 +14074,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14168,15 +14114,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 3000,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 3000,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14206,7 +14156,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14249,15 +14198,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14287,7 +14240,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14330,15 +14282,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14358,7 +14314,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1:9900",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14386,15 +14341,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14414,7 +14373,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14442,15 +14400,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14513,15 +14475,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14562,7 +14528,6 @@ CopyIntoLocation(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {},
@@ -14728,7 +14693,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14772,15 +14736,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14839,15 +14807,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14906,15 +14878,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -14973,15 +14949,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: true,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: true,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -15009,7 +14989,6 @@ CopyIntoTable(
                     protocol: "fs",
                     name: "",
                     path: "/path/to/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -15050,15 +15029,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: true,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: true,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -15084,7 +15067,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "databend",
                     path: "/books.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -15121,15 +15103,19 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+        },
     },
 )
 
@@ -17249,7 +17235,6 @@ Query(
                                 protocol: "s3",
                                 name: "test",
                                 path: "/bucket",
-                                part_prefix: "",
                                 connection: Connection {
                                     visited_keys: {},
                                     conns: {},
@@ -20947,15 +20932,19 @@ CreatePipe(
             },
             files: None,
             pattern: None,
-            force: false,
-            validation_mode: "",
-            size_limit: 0,
-            max_files: 0,
-            split_size: 0,
-            purge: false,
-            disable_variant_check: false,
-            return_failed_only: false,
-            on_error: "abort",
+            options: CopyIntoTableOptions {
+                on_error: AbortNum(
+                    1,
+                ),
+                size_limit: 0,
+                max_files: 0,
+                split_size: 0,
+                force: false,
+                purge: false,
+                disable_variant_check: false,
+                return_failed_only: false,
+                validation_mode: "",
+            },
         },
     },
 )
@@ -21008,15 +20997,19 @@ CreatePipe(
             },
             files: None,
             pattern: None,
-            force: false,
-            validation_mode: "",
-            size_limit: 0,
-            max_files: 0,
-            split_size: 0,
-            purge: false,
-            disable_variant_check: false,
-            return_failed_only: false,
-            on_error: "abort",
+            options: CopyIntoTableOptions {
+                on_error: AbortNum(
+                    1,
+                ),
+                size_limit: 0,
+                max_files: 0,
+                split_size: 0,
+                force: false,
+                purge: false,
+                disable_variant_check: false,
+                return_failed_only: false,
+                validation_mode: "",
+            },
         },
     },
 )
@@ -22350,7 +22343,6 @@ AttachTable(
             protocol: "s3",
             name: "a",
             path: "/",
-            part_prefix: "",
             connection: Connection {
                 visited_keys: {},
                 conns: {
@@ -22672,9 +22664,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )

@@ -310,8 +310,13 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        self.privilege_mgr().get_visibility_checker().await
+    pub async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr()
+            .get_visibility_checker(ignore_ownership)
+            .await
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -387,7 +392,7 @@ impl Session {
                     id
                 } else {
                     return Err(ErrorCode::BadArguments(
-                        "can not use temp table in http handler if token is not used",
+                        "can not use temp table in http handler if cookie is not enabled",
                     ));
                 }
             }

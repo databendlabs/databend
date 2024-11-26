@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -173,6 +174,10 @@ async fn get_time_travel_size(storage_prefix: &str, op: &Operator) -> Result<u64
 }
 
 async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, u64)> {
+    info!(
+        "fuse_time_travel_size start calc_tbl_size:{}",
+        tbl.get_table_info().desc
+    );
     let operator = tbl.get_operator();
     let storage_prefix = tbl.get_storage_prefix();
     let start = std::time::Instant::now();
@@ -182,6 +187,7 @@ async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, u64)> {
     let latest_snapshot_size = match snapshot_location {
         Some(snapshot_location) => {
             let start = std::time::Instant::now();
+            info!("fuse_time_travel_size will read: {}", snapshot_location);
             let (snapshot, _) = SnapshotsIO::read_snapshot(snapshot_location, operator).await?;
             info!("read_snapshot cost: {:?}", start.elapsed());
             snapshot.summary.compressed_byte_size + snapshot.summary.index_size

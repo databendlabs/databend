@@ -20,8 +20,8 @@ use std::io::BufWriter;
 use std::io::Write;
 
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
-use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::Vote;
+use databend_common_meta_types::raft_types::SnapshotMeta;
+use databend_common_meta_types::raft_types::Vote;
 use log::debug;
 use log::error;
 use log::info;
