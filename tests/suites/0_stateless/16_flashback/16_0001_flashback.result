@@ -11,8 +11,8 @@ true
 checking that after flashback to the first snapshot, there should be only 1 snapshot visible
 true
 flash back to snapshot id that not exist should report error 1105
-Error: APIError: ResponseError with 2013: No historical data found at given point
+Error: APIError: QueryFailed: [2013]No historical data found at given point
 flash back to timestamp that not exist should report error 1105
-Error: APIError: ResponseError with 2013: No historical data found at given point
+Error: APIError: QueryFailed: [2013]No historical data found at given point
 flash back to point that does not visible to the current snapshot should report error 1105
-Error: APIError: ResponseError with 2013: No historical data found at given point
+Error: APIError: QueryFailed: [2013]No historical data found at given point
