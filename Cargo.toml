@@ -353,22 +353,24 @@ result_large_err = "allow"
 debug = 1
 lto = "thin"
 overflow-checks = false
-incremental = false
-opt-level = "s"
+opt-level = "s"         ## defaults to be 3
+incremental = true
 
-# codegen-units = 1 # Reduce number of codegen units to increase optimizations.
+[profile.ci]
+inherits = "release"
+overflow-checks = true
+incremental = false
+debug-assertions = true
 
 # [profile.release.package]
-# arrow2 = { codegen-units = 4 }
-# common-functions = { codegen-units = 16 }
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
 
 [profile.dev]
 split-debuginfo = "unpacked"
-overflow-checks = false
-# wait until https://github.com/rust-lang/rust/issues/100142 fixed
-incremental = false
+overflow-checks = true
+# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
+incremental = true
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }

@@ -49,4 +49,6 @@ ignore = [
     "RUSTSEC-2024-0371",
     # Remotely exploitable Denial of Service in Tonic, ignored temporarily 
     "RUSTSEC-2024-0376",
+    #rustls network-reachable panic in `Acceptor::accept`
+    "RUSTSEC-2024-0399",
 ]
