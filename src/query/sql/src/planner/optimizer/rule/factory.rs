@@ -58,8 +58,7 @@ pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
 impl RuleFactory {
     pub fn create_rule(id: RuleID, ctx: OptimizerContext) -> Result<RulePtr> {
         match id {
-            RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(ctx.metadata))),
-            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(ctx.metadata))),
+            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.enable_distributed_optimization,
             ))),
@@ -73,9 +72,6 @@ impl RuleFactory {
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
-            RuleID::PushDownSortEvalScalar => {
-                Ok(Box::new(RulePushDownSortEvalScalar::new(ctx.metadata)))
-            }
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
             RuleID::PushDownLimitSort => {
