@@ -14,8 +14,10 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -55,36 +57,29 @@ pub struct CopyIntoTableStmt {
     // files to load
     pub files: Option<Vec<String>>,
     pub pattern: Option<LiteralStringOrVariable>,
-    pub force: bool,
 
-    // copy options
-    /// TODO(xuanwo): parse into validation_mode directly.
-    pub validation_mode: String,
-    pub size_limit: usize,
-    pub max_files: usize,
-    pub split_size: usize,
-    pub purge: bool,
-    pub disable_variant_check: bool,
-    pub return_failed_only: bool,
-    pub on_error: String,
+    pub options: CopyIntoTableOptions,
 }
 
 impl CopyIntoTableStmt {
-    pub fn apply_option(&mut self, opt: CopyIntoTableOption) {
+    pub fn apply_option(
+        &mut self,
+        opt: CopyIntoTableOption,
+    ) -> std::result::Result<(), &'static str> {
         match opt {
             CopyIntoTableOption::Files(v) => self.files = Some(v),
             CopyIntoTableOption::Pattern(v) => self.pattern = Some(v),
             CopyIntoTableOption::FileFormat(v) => self.file_format = v,
-            CopyIntoTableOption::ValidationMode(v) => self.validation_mode = v,
-            CopyIntoTableOption::SizeLimit(v) => self.size_limit = v,
-            CopyIntoTableOption::MaxFiles(v) => self.max_files = v,
-            CopyIntoTableOption::SplitSize(v) => self.split_size = v,
-            CopyIntoTableOption::Purge(v) => self.purge = v,
-            CopyIntoTableOption::Force(v) => self.force = v,
-            CopyIntoTableOption::DisableVariantCheck(v) => self.disable_variant_check = v,
-            CopyIntoTableOption::ReturnFailedOnly(v) => self.return_failed_only = v,
-            CopyIntoTableOption::OnError(v) => self.on_error = v,
+            CopyIntoTableOption::SizeLimit(v) => self.options.size_limit = v,
+            CopyIntoTableOption::MaxFiles(v) => self.options.max_files = v,
+            CopyIntoTableOption::SplitSize(v) => self.options.split_size = v,
+            CopyIntoTableOption::Purge(v) => self.options.purge = v,
+            CopyIntoTableOption::Force(v) => self.options.force = v,
+            CopyIntoTableOption::DisableVariantCheck(v) => self.options.disable_variant_check = v,
+            CopyIntoTableOption::ReturnFailedOnly(v) => self.options.return_failed_only = v,
+            CopyIntoTableOption::OnError(v) => self.options.on_error = OnErrorMode::from_str(&v)?,
         }
+        Ok(())
     }
 }
 
@@ -117,28 +112,115 @@ impl Display for CopyIntoTableStmt {
             write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
 
-        if !self.validation_mode.is_empty() {
-            write!(f, "VALIDATION_MODE = {}", self.validation_mode)?;
+        if !self.options.validation_mode.is_empty() {
+            write!(f, "VALIDATION_MODE = {}", self.options.validation_mode)?;
         }
 
-        if self.size_limit != 0 {
-            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        if self.options.size_limit != 0 {
+            write!(f, " SIZE_LIMIT = {}", self.options.size_limit)?;
         }
 
-        if self.max_files != 0 {
-            write!(f, " MAX_FILES = {}", self.max_files)?;
+        if self.options.max_files != 0 {
+            write!(f, " MAX_FILES = {}", self.options.max_files)?;
         }
 
-        if self.split_size != 0 {
-            write!(f, " SPLIT_SIZE = {}", self.split_size)?;
+        if self.options.split_size != 0 {
+            write!(f, " SPLIT_SIZE = {}", self.options.split_size)?;
         }
 
-        write!(f, " PURGE = {}", self.purge)?;
-        write!(f, " FORCE = {}", self.force)?;
-        write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
-        write!(f, " ON_ERROR = {}", self.on_error)?;
-        write!(f, " RETURN_FAILED_ONLY = {}", self.return_failed_only)?;
+        write!(f, " PURGE = {}", self.options.purge)?;
+        write!(f, " FORCE = {}", self.options.force)?;
+        write!(
+            f,
+            " DISABLE_VARIANT_CHECK = {}",
+            self.options.disable_variant_check
+        )?;
+        write!(f, " ON_ERROR = {}", self.options.on_error)?;
+        write!(
+            f,
+            " RETURN_FAILED_ONLY = {}",
+            self.options.return_failed_only
+        )?;
 
+        Ok(())
+    }
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, Default, PartialEq, Drive, DriveMut, Eq,
+)]
+pub struct CopyIntoTableOptions {
+    pub on_error: OnErrorMode,
+    pub size_limit: usize,
+    pub max_files: usize,
+    pub split_size: usize,
+    pub force: bool,
+    pub purge: bool,
+    pub disable_variant_check: bool,
+    pub return_failed_only: bool,
+    pub validation_mode: String,
+}
+
+impl CopyIntoTableOptions {
+    fn parse_uint(k: &str, v: &String) -> std::result::Result<usize, String> {
+        usize::from_str(v).map_err(|e| format!("can not parse {}={} as uint: {}", k, v, e))
+    }
+    fn parse_bool(k: &str, v: &String) -> std::result::Result<bool, String> {
+        bool::from_str(v).map_err(|e| format!("can not parse {}={} as bool: {}", k, v, e))
+    }
+
+    pub fn apply(
+        &mut self,
+        opts: &BTreeMap<String, String>,
+        ignore_unknown: bool,
+    ) -> std::result::Result<(), String> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "on_error" => {
+                    let on_error = OnErrorMode::from_str(v)?;
+                    self.on_error = on_error;
+                }
+                "size_limit" => {
+                    self.size_limit = Self::parse_uint(k, v)?;
+                }
+                "max_files" => {
+                    self.max_files = Self::parse_uint(k, v)?;
+                }
+                "split_size" => {
+                    self.split_size = Self::parse_uint(k, v)?;
+                }
+                "purge" => {
+                    self.purge = Self::parse_bool(k, v)?;
+                }
+                "disable_variant_check" => {
+                    self.disable_variant_check = Self::parse_bool(k, v)?;
+                }
+                "return_failed_only" => {
+                    self.return_failed_only = Self::parse_bool(k, v)?;
+                }
+                _ => {
+                    if !ignore_unknown {
+                        return Err(format!("Unknown stage copy option {}", k));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for CopyIntoTableOptions {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "OnErrorMode {}", self.on_error)?;
+        write!(f, "SizeLimit {}", self.size_limit)?;
+        write!(f, "MaxFiles {}", self.max_files)?;
+        write!(f, "SplitSize {}", self.split_size)?;
+        write!(f, "Purge {}", self.purge)?;
+        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
+        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
         Ok(())
     }
 }
@@ -239,7 +321,7 @@ impl Display for CopyIntoTableSource {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CopyIntoLocationSource {
     Query(Box<Query>),
-    /// it will be rewrite as `(SELECT * FROM table)`
+    /// it will be rewritten as `(SELECT * FROM table)`
     Table(TableRef),
 }
 
@@ -482,7 +564,6 @@ pub enum CopyIntoTableOption {
     Files(Vec<String>),
     Pattern(LiteralStringOrVariable),
     FileFormat(FileFormatOptions),
-    ValidationMode(String),
     SizeLimit(usize),
     MaxFiles(usize),
     SplitSize(usize),
@@ -559,6 +640,76 @@ impl Display for FileFormatValue {
                     write!(f, "{}", QuotedString(s, '\''))?;
                 }
                 write!(f, ")")
+            }
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq)]
+pub enum OnErrorMode {
+    Continue,
+    SkipFileNum(u64),
+    AbortNum(u64),
+}
+
+impl Default for OnErrorMode {
+    fn default() -> Self {
+        Self::AbortNum(1)
+    }
+}
+
+impl Display for OnErrorMode {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            OnErrorMode::Continue => {
+                write!(f, "continue")
+            }
+            OnErrorMode::SkipFileNum(n) => {
+                if *n <= 1 {
+                    write!(f, "skipfile")
+                } else {
+                    write!(f, "skipfile_{}", n)
+                }
+            }
+            OnErrorMode::AbortNum(n) => {
+                if *n <= 1 {
+                    write!(f, "abort")
+                } else {
+                    write!(f, "abort_{}", n)
+                }
+            }
+        }
+    }
+}
+
+const ERROR_MODE_MSG: &str =
+    "OnError must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}";
+impl FromStr for OnErrorMode {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<Self, &'static str> {
+        match s.to_uppercase().as_str() {
+            "" | "ABORT" => Ok(OnErrorMode::AbortNum(1)),
+            "CONTINUE" => Ok(OnErrorMode::Continue),
+            "SKIP_FILE" => Ok(OnErrorMode::SkipFileNum(1)),
+            v => {
+                if v.starts_with("ABORT_") {
+                    let num_str = v.replace("ABORT_", "");
+                    let nums = num_str.parse::<u64>();
+                    match nums {
+                        Ok(n) if n < 1 => Err(ERROR_MODE_MSG),
+                        Ok(n) => Ok(OnErrorMode::AbortNum(n)),
+                        Err(_) => Err(ERROR_MODE_MSG),
+                    }
+                } else {
+                    let num_str = v.replace("SKIP_FILE_", "");
+                    let nums = num_str.parse::<u64>();
+                    match nums {
+                        Ok(n) if n < 1 => Err(ERROR_MODE_MSG),
+                        Ok(n) => Ok(OnErrorMode::SkipFileNum(n)),
+                        Err(_) => Err(ERROR_MODE_MSG),
+                    }
+                }
             }
         }
     }

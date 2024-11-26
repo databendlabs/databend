@@ -112,6 +112,7 @@ impl CopyIntoLocationInterpreter {
                 is_select: false,
                 default_values: None,
                 copy_into_location_options: options.clone(),
+                copy_into_table_options: Default::default(),
             },
         }));
 
