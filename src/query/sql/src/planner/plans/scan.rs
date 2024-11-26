@@ -243,13 +243,19 @@ impl Operator for Scan {
                 {
                     histogram.clone()
                 } else {
-                    histogram_from_ndv(
-                        ndv,
-                        num_rows.saturating_sub(col_stat.null_count),
-                        Some((min.clone(), max.clone())),
-                        DEFAULT_HISTOGRAM_BUCKETS,
-                    )
-                    .ok()
+                    let num_rows = num_rows.saturating_sub(col_stat.null_count);
+                    let ndv = std::cmp::min(num_rows, ndv);
+                    if num_rows != 0 {
+                        histogram_from_ndv(
+                            ndv,
+                            num_rows,
+                            Some((min.clone(), max.clone())),
+                            DEFAULT_HISTOGRAM_BUCKETS,
+                        )
+                        .ok()
+                    } else {
+                        None
+                    }
                 };
                 let column_stat = ColumnStat {
                     min,
