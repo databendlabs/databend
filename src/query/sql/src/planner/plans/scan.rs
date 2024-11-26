@@ -245,7 +245,7 @@ impl Operator for Scan {
                 } else {
                     histogram_from_ndv(
                         ndv,
-                        num_rows - col_stat.null_count,
+                        num_rows.saturating_sub(col_stat.null_count),
                         Some((min.clone(), max.clone())),
                         DEFAULT_HISTOGRAM_BUCKETS,
                     )
