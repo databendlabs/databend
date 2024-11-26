@@ -31,7 +31,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_sql::executor::physical_plans::RangeJoin;
@@ -260,8 +259,8 @@ impl RangeJoinState {
             .value
             .try_downcast::<UInt64Type>()
             .unwrap();
-        if let ValueRef::Column(col) = column.as_ref() {
-            for val in UInt64Type::iter_column(&col) {
+        if let Value::Column(col) = &column {
+            for val in UInt64Type::iter_column(col) {
                 p_array.push(val)
             }
         }
