@@ -14,9 +14,18 @@
 
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
+use crate::plans::Mutation;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::BindContext;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub struct OptimizePurgePlan {
@@ -49,12 +58,40 @@ impl Operator for OptimizeCompactBlock {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub struct OptimizeClusterBy {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
-    pub num_segment_limit: Option<usize>,
+    pub metadata: MetadataRef,
+    pub bind_context: Box<BindContext>,
+}
+
+impl std::fmt::Debug for OptimizeClusterBy {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("OptimizeClusterBy")
+            .field("catalog", &self.catalog_name)
+            .field("database", &self.database_name)
+            .field("table", &self.table_name)
+            .finish()
+    }
+}
+
+impl Eq for OptimizeClusterBy {}
+
+impl PartialEq for OptimizeClusterBy {
+    fn eq(&self, other: &Self) -> bool {
+        self.catalog_name == other.catalog_name
+            && self.database_name == other.database_name
+            && self.table_name == other.table_name
+    }
+}
+
+impl std::hash::Hash for OptimizeClusterBy {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.database_name.hash(state);
+        self.table_name.hash(state);
+    }
 }
 
 impl Operator for OptimizeClusterBy {
