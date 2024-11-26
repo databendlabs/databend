@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::iter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -23,10 +24,11 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Exchange;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::sort::select_row_type;
-use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::processors::sort::Rows;
+use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
 
 use super::sort_simple::SortSimpleState;
 use crate::pipelines::processors::PartitionProcessor;
@@ -61,11 +63,10 @@ impl<R: Rows + 'static> Exchange for SortRangeExchange<R> {
 
         let mut i = 0;
         let mut j = 0;
-        let mut v = rows.row(i);
         let mut bound = bounds.row(j);
         let mut indices = Vec::new();
         while i < rows.len() {
-            match v.cmp(&bound) {
+            match rows.row(i).cmp(&bound) {
                 Ordering::Less => indices.push(j as u32),
                 Ordering::Greater if j + 1 < bounds.len() => {
                     j += 1;
@@ -75,20 +76,19 @@ impl<R: Rows + 'static> Exchange for SortRangeExchange<R> {
                 _ => indices.push(j as u32 + 1),
             }
             i += 1;
-            v = rows.row(i);
         }
 
         DataBlock::scatter(&data, &indices, n)
     }
 }
 
-pub fn create_exchange_pipeitems(
+pub fn create_exchange_pipe(
     inputs: usize,
     partitions: usize,
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     state: Arc<SortSimpleState>,
-) -> Vec<PipeItem> {
+) -> Pipe {
     let mut builder = Builder {
         inputs,
         partitions,
@@ -100,7 +100,7 @@ pub fn create_exchange_pipeitems(
 
     select_row_type(&mut builder);
 
-    builder.items
+    Pipe::create(inputs, inputs * partitions, builder.items)
 }
 
 struct Builder {
@@ -113,22 +113,26 @@ struct Builder {
 }
 
 impl RowsTypeVisitor for Builder {
-    fn call<R: Rows + 'static>(&mut self) {
+    fn visit_type<R: Rows + 'static>(&mut self) {
         let exchange = Arc::new(SortRangeExchange::<R> {
             sort_desc: self.sort_desc.clone(),
             state: self.state.clone(),
             _r: PhantomData,
         });
-        let mut items = Vec::with_capacity(self.inputs);
-        for _ in 0..self.partitions {
+        self.items = iter::repeat_with(|| {
             let input = InputPort::create();
-            let outputs: Vec<_> = (0..self.partitions).map(|_| OutputPort::create()).collect();
-            items.push(PipeItem::create(
+            let outputs = iter::repeat_with(OutputPort::create)
+                .take(self.partitions)
+                .collect::<Vec<_>>();
+
+            PipeItem::create(
                 PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
                 vec![input],
                 outputs,
-            ));
-        }
+            )
+        })
+        .take(self.inputs)
+        .collect::<Vec<_>>();
     }
 
     fn schema(&self) -> DataSchemaRef {

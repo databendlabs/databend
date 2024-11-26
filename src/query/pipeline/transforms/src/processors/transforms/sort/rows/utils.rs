@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::types::DataType;
@@ -39,7 +37,7 @@ use crate::sort::CommonRows;
 
 pub fn convert_rows(
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: &[SortColumnDescription],
     data: DataBlock,
 ) -> Result<Column> {
     let num_rows = data.num_rows();
@@ -84,19 +82,19 @@ pub fn convert_rows(
 
 fn convert_columns<R: Rows, C: RowConverter<R>>(
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: &[SortColumnDescription],
     columns: &[BlockEntry],
     num_rows: usize,
 ) -> Result<Column> {
-    let mut converter = C::create(&sort_desc, schema)?;
+    let mut converter = C::create(sort_desc, schema)?;
     let rows = C::convert(&mut converter, columns, num_rows)?;
     Ok(rows.to_column())
 }
 
-pub fn select_row_type(cb: &mut impl RowsTypeVisitor) {
-    let sort_desc = cb.sort_desc();
+pub fn select_row_type(visitor: &mut impl RowsTypeVisitor) {
+    let sort_desc = visitor.sort_desc();
     if sort_desc.len() == 1 {
-        let schema = cb.schema();
+        let schema = visitor.schema();
         let sort_type = schema.field(sort_desc[0].offset).data_type();
         let asc = sort_desc[0].asc;
 
@@ -105,25 +103,25 @@ pub fn select_row_type(cb: &mut impl RowsTypeVisitor) {
         match sort_type {
             DataType::T => {
                 if asc {
-                    cb.call::<SimpleRowsAsc<T>>()
+                    visitor.visit_type::<SimpleRowsAsc<T>>()
                 } else {
-                    cb.call::<SimpleRowsDesc<T>>()
+                    visitor.visit_type::<SimpleRowsDesc<T>>()
                 }
             },
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
                 NumberDataType::NUM_TYPE => {
                     if asc {
-                        cb.call::<SimpleRowsAsc<NumberType<NUM_TYPE>>>()
+                        visitor.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>>()
                     } else {
-                        cb.call::<SimpleRowsDesc<NumberType<NUM_TYPE>>>()
+                        visitor.visit_type::<SimpleRowsDesc<NumberType<NUM_TYPE>>>()
                     }
                 }
             }),
-            _ => cb.call::<CommonRows>()
+            _ => visitor.visit_type::<CommonRows>()
             }
         }
     } else {
-        cb.call::<CommonRows>()
+        visitor.visit_type::<CommonRows>()
     }
 }
 
@@ -132,5 +130,5 @@ pub trait RowsTypeVisitor {
 
     fn sort_desc(&self) -> &[SortColumnDescription];
 
-    fn call<R: Rows + 'static>(&mut self);
+    fn visit_type<R: Rows + 'static>(&mut self);
 }

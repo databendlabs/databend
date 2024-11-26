@@ -38,6 +38,7 @@ use crate::pipelines::processors::transforms::sort::add_range_shuffle;
 use crate::pipelines::processors::transforms::sort::add_range_shuffle_merge;
 use crate::pipelines::processors::transforms::sort::add_sort_simple;
 use crate::pipelines::processors::transforms::sort::SortSimpleState;
+use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
@@ -225,6 +226,8 @@ impl SortPipelineBuilder {
             self.sort_desc.clone(),
         );
 
+        add_sort_simple(pipeline, simple.clone(), self.sort_desc.clone(), k)?;
+
         // Partial sort
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
@@ -232,8 +235,6 @@ impl SortPipelineBuilder {
                 self.sort_desc.clone(),
             )
         });
-
-        add_sort_simple(pipeline, simple.clone(), self.sort_desc.clone(), k)?;
 
         self.build_merge_sort(pipeline, false)?;
 
@@ -248,7 +249,15 @@ impl SortPipelineBuilder {
             self.enable_loser_tree,
         )?;
 
-        add_range_shuffle_merge(pipeline)
+        add_range_shuffle_merge(pipeline)?;
+
+        if self.limit.is_none() {
+            return Ok(());
+        }
+
+        pipeline.add_transform(|input, output| {
+            TransformLimit::try_create(self.limit, 0, input, output).map(ProcessorPtr::create)
+        })
     }
 
     fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {

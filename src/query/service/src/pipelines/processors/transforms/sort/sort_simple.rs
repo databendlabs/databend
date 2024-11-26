@@ -37,7 +37,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-use super::sort_exchange::create_exchange_pipeitems;
+use super::sort_exchange::create_exchange_pipe;
 use super::sort_wait::TransformSortSimpleWait;
 
 pub struct SortSimpleState {
@@ -53,7 +53,9 @@ impl SortSimpleState {
 
 struct StateInner {
     partitions: usize,
+    // schema for bounds DataBlock
     schema: DataSchemaRef,
+    // sort_desc for bounds DataBlock
     sort_desc: Vec<SortColumnDescription>,
     partial: Vec<Option<DataBlock>>,
     bounds: Option<Column>,
@@ -72,7 +74,7 @@ impl StateInner {
         if partial.is_empty() {
             let bounds = convert_rows(
                 self.schema.clone(),
-                self.sort_desc.clone().into(),
+                &self.sort_desc,
                 DataBlock::empty_with_schema(self.schema.clone()),
             )?;
 
@@ -114,7 +116,7 @@ impl StateInner {
 
         let bounds = convert_rows(
             self.schema.clone(),
-            self.sort_desc.clone().into(),
+            &self.sort_desc,
             candidates.take(&bounds)?,
         )?;
         self.bounds = Some(bounds);
@@ -159,10 +161,10 @@ impl SortSimpleState {
         None
     }
 
-    fn commit_simple(&self, id: usize, block: Option<DataBlock>) -> Result<bool> {
+    pub fn commit_simple(&self, id: usize, block: Option<DataBlock>) -> Result<bool> {
         let mut inner = self.inner.write().unwrap();
 
-        let block = block.unwrap_or(DataBlock::empty_with_schema(inner.schema.clone())); // todo check
+        let block = block.unwrap_or(DataBlock::empty_with_schema(inner.schema.clone()));
         let x = inner.partial[id].replace(block);
         debug_assert!(x.is_none());
         let done = inner.partial.iter().all(|x| x.is_some());
@@ -240,19 +242,17 @@ pub fn add_range_shuffle(
     remove_order_col: bool,
     enable_loser_tree: bool,
 ) -> Result<()> {
-    let input_len = pipeline.output_len();
-
     pipeline.add_transform(|input, output| {
         Ok(ProcessorPtr::create(Box::new(
             TransformSortSimpleWait::new(input, output, state.clone()),
         )))
     })?;
 
-    let n = state.partitions();
-    let items = create_exchange_pipeitems(input_len, n, schema.clone(), sort_desc.clone(), state);
-
     // partition data block
-    pipeline.add_pipe(Pipe::create(input_len, input_len * n, items));
+    let input_len = pipeline.output_len();
+    let n = state.partitions();
+    let exchange = create_exchange_pipe(input_len, n, schema.clone(), sort_desc.clone(), state);
+    pipeline.add_pipe(exchange);
 
     let reorder_edges = (0..input_len * n)
         .map(|index| (index % n) * input_len + (index / n))
@@ -284,7 +284,6 @@ pub fn add_range_shuffle(
     // merge partition
     pipeline.add_pipe(Pipe::create(input_len * n, n, items));
 
-    // todo limit
     Ok(())
 }
 
