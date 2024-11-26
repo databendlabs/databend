@@ -5,10 +5,22 @@ statement ok
 drop table if exists t2 all
 
 statement ok
-create table t1 as select number as a, number as b from numbers(1)
+create OR REPLACE table t1 as select number as a, number as b from numbers(1)
 
 statement ok
-create table t2 as select number as a, number as b from numbers(5)
+create OR REPLACE table t2 as select number as a, number as b from numbers(5)
+
+statement error 1005
+explain explain select t1.a from t1 where a > 0
+
+statement error 1005
+explain explain analyze select t1.a from t1 where a > 0
+
+statement error 1005
+explain analyze explain select t1.a from t1 where a > 0
+
+statement error 1005
+explain analyze explain analyze select t1.a from t1 where a > 0
 
 query T
 explain select t1.a from t1 where a > 0
@@ -33,7 +45,7 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
-├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
+├── filters: [(t1.a (#0) > 3 OR (t2.a (#2) > 5 AND t1.a (#0) > 1))]
 ├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
@@ -44,7 +56,7 @@ Filter
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
+    │   ├── filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)]
     │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -54,11 +66,11 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 0
     │       ├── pruning stats: [segments: <range pruning: 1 to 0>]
-    │       ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
+    │       ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
         ├── output columns: [t2.a (#2), t2.b (#3)]
-        ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
+        ├── filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)]
         ├── estimated rows: 3.40
         └── TableScan
             ├── table: default.default.t2
@@ -68,7 +80,7 @@ Filter
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
+            ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
             └── estimated rows: 5.00
 
 query T
@@ -224,7 +236,7 @@ query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
 COPY
-INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
+INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
     field_delimiter = ',',
@@ -235,9 +247,9 @@ FILE_FORMAT = (
 SINGLE = false
 
 query T
-explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
+explain syntax create OR REPLACE table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
-CREATE TABLE t3 (
+CREATE OR REPLACE TABLE t3 (
     a Int64,
     b UInt64,
     c Float64,
@@ -322,7 +334,7 @@ query T
 explain syntax with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
 ----
 WITH
-    cte(a, b) AS 
+    cte(a, b) AS
     (
         SELECT
             1,
@@ -341,7 +353,7 @@ query T
 explain syntax with cte (a, b) as (values(1,2),(3,4)) select a, b from cte
 ----
 WITH
-    cte(a, b) AS 
+    cte(a, b) AS
     (
         VALUES(1, 2), (3, 4)
     )
@@ -397,9 +409,9 @@ explain syntax create database db1 engine=default
 CREATE DATABASE db1 ENGINE = DEFAULT
 
 query T
-explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
+explain syntax create OR REPLACE table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
-CREATE TABLE t3 (
+CREATE OR REPLACE TABLE t3 (
     a Int64,
     b UInt64,
     c Float64,
@@ -491,7 +503,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
+├── filters: [((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4))]
 ├── estimated rows: 3.52
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -502,7 +514,7 @@ Filter
     ├── estimated rows: 4.40
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
+    │   ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 3)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -512,11 +524,11 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
+    │       ├── push downs: [filters: [(t1.a (#0) > 1 OR t1.b (#1) < 3)], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
         ├── output columns: [t2.a (#2), t2.b (#3)]
-        ├── filters: [t2.a (#2) > 2 OR t2.b (#3) < 4]
+        ├── filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)]
         ├── estimated rows: 4.40
         └── TableScan
             ├── table: default.default.t2
@@ -526,7 +538,7 @@ Filter
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
+            ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
             └── estimated rows: 5.00
 
 query T
@@ -534,7 +546,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
+├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t1.a (#0) = 2)]
 ├── estimated rows: 4.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -545,7 +557,7 @@ Filter
     ├── estimated rows: 5.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2]
+    │   ├── filters: [((t1.a (#0) > 1 OR t1.b (#1) < 3) OR t1.a (#0) = 2)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -555,7 +567,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-    │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2], limit: NONE]
+    │       ├── push downs: [filters: [((t1.a (#0) > 1 OR t1.b (#1) < 3) OR t1.a (#0) = 2)], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -572,7 +584,7 @@ statement ok
 drop table if exists t3
 
 statement ok
-create table t3 as select number as a, number as b from numbers(10)
+create OR REPLACE table t3 as select number as a, number as b from numbers(10)
 
 query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
@@ -582,7 +594,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: []
 ├── probe keys: []
-├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
+├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -634,7 +646,7 @@ HashJoin
 ├── estimated rows: 28.16
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-│   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
+│   ├── filters: [((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4))]
 │   ├── estimated rows: 3.52
 │   └── HashJoin
 │       ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -645,7 +657,7 @@ HashJoin
 │       ├── estimated rows: 4.40
 │       ├── Filter(Build)
 │       │   ├── output columns: [t1.a (#0), t1.b (#1)]
-│       │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
+│       │   ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 3)]
 │       │   ├── estimated rows: 1.00
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
@@ -655,11 +667,11 @@ HashJoin
 │       │       ├── partitions total: 1
 │       │       ├── partitions scanned: 1
 │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
+│       │       ├── push downs: [filters: [(t1.a (#0) > 1 OR t1.b (#1) < 3)], limit: NONE]
 │       │       └── estimated rows: 1.00
 │       └── Filter(Probe)
 │           ├── output columns: [t2.a (#2), t2.b (#3)]
-│           ├── filters: [t2.a (#2) > 2 OR t2.b (#3) < 4]
+│           ├── filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)]
 │           ├── estimated rows: 4.40
 │           └── TableScan
 │               ├── table: default.default.t2
@@ -669,7 +681,7 @@ HashJoin
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
 │               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│               ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
+│               ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
 │               └── estimated rows: 5.00
 └── Filter(Probe)
     ├── output columns: [t3.a (#4), t3.b (#5)]
@@ -697,11 +709,11 @@ Limit
 └── Sort
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── sort keys: [a DESC NULLS LAST]
-    ├── estimated rows: 3.87
+    ├── estimated rows: 3.85
     └── Filter
         ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-        ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-        ├── estimated rows: 3.87
+        ├── filters: [(((t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4))]
+        ├── estimated rows: 3.85
         └── HashJoin
             ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
             ├── join type: CROSS
@@ -711,7 +723,7 @@ Limit
             ├── estimated rows: 4.40
             ├── Filter(Build)
             │   ├── output columns: [t1.a (#0), t1.b (#1)]
-            │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3]
+            │   ├── filters: [((t1.a (#0) > 1 OR t1.b (#1) < 2) OR t1.b (#1) < 3)]
             │   ├── estimated rows: 1.00
             │   └── TableScan
             │       ├── table: default.default.t1
@@ -721,11 +733,11 @@ Limit
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3], limit: NONE]
+            │       ├── push downs: [filters: [((t1.a (#0) > 1 OR t1.b (#1) < 2) OR t1.b (#1) < 3)], limit: NONE]
             │       └── estimated rows: 1.00
             └── Filter(Probe)
                 ├── output columns: [t2.a (#2), t2.b (#3)]
-                ├── filters: [t2.a (#2) > 2 OR t2.b (#3) < 4]
+                ├── filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)]
                 ├── estimated rows: 4.40
                 └── TableScan
                     ├── table: default.default.t2
@@ -735,7 +747,7 @@ Limit
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                    ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
+                    ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
                     └── estimated rows: 5.00
 
 query 
@@ -750,7 +762,7 @@ HashJoin
 ├── estimated rows: 5.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
-│   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2]
+│   ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2)]
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.default.t1
@@ -760,7 +772,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2], limit: NONE]
+│       ├── push downs: [filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2)], limit: NONE]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
@@ -883,7 +895,7 @@ statement ok
 drop table if exists t4
 
 statement ok
-create table t4(a int, b string);
+create OR REPLACE table t4(a int, b string);
 
 query 
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
@@ -957,10 +969,10 @@ statement ok
 drop table if exists b
 
 statement ok
-create table a(id int, c1 INT NULL)
+create OR REPLACE table a(id int, c1 INT NULL)
 
 statement ok
-create table b(id int, c1 INT NULL)
+create OR REPLACE table b(id int, c1 INT NULL)
 
 statement ok
 insert into a values(1, 1683648000)
@@ -1037,7 +1049,7 @@ Sort
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
     ├── build keys: [b.register_at (#3), numbers.number (#2)]
-    ├── probe keys: [a.pt (#1), numbers.number (#0)]
+    ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
@@ -1083,10 +1095,10 @@ statement ok
 drop table if exists b
 
 statement ok
-create table a(id int, c1 INT NULL)
+create OR REPLACE table a(id int, c1 INT NULL)
 
 statement ok
-create table b(id int, c1 INT NULL)
+create OR REPLACE table b(id int, c1 INT NULL)
 
 statement ok
 insert into a values (1, 2), (2, 4), (3, 6)
@@ -1098,41 +1110,37 @@ insert into b values (1, 5), (4, 8)
 query T
 explain select * from a where a.id = (select id from b where a.id = b.id);
 ----
-Filter
+HashJoin
 ├── output columns: [a.id (#0), a.c1 (#1)]
-├── filters: [is_true(a.id (#0) = scalar_subquery_2 (#2))]
-├── estimated rows: 0.08
-└── HashJoin
-    ├── output columns: [a.id (#0), a.c1 (#1), b.id (#2)]
-    ├── join type: INNER
-    ├── build keys: [id (#2)]
-    ├── probe keys: [id (#0)]
-    ├── filters: []
-    ├── estimated rows: 0.40
-    ├── Filter(Build)
-    │   ├── output columns: [b.id (#2)]
-    │   ├── filters: [is_true(b.id (#2) = b.id (#2))]
-    │   ├── estimated rows: 0.40
-    │   └── TableScan
-    │       ├── table: default.default.b
-    │       ├── output columns: [id (#2)]
-    │       ├── read rows: 2
-    │       ├── read size: < 1 KiB
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    │       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
-    │       └── estimated rows: 2.00
-    └── TableScan(Probe)
-        ├── table: default.default.a
-        ├── output columns: [id (#0), c1 (#1)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 3.00
+├── join type: INNER
+├── build keys: [scalar_subquery_2 (#2), id (#2)]
+├── probe keys: [a.id (#0), a.id (#0)]
+├── filters: []
+├── estimated rows: 0.40
+├── Filter(Build)
+│   ├── output columns: [b.id (#2)]
+│   ├── filters: [is_true(b.id (#2) = b.id (#2))]
+│   ├── estimated rows: 0.40
+│   └── TableScan
+│       ├── table: default.default.b
+│       ├── output columns: [id (#2)]
+│       ├── read rows: 2
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
+│       └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── table: default.default.a
+    ├── output columns: [id (#0), c1 (#1)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
 
 statement ok
 drop table a;
@@ -1141,7 +1149,7 @@ statement ok
 drop table b;
 
 statement ok
-create table t1(a int, b int);
+create OR REPLACE table t1(a int, b int);
 
 statement ok
 insert into t1 values(1, 2), (2, 3), (3, 4);
@@ -1226,10 +1234,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-CREATE TABLE t1(i int, j int);
+CREATE OR REPLACE TABLE t1(i int, j int);
 
 statement ok
-CREATE TABLE t2(k int, l int);
+CREATE OR REPLACE TABLE t2(k int, l int);
 
 statement ok
 INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
@@ -1266,28 +1274,26 @@ Sort
 query T
 EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
-EvalScalar
-├── scalars: [t1.i (#0) AS (#0), t1.j (#1) AS (#1), t2.k (#2) AS (#2), t2.l (#3) AS (#3)]
-└── Sort
-    ├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
-    ├── limit: [NONE]
-    └── Join(Left)
-        ├── build keys: [t2.k (#2)]
-        ├── probe keys: [t1.i (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EmptyResultScan
+Sort
+├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
+├── limit: [NONE]
+└── Join(Left)
+    ├── build keys: [t2.k (#2)]
+    ├── probe keys: [t1.i (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t1
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EmptyResultScan
 
 
 statement ok
 drop table if exists t3;
 
 statement ok
-CREATE TABLE t3(a int, b map(string, string) null, c map(string, variant) null);
+CREATE OR REPLACE TABLE t3(a int, b map(string, string) null, c map(string, variant) null);
 
 statement ok
 INSERT INTO t3 VALUES (1, {'k1':'a', 'k2':'b'}, {'k1':'"a"', 'k2':'100'}), (2, null, null), (3, {'k3':'z'}, {'k3':'"z"'});
@@ -1359,7 +1365,7 @@ statement ok
 drop table t3;
 
 statement ok
-CREATE TABLE customers AS SELECT
+CREATE OR REPLACE TABLE customers AS SELECT
   number % 100 AS customer_id,
   concat('Customer ', to_string(number % 100)) AS customer_name,
   CASE WHEN (rand() * 10000)::int % 3 = 0 THEN 'Small'
@@ -1372,7 +1378,7 @@ FROM numbers(100);
 
 
 statement ok
-CREATE TABLE products AS SELECT
+CREATE OR REPLACE TABLE products AS SELECT
   number % 10 AS product_id,
   concat('Product ', to_string(number % 10)) AS product_name,
   (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS price,
@@ -1384,7 +1390,7 @@ CREATE TABLE products AS SELECT
 FROM numbers(10);
 
 statement ok
-CREATE TABLE sales AS SELECT
+CREATE OR REPLACE TABLE sales AS SELECT
   number % 500 AS sale_id,
   number % 100 AS product_id,
   number % 100 AS customer_id,
@@ -1446,10 +1452,10 @@ statement ok
 drop table sales;
 
 statement ok
-create table t1 (a int);
+create OR REPLACE table t1 (a int);
 
 statement ok
-create table t2 (b int);
+create OR REPLACE table t2 (b int);
 
 query T
 explain select date from (select *, 'year' as date from t1 left join t2 on t1.a = t2.b) where date = '';
@@ -1500,119 +1506,111 @@ statement ok
 drop table t2;
 
 statement ok
-create table t1(a int, b int, c varchar(20));
+create OR REPLACE table t1(a int, b int, c varchar(20));
 
 statement ok
-create table t2(a int, b int, c varchar(20));
+create OR REPLACE table t2(a int, b int, c varchar(20));
 
 # scalar subquery and sort plan contains count() agg function.
 query T
 explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(a));
 ----
-Filter
+HashJoin
 ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
-├── filters: [is_true(t2.c (#2) > scalar_subquery_5 (#5))]
+├── join type: INNER
+├── build keys: [a (#3)]
+├── probe keys: [a (#0)]
+├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── estimated rows: 0.00
-└── HashJoin
-    ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
-    ├── join type: INNER
-    ├── build keys: [a (#3)]
-    ├── probe keys: [a (#0)]
-    ├── filters: []
-    ├── estimated rows: 0.00
-    ├── Sort(Build)
-    │   ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
-    │   ├── sort keys: [count(a) ASC NULLS LAST]
-    │   ├── estimated rows: 0.00
-    │   └── EvalScalar
-    │       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
-    │       ├── expressions: [count(a) (#6)]
-    │       ├── estimated rows: 0.00
-    │       └── AggregateFinal
-    │           ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
-    │           ├── group by: [c, a]
-    │           ├── aggregate functions: [count(a)]
-    │           ├── estimated rows: 0.00
-    │           └── AggregatePartial
-    │               ├── group by: [c, a]
-    │               ├── aggregate functions: [count(a)]
-    │               ├── estimated rows: 0.00
-    │               └── Filter
-    │                   ├── output columns: [t1.a (#3), t1.c (#5)]
-    │                   ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
-    │                   ├── estimated rows: 0.00
-    │                   └── TableScan
-    │                       ├── table: default.default.t1
-    │                       ├── output columns: [a (#3), c (#5)]
-    │                       ├── read rows: 0
-    │                       ├── read size: 0
-    │                       ├── partitions total: 0
-    │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-    │                       └── estimated rows: 0.00
-    └── TableScan(Probe)
-        ├── table: default.default.t2
-        ├── output columns: [a (#0), b (#1), c (#2)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
+├── Sort(Build)
+│   ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+│   ├── sort keys: [count(a) ASC NULLS LAST]
+│   ├── estimated rows: 0.00
+│   └── EvalScalar
+│       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+│       ├── expressions: [count(a) (#6)]
+│       ├── estimated rows: 0.00
+│       └── AggregateFinal
+│           ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
+│           ├── group by: [c, a]
+│           ├── aggregate functions: [count(a)]
+│           ├── estimated rows: 0.00
+│           └── AggregatePartial
+│               ├── group by: [c, a]
+│               ├── aggregate functions: [count(a)]
+│               ├── estimated rows: 0.00
+│               └── Filter
+│                   ├── output columns: [t1.a (#3), t1.c (#5)]
+│                   ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
+│                   ├── estimated rows: 0.00
+│                   └── TableScan
+│                       ├── table: default.default.t1
+│                       ├── output columns: [a (#3), c (#5)]
+│                       ├── read rows: 0
+│                       ├── read size: 0
+│                       ├── partitions total: 0
+│                       ├── partitions scanned: 0
+│                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+│                       └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.t2
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(*));
 ----
-Filter
+HashJoin
 ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
-├── filters: [is_true(t2.c (#2) > scalar_subquery_5 (#5))]
+├── join type: INNER
+├── build keys: [a (#3)]
+├── probe keys: [a (#0)]
+├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── estimated rows: 0.00
-└── HashJoin
-    ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
-    ├── join type: INNER
-    ├── build keys: [a (#3)]
-    ├── probe keys: [a (#0)]
-    ├── filters: []
-    ├── estimated rows: 0.00
-    ├── Sort(Build)
-    │   ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
-    │   ├── sort keys: [COUNT(*) ASC NULLS LAST]
-    │   ├── estimated rows: 0.00
-    │   └── EvalScalar
-    │       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
-    │       ├── expressions: [COUNT(*) (#6)]
-    │       ├── estimated rows: 0.00
-    │       └── AggregateFinal
-    │           ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
-    │           ├── group by: [c, a]
-    │           ├── aggregate functions: [count()]
-    │           ├── estimated rows: 0.00
-    │           └── AggregatePartial
-    │               ├── group by: [c, a]
-    │               ├── aggregate functions: [count()]
-    │               ├── estimated rows: 0.00
-    │               └── Filter
-    │                   ├── output columns: [t1.a (#3), t1.c (#5)]
-    │                   ├── filters: [is_true(a (#3) = a (#3))]
-    │                   ├── estimated rows: 0.00
-    │                   └── TableScan
-    │                       ├── table: default.default.t1
-    │                       ├── output columns: [a (#3), c (#5)]
-    │                       ├── read rows: 0
-    │                       ├── read size: 0
-    │                       ├── partitions total: 0
-    │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-    │                       └── estimated rows: 0.00
-    └── TableScan(Probe)
-        ├── table: default.default.t2
-        ├── output columns: [a (#0), b (#1), c (#2)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
+├── Sort(Build)
+│   ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+│   ├── sort keys: [COUNT(*) ASC NULLS LAST]
+│   ├── estimated rows: 0.00
+│   └── EvalScalar
+│       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+│       ├── expressions: [COUNT(*) (#6)]
+│       ├── estimated rows: 0.00
+│       └── AggregateFinal
+│           ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
+│           ├── group by: [c, a]
+│           ├── aggregate functions: [count()]
+│           ├── estimated rows: 0.00
+│           └── AggregatePartial
+│               ├── group by: [c, a]
+│               ├── aggregate functions: [count()]
+│               ├── estimated rows: 0.00
+│               └── Filter
+│                   ├── output columns: [t1.a (#3), t1.c (#5)]
+│                   ├── filters: [is_true(a (#3) = a (#3))]
+│                   ├── estimated rows: 0.00
+│                   └── TableScan
+│                       ├── table: default.default.t1
+│                       ├── output columns: [a (#3), c (#5)]
+│                       ├── read rows: 0
+│                       ├── read size: 0
+│                       ├── partitions total: 0
+│                       ├── partitions scanned: 0
+│                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+│                       └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.t2
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain insert into t2 select * from t1;
@@ -1621,13 +1619,11 @@ InsertPlan (subquery):
 ├── table: default.default.t2
 ├── inserted columns: [t2.a (#0),t2.b (#1),t2.c (#2)]
 ├── overwrite: false
-└── EvalScalar
-    ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t1.c (#2) AS (#2)]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── Scan
+    ├── table: default.t1
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
 
 
 statement ok
