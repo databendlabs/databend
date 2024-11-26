@@ -32,7 +32,7 @@ sample_3_replace.csv	5	0	NULL	NULL
 105	hammer	14oz carpenter's hammer
 24
 null
-Error: APIError: ResponseError with 1046: Number of columns in file (2) does not match that of the corresponding table (3)
+Error: APIError: QueryFailed: [1046]Number of columns in file (2) does not match that of the corresponding table (3)
 at file 'sample_2_columns.csv', line 0
 24
 5
