@@ -182,9 +182,9 @@ impl AdminService {
 impl Server for AdminService {
     #[async_backtrace::framed]
     async fn shutdown(&mut self, _graceful: bool) {
-        // intendfully do nothing: sometimes we hope to diagnose the backtraces or metrics after
+        // intentionally do nothing: sometimes we hope to diagnose the backtraces or metrics after
         // the process got the sigterm signal, we can still leave the admin service port open until
-        // the process exited. it's not an user facing service, it's allowed to shutdown forcely.
+        // the process exited. it's not an user facing service, it's allowed to shut down forcibly.
     }
 
     #[async_backtrace::framed]
