@@ -19,7 +19,6 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use num_traits::AsPrimitive;
 use strength_reduce::StrengthReducedU16;
 use strength_reduce::StrengthReducedU32;
@@ -27,8 +26,7 @@ use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
 pub(crate) fn vectorize_modulo<L, R, M, O>()
--> impl Fn(ValueRef<NumberType<L>>, ValueRef<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>>
-+ Copy
+-> impl Fn(Value<NumberType<L>>, Value<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>> + Copy
 where
     L: Number + AsPrimitive<M>,
     R: Number + AsPrimitive<M> + AsPrimitive<f64>,
@@ -47,7 +45,7 @@ where
         };
 
         match (arg1, arg2) {
-            (ValueRef::Column(lhs), ValueRef::Scalar(rhs)) => {
+            (Value::Column(lhs), Value::Scalar(rhs)) => {
                 if rhs == R::default() {
                     ctx.set_error(0, "Division by zero");
                     return Value::Column(vec![O::default(); lhs.len()].into());
@@ -55,19 +53,19 @@ where
                 let iter = lhs.iter().map(|lhs| lhs.as_());
                 RemScalar::<O>::rem_scalar(iter, rhs.as_())
             }
-            (ValueRef::Scalar(lhs), ValueRef::Scalar(rhs)) => {
+            (Value::Scalar(lhs), Value::Scalar(rhs)) => {
                 let mut builder: Vec<O> = Vec::with_capacity(1);
                 apply(&lhs, &rhs, &mut builder, ctx);
                 Value::Scalar(NumberType::<O>::build_scalar(builder))
             }
-            (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+            (Value::Scalar(arg1), Value::Column(arg2)) => {
                 let mut builder: Vec<O> = Vec::with_capacity(arg2.len());
                 for val in arg2.iter() {
                     apply(&arg1, val, &mut builder, ctx);
                 }
                 Value::Column(builder.into())
             }
-            (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            (Value::Column(arg1), Value::Column(arg2)) => {
                 let mut builder: Vec<O> = Vec::with_capacity(arg2.len());
                 let iter = arg1.iter().zip(arg2.iter());
                 for (val1, val2) in iter {

@@ -337,9 +337,6 @@ macro_rules! register_decimal_binary_op {
                         let a = convert_to_decimal(&args[0], ctx, &args_type[0], left);
                         let b = convert_to_decimal(&args[1], ctx, &args_type[1], right);
 
-                        let a = a.as_ref();
-                        let b = b.as_ref();
-
                         let res = op_decimal!(
                             &a,
                             &b,

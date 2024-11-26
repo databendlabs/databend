@@ -43,7 +43,6 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("and_filters", |_, args_type| {
@@ -83,8 +82,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(!scalar),
-            ValueRef::Column(column) => Value::Column(!&column),
+            Value::Scalar(scalar) => Value::Scalar(!scalar),
+            Value::Column(column) => Value::Column(!&column),
         },
     );
 
@@ -97,9 +96,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => other.to_owned(),
-            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Value::Scalar(false),
-            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(&a & &b),
+            (Value::Scalar(true), other) | (other, Value::Scalar(true)) => other.to_owned(),
+            (Value::Scalar(false), _) | (_, Value::Scalar(false)) => Value::Scalar(false),
+            (Value::Column(a), Value::Column(b)) => Value::Column(&a & &b),
         },
     );
 
@@ -112,9 +111,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), _) | (_, ValueRef::Scalar(true)) => Value::Scalar(true),
-            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
-            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(&a | &b),
+            (Value::Scalar(true), _) | (_, Value::Scalar(true)) => Value::Scalar(true),
+            (Value::Scalar(false), other) | (other, Value::Scalar(false)) => other.to_owned(),
+            (Value::Column(a), Value::Column(b)) => Value::Column(&a | &b),
         },
     );
 
@@ -220,12 +219,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), ValueRef::Scalar(other))
-            | (ValueRef::Scalar(other), ValueRef::Scalar(true)) => Value::Scalar(!other),
-            (ValueRef::Scalar(true), ValueRef::Column(other))
-            | (ValueRef::Column(other), ValueRef::Scalar(true)) => Value::Column(!&other),
-            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
-            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(boolean::xor(&a, &b)),
+            (Value::Scalar(true), Value::Scalar(other))
+            | (Value::Scalar(other), Value::Scalar(true)) => Value::Scalar(!other),
+            (Value::Scalar(true), Value::Column(other))
+            | (Value::Column(other), Value::Scalar(true)) => Value::Column(!&other),
+            (Value::Scalar(false), other) | (other, Value::Scalar(false)) => other.to_owned(),
+            (Value::Column(a), Value::Column(b)) => Value::Column(boolean::xor(&a, &b)),
         },
     );
 
@@ -269,9 +268,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(None) => Value::Scalar(false),
-            ValueRef::Scalar(Some(scalar)) => Value::Scalar(scalar),
-            ValueRef::Column(NullableColumn { column, validity }) => {
+            Value::Scalar(None) => Value::Scalar(false),
+            Value::Scalar(Some(scalar)) => Value::Scalar(scalar),
+            Value::Column(NullableColumn { column, validity }) => {
                 Value::Column((&column) & (&validity))
             }
         },
@@ -452,14 +451,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 }
 
-fn eval_boolean_to_string(val: ValueRef<BooleanType>, ctx: &mut EvalContext) -> Value<StringType> {
+fn eval_boolean_to_string(val: Value<BooleanType>, ctx: &mut EvalContext) -> Value<StringType> {
     vectorize_with_builder_1_arg::<BooleanType, StringType>(|val, output, _| {
         output.put_str(if val { "true" } else { "false" });
         output.commit_row();
     })(val, ctx)
 }
 
-fn eval_string_to_boolean(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BooleanType> {
+fn eval_string_to_boolean(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BooleanType> {
     vectorize_with_builder_1_arg::<StringType, BooleanType>(|val, output, ctx| {
         if val.eq_ignore_ascii_case("true") {
             output.push(true);
