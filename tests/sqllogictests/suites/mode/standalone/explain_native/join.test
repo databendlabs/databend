@@ -217,93 +217,93 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
 HashJoin
-├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
 ├── join type: INNER
-├── build keys: [a.x (#0)]
-├── probe keys: [b.x (#1)]
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 2.67
+├── estimated rows: 2.37
 ├── TableScan(Build)
-│   ├── table: default.default.onecolumn
-│   ├── output columns: [x (#0)]
+│   ├── table: default.default.twocolumn
+│   ├── output columns: [x (#1), y (#2)]
 │   ├── read rows: 4
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
+│   ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
 │   └── estimated rows: 2.67
 └── TableScan(Probe)
-    ├── table: default.default.twocolumn
-    ├── output columns: [x (#1), y (#2)]
+    ├── table: default.default.onecolumn
+    ├── output columns: [x (#0)]
     ├── read rows: 4
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
-    └── estimated rows: 3.00
+    ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
+    └── estimated rows: 2.67
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
 ----
 HashJoin
-├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
 ├── join type: INNER
-├── build keys: [a.x (#0)]
-├── probe keys: [b.x (#1)]
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 1.17
+├── estimated rows: 0.89
 ├── TableScan(Build)
-│   ├── table: default.default.onecolumn
-│   ├── output columns: [x (#0)]
+│   ├── table: default.default.twocolumn
+│   ├── output columns: [x (#1), y (#2)]
 │   ├── read rows: 4
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true((onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43))], limit: NONE]
+│   ├── push downs: [filters: [is_true((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43))], limit: NONE]
 │   └── estimated rows: 1.33
 └── TableScan(Probe)
-    ├── table: default.default.twocolumn
-    ├── output columns: [x (#1), y (#2)]
+    ├── table: default.default.onecolumn
+    ├── output columns: [x (#0)]
     ├── read rows: 4
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43))], limit: NONE]
-    └── estimated rows: 1.75
+    ├── push downs: [filters: [is_true((onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43))], limit: NONE]
+    └── estimated rows: 1.33
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
-├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
 ├── join type: INNER
-├── build keys: [a.x (#0)]
-├── probe keys: [b.x (#1)]
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 3.56
+├── estimated rows: 2.37
 ├── TableScan(Build)
-│   ├── table: default.default.onecolumn
-│   ├── output columns: [x (#0)]
+│   ├── table: default.default.twocolumn
+│   ├── output columns: [x (#1), y (#2)]
 │   ├── read rows: 4
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
+│   ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
 │   └── estimated rows: 2.67
 └── TableScan(Probe)
-    ├── table: default.default.twocolumn
-    ├── output columns: [x (#1), y (#2)]
+    ├── table: default.default.onecolumn
+    ├── output columns: [x (#0)]
     ├── read rows: 4
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
+    ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
     └── estimated rows: 2.67
 
 # the following cases won't be converted to inner join
@@ -352,7 +352,7 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 3.56
+├── estimated rows: 2.67
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]
