@@ -92,32 +92,32 @@ Exchange
     ├── estimated rows: 200.00
     ├── Exchange(Build)
     │   ├── output columns: [table3.value (#2), table2.value (#1)]
-    │   ├── join type: INNER
-    │   ├── build keys: [table2.value (#1)]
-    │   ├── probe keys: [table3.value (#2)]
-    │   ├── filters: []
-    │   ├── estimated rows: 2000.00
-    │   ├── Exchange(Build)
-    │   │   ├── output columns: [table2.value (#1)]
-    │   │   ├── exchange type: Hash(table2.value (#1))
-    │   │   └── Filter
-    │   │       ├── output columns: [table2.value (#1)]
-    │   │       ├── filters: [is_not_null(table2.value (#1))]
-    │   │       ├── estimated rows: 1000.00
-    │   │       └── TableScan
-    │   │           ├── table: default.default.table2
-    │   │           ├── output columns: [value (#1)]
-    │   │           ├── read rows: 1000
-    │   │           ├── read size: 2.30 KiB
-    │   │           ├── partitions total: 6
-    │   │           ├── partitions scanned: 3
-    │   │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
-    │   │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
-    │   │           └── estimated rows: 4000.00
-    │   └── Exchange(Probe)
-    │       ├── output columns: [table3.value (#2)]
-    │       ├── exchange type: Hash(table3.value (#2))
-    │       └── Filter
+    │   ├── exchange type: Broadcast
+    │   └── HashJoin
+    │       ├── output columns: [table3.value (#2), table2.value (#1)]
+    │       ├── join type: INNER
+    │       ├── build keys: [table2.value (#1)]
+    │       ├── probe keys: [table3.value (#2)]
+    │       ├── filters: []
+    │       ├── estimated rows: 250.00
+    │       ├── Exchange(Build)
+    │       │   ├── output columns: [table2.value (#1)]
+    │       │   ├── exchange type: Broadcast
+    │       │   └── Filter
+    │       │       ├── output columns: [table2.value (#1)]
+    │       │       ├── filters: [is_not_null(table2.value (#1))]
+    │       │       ├── estimated rows: 1000.00
+    │       │       └── TableScan
+    │       │           ├── table: default.default.table2
+    │       │           ├── output columns: [value (#1)]
+    │       │           ├── read rows: 1000
+    │       │           ├── read size: 2.30 KiB
+    │       │           ├── partitions total: 6
+    │       │           ├── partitions scanned: 3
+    │       │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │       │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │       │           └── estimated rows: 4000.00
+    │       └── Filter(Probe)
     │           ├── output columns: [table3.value (#2)]
     │           ├── filters: [is_not_null(table3.value (#2))]
     │           ├── estimated rows: 2000.00
@@ -131,23 +131,20 @@ Exchange
     │               ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
     │               ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
     │               └── estimated rows: 4000.00
-    └── Exchange(Probe)
+    └── Filter(Probe)
         ├── output columns: [table1.value (#0)]
-        ├── exchange type: Hash(table1.value (#0))
-        └── Filter
-            ├── output columns: [table1.value (#0)]
-            ├── filters: [is_not_null(table1.value (#0))]
-            ├── estimated rows: 2000.00
-            └── TableScan
-                ├── table: default.default.table1
-                ├── output columns: [value (#0)]
-                ├── read rows: 2000
-                ├── read size: 3.94 KiB
-                ├── partitions total: 6
-                ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
-                ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-                └── estimated rows: 4000.00
+        ├── filters: [is_not_null(table1.value (#0))]
+        ├── estimated rows: 2000.00
+        └── TableScan
+            ├── table: default.default.table1
+            ├── output columns: [value (#0)]
+            ├── read rows: 2000
+            ├── read size: 3.94 KiB
+            ├── partitions total: 6
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+            └── estimated rows: 4000.00
 
 
 query T
