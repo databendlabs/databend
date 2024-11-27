@@ -54,7 +54,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::memory_part::MemoryLazyPartInfo;
 use crate::memory_part::MemoryPartInfo;
 
 #[derive(Clone)]
@@ -123,31 +122,6 @@ impl MemoryTable {
         }
 
         Arc::new(Mutex::new(read_data_blocks))
-    }
-
-    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
-        let part_size = total / workers;
-        let part_remain = total % workers;
-
-        let mut partitions = Vec::with_capacity(workers);
-        if part_size == 0 {
-            partitions.push(MemoryPartInfo::create(start, total, total));
-        } else {
-            for part in 0..workers {
-                let mut part_begin = part * part_size;
-                if part == 0 && start > 0 {
-                    part_begin = start;
-                }
-                let mut part_end = (part + 1) * part_size;
-                if part == (workers - 1) && part_remain > 0 {
-                    part_end += part_remain;
-                }
-
-                partitions.push(MemoryPartInfo::create(part_begin, part_end, total));
-            }
-        }
-
-        Partitions::create(PartitionsShuffleKind::Seq, partitions)
     }
 }
 
@@ -226,24 +200,13 @@ impl Table for MemoryTable {
             statistics.read_rows = statistics.read_rows.max(cluster.nodes.len());
             statistics.partitions_total = statistics.partitions_total.max(cluster.nodes.len());
             statistics.partitions_scanned = statistics.partitions_scanned.max(cluster.nodes.len());
-
-            let parts = (0..cluster.nodes.len())
-                .map(|node| MemoryLazyPartInfo::create(node as u64))
-                .collect();
-
-            return Ok((
-                statistics,
-                Partitions::create(PartitionsShuffleKind::Mod, parts),
-            ));
         }
 
-        let parts = Self::generate_memory_parts(
-            0,
-            ctx.get_settings().get_max_threads()? as usize,
-            blocks.len(),
-        );
-
-        Ok((statistics, parts))
+        let parts = vec![MemoryPartInfo::create()];
+        return Ok((
+            statistics,
+            Partitions::create(PartitionsShuffleKind::Broadcast, parts),
+        ));
     }
 
     fn read_data(
