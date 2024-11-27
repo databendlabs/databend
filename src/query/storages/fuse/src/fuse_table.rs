@@ -181,54 +181,13 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
-
-                        // If table_info options contains key OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG,
-                        // it means that this table info has been tweaked according to the rules of
-                        // resolving snapshot location from the hint file, it should not be tweaked again.
-
                         let operator = init_operator(&sp)?;
-                        let table_type = if !table_meta_options
-                            .contains_key(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG)
-                        {
-                            // Extract snapshot location from last snapshot hit file.
-                            if Self::is_table_attached(table_meta_options) {
-                                let location = Self::load_snapshot_location_from_hint(
-                                    &operator,
-                                    &storage_prefix,
-                                )?;
-
-                                info!(
-                                    "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-                                    location, table_info.desc, table_info.ident
-                                );
-
-                                // Adjust snapshot location to the values extracted from the last snapshot hint
-                                match location {
-                                    None => {
-                                        table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
-                                    }
-                                    Some(location) => {
-                                        table_info.options_mut().insert(
-                                            OPT_KEY_SNAPSHOT_LOCATION.to_string(),
-                                            location,
-                                        );
-                                    }
-                                }
-
-                                // Mark the snapshot as fixed, indicating it doesn't need to be reloaded from the hint.
-                                // NOTE:
-                                // - Attached tables do not commit `table_info` to the meta server,
-                                //   except when the table is created by a DDL statement for the first time.
-                                // - As a result, the key `OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG` is transient
-                                //   and will NOT appear when this table is resolved within another query context
-                                //   for the first time.
-
-                                table_info.options_mut().insert(
-                                    OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG.to_string(),
-                                    "does not matter".to_string(),
-                                );
-                            };
-
+                        let table_type = if Self::is_table_attached(table_meta_options) {
+                            Self::tweak_attach_table_snapshot_location(
+                                &mut table_info,
+                                &operator,
+                                &storage_prefix,
+                            )?;
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
@@ -532,6 +491,54 @@ impl FuseTable {
                 Err(e) => Err(e.into()),
             }
         })
+    }
+
+    fn tweak_attach_table_snapshot_location(
+        table_info: &mut TableInfo,
+        operator: &Operator,
+        storage_prefix: &str,
+    ) -> Result<()> {
+        let table_meta_options = &table_info.meta.options;
+
+        if table_meta_options.contains_key(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG) {
+            // If table_info options contains key OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG,
+            // it means that this table info has been tweaked according to the rules of
+            // resolving snapshot location from the hint file, it should not be tweaked again.
+            return Ok(());
+        }
+
+        let location = Self::load_snapshot_location_from_hint(operator, storage_prefix)?;
+
+        info!(
+            "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
+            location, table_info.desc, table_info.ident
+        );
+
+        // Adjust snapshot location to the values extracted from the last snapshot hint
+        match location {
+            None => {
+                table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+            }
+            Some(location) => {
+                table_info
+                    .options_mut()
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+            }
+        }
+
+        // Mark the snapshot as fixed, indicating it doesn't need to be reloaded from the hint.
+        // NOTE:
+        // - Attached tables do not commit `table_info` to the meta server,
+        //   except when the table is created by a DDL statement for the first time.
+        // - As a result, the key `OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG` is transient
+        //   and will NOT appear when this table is resolved within another query context
+        //   for the first time.
+
+        table_info.options_mut().insert(
+            OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG.to_string(),
+            "does not matter".to_string(),
+        );
+        Ok(())
     }
 }
 
