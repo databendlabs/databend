@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -28,6 +29,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Domain;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -310,41 +312,38 @@ where
         Ok(())
     }
 
-    /// Do an external merge sort until there is only one sorted stream.
-    /// If `block` is not [None], we need to merge it with spilled files.
     async fn restore(&mut self) -> Result<()> {
-        todo!()
-        // while (self.unmerged_blocks.len() + block.is_some() as usize) > self.num_merge {
-        //     let b = block.take();
-        //     self.merge_sort_one_round(b).await?;
-        // }
+        let bound = A::Rows::from_column(&self.bound(), &self.sort_desc)?; // todo check
+        let streams = self
+            .blocks
+            .iter_mut()
+            .map(|blocks| BoundBlockStream::<A::Rows> {
+                sort_desc: &self.sort_desc,
+                blocks,
+                bound: bound.clone(),
+                spiller: &self.spiller,
+            })
+            .collect();
 
-        // // Deal with a corner case:
-        // // If this thread only has one spilled file.
-        // if self.unmerged_blocks.len() == 1 {
-        //     let files = self.unmerged_blocks.pop_front().unwrap();
-        //     debug_assert!(files.len() == 1);
+        let mut merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
+            self.schema.clone(),
+            streams,
+            self.sort_desc.clone(),
+            self.batch_rows,
+            self.limit, // todo
+        );
 
-        //     let block = self.spiller.read_spilled_file(&files[0]).await?;
+        let mut outputs = Vec::new();
+        while let Some(data) = merger.async_next_block().await? {
+            outputs.push(data);
+        }
+        debug_assert!(merger.is_finished());
 
-        //     self.output_data = Some(block);
-        //     self.state = State::Finish;
+        for data in outputs {
+            self.output_block(data);
+        }
 
-        //     return Ok(());
-        // }
-
-        // let num_streams = self.unmerged_blocks.len() + block.is_some() as usize;
-        // debug_assert!(num_streams <= self.num_merge && num_streams > 1);
-
-        // self.final_merger = Some(self.create_merger(block, num_streams));
-        // self.state = State::MergeFinal;
-
-        // Ok(())
-    }
-
-    /// Merge certain number of sorted streams to one sorted stream.
-    async fn merge_sort_one_round(&mut self, block: Option<DataBlock>) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn should_process(&self) -> bool {
@@ -352,17 +351,22 @@ where
     }
 
     async fn spill_block(&mut self, block: DataBlock) -> Result<Block> {
+        let domain = block.get_last_column().domain();
         let location = self.spiller.spill(vec![block]).await?;
         Ok(Block {
             data: BlockData::Spilled(location),
-            min_max: todo!(),
+            domain,
         })
+    }
+
+    fn bound(&self) -> Column {
+        todo!()
     }
 }
 
 struct Block {
     data: BlockData,
-    min_max: Column,
+    domain: Domain,
 }
 
 enum BlockData {
@@ -371,45 +375,55 @@ enum BlockData {
 }
 
 impl Block {
-    async fn restore(&mut self, spiller: &Spiller) -> Result<()> {
-        match &self.data {
-            BlockData::Memory(_) => Ok(()),
-            BlockData::Spilled(location) => {
-                let block = spiller.read_spilled_file(location).await?;
-                self.data = BlockData::Memory(block);
-                Ok(())
-            }
-        }
-    }
-
-    fn should_include(&self, bound: &Column) -> bool {
-        todo!()
-    }
-
-    fn slice(&mut self, bound: &Column) -> DataBlock {
-        todo!()
-    }
+    // fn memory_size(&self) -> usize {
+    //     match self.data {
+    //         BlockData::Memory(b) => b.memory_size(),
+    //         BlockData::Spilled(_) => 0,
+    //     }
+    // }
 }
 
-struct BoundBlockStream<'a> {
+struct BoundBlockStream<'a, R: Rows> {
+    sort_desc: &'a [SortColumnDescription],
     blocks: &'a mut VecDeque<Block>,
-    bound: Column,
-    spiller: Arc<Spiller>,
+    bound: R,
+    spiller: &'a Spiller,
 }
+
+unsafe impl<'a, R: Rows> Send for BoundBlockStream<'a, R> {}
 
 #[async_trait::async_trait]
-impl<'a> SortedStream for BoundBlockStream<'a> {
+impl<'a, R: Rows + Send> SortedStream for BoundBlockStream<'a, R> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        match self.blocks.front_mut() {
-            Some(data) if data.should_include(&self.bound) => {
-                data.restore(&self.spiller).await?;
+        if self.should_include_first() {
+            self.restore_first().await?;
+            let block = self.block_slice();
+            let col = block.get_last_column().clone();
+            Ok((Some((block, col)), false))
+        } else {
+            Ok((None, false))
+        }
+    }
+}
 
-                let block = data.slice(&self.bound);
-                self.blocks.pop_front();
-                let col = block.get_last_column().clone();
-                Ok((Some((block, col)), false))
+impl<'a, R: Rows> BoundBlockStream<'a, R> {
+    fn should_include_first(&self) -> bool {
+        todo!()
+    }
+
+    fn block_slice(&mut self) -> DataBlock {
+        todo!()
+    }
+
+    async fn restore_first(&mut self) -> Result<()> {
+        let block = self.blocks.front_mut().unwrap();
+        match &block.data {
+            BlockData::Memory(_) => Ok(()),
+            BlockData::Spilled(location) => {
+                let data = self.spiller.read_spilled_file(location).await?;
+                block.data = BlockData::Memory(data);
+                Ok(())
             }
-            _ => Ok((None, false)),
         }
     }
 }
