@@ -738,7 +738,7 @@ impl<'a> TypeChecker<'a> {
                                 Self::all_sugar_functions()
                                     .iter()
                                     .cloned()
-                                    .map(str::to_string),
+                                    .map(|ascii| ascii.into_inner()),
                             );
                         let mut engine: SimSearch<String> = SimSearch::new();
                         for func_name in all_funcs {
@@ -3119,42 +3119,44 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    pub fn all_sugar_functions() -> &'static [&'static str] {
-        &[
-            "database",
-            "currentdatabase",
-            "current_database",
-            "version",
-            "user",
-            "currentuser",
-            "current_user",
-            "current_role",
-            "connection_id",
-            "timezone",
-            "nullif",
-            "ifnull",
-            "nvl",
-            "nvl2",
-            "is_null",
-            "is_error",
-            "error_or",
-            "coalesce",
-            "last_query_id",
-            "array_sort",
-            "array_aggregate",
-            "to_variant",
-            "try_to_variant",
-            "greatest",
-            "least",
-            "stream_has_data",
-            "getvariable",
-        ]
+    pub fn all_sugar_functions() -> &'static [Ascii<&'static str>] {
+        static FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("database"),
+            Ascii::new("currentdatabase"),
+            Ascii::new("current_database"),
+            Ascii::new("version"),
+            Ascii::new("user"),
+            Ascii::new("currentuser"),
+            Ascii::new("current_user"),
+            Ascii::new("current_role"),
+            Ascii::new("connection_id"),
+            Ascii::new("timezone"),
+            Ascii::new("nullif"),
+            Ascii::new("ifnull"),
+            Ascii::new("nvl"),
+            Ascii::new("nvl2"),
+            Ascii::new("is_null"),
+            Ascii::new("is_error"),
+            Ascii::new("error_or"),
+            Ascii::new("coalesce"),
+            Ascii::new("last_query_id"),
+            Ascii::new("array_sort"),
+            Ascii::new("array_aggregate"),
+            Ascii::new("to_variant"),
+            Ascii::new("try_to_variant"),
+            Ascii::new("greatest"),
+            Ascii::new("least"),
+            Ascii::new("stream_has_data"),
+            Ascii::new("getvariable"),
+        ];
+        FUNCTIONS
     }
 
     pub fn is_sugar_function(name: &str) -> bool {
-        Self::all_sugar_functions()
+        let name = Ascii::new(name);
+        all_sugar_functions()
             .iter()
-            .any(|func| func.eq_ignore_ascii_case(name))
+            .any(|func| func.eq(&name))
     }
 
     fn try_rewrite_sugar_function(

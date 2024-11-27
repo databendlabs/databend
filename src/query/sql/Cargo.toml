@@ -74,6 +74,7 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 simsearch = { workspace = true }
 tokio = { workspace = true }
+unicase = { workspace = true }
 url = { workspace = true }
 
 [lints]
