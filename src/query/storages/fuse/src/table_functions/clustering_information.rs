@@ -557,6 +557,9 @@ fn domain_to_minmax(domain: &Domain) -> (Scalar, Scalar) {
             (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
         }
         Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
+        Domain::Interval(SimpleDomain { min, max }) => {
+            (Scalar::Interval(*min), Scalar::Interval(*max))
+        }
         Domain::Nullable(NullableDomain { has_null, value }) => {
             if let Some(v) = value {
                 let (min, mut max) = domain_to_minmax(v);

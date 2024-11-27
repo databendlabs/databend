@@ -89,6 +89,7 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
         }
         Column::Timestamp(v) => row_space.store_value_uncheckd(&v[row]),
         Column::Date(v) => row_space.store_value_uncheckd(&v[row]),
+        Column::Interval(v) => row_space.store_value_uncheckd(&v[row]),
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             row_space.store_value_uncheckd(&(data.len() as u64));

@@ -47,6 +47,7 @@ use crate::ScalarRef;
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;
 pub use databend_common_column::buffer::Buffer;
+use databend_common_column::types::months_days_ns;
 
 pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType] = &[
     NumberDataType::UInt8,
@@ -1481,5 +1482,65 @@ impl Number for F64 {
         lexical_core::WriteFloatOptions::builder()
             .trim_floats(true)
             .build_unchecked()
+    }
+}
+
+// pub struct months_days_ns(pub i32, pub i32, pub i64);
+impl Number for months_days_ns {
+    type Native = i64;
+    const MIN: Self = months_days_ns(i32::MIN, i32::MIN, i64::MIN);
+    const MAX: Self = months_days_ns(i32::MAX, i32::MAX, i64::MAX);
+    const FLOATING: bool = false;
+    const NEGATIVE: bool = true;
+    fn data_type() -> NumberDataType {
+        NumberDataType::Int64
+    }
+    fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self> {
+        scalar.as_int64().cloned().map(|s| months_days_ns(0, 0, s))
+    }
+    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
+        col.as_int64()
+            .cloned()
+            .map(|c| Buffer::from_iter(c.into_iter().map(|s| months_days_ns(0, 0, s))))
+    }
+    fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
+        if let Some(b) = builder.as_int64().cloned() {
+            let data = b
+                .into_iter()
+                .map(|s| months_days_ns(0, 0, s))
+                .collect::<Vec<_>>();
+            Some(Box::leak(Box::new(data)))
+        } else {
+            None
+        }
+    }
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int64(b) => {
+                Some(b.into_iter().map(|s| months_days_ns(0, 0, s)).collect())
+            }
+            _ => None,
+        }
+    }
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Interval(v))
+    }
+    fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
+        domain.as_int64().cloned().map(|i| SimpleDomain {
+            min: months_days_ns(0, 0, i.min),
+            max: months_days_ns(0, 0, i.max),
+        })
+    }
+    fn upcast_scalar(scalar: Self) -> NumberScalar {
+        NumberScalar::Int64(scalar.2)
+    }
+    fn upcast_column(col: Buffer<Self>) -> NumberColumn {
+        NumberColumn::Int64(col.into_iter().map(|c| c.2).collect())
+    }
+    fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
+        NumberDomain::Int64(SimpleDomain {
+            min: domain.min.2,
+            max: domain.max.2,
+        })
     }
 }

@@ -24,6 +24,7 @@ pub mod empty_map;
 pub mod generic;
 pub mod geography;
 pub mod geometry;
+pub mod interval;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -60,6 +61,7 @@ pub use self::generic::GenericType;
 pub use self::geography::GeographyColumn;
 pub use self::geography::GeographyType;
 pub use self::geometry::GeometryType;
+pub use self::interval::IntervalType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableColumn;
@@ -97,6 +99,7 @@ pub enum DataType {
     Tuple(Vec<DataType>),
     Variant,
     Geometry,
+    Interval,
     Geography,
 
     // Used internally for generic types
@@ -149,6 +152,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::Date
+            | DataType::Interval
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
@@ -173,6 +177,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::Date
+            | DataType::Interval
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry

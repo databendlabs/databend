@@ -35,6 +35,7 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalType;
+use crate::types::IntervalType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::TimestampType;
@@ -165,6 +166,13 @@ impl Column {
                     capacity,
                 );
                 Column::Date(buffer)
+            }
+            Column::Interval(_) => {
+                let buffer = Self::concat_primitive_types(
+                    columns.map(|col| IntervalType::try_downcast_column(&col).unwrap()),
+                    capacity,
+                );
+                Column::Interval(buffer)
             }
             Column::Array(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
