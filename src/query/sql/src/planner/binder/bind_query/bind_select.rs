@@ -100,7 +100,7 @@ impl Binder {
             self.bind_table_reference(bind_context, &cross_joins)?
         };
 
-        // only
+        // whether allow rewrite virtual column and pushdown
         let allow_pushdown = LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
             .is_ok();

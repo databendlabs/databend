@@ -114,7 +114,7 @@ pub enum NameResolutionResult {
 pub struct VirtualColumnContext {
     /// Whether allow rewrite as virtual column and pushdown.
     pub allow_pushdown: bool,
-    /// The table indics of the virtual column has been readed,
+    /// The table indics of the virtual column has been readded,
     /// used to avoid repeated reading
     pub table_indices: HashSet<IndexType>,
     /// Mapping: (table index) -> (derived virtual column indices)
