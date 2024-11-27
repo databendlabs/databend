@@ -1021,6 +1021,7 @@ pub enum TypeName {
     Variant,
     Geometry,
     Geography,
+    Interval,
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -1148,6 +1149,9 @@ impl Display for TypeName {
             }
             TypeName::NotNull(ty) => {
                 write!(f, "{} NOT NULL", ty)?;
+            }
+            TypeName::Interval => {
+                write!(f, "INTERVAL")?;
             }
         }
         Ok(())

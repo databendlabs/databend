@@ -18,11 +18,13 @@ use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
+use arrow_schema::IntervalUnit;
 use arrow_schema::Schema;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binview::StringColumn;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_column::types::months_days_ns;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -107,6 +109,7 @@ impl TryFrom<&Field> for TableField {
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,
                 ArrowDataType::Date64 => TableDataType::Date,
+                ArrowDataType::Interval(IntervalUnit::MonthDayNano) => TableDataType::Interval,
                 ArrowDataType::List(field) => {
                     let inner_type = TableField::try_from(field.as_ref())?;
                     TableDataType::Array(Box::new(inner_type.data_type))
@@ -257,6 +260,14 @@ impl Column {
                 let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Date32)?;
                 let buffer: Buffer<i32> = array.to_data().buffers()[0].clone().into();
                 Column::Date(buffer)
+            }
+            DataType::Interval => {
+                let array = arrow_cast::cast(
+                    array.as_ref(),
+                    &ArrowDataType::Interval(IntervalUnit::MonthDayNano),
+                )?;
+                let buffer: Buffer<months_days_ns> = array.to_data().buffers()[0].clone().into();
+                Column::Interval(buffer)
             }
             DataType::Nullable(_) => {
                 let validity = match array.nulls() {

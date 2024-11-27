@@ -14,6 +14,7 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_column::types::months_days_ns;
 use databend_common_exception::Result;
 use decimal::DecimalType;
 use geometry::GeometryType;
@@ -79,6 +80,10 @@ pub trait ValueVisitor {
         self.visit_typed_column::<DateType>(buffer)
     }
 
+    fn visit_interval(&mut self, buffer: Buffer<months_days_ns>) -> Result<()> {
+        self.visit_typed_column::<IntervalType>(buffer)
+    }
+
     fn visit_array(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<()> {
         self.visit_typed_column::<AnyType>(Column::Array(column))
     }
@@ -132,6 +137,7 @@ pub trait ValueVisitor {
             Column::String(column) => self.visit_string(column),
             Column::Timestamp(buffer) => self.visit_timestamp(buffer),
             Column::Date(buffer) => self.visit_date(buffer),
+            Column::Interval(buffer) => self.visit_interval(buffer),
             Column::Array(column) => self.visit_array(column),
             Column::Map(column) => self.visit_map(column),
             Column::Tuple(columns) => self.visit_tuple(columns),
