@@ -372,32 +372,41 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
-                if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
-                    // If the table is attaching to someone else,
-                    // parse the snapshot location from the hint file.
-                    //
-                    // The snapshot location is allowed
-                    // to be fetched from the table level instance cache.
-                    let snapshot_location = self
-                        .attached_table_location
-                        .get_or_try_init(|| async {
-                            let hint =
-                                format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                            let hint_content = self.operator.read(&hint).await?.to_vec();
-                            let snapshot_full_path = String::from_utf8(hint_content)?;
-                            let operator_info = self.operator.info();
-                            Ok::<_, ErrorCode>(
-                                snapshot_full_path[operator_info.root().len()..].to_string(),
-                            )
-                        })
-                        .await?;
-                    Ok(Some(snapshot_location.to_owned()))
-                } else {
-                    Ok(options
-                        .get(OPT_KEY_SNAPSHOT_LOCATION)
-                        // for backward compatibility, we check the legacy table option
-                        .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                        .cloned())
+                match options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    // for backward compatibility, we check the legacy table option
+                    .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                    .cloned()
+                {
+                    Some(v) => Ok(Some(v)),
+                    None => {
+                        if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
+                            // If the table is attaching to someone else,
+                            // parse the snapshot location from the hint file.
+                            //
+                            // The snapshot location is allowed
+                            // to be fetched from the table level instance cache.
+                            let snapshot_location = self
+                                .attached_table_location
+                                .get_or_try_init(|| async {
+                                    let hint = format!(
+                                        "{}/{}",
+                                        storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT
+                                    );
+                                    let hint_content = self.operator.read(&hint).await?.to_vec();
+                                    let snapshot_full_path = String::from_utf8(hint_content)?;
+                                    let operator_info = self.operator.info();
+                                    Ok::<_, ErrorCode>(
+                                        snapshot_full_path[operator_info.root().len()..]
+                                            .to_string(),
+                                    )
+                                })
+                                .await?;
+                            Ok(Some(snapshot_location.to_owned()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
                 }
             }
         }
@@ -501,6 +510,21 @@ impl Table for FuseTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    fn get_data_source_info(&self) -> DataSourceInfo {
+        let table_info = match self.attached_table_location.get() {
+            Some(snapshot_location) => {
+                let mut table_info = self.table_info.clone();
+                table_info
+                    .meta
+                    .options
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_location);
+                table_info
+            }
+            None => self.table_info.clone(),
+        };
+        DataSourceInfo::TableSource(table_info)
     }
 
     fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
