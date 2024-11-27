@@ -64,7 +64,7 @@ impl TopNPruneTransform {
         let pruned = self
             .topn_pruner
             .prune(self.metas.clone())
-            .unwrap_or(self.metas.clone());
+            .unwrap_or_else(|_| self.metas.clone());
         if pruned.is_empty() {
             Ok(None)
         } else {
