@@ -25,6 +25,7 @@ pub enum QueryKind {
     Explain,
     CopyIntoTable,
     CopyIntoLocation,
+    CreateTable,
     Update,
     Insert,
     Other,
