@@ -152,7 +152,7 @@ impl Amender {
             Ok(None) => (),
             Err(e) => {
                 if e.code() == ErrorCode::STORAGE_NOT_FOUND {
-                    let snapshot_location = table.snapshot_loc().await?.unwrap();
+                    let snapshot_location = table.snapshot_loc().unwrap();
                     self.recover_object(&snapshot_location).await?;
                     let snapshot = table.read_table_snapshot().await?;
                     let schema = table.schema();
