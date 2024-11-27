@@ -220,7 +220,8 @@ impl FuseTable {
                                 // - Attached tables do not commit `table_info` to the meta server,
                                 //   except when the table is created by a DDL statement for the first time.
                                 // - As a result, the key `OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG` is transient
-                                //   and only appears when this table is resolved within another query context.
+                                //   and will NOT appear when this table is resolved within another query context
+                                //   for the first time.
 
                                 table_info.options_mut().insert(
                                     OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG.to_string(),
