@@ -1,25 +1,25 @@
-Error: APIError: ResponseError with 1065: error: 
+Error: APIError: QueryFailed: [1065]error: 
   --> SQL:1:8
   |
 1 | select *
   |        ^ 'SELECT *' is used without specifying any tables in the FROM clause.
 
 
-Error: APIError: ResponseError with 1025: error: 
+Error: APIError: QueryFailed: [1025]error: 
   --> SQL:1:15
   |
 1 | select * from t
   |               ^ Unknown table "default"."default".t .
 
 
-Error: APIError: ResponseError with 1008: error: 
+Error: APIError: QueryFailed: [1008]error: 
   --> SQL:1:8
   |
 1 | select base64(1)
   |        ^^^^^^^^^ no function matches the given name: 'base64', do you mean 'to_base64'?
 
 
-Error: APIError: ResponseError with 1065: error: 
+Error: APIError: QueryFailed: [1065]error: 
   --> SQL:1:8
   |
 1 | select to_base64(1)
@@ -30,19 +30,19 @@ candidate functions:
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
-Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `1 + to_uint64('a')`
-Error: APIError: ResponseError with 1025: error: 
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `1 + to_uint64('a')`
+Error: APIError: QueryFailed: [1025]error: 
   --> SQL:1:20
   |
 1 | select t1.a:z from t
   |                    ^ Unknown table "default"."default".t .
 
 
-Error: APIError: ResponseError with 1065: error: 
+Error: APIError: QueryFailed: [1065]error: 
   --> SQL:1:33
   |
 1 | select * from t2 join t3 using (c)
   |                                 ^ column c specified in USING clause does not exist in left table
 
 
-Error: APIError: ResponseError with 1025: Unknown table 't'
+Error: APIError: QueryFailed: [1025]Unknown table 't'

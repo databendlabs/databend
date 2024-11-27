@@ -44,7 +44,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_hashtable::StackHashSet;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -252,7 +251,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(move |args, _ctx| {
                     let input_length = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
 
@@ -262,8 +261,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let mut delete_key_list = HashSet::new();
                     for idx in 0..(input_length.unwrap_or(1)) {
                         let input_map = match &args[0] {
-                            ValueRef::Scalar(map) => map.clone(),
-                            ValueRef::Column(map) => unsafe { map.index_unchecked(idx) },
+                            Value::Scalar(map) => map.as_ref(),
+                            Value::Column(map) => unsafe { map.index_unchecked(idx) },
                         };
 
                         match &input_map {
@@ -274,10 +273,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 delete_key_list.clear();
                                 for input_key_item in args.iter().skip(1) {
                                     let input_key = match &input_key_item {
-                                        ValueRef::Scalar(scalar) => scalar.clone(),
-                                        ValueRef::Column(col) => unsafe {
-                                            col.index_unchecked(idx)
-                                        },
+                                        Value::Scalar(scalar) => scalar.as_ref(),
+                                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
                                     };
                                     match input_key {
                                         ScalarRef::EmptyArray | ScalarRef::Null => {}
@@ -450,7 +447,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(move |args, _ctx| {
                     let input_length = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
 
@@ -460,8 +457,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let mut pick_key_list = HashSet::new();
                     for idx in 0..(input_length.unwrap_or(1)) {
                         let input_map = match &args[0] {
-                            ValueRef::Scalar(map) => map.clone(),
-                            ValueRef::Column(map) => unsafe { map.index_unchecked(idx) },
+                            Value::Scalar(map) => map.as_ref(),
+                            Value::Column(map) => unsafe { map.index_unchecked(idx) },
                         };
 
                         match &input_map {
@@ -472,10 +469,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 pick_key_list.clear();
                                 for input_key_item in args.iter().skip(1) {
                                     let input_key = match &input_key_item {
-                                        ValueRef::Scalar(scalar) => scalar.clone(),
-                                        ValueRef::Column(col) => unsafe {
-                                            col.index_unchecked(idx)
-                                        },
+                                        Value::Scalar(scalar) => scalar.as_ref(),
+                                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
                                     };
                                     match input_key {
                                         ScalarRef::EmptyArray | ScalarRef::Null => {}
