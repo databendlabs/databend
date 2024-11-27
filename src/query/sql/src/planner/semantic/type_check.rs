@@ -106,7 +106,7 @@ use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
-use unicase::UniCase;
+use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -185,7 +185,7 @@ pub struct TypeChecker<'a> {
     // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
 
-    // true if current expr is inside an window function.
+    // true if current expr is inside a window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
     forbid_udf: bool,
@@ -722,7 +722,10 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
-                if !is_builtin_function(func_name) && !Self::is_sugar_function(func_name) {
+                let uni_case_func_name = Ascii::new(func_name);
+                if !is_builtin_function(func_name)
+                    && !Self::all_sugar_functions().contains(&uni_case_func_name)
+                {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
                         return Ok(udf);
                     } else {
@@ -731,10 +734,10 @@ impl<'a> TypeChecker<'a> {
                             .all_function_names()
                             .into_iter()
                             .chain(AggregateFunctionFactory::instance().registered_names())
-                            .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
+                            .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
+                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
+                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
@@ -768,7 +771,7 @@ impl<'a> TypeChecker<'a> {
                 // check window function legal
                 if window.is_some()
                     && !AggregateFunctionFactory::instance().contains(func_name)
-                    && !GENERAL_WINDOW_FUNCTIONS.contains(&func_name)
+                    && !GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name)
                 {
                     return Err(ErrorCode::SemanticError(
                         "only window and aggregate functions allowed in window syntax",
@@ -776,7 +779,7 @@ impl<'a> TypeChecker<'a> {
                     .set_span(*span));
                 }
                 // check lambda function legal
-                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     return Err(ErrorCode::SemanticError(
                         "only lambda functions allowed in lambda syntax",
                     )
@@ -785,7 +788,7 @@ impl<'a> TypeChecker<'a> {
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
+                if GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name) {
                     // general window function
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
@@ -851,7 +854,7 @@ impl<'a> TypeChecker<'a> {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
-                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "function {func_name} must have a lambda expression",
@@ -860,8 +863,8 @@ impl<'a> TypeChecker<'a> {
                     }
                     let lambda = lambda.as_ref().unwrap();
                     self.resolve_lambda_function(*span, func_name, &args, lambda)?
-                } else if GENERAL_SEARCH_FUNCTIONS.contains(&func_name) {
-                    match func_name {
+                } else if GENERAL_SEARCH_FUNCTIONS.contains(&uni_case_func_name) {
+                    match func_name.to_lowercase().as_str() {
                         "score" => self.resolve_score_search_function(*span, func_name, &args)?,
                         "match" => self.resolve_match_search_function(*span, func_name, &args)?,
                         "query" => self.resolve_query_search_function(*span, func_name, &args)?,
@@ -873,7 +876,7 @@ impl<'a> TypeChecker<'a> {
                             .set_span(*span));
                         }
                     }
-                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                } else if ASYNC_FUNCTIONS.contains(&uni_case_func_name) {
                     self.resolve_async_function(*span, func_name, &args)?
                 } else if BUILTIN_FUNCTIONS
                     .get_property(func_name)
@@ -1435,7 +1438,7 @@ impl<'a> TypeChecker<'a> {
         self.in_window_function = false;
 
         // If { IGNORE | RESPECT } NULLS is not specified, the default is RESPECT NULLS
-        // (i.e. a NULL value will be returned if the expression contains a NULL value and it is the first value in the expression).
+        // (i.e. a NULL value will be returned if the expression contains a NULL value, and it is the first value in the expression).
         let ignore_null = if let Some(ignore_null) = window_ignore_null {
             *ignore_null
         } else {
@@ -2080,7 +2083,7 @@ impl<'a> TypeChecker<'a> {
         param_count: usize,
         span: Span,
     ) -> Result<()> {
-        // json lambda functions are casted to array or map, ignored here.
+        // json lambda functions are cast to array or map, ignored here.
         let expected_count = if func_name == "array_reduce" {
             2
         } else if func_name.starts_with("array") {
@@ -3151,11 +3154,6 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("getvariable"),
         ];
         FUNCTIONS
-    }
-
-    pub fn is_sugar_function(name: &str) -> bool {
-        let name = Ascii::new(name);
-        all_sugar_functions().iter().any(|func| func.eq(&name))
     }
 
     fn try_rewrite_sugar_function(

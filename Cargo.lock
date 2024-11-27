@@ -3415,6 +3415,7 @@ dependencies = [
  "strength_reduce",
  "stringslice",
  "twox-hash",
+ "unicase",
 ]
 
 [[package]]

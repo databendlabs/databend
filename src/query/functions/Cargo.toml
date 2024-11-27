@@ -61,6 +61,7 @@ siphasher = { workspace = true }
 strength_reduce = { workspace = true }
 stringslice = { workspace = true }
 twox-hash = { workspace = true }
+unicase = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }
