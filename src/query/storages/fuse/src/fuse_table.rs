@@ -25,6 +25,7 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -93,7 +94,7 @@ use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 use uuid::Uuid;
-use databend_common_base::runtime::GlobalIORuntime;
+
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
