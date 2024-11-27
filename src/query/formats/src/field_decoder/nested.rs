@@ -17,8 +17,10 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
+use databend_common_column::types::months_days_ns;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
@@ -50,6 +52,7 @@ use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
+use databend_common_io::Interval;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
@@ -128,6 +131,7 @@ impl NestedValues {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, reader),
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader),
+            ColumnBuilder::Interval(c) => self.read_interval(c, reader),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
             ColumnBuilder::Binary(c) => self.read_binary(c, reader),
             ColumnBuilder::String(c) => self.read_string(c, reader),
@@ -248,6 +252,25 @@ impl NestedValues {
         let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
+        Ok(())
+    }
+
+    fn read_interval<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<months_days_ns>,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let res =
+            std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
+                format!(
+                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
+                    buf
+                )
+            })?;
+        let i = Interval::from_string(res)?;
+        column.push(months_days_ns(i.months, i.days, i.nanos));
         Ok(())
     }
 

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_column::types::months_days_ns;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use ethnum::i256;
@@ -62,6 +63,7 @@ impl RowConverter {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
+            | DataType::Interval
             | DataType::Date
             | DataType::Binary
             | DataType::String
@@ -117,6 +119,9 @@ impl RowConverter {
                 DataType::Timestamp => lengths
                     .iter_mut()
                     .for_each(|x| *x += i64::ENCODED_LEN as u64),
+                DataType::Interval => lengths
+                    .iter_mut()
+                    .for_each(|x| *x += months_days_ns::ENCODED_LEN as u64),
                 DataType::Date => lengths
                     .iter_mut()
                     .for_each(|x| *x += i32::ENCODED_LEN as u64),
@@ -254,6 +259,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
             })
         }
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
+        Column::Interval(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Binary(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         Column::String(col) => variable::encode(
