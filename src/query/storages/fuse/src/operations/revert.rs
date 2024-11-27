@@ -42,7 +42,7 @@ impl FuseTable {
         let table_info = table_reverting_to.get_table_info();
 
         // shortcut. if reverting to the same point, just return ok
-        if self.snapshot_loc().await? == table_reverting_to.snapshot_loc().await? {
+        if self.snapshot_loc() == table_reverting_to.snapshot_loc() {
             return Ok(());
         }
 
@@ -64,7 +64,7 @@ impl FuseTable {
         let reply = catalog.update_single_table_meta(req, table_info).await;
         if reply.is_ok() {
             // try keeping the snapshot hit
-            let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
+            let snapshot_location = table_reverting_to.snapshot_loc().ok_or_else(|| {
                     ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
                 })?;
             Self::write_last_snapshot_hint(
