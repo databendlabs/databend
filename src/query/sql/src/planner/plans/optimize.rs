@@ -14,14 +14,7 @@
 
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationPoint;
-use databend_common_exception::ErrorCode;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 
-use crate::plans::Mutation;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::BindContext;

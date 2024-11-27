@@ -14,8 +14,6 @@
 
 use databend_common_exception::Result;
 
-use crate::executor::physical_plans::CommitSink;
-use crate::executor::physical_plans::MutationKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
