@@ -43,7 +43,9 @@ impl PipelineBuilder {
         self.ctx.set_partitions(scan.source.parts.clone())?;
         self.ctx
             .set_wait_runtime_filter(scan.scan_id, self.contain_sink_processor);
-        if self.ctx.get_settings().get_enable_prune_pipeline()? {
+        if self.ctx.get_settings().get_enable_prune_pipeline()?
+            && table.get_table_info().meta.engine == "FUSE".to_string()
+        {
             if let Some(prune_pipeline) = table.build_prune_pipeline(
                 self.ctx.clone(),
                 &scan.source,
