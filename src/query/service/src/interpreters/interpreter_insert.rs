@@ -103,6 +103,13 @@ impl Interpreter for InsertInterpreter {
         // check mutability
         table.check_mutable()?;
 
+        if !self.ctx.get_cluster().is_empty() && table.is_local() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "Insert into local table with engine `{}` is not supported in distributed mode",
+                table.engine(),
+            )));
+        }
+
         let mut build_res = PipelineBuildResult::create();
 
         match &self.plan.source {

@@ -183,5 +183,26 @@ select count(*) from test_order;
 ----
 4000000
 
+statement error
+create or replace table test_memory engine = Memory as select * from numbers(10000);
+
+statement ok
+create or replace table test_memory like test_order  engine = Memory;
+
+statement ok
+copy into @test_stage from (select * from random_source limit 4000000) FILE_FORMAT=(type=parquet);
+
+statement error
+insert into test_memory select * from random_source limit 4000
+
+statement error
+copy into test_memory from @test_stage file_format=(type=parquet) force=true purge = true;
+
+statement ok
+drop table test_order;
+
+statement ok
+drop table test_memory;
+
 statement ok
 set enable_distributed_copy_into = 0;

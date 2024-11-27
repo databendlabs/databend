@@ -19,6 +19,7 @@ use std::time::Duration;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -127,6 +128,13 @@ impl PipelineBuilder {
         source_schema: Arc<DataSchema>,
         to_table: Arc<dyn Table>,
     ) -> Result<()> {
+        if !ctx.get_cluster().is_empty() && to_table.is_local() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "Insert into local table with engine `{}` is not supported in distributed mode",
+                to_table.engine(),
+            )));
+        }
+
         let plan_required_source_schema = &plan.required_source_schema;
         let plan_values_consts = &plan.values_consts;
         let plan_required_values_schema = &plan.required_values_schema;
