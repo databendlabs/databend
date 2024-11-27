@@ -734,15 +734,35 @@ impl<'a> TypeChecker<'a> {
                             .all_function_names()
                             .into_iter()
                             .chain(AggregateFunctionFactory::instance().registered_names())
-                            .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
-                            .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
-                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
-                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(|ascii| ascii.into_inner()))
+                            .chain(
+                                GENERAL_WINDOW_FUNCTIONS
+                                    .iter()
+                                    .cloned()
+                                    .map(|ascii| ascii.into_inner().to_string()),
+                            )
+                            .chain(
+                                GENERAL_LAMBDA_FUNCTIONS
+                                    .iter()
+                                    .cloned()
+                                    .map(|ascii| ascii.into_inner().to_string()),
+                            )
+                            .chain(
+                                GENERAL_SEARCH_FUNCTIONS
+                                    .iter()
+                                    .cloned()
+                                    .map(|ascii| ascii.into_inner().to_string()),
+                            )
+                            .chain(
+                                ASYNC_FUNCTIONS
+                                    .iter()
+                                    .cloned()
+                                    .map(|ascii| ascii.into_inner().to_string()),
+                            )
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
                                     .cloned()
-                                    .map(|ascii| ascii.into_inner()),
+                                    .map(|ascii| ascii.into_inner().to_string()),
                             );
                         let mut engine: SimSearch<String> = SimSearch::new();
                         for func_name in all_funcs {
