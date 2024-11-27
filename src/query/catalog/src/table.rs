@@ -226,11 +226,7 @@ pub trait Table: Sync + Send {
     ) -> Result<Option<Pipeline>> {
         let (_, _, _) = (table_ctx, plan, source_pipeline);
 
-        Err(ErrorCode::Unimplemented(format!(
-            "The 'build_prune_pipeline' operation is not implemented for the table '{}'. Table engine type: '{}'.",
-            self.name(),
-            self.get_table_info().meta.engine
-        )))
+        Ok(None)
     }
 
     /// Assembly the pipeline of appending data to storage
