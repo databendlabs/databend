@@ -67,7 +67,9 @@ pub fn write<W: Write>(
         Column::Date(column) => {
             write_primitive::<i32, W>(w, &column, validity, write_options, scratch)
         }
-
+        Column::Interval(_column) => {
+            todo!()
+        }
         Column::Binary(b)
         | Column::Bitmap(b)
         | Column::Variant(b)

@@ -17,9 +17,13 @@ use std::convert::TryFrom;
 use std::ops::Neg;
 use std::panic::RefUnwindSafe;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use databend_common_base::base::OrderedFloat;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
 
 use super::PrimitiveType;
 
@@ -243,7 +247,22 @@ impl NativeType for days_ms {
 }
 
 /// The in-memory representation of the MonthDayNano variant of the "Interval" logical type.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    PartialEq,
+    PartialOrd,
+    Eq,
+    Hash,
+    Zeroable,
+    Pod,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct months_days_ns(pub i32, pub i32, pub i64);

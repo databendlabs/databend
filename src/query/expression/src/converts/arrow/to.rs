@@ -22,6 +22,7 @@ use arrow_data::ArrayDataBuilder;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Fields;
+use arrow_schema::IntervalUnit;
 use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
 use databend_common_column::bitmap::Bitmap;
@@ -114,6 +115,7 @@ impl From<&TableField> for Field {
             TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
                 ArrowDataType::Decimal256(size.precision, size.scale as i8)
             }
+            TableDataType::Interval => ArrowDataType::Interval(IntervalUnit::MonthDayNano),
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,
             TableDataType::Nullable(ty) => {
@@ -293,6 +295,9 @@ impl From<&Column> for ArrayData {
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
+            Column::Interval(_) => {
+                todo!()
+            }
             Column::Array(col) => {
                 let child_data = ArrayData::from(&col.values);
                 let builder = ArrayDataBuilder::new(arrow_type)
