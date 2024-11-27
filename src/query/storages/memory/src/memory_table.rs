@@ -54,6 +54,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
+use crate::memory_part::MemoryLazyPartInfo;
 use crate::memory_part::MemoryPartInfo;
 
 #[derive(Clone)]
@@ -160,6 +161,12 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
+    /// MemoryTable could be distributed table, yet we only insert data in one node per query
+    /// Because commit_insert did not support distributed transaction
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn support_column_projection(&self) -> bool {
         true
     }
@@ -176,8 +183,7 @@ impl Table for MemoryTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
-
-        let statistics = match push_downs {
+        let mut statistics = match push_downs {
             Some(push_downs) => {
                 let projection_filter: Box<dyn Fn(usize) -> bool> = match push_downs.projection {
                     Some(prj) => {
@@ -214,11 +220,29 @@ impl Table for MemoryTable {
             }
         };
 
+        let cluster = ctx.get_cluster();
+        if !cluster.is_empty() {
+            statistics.read_bytes = statistics.read_bytes.max(cluster.nodes.len());
+            statistics.read_rows = statistics.read_rows.max(cluster.nodes.len());
+            statistics.partitions_total = statistics.partitions_total.max(cluster.nodes.len());
+            statistics.partitions_scanned = statistics.partitions_scanned.max(cluster.nodes.len());
+
+            let parts = (0..cluster.nodes.len())
+                .map(|node| MemoryLazyPartInfo::create(node as u64))
+                .collect();
+
+            return Ok((
+                statistics,
+                Partitions::create(PartitionsShuffleKind::Mod, parts),
+            ));
+        }
+
         let parts = Self::generate_memory_parts(
             0,
             ctx.get_settings().get_max_threads()? as usize,
             blocks.len(),
         );
+
         Ok((statistics, parts))
     }
 

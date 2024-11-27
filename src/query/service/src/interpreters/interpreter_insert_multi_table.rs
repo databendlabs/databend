@@ -307,14 +307,6 @@ impl InsertMultiTableInterpreter {
                 source_scalar_exprs,
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
-
-            if !self.ctx.get_cluster().is_empty() && table.is_local() {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "Insert into local table with engine `{}` is not supported in distributed mode",
-                    table.engine(),
-                )));
-            }
-
             branches.push(
                 table,
                 condition,

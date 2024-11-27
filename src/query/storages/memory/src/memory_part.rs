@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2021 DataMemory Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct MemoryPartInfo {
@@ -48,5 +50,38 @@ impl MemoryPartInfo {
             part_start: start,
             part_end: end,
         }))
+    }
+}
+
+/// Memory table lazy partition information.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct MemoryLazyPartInfo {
+    node_id: u64,
+}
+
+#[typetag::serde(name = "memory_lazy")]
+impl PartInfo for MemoryLazyPartInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        info.as_any()
+            .downcast_ref::<MemoryLazyPartInfo>()
+            .is_some_and(|other| self == other)
+    }
+
+    fn hash(&self) -> u64 {
+        self.node_id
+    }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::LazyLevel
+    }
+}
+
+impl MemoryLazyPartInfo {
+    pub fn create(node_id: u64) -> PartInfoPtr {
+        Arc::new(Box::new(MemoryLazyPartInfo { node_id }))
     }
 }

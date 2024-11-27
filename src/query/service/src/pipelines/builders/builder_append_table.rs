@@ -38,6 +38,7 @@ impl PipelineBuilder {
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
+
         table.append_data(ctx.clone(), main_pipeline)?;
 
         table.commit_insertion(
