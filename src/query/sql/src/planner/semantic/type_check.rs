@@ -106,6 +106,7 @@ use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
+use unicase::UniCase;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -3154,9 +3155,7 @@ impl<'a> TypeChecker<'a> {
 
     pub fn is_sugar_function(name: &str) -> bool {
         let name = Ascii::new(name);
-        all_sugar_functions()
-            .iter()
-            .any(|func| func.eq(&name))
+        all_sugar_functions().iter().any(|func| func.eq(&name))
     }
 
     fn try_rewrite_sugar_function(
