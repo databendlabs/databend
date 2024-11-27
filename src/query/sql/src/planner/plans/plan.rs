@@ -434,6 +434,7 @@ impl Plan {
             | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
+            Plan::CreateTable(_) => QueryKind::CreateTable,
             _ => QueryKind::Other,
         }
     }
