@@ -5023,6 +5023,7 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "derive-visitor",
+ "enum-as-inner 0.5.1",
  "ethnum",
  "fastrace",
  "flatbuffers",

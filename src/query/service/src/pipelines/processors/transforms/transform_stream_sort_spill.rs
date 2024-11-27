@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -47,6 +48,7 @@ use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
+use enum_as_inner::EnumAsInner;
 
 use crate::spillers::Location;
 use crate::spillers::Spiller;
@@ -347,11 +349,23 @@ where
     }
 
     fn should_process(&self) -> bool {
-        todo!()
+        match self.state {
+            State::Spill => {
+                let size = self
+                    .input_data
+                    .iter()
+                    .map(|b| b.memory_size())
+                    .sum::<usize>();
+                todo!()
+            }
+            State::Restore => todo!(),
+            State::Finish => todo!(),
+            _ => unreachable!(),
+        }
     }
 
     async fn spill_block(&mut self, block: DataBlock) -> Result<Block> {
-        let domain = block.get_last_column().domain();
+        let domain = get_domain(block.get_last_column());
         let location = self.spiller.spill(vec![block]).await?;
         Ok(Block {
             data: BlockData::Spilled(location),
@@ -366,9 +380,10 @@ where
 
 struct Block {
     data: BlockData,
-    domain: Domain,
+    domain: Column,
 }
 
+#[derive(EnumAsInner, Debug)]
 enum BlockData {
     Memory(DataBlock),
     Spilled(Location),
@@ -381,6 +396,21 @@ impl Block {
     //         BlockData::Spilled(_) => 0,
     //     }
     // }
+
+    fn slice(&mut self, pos: usize) -> DataBlock {
+        let data = self.data.as_memory().unwrap();
+
+        let left = data.slice(0..pos);
+        let right = data.slice(pos..data.num_rows());
+
+        self.domain = get_domain(right.get_last_column());
+        self.data = BlockData::Memory(right);
+        left
+    }
+
+    fn domain<R: Rows>(&self, sort_desc: &[SortColumnDescription]) -> R {
+        R::from_column(&self.domain, sort_desc).unwrap()
+    }
 }
 
 struct BoundBlockStream<'a, R: Rows> {
@@ -408,11 +438,25 @@ impl<'a, R: Rows + Send> SortedStream for BoundBlockStream<'a, R> {
 
 impl<'a, R: Rows> BoundBlockStream<'a, R> {
     fn should_include_first(&self) -> bool {
-        todo!()
+        let Some(block) = self.blocks.front() else {
+            return false;
+        };
+        block.domain::<R>(&self.sort_desc).first() < self.bound.row(0)
     }
 
     fn block_slice(&mut self) -> DataBlock {
-        todo!()
+        let block = self.blocks.front_mut().unwrap();
+        let BlockData::Memory(data) = &block.data else {
+            unreachable!()
+        };
+
+        let rows = R::from_column(data.get_last_column(), &self.sort_desc).unwrap();
+
+        // todo binary_search
+        match (0..rows.len()).position(|i| rows.row(i) >= self.bound.row(0)) {
+            Some(pos) => block.slice(pos),
+            None => self.blocks.pop_front().unwrap().data.into_memory().unwrap(),
+        }
     }
 
     async fn restore_first(&mut self) -> Result<()> {
@@ -437,5 +481,20 @@ impl SortedStream for BlockStream {
             (b, col)
         });
         Ok((data, false))
+    }
+}
+
+fn get_domain(col: &Column) -> Column {
+    match col.len() {
+        0 => unreachable!(),
+        1 | 2 => col.clone(),
+        n => {
+            let mut bitmap = MutableBitmap::with_capacity(n);
+            bitmap.push(true);
+            bitmap.extend_constant(n - 2, false);
+            bitmap.push(true);
+
+            col.filter(&bitmap.freeze())
+        }
     }
 }
