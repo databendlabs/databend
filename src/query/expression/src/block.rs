@@ -56,7 +56,7 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
-            if let crate::ValueRef::Column(c) = value.as_ref() {
+            if let crate::Value::Column(c) = &value {
                 c.check_valid().unwrap();
             }
             check_type(&data_type, &value);
@@ -239,7 +239,7 @@ impl DataBlock {
     pub fn domains(&self) -> Vec<Domain> {
         self.columns
             .iter()
-            .map(|entry| entry.value.as_ref().domain(&entry.data_type))
+            .map(|entry| entry.value.domain(&entry.data_type))
             .collect()
     }
 
