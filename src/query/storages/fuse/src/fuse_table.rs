@@ -83,6 +83,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -181,29 +182,42 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
 
-                        let operator = init_operator(&sp)?;
+                        // If table_info options contains key OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG,
+                        // it means that this table info has been tweaked according to the rules of
+                        // resolving snapshot location from the hint file, it should not be tweaked again.
 
-                        // Extract snapshot location from last snapshot hit file.
-                        let table_type = if Self::is_table_attached(table_meta_options) {
-                            let location =
-                                Self::load_snapshot_location_from_hint(&operator, &storage_prefix)?;
+                        if !table_meta_options.contains_key(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG) {
+                            let operator = init_operator(&sp)?;
+                            // Extract snapshot location from last snapshot hit file.
+                            let table_type = if Self::is_table_attached(table_meta_options) {
+                                let location =
+                                    Self::load_snapshot_location_from_hint(&operator, &storage_prefix)?;
 
-                            info!(
+                                info!(
                                 "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
                                 location, table_info.desc, table_info.ident
                             );
 
-                            // Adjust snapshot location to the values extracted from the last snapshot hint
-                            match location {
-                                None => {
-                                    table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+                                // Adjust snapshot location to the values extracted from the last snapshot hint
+                                match location {
+                                    None => {
+                                        table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+                                    }
+                                    Some(location) => {
+                                        table_info
+                                            .options_mut()
+                                            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+                                    }
                                 }
-                                Some(location) => {
-                                    table_info
-                                        .options_mut()
-                                        .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
-                                }
+
+                                // Mark the snapshot is fixed, no need to be reloaded from hint,
+                                table_info.options_mut().insert(
+                                    OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG.to_string(),
+                                    "does not matter".to_string(),
+                                );
+
                             }
+
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
