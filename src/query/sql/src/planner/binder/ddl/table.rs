@@ -1269,15 +1269,6 @@ impl Binder {
                     {keys_bounds_str} \
                 FROM {database_name}.{table_name} \
             ), \
-            _index_bound AS MATERIALIZED ( \
-                SELECT \
-                    range_bound(1000)(index) AS bound \
-                FROM ( \
-                    SELECT \
-                        hilbert_index([{hilbert_keys_str}], 2) AS index \
-                    FROM {database_name}.{table_name}, _keys_bound \
-                ) AS tmp \
-            ), \
             _source_data AS ( \
                 SELECT \
                     {table_name}.*, \
@@ -1285,12 +1276,11 @@ impl Binder {
                 FROM {database_name}.{table_name}, _keys_bound \
             ) \
             SELECT \
-                _source_data.* EXCLUDE(_hilbert_index) \
+                * EXCLUDE(_hilbert_index) \
             FROM \
-                _source_data, \
-                _index_bound \
+                _source_data \
             ORDER BY \
-                range_partition_id(_source_data._hilbert_index, _index_bound.bound) \
+                _hilbert_index \
             "
         );
 
@@ -1303,12 +1293,14 @@ impl Binder {
         let (s_expr, new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
         // Wrap `LogicalMaterializedCte` to `s_expr`
         let s_expr = new_bind_context.cte_context.wrap_m_cte(s_expr);
+        let new_bind_context = Box::new(new_bind_context);
+        bind_context.parent = Some(new_bind_context.clone());
         let cluster_by = OptimizeClusterBy {
             catalog_name,
             database_name,
             table_name,
             metadata: self.metadata.clone(),
-            bind_context: Box::new(new_bind_context),
+            bind_context: new_bind_context,
         };
         let s_expr = SExpr::create_unary(
             Arc::new(RelOperator::OptimizeClusterBy(cluster_by)),

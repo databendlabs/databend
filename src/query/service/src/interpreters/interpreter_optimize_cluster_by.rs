@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -22,7 +21,6 @@ use databend_common_sql::plans::OptimizeClusterBy;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -63,7 +61,6 @@ impl Interpreter for OptimizeClusterByInterpreter {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
-        let mut build_res = PipelineBuildResult::create();
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
         let physical_plan = builder
             .build(&self.s_expr, bind_context.column_set())
