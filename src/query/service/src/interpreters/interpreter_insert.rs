@@ -139,7 +139,7 @@ impl Interpreter for InsertInterpreter {
             }
             InsertInputSource::SelectPlan(plan) => {
                 let table1 = table.clone();
-                let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+                let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
                     Plan::Query {
                         s_expr,
                         metadata,
@@ -166,10 +166,11 @@ impl Interpreter for InsertInterpreter {
                     dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
 
                 // here we remove the last exchange merge plan to trigger distribute insert
-                let insert_select_plan = match select_plan {
-                    PhysicalPlan::Exchange(ref mut exchange) => {
-                        // insert can be dispatched to different nodes
+                let insert_select_plan = match (select_plan, table.support_distributed_insert()) {
+                    (PhysicalPlan::Exchange(ref mut exchange), true) => {
+                        // insert can be dispatched to different nodes if table support_distributed_insert
                         let input = exchange.input.clone();
+
                         exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
                             DistributedInsertSelect {
                                 // TODO(leiysky): we reuse the id of exchange here,
@@ -183,9 +184,9 @@ impl Interpreter for InsertInterpreter {
                                 cast_needed: self.check_schema_cast(plan)?,
                             },
                         )));
-                        select_plan
+                        PhysicalPlan::Exchange(exchange.clone())
                     }
-                    other_plan => {
+                    (other_plan, _) => {
                         // insert should wait until all nodes finished
                         PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
                             // TODO: we reuse the id of other plan here,
