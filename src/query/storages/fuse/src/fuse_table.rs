@@ -186,17 +186,21 @@ impl FuseTable {
                         // it means that this table info has been tweaked according to the rules of
                         // resolving snapshot location from the hint file, it should not be tweaked again.
 
-                        if !table_meta_options.contains_key(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG) {
-                            let operator = init_operator(&sp)?;
+                        let operator = init_operator(&sp)?;
+                        let table_type = if !table_meta_options
+                            .contains_key(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG)
+                        {
                             // Extract snapshot location from last snapshot hit file.
-                            let table_type = if Self::is_table_attached(table_meta_options) {
-                                let location =
-                                    Self::load_snapshot_location_from_hint(&operator, &storage_prefix)?;
+                            if Self::is_table_attached(table_meta_options) {
+                                let location = Self::load_snapshot_location_from_hint(
+                                    &operator,
+                                    &storage_prefix,
+                                )?;
 
                                 info!(
-                                "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-                                location, table_info.desc, table_info.ident
-                            );
+                                    "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
+                                    location, table_info.desc, table_info.ident
+                                );
 
                                 // Adjust snapshot location to the values extracted from the last snapshot hint
                                 match location {
@@ -204,9 +208,10 @@ impl FuseTable {
                                         table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
                                     }
                                     Some(location) => {
-                                        table_info
-                                            .options_mut()
-                                            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+                                        table_info.options_mut().insert(
+                                            OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+                                            location,
+                                        );
                                     }
                                 }
 
@@ -221,7 +226,7 @@ impl FuseTable {
                                     OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG.to_string(),
                                     "does not matter".to_string(),
                                 );
-                            }
+                            };
 
                             FuseTableType::Attached
                         } else {
@@ -571,7 +576,7 @@ impl Table for FuseTable {
                 ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
                 ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
             }
-                .unwrap();
+            .unwrap();
 
             let cluster_keys = cluster_keys
                 .iter()
@@ -579,7 +584,7 @@ impl Table for FuseTable {
                     k.project_column_ref(|index| {
                         table_meta.schema().field(*index).name().to_string()
                     })
-                        .as_remote_expr()
+                    .as_remote_expr()
                 })
                 .collect();
             return cluster_keys;
@@ -679,7 +684,7 @@ impl Table for FuseTable {
             &None,
             &self.operator,
         )
-            .await
+        .await
     }
 
     #[async_backtrace::framed]
@@ -733,7 +738,7 @@ impl Table for FuseTable {
             &None,
             &self.operator,
         )
-            .await
+        .await
     }
 
     #[fastrace::trace]
@@ -922,7 +927,7 @@ impl Table for FuseTable {
             ctx.get_settings().get_max_threads()? as usize * 4,
             num_segments,
         )
-            .max(1);
+        .max(1);
 
         ctx.set_status_info(&format!(
             "processing {} segments, chunk size {}",
@@ -1013,11 +1018,11 @@ impl Table for FuseTable {
     ) -> Result<String> {
         let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {
-                     seq,
-                     desc,
-                     mode,
-                     location,
-                 }) = self.changes_desc.as_ref()
+            seq,
+            desc,
+            mode,
+            location,
+        }) = self.changes_desc.as_ref()
         else {
             return Err(ErrorCode::Internal(format!(
                 "No changes descriptor found in table {db_tb_name}"
@@ -1031,7 +1036,7 @@ impl Table for FuseTable {
             format!("{}.{} {}", database_name, table_name, desc),
             *seq,
         )
-            .await
+        .await
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {
