@@ -87,4 +87,3 @@ query SSSS
 select name, warehouse, schedule, definition from system.task_history where name = 'mytaskroot'
 ----
 mytaskroot mywh CRON 0 0 0 1 1 ? 2100 SELECT 1
-

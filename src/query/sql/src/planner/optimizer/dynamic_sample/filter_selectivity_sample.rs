@@ -27,11 +27,11 @@ use num_traits::ToPrimitive;
 
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -44,7 +44,7 @@ pub async fn filter_selectivity_sample(
     ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     s_expr: &SExpr,
-    sample_executor: Arc<dyn QuerySampleExecutor>,
+    sample_executor: Arc<dyn QueryExecutor>,
 ) -> Result<Arc<StatInfo>> {
     // filter cardinality by sample will be called in `dphyp`, so we can ensure the filter is in complex query(contains not only one table)
     // Because it's meaningless for filter cardinality by sample in single table query.
@@ -88,14 +88,21 @@ pub async fn filter_selectivity_sample(
         required.insert(0);
         let plan = builder.build(&new_s_expr, required).await?;
 
-        let result = sample_executor.execute_query(&plan).await?;
+        let result = sample_executor
+            .execute_query_with_physical_plan(&plan)
+            .await?;
         if let Some(block) = result.first() {
             if let Some(count) = block.get_last_column().as_number() {
                 if let Some(number_scalar) = count.index(0) {
                     // Compute and return selectivity
                     let selectivity = number_scalar.to_f64().to_f64().unwrap() / sample_size;
-                    let mut statistics = child_rel_expr.derive_cardinality()?.statistics.clone();
-                    let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+                    let stat_info = child_rel_expr.derive_cardinality()?;
+                    let mut statistics = stat_info.statistics.clone();
+                    let mut sb = SelectivityEstimator::new(
+                        &mut statistics,
+                        stat_info.cardinality,
+                        HashSet::new(),
+                    );
                     sb.update_other_statistic_by_selectivity(selectivity);
                     let stat_info = Arc::new(StatInfo {
                         cardinality: (selectivity * num_rows as f64).ceil(),

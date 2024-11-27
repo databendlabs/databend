@@ -236,16 +236,24 @@ impl Operator for Scan {
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
                 let ndv = col_stat.ndv.unwrap();
-                let histogram = if let Some(histogram) = self.statistics.histograms.get(k) {
+                let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
+                    && histogram.is_some()
+                {
                     histogram.clone()
                 } else {
-                    histogram_from_ndv(
-                        ndv,
-                        num_rows,
-                        Some((min.clone(), max.clone())),
-                        DEFAULT_HISTOGRAM_BUCKETS,
-                    )
-                    .ok()
+                    let num_rows = num_rows.saturating_sub(col_stat.null_count);
+                    let ndv = std::cmp::min(num_rows, ndv);
+                    if num_rows != 0 {
+                        histogram_from_ndv(
+                            ndv,
+                            num_rows,
+                            Some((min.clone(), max.clone())),
+                            DEFAULT_HISTOGRAM_BUCKETS,
+                        )
+                        .ok()
+                    } else {
+                        None
+                    }
                 };
                 let column_stat = ColumnStat {
                     min,
@@ -271,7 +279,11 @@ impl Operator for Scan {
                     column_stats,
                 };
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+                let mut sb = SelectivityEstimator::new(
+                    &mut statistics,
+                    precise_cardinality as f64,
+                    HashSet::new(),
+                );
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction

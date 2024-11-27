@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
@@ -26,12 +28,16 @@ use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::Pivot;
+use databend_common_ast::ast::PivotValues;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::ScalarRef;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -39,6 +45,7 @@ use log::warn;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::query_executor::QueryExecutor;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 use crate::VirtualColumnRewriter;
@@ -94,7 +101,8 @@ impl Binder {
         let mut rewriter = SelectRewriter::new(
             from_context.all_column_bindings(),
             self.name_resolution_ctx.unquoted_ident_case_sensitive,
-        );
+        )
+        .with_subquery_executor(self.subquery_executor.clone());
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
@@ -259,6 +267,7 @@ struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
     is_unquoted_ident_case_sensitive: bool,
+    subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 // helper functions to SelectRewriter
@@ -366,7 +375,16 @@ impl<'a> SelectRewriter<'a> {
             column_binding,
             new_stmt: None,
             is_unquoted_ident_case_sensitive,
+            subquery_executor: None,
         }
+    }
+
+    pub fn with_subquery_executor(
+        mut self,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    ) -> Self {
+        self.subquery_executor = subquery_executor;
+        self
     }
 
     fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
@@ -425,19 +443,46 @@ impl<'a> SelectRewriter<'a> {
             name: format!("{}_if", aggregate_name.name),
             ..aggregate_name.clone()
         };
-        for value in &pivot.values {
-            let mut args = aggregate_args.to_vec();
-            args.push(Self::expr_eq_from_col_and_value(
-                pivot.value_column.clone(),
-                value.clone(),
-            ));
-            let alias = Self::raw_string_from_literal_expr(value)
-                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
-            new_select_list.push(Self::target_func_from_name_args(
-                new_aggregate_name.clone(),
-                args,
-                Some(Identifier::from_name(stmt.span, &alias)),
-            ));
+
+        // The values of pivot are divided into two categories: Column(Vec<Expr>) and Subquery.
+        // For Column, it must be literal. For Subquery, it should first be executed,
+        // and the processing of the result will be consistent with that of Column.
+        // Therefore, the subquery can only return one column, and only return a string type.
+        match &pivot.values {
+            PivotValues::ColumnValues(values) => {
+                self.process_pivot_column_values(
+                    pivot,
+                    values,
+                    &new_aggregate_name,
+                    aggregate_args,
+                    &mut new_select_list,
+                    stmt,
+                )?;
+            }
+            PivotValues::Subquery(subquery) => {
+                let query_sql = subquery.to_string();
+                if let Some(subquery_executor) = &self.subquery_executor {
+                    let data_blocks = databend_common_base::runtime::block_on(async move {
+                        subquery_executor
+                            .execute_query_with_sql_string(&query_sql)
+                            .await
+                    })?;
+                    let values =
+                        self.extract_column_values_from_data_blocks(&data_blocks, subquery.span)?;
+                    self.process_pivot_column_values(
+                        pivot,
+                        &values,
+                        &new_aggregate_name,
+                        aggregate_args,
+                        &mut new_select_list,
+                        stmt,
+                    )?;
+                } else {
+                    return Err(ErrorCode::Internal(
+                        "SelectRewriter's Subquery executor is not set",
+                    ));
+                };
+            }
         }
 
         if let Some(ref mut new_stmt) = self.new_stmt {
@@ -451,6 +496,67 @@ impl<'a> SelectRewriter<'a> {
             });
         }
         Ok(())
+    }
+
+    fn process_pivot_column_values(
+        &self,
+        pivot: &Pivot,
+        values: &[Expr],
+        new_aggregate_name: &Identifier,
+        aggregate_args: &[Expr],
+        new_select_list: &mut Vec<SelectTarget>,
+        stmt: &SelectStmt,
+    ) -> Result<()> {
+        for value in values {
+            let mut args = aggregate_args.to_vec();
+            args.push(Self::expr_eq_from_col_and_value(
+                pivot.value_column.clone(),
+                value.clone(),
+            ));
+            let alias = Self::raw_string_from_literal_expr(value)
+                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
+            new_select_list.push(Self::target_func_from_name_args(
+                new_aggregate_name.clone(),
+                args,
+                Some(Identifier::from_name(stmt.span, &alias)),
+            ));
+        }
+        Ok(())
+    }
+
+    fn extract_column_values_from_data_blocks(
+        &self,
+        data_blocks: &[DataBlock],
+        span: Span,
+    ) -> Result<Vec<Expr>> {
+        let mut values: Vec<Expr> = vec![];
+        for block in data_blocks {
+            if block.num_columns() != 1 {
+                return Err(ErrorCode::SemanticError(
+                    "The subquery of `pivot in` must return one column",
+                )
+                .set_span(span));
+            }
+            let columns = block.columns();
+            for row in 0..block.num_rows() {
+                match columns[0].value.index(row).unwrap() {
+                    ScalarRef::String(s) => {
+                        let literal = Expr::Literal {
+                            span,
+                            value: Literal::String(s.to_string()),
+                        };
+                        values.push(literal);
+                    }
+                    _ => {
+                        return Err(ErrorCode::SemanticError(
+                            "The subquery of `pivot in` must return a string type",
+                        )
+                        .set_span(span));
+                    }
+                }
+            }
+        }
+        Ok(values)
     }
 
     fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {
