@@ -262,7 +262,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true(twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43)], limit: NONE]
+│   ├── push downs: [filters: [is_true((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43))], limit: NONE]
 │   └── estimated rows: 1.33
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
@@ -272,7 +272,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43)], limit: NONE]
+    ├── push downs: [filters: [is_true((onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43))], limit: NONE]
     └── estimated rows: 1.33
 
 query T
@@ -313,7 +313,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 Filter
 ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
-├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
+├── filters: [is_true((b.x (#1) > 44 OR a.x (#0) < 43))]
 ├── estimated rows: 2.00
 └── HashJoin
     ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
