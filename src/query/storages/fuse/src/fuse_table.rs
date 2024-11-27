@@ -25,6 +25,7 @@ use chrono::Duration;
 use chrono::TimeDelta;
 use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -516,10 +517,10 @@ impl Table for FuseTable {
         let table_info = match self.attached_table_location.get() {
             Some(snapshot_location) => {
                 let mut table_info = self.table_info.clone();
-                table_info
-                    .meta
-                    .options
-                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_location);
+                table_info.meta.options.insert(
+                    OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+                    snapshot_location.to_owned(),
+                );
                 table_info
             }
             None => self.table_info.clone(),
