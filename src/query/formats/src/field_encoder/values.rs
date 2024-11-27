@@ -14,10 +14,12 @@
 
 use chrono_tz::Tz;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::types::months_days_ns;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::geography::GeographyColumn;
+use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
@@ -34,6 +36,7 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_io::cursor_ext::Interval;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
@@ -152,6 +155,7 @@ impl FieldEncoderValues {
             Column::Binary(c) => self.write_binary(c, row_index, out_buf),
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
+            Column::Interval(c) => self.write_interval(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
@@ -273,6 +277,23 @@ impl FieldEncoderValues {
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
         let s = date_to_string(*v as i64, &self.common_settings().jiff_timezone).to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+    }
+
+    fn write_interval(
+        &self,
+        column: &Buffer<months_days_ns>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = interval_to_string(Interval {
+            months: v.0,
+            days: v.1,
+            micros: v.2,
+        })
+        .to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

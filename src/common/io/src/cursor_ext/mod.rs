@@ -15,6 +15,7 @@
 mod cursor_checkpoint_ext;
 mod cursor_read_bytes_ext;
 mod cursor_read_datetime_ext;
+mod cursor_read_interval_ext;
 mod cursor_read_number_ext;
 mod cursor_read_string_ext;
 
@@ -23,6 +24,8 @@ pub use cursor_read_bytes_ext::ReadBytesExt;
 pub use cursor_read_datetime_ext::unwrap_local_time;
 pub use cursor_read_datetime_ext::BufferReadDateTimeExt;
 pub use cursor_read_datetime_ext::DateTimeResType;
+pub use cursor_read_interval_ext::BufferReadIntervalExt;
+pub use cursor_read_interval_ext::Interval;
 pub use cursor_read_number_ext::collect_number;
 pub use cursor_read_number_ext::read_num_text_exact;
 pub use cursor_read_number_ext::ReadNumberExt;

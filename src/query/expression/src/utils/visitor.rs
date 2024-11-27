@@ -132,6 +132,8 @@ pub trait ValueVisitor {
             Column::String(column) => self.visit_string(column),
             Column::Timestamp(buffer) => self.visit_timestamp(buffer),
             Column::Date(buffer) => self.visit_date(buffer),
+            // TODO: impl visitor
+            Column::Interval(_) => unimplemented!(),
             Column::Array(column) => self.visit_array(column),
             Column::Map(column) => self.visit_map(column),
             Column::Tuple(columns) => self.visit_tuple(columns),
