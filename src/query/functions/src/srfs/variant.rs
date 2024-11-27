@@ -40,7 +40,6 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use jaq_core;
 use jaq_interpret::Ctx;
 use jaq_interpret::FilterT;
@@ -329,7 +328,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                     if args.len() >= 2 {
                         match &args[1] {
-                            ValueRef::Scalar(ScalarRef::String(v)) => {
+                            Value::Scalar(Scalar::String(v)) => {
                                 match parse_json_path(v.as_bytes()) {
                                     Ok(jsonpath) => {
                                         let selector = Selector::new(jsonpath, SelectorMode::First);
@@ -341,7 +340,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     }
                                 }
                             }
-                            ValueRef::Column(_) => {
+                            Value::Column(_) => {
                                 ctx.set_error(
                                     0,
                                     "argument `path` to function FLATTEN needs to be constant"
@@ -354,10 +353,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     if args.len() >= 3 {
                         match &args[2] {
-                            ValueRef::Scalar(ScalarRef::Boolean(v)) => {
+                            Value::Scalar(Scalar::Boolean(v)) => {
                                 outer = *v;
                             }
-                            ValueRef::Column(_) => {
+                            Value::Column(_) => {
                                 ctx.set_error(
                                     0,
                                     "argument `outer` to function FLATTEN needs to be constant"
@@ -370,10 +369,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     if args.len() >= 4 {
                         match &args[3] {
-                            ValueRef::Scalar(ScalarRef::Boolean(v)) => {
+                            Value::Scalar(Scalar::Boolean(v)) => {
                                 recursive = *v;
                             }
-                            ValueRef::Column(_) => {
+                            Value::Column(_) => {
                                 ctx.set_error(
                                     0,
                                     "argument `recursive` to function FLATTEN needs to be constant"
@@ -385,25 +384,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                     if args.len() >= 5 {
-                        match args[4] {
-                            ValueRef::Scalar(ScalarRef::String(v)) => {
-                                match v.to_lowercase().as_str() {
-                                    "object" => {
-                                        mode = FlattenMode::Object;
-                                    }
-                                    "array" => {
-                                        mode = FlattenMode::Array;
-                                    }
-                                    "both" => {
-                                        mode = FlattenMode::Both;
-                                    }
-                                    _ => {
-                                        ctx.set_error(0, format!("Invalid mode {v:?}"));
-                                        return results;
-                                    }
+                        match &args[4] {
+                            Value::Scalar(Scalar::String(v)) => match v.to_lowercase().as_str() {
+                                "object" => {
+                                    mode = FlattenMode::Object;
                                 }
-                            }
-                            ValueRef::Column(_) => {
+                                "array" => {
+                                    mode = FlattenMode::Array;
+                                }
+                                "both" => {
+                                    mode = FlattenMode::Both;
+                                }
+                                _ => {
+                                    ctx.set_error(0, format!("Invalid mode {v:?}"));
+                                    return results;
+                                }
+                            },
+                            Value::Column(_) => {
                                 ctx.set_error(
                                     0,
                                     "argument `mode` to function FLATTEN needs to be constant"

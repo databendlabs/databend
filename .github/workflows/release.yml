@@ -139,7 +139,6 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -196,47 +195,17 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - category: default
             target: x86_64-unknown-linux-musl
-          - category: default
-            target: aarch64-unknown-linux-musl
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.create_release.outputs.sha }}
-      - name: Download artifact
-        uses: ./.github/actions/artifact_download
+      - name: Pack Binaries
+        uses: ./.github/actions/pack_binaries
         with:
-          sha: ${{ github.sha }}
+          version: ${{ needs.create_release.outputs.version }}
           target: ${{ matrix.target }}
           category: ${{ matrix.category }}
-          path: distro/bin
-          artifacts: metactl,meta,query
-      - name: Pack Binaries
-        run: |
-          target=${{ matrix.target }}
-          version=${{ needs.create_release.outputs.version }}
-          case ${{ matrix.category }} in
-            default)
-              pkg_name="databend-${version}-${target}"
-              ;;
-            *)
-            pkg_name="databend-${{ matrix.category }}-${version}-${target}"
-              ;;
-          esac
-          mkdir -p distro/{bin,configs,systemd,scripts}
-          cp ./scripts/distribution/systemd/databend-* distro/systemd/
-          cp ./scripts/distribution/configs/databend-* distro/configs/
-          cp ./scripts/distribution/release-readme.txt distro/readme.txt
-          cp -r ./scripts/distribution/local-scripts/* distro/scripts/
-          cp -r ./scripts/distribution/package-scripts/* distro/scripts/
-          tar -C ./distro -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
-          sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
-      - name: post sha256
-        uses: actions/upload-artifact@v4
-        with:
-          name: sha256sums-${{ matrix.category }}-${{ matrix.target }}
-          path: sha256-*.txt
-          retention-days: 1
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         env:
@@ -455,55 +424,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.create_release.outputs.sha }}
-      - name: Install nfpm@latest
-        run: |
-          curl -sSLo nfpm.tar.gz https://github.com/goreleaser/nfpm/releases/download/v2.26.0/nfpm_2.26.0_Linux_x86_64.tar.gz
-          tar xf nfpm.tar.gz
-          sudo mv nfpm /usr/local/bin
-          sudo chmod a+x /usr/local/bin/nfpm
-          rm nfpm.tar.gz
-      - name: Get target
-        id: target
-        run: |
-          echo 'target=${{ matrix.arch }}-unknown-linux-gnu' >> $GITHUB_OUTPUT
-      - name: Download artifacts
-        uses: ./.github/actions/artifact_download
+      - name: Pack distribution
+        uses: ./.github/actions/pack_distribution
         with:
-          sha: ${{ github.sha }}
-          target: ${{ steps.target.outputs.target }}
-          category: default
-          artifacts: metactl,meta,query
-          path: distro/bin
-      - name: Build Packages
-        id: build_packages
-        run: |
-          export name="databend"
-          export version="${{ needs.create_release.outputs.version }}"
-          export path="distro"
-          case "${{ matrix.arch }}" in
-            x86_64)
-              export arch="amd64"
-              ;;
-            aarch64)
-              export arch="arm64"
-              ;;
-          esac
-          mkdir -p distro/{bin,configs,systemd,scripts}
-          cp ./scripts/distribution/systemd/databend-* distro/systemd/
-          cp ./scripts/distribution/configs/databend-* distro/configs/
-          cp ./scripts/distribution/release-readme.txt distro/readme.txt
-          cp -r ./scripts/distribution/local-scripts/* distro/scripts/
-          cp -r ./scripts/distribution/package-scripts/* distro/scripts/
-          nfpm pkg --packager ${{ matrix.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
-      - name: Update release to github
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        # Reference: https://cli.github.com/manual/gh_release_upload
-        run: |
-          version="${{ needs.create_release.outputs.version }}"
-          # name looks like: `databend_0.8.144~nightly_amd64.deb`
-          gh release upload ${version} databend_*.${{ matrix.packager }} --clobber
+          version: ${{ needs.create_release.outputs.version }}
+          arch: ${{ matrix.arch }}
+          packager: ${{ matrix.packager }}
 
   # bindings_python:
   #   if: inputs.stable

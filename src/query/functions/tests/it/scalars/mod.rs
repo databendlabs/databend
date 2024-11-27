@@ -105,9 +105,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
             Ok(result) => assert!(
-                result
-                    .as_ref()
-                    .semantically_eq(&optimized_result.clone().unwrap().as_ref()),
+                result.semantically_eq(&optimized_result.clone().unwrap()),
                 "{} should eq {}, expr: {}, optimized_expr: {}",
                 result,
                 optimized_result.unwrap(),

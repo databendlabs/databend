@@ -262,7 +262,6 @@ pub async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> 
     let mut count: u64 = 0;
     for block in blocks {
         let value = &block.get_by_offset(0).value;
-        let value = value.as_ref();
         let value = unsafe { value.index_unchecked(0) };
         if let ScalarRef::Number(NumberScalar::UInt64(v)) = value {
             count += v;

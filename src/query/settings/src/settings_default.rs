@@ -335,6 +335,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable materialized common table expression.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",

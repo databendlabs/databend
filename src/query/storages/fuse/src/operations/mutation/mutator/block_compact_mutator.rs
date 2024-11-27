@@ -168,7 +168,7 @@ impl BlockCompactMutator {
                 self.ctx.set_status_info(&status);
             }
 
-            if is_end {
+            if is_end || segment_idx >= num_segment_limit {
                 break;
             }
         }

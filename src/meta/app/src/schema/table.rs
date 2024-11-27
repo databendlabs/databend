@@ -382,6 +382,10 @@ impl TableInfo {
         &self.meta.options
     }
 
+    pub fn options_mut(&mut self) -> &mut BTreeMap<String, String> {
+        &mut self.meta.options
+    }
+
     pub fn catalog(&self) -> &str {
         &self.catalog_info.name_ident.catalog_name
     }
