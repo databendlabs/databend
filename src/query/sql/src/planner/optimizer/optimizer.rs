@@ -68,7 +68,7 @@ pub struct OptimizerContext {
     enable_join_reorder: bool,
     enable_dphyp: bool,
     #[educe(Debug(ignore))]
-    sample_executor: Option<Arc<dyn QueryExecutor>>,
+    pub(crate) sample_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl OptimizerContext {
