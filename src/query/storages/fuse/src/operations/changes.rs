@@ -75,7 +75,7 @@ impl FuseTable {
         } else {
             self.clone()
         };
-        let location = source.snapshot_loc().await?;
+        let location = source.snapshot_loc();
         let seq = match navigation {
             Some(NavigationPoint::StreamInfo(info)) => info
                 .options()
@@ -338,7 +338,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         base: &Option<String>,
     ) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
-        let latest = self.snapshot_loc().await?;
+        let latest = self.snapshot_loc();
 
         let latest_segments = if let Some(snapshot) = latest {
             let (sn, _) =

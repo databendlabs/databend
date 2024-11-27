@@ -77,7 +77,7 @@ async fn location_snapshot(
     if let Some(snapshot) = maybe_snapshot {
         if let Some(snapshot_id) = snapshot_id {
             // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version(None).await?;
+            let snapshot_version = tbl.snapshot_format_version(None)?;
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
