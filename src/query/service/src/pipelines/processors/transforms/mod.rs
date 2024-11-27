@@ -37,6 +37,7 @@ mod transform_resort_addon;
 mod transform_resort_addon_without_source_schema;
 mod transform_sort_spill;
 mod transform_srf;
+mod transform_stream_sort_spill;
 mod transform_udf_script;
 mod transform_udf_server;
 mod window;
