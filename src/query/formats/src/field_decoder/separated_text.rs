@@ -18,6 +18,7 @@ use std::io::Cursor;
 use bstr::ByteSlice;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
@@ -44,6 +45,7 @@ use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
+use databend_common_io::cursor_ext::Interval;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
@@ -144,6 +146,7 @@ impl SeparatedTextDecoder {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, data),
             }),
             ColumnBuilder::Date(c) => self.read_date(c, data),
+            ColumnBuilder::Interval(c) => self.read_interval(c, data),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, data),
             ColumnBuilder::Array(c) => self.read_array(c, data),
             ColumnBuilder::Map(c) => self.read_map(c, data),
@@ -256,6 +259,18 @@ impl SeparatedTextDecoder {
         let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
+        Ok(())
+    }
+
+    fn read_interval(&self, column: &mut Vec<(i32, i32, i64)>, data: &[u8]) -> Result<()> {
+        let res = std::str::from_utf8(data).map_err_to_code(ErrorCode::BadBytes, || {
+            format!(
+                "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
+                data
+            )
+        })?;
+        let i = Interval::from_string(res)?;
+        column.push((i.months, i.days, i.micros));
         Ok(())
     }
 

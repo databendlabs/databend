@@ -43,6 +43,7 @@ pub enum LegacyScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
+    Interval((i32, i32, i64)),
     Boolean(bool),
     String(Vec<u8>),
     Array(LegacyColumn),
@@ -63,6 +64,7 @@ pub enum LegacyColumn {
     String(LegacyBinaryColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
+    Interval(Buffer<(i32, i32, i64)>),
     Array(Box<LegacyArrayColumn>),
     Map(Box<LegacyArrayColumn>),
     Bitmap(LegacyBinaryColumn),
@@ -99,6 +101,7 @@ impl From<LegacyScalar> for Scalar {
             LegacyScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
             LegacyScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             LegacyScalar::Date(date) => Scalar::Date(date),
+            LegacyScalar::Interval(interval) => Scalar::Interval(interval),
             LegacyScalar::Boolean(b) => Scalar::Boolean(b),
             LegacyScalar::String(s) => Scalar::String(String::from_utf8_lossy(&s).into_owned()),
             LegacyScalar::Array(col) => Scalar::Array(col.into()),
@@ -139,6 +142,7 @@ impl From<LegacyColumn> for Column {
             }
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),
+            LegacyColumn::Interval(buf) => Column::Interval(buf),
             LegacyColumn::Array(arr_col) => Column::Array(Box::new(ArrayColumn::<AnyType> {
                 values: arr_col.values.into(),
                 offsets: arr_col.offsets,
@@ -172,6 +176,7 @@ impl From<Scalar> for LegacyScalar {
             Scalar::Decimal(dec_scalar) => LegacyScalar::Decimal(dec_scalar),
             Scalar::Timestamp(ts) => LegacyScalar::Timestamp(ts),
             Scalar::Date(date) => LegacyScalar::Date(date),
+            Scalar::Interval(interval) => LegacyScalar::Interval(interval),
             Scalar::Boolean(b) => LegacyScalar::Boolean(b),
             Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) => unreachable!(),
             Scalar::String(string) => LegacyScalar::String(string.as_bytes().to_vec()),
@@ -199,6 +204,7 @@ impl From<Column> for LegacyColumn {
             }
             Column::Timestamp(buf) => LegacyColumn::Timestamp(buf),
             Column::Date(buf) => LegacyColumn::Date(buf),
+            Column::Interval(buf) => LegacyColumn::Interval(buf),
             Column::Array(arr_col) => LegacyColumn::Array(Box::new(LegacyArrayColumn {
                 values: arr_col.values.into(),
                 offsets: arr_col.offsets,

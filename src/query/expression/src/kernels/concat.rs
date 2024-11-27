@@ -215,6 +215,7 @@ impl Column {
                     .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
+            Column::Interval(_) => todo!(),
             Column::Variant(_)
             | Column::Geometry(_)
             | Column::Geography(_)

@@ -258,6 +258,12 @@ impl Column {
                 let buffer: Buffer<i32> = array.to_data().buffers()[0].clone().into();
                 Column::Date(buffer)
             }
+            DataType::Interval => {
+                todo!()
+                // let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Interval(IntervalUnit::MonthDayNano))?;
+                // let buffer: Buffer<(i32, i32, i64)> = array.to_data().buffers()[0].clone().into();
+                // Column::Interval(buffer)
+            }
             DataType::Nullable(_) => {
                 let validity = match array.nulls() {
                     Some(nulls) => Bitmap::from_null_buffer(nulls.clone()),

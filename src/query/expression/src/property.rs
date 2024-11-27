@@ -32,6 +32,7 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataType;
+use crate::types::IntervalType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -99,6 +100,7 @@ pub enum Domain {
     String(StringDomain),
     Timestamp(SimpleDomain<i64>),
     Date(SimpleDomain<i32>),
+    Interval(SimpleDomain<(i32, i32, i64)>),
     Nullable(NullableDomain<AnyType>),
     /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),
@@ -177,6 +179,7 @@ impl Domain {
             },
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
             DataType::Date => Domain::Date(DateType::full_domain()),
+            DataType::Interval => Domain::Interval(IntervalType::full_domain()),
             DataType::Null => Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,

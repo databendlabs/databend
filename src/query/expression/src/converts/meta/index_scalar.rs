@@ -32,6 +32,7 @@ pub enum IndexScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
+    Interval((i32, i32, i64)),
     Boolean(bool),
     // For compat reason, we keep this attribute which treat string/binary into string
     #[serde(alias = "String", alias = "Binary")]
@@ -51,6 +52,7 @@ impl TryFrom<IndexScalar> for Scalar {
             IndexScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
+            IndexScalar::Interval(interval) => Scalar::Interval(interval),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
             IndexScalar::String(s) => Scalar::String(String::from_utf8(s).map_err(|e| {
                 ErrorCode::InvalidUtf8String(format!("invalid utf8 data for string type: {}", e))
@@ -77,6 +79,7 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Decimal(dec_scalar) => IndexScalar::Decimal(dec_scalar),
             Scalar::Timestamp(ts) => IndexScalar::Timestamp(ts),
             Scalar::Date(date) => IndexScalar::Date(date),
+            Scalar::Interval(interval) => IndexScalar::Interval(interval),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
             Scalar::Binary(s) => IndexScalar::BinaryV2(s),

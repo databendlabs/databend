@@ -53,6 +53,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         },
         DataType::Timestamp => 8,
         DataType::Date => 4,
+        DataType::Interval => 16, // i32 + i32 + i64
         // use address instead
         DataType::Binary
         | DataType::String
