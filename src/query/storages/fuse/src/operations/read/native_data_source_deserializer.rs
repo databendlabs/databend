@@ -32,6 +32,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
 use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MutableBitmap;
@@ -553,7 +554,7 @@ impl NativeDeserializeDataTransform {
 
                         let data_type = self.src_schema.field(*index).data_type().clone();
                         let default_val = self.block_reader.default_vals[*index].clone();
-                        let value = Value::Scalar(default_val);
+                        let value: Value<AnyType> = Value::Scalar(default_val);
                         let col = value.convert_to_full_column(&data_type, num_rows);
                         let mut bitmap = MutableBitmap::from_len_set(num_rows);
                         sorter.push_column(&col, &mut bitmap);

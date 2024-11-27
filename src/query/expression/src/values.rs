@@ -264,6 +264,35 @@ impl<T: ArgType> Value<T> {
             Value::Column(col) => Value::Column(T::upcast_column(col)),
         }
     }
+
+    pub fn convert_to_full_column(&self, num_rows: usize, generics: &GenericMap) -> T::Column {
+        match self {
+            Value::Scalar(s) => {
+                let mut builder = T::create_builder(num_rows, generics);
+                T::push_item_repeat(&mut builder, T::to_scalar_ref(s), num_rows);
+                T::build_column(builder)
+            }
+            Value::Column(c) => c.clone(),
+        }
+    }
+}
+
+impl<T: ValueType> Value<NullableType<T>> {
+    pub fn validity(&self, num_rows: usize) -> Bitmap {
+        match self {
+            Value::Scalar(None) => Bitmap::new_zeroed(num_rows),
+            Value::Scalar(Some(_)) => Bitmap::new_trued(num_rows),
+            Value::Column(col) => col.validity.clone(),
+        }
+    }
+
+    pub fn value(&self) -> Option<Value<T>> {
+        match self {
+            Value::Scalar(None) => None,
+            Value::Scalar(Some(s)) => Some(Value::Scalar(s.clone())),
+            Value::Column(col) => Some(Value::Column(col.column.clone())),
+        }
+    }
 }
 
 impl<T: Decimal> Value<DecimalType<T>> {
