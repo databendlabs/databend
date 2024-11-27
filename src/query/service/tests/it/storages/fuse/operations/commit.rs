@@ -243,7 +243,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     // check last snapshot hit file
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let last_snapshot_location = fuse_table.snapshot_loc().await?.unwrap();
+    let last_snapshot_location = fuse_table.snapshot_loc().unwrap();
     let operator = fuse_table.get_operator();
     let location = fuse_table
         .meta_location_generator()

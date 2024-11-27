@@ -183,7 +183,7 @@ async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, u64)> {
     let start = std::time::Instant::now();
     let time_travel_size = get_time_travel_size(storage_prefix, &operator).await?;
     info!("get_time_travel_size cost: {:?}", start.elapsed());
-    let snapshot_location = tbl.snapshot_loc().await?;
+    let snapshot_location = tbl.snapshot_loc();
     let latest_snapshot_size = match snapshot_location {
         Some(snapshot_location) => {
             let start = std::time::Instant::now();
