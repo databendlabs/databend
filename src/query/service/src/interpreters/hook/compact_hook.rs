@@ -191,6 +191,12 @@ async fn compact_table(
         }
     }
 
+    ctx.evict_table_from_cache(
+        &compact_target.catalog,
+        &compact_target.database,
+        &compact_target.table,
+    )?;
+
     if do_recluster {
         let recluster = RelOperator::Recluster(Recluster {
             catalog: compact_target.catalog,
