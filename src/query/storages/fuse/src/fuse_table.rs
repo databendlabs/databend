@@ -20,6 +20,7 @@ use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Duration;
 use chrono::TimeDelta;
@@ -184,26 +185,25 @@ impl FuseTable {
 
                         // Extract snapshot location from last snapshot hit file.
                         let table_type = if Self::is_table_attached(table_meta_options) {
-                            let location = GlobalIORuntime::instance().block_on(async {
-                                let hint =
-                                    format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                                let hint_content = operator.read(&hint).await?.to_vec();
-                                let snapshot_full_path = String::from_utf8(hint_content)?;
-                                let operator_info = operator.info();
-                                Ok::<_, ErrorCode>(
-                                    snapshot_full_path[operator_info.root().len()..].to_string(),
-                                )
-                            })?;
+                            let location =
+                                Self::load_snapshot_location_from_hint(&operator, &storage_prefix)?;
 
                             info!(
-                                "extracted snapshot location {} of table {}, with id {:?} from the last snapshot hint file.",
+                                "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
                                 location, table_info.desc, table_info.ident
                             );
 
                             // Adjust snapshot location to the values extracted from the last snapshot hint
-                            table_info
-                                .options_mut()
-                                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+                            match location {
+                                None => {
+                                    table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+                                }
+                                Some(location) => {
+                                    table_info
+                                        .options_mut()
+                                        .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+                                }
+                            }
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
@@ -475,6 +475,38 @@ impl FuseTable {
 
     pub fn get_storage_prefix(&self) -> &str {
         self.meta_location_generator.prefix()
+    }
+
+    fn load_snapshot_location_from_hint(
+        operator: &Operator,
+        storage_prefix: &str,
+    ) -> Result<Option<String>> {
+        GlobalIORuntime::instance().block_on(async {
+            let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+            let begin_load_hint = Instant::now();
+            let maybe_hint_content = operator.read(&hint_file_path).await;
+            info!(
+                "loaded last snapshot hint file [{}], time used {:?}",
+                hint_file_path,
+                begin_load_hint.elapsed()
+            );
+
+            match maybe_hint_content {
+                Ok(buf) => {
+                    let hint_content = buf.to_vec();
+                    let snapshot_full_path = String::from_utf8(hint_content)?;
+                    let operator_info = operator.info();
+                    Ok::<_, ErrorCode>(Some(
+                        snapshot_full_path[operator_info.root().len()..].to_string(),
+                    ))
+                }
+                Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
+                    // Table be attached has not last snapshot hint file, treat it as empty table
+                    Ok(None)
+                }
+                Err(e) => Err(e.into()),
+            }
+        })
     }
 }
 
