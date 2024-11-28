@@ -46,8 +46,17 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
-    let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
+    let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
+    let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
+    if left_rel_expr.derive_cardinality()?.cardinality <= 1.0
+        || right_rel_expr.derive_cardinality()?.cardinality <= 1.0
+    {
+        // If the cardinality is less than or equal to 1, We use CROSS JOIN + FILTER instead of MERGE JOIN.
+        return Ok(PhysicalJoinType::Hash);
+    }
+
+    let left_prop = left_rel_expr.derive_relational_prop()?;
+    let right_prop = right_rel_expr.derive_relational_prop()?;
     let mut range_conditions = vec![];
     let mut other_conditions = vec![];
     for condition in join.non_equi_conditions.iter() {
