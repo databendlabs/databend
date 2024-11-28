@@ -689,7 +689,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
 
 # Q15
-query T
+statement ok
 explain join with revenue as materialized (
     select
         l_suppkey as supplier_no,
