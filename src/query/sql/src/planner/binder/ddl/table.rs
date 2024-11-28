@@ -1264,7 +1264,7 @@ impl Binder {
             .collect::<Vec<_>>()
             .join(", ");
         let query = format!(
-            "WITH _keys_bound AS MATERIALIZED ( \
+            "WITH _keys_bound AS ( \
                 SELECT \
                     {keys_bounds_str} \
                 FROM {database_name}.{table_name} \
