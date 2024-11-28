@@ -38,8 +38,8 @@ runs:
       # Reference: https://cli.github.com/manual/gh_release_upload
       run: |
         gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}.tar.gz --clobber
-        if [ -f ${{ steps.name.outputs.name }}-gdb.tar.gz ]; then
-          gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}-dbg.* --clobber
+        if [ -f ${{ steps.name.outputs.name }}-dbg.tar.gz ]; then
+          gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}-dbg.tar.gz --clobber
         fi
 
     - name: Sync normal release to R2
@@ -47,7 +47,7 @@ runs:
       if: inputs.category == 'default'
       run: |
         aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress
-        if [ -f ${{ steps.name.outputs.name }}-gdb.tar.gz ]; then
+        if [ -f ${{ steps.name.outputs.name }}-dbg.tar.gz ]; then
           aws s3 cp ${{ steps.name.outputs.name }}-dbg.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}-dbg.tar.gz --no-progress
         fi
         gh api /repos/databendlabs/databend/tags > tags.json

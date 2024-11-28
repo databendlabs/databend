@@ -305,8 +305,6 @@ pub struct ConfigViaEnv {
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
     pub kvsrv_id: u64,
-    pub sled_tree_prefix: String,
-    pub sled_max_cache_size_mb: u64,
     pub cluster_name: String,
 }
 
@@ -363,8 +361,6 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
             kvsrv_id: cfg.raft_config.id,
-            sled_tree_prefix: cfg.raft_config.sled_tree_prefix,
-            sled_max_cache_size_mb: cfg.raft_config.sled_max_cache_size_mb,
             cluster_name: cfg.raft_config.cluster_name,
         }
     }
@@ -405,8 +401,6 @@ impl Into<Config> for ConfigViaEnv {
             // Do not allow to leave via environment variable
             leave_id: None,
             id: self.kvsrv_id,
-            sled_tree_prefix: self.sled_tree_prefix,
-            sled_max_cache_size_mb: self.sled_max_cache_size_mb,
             cluster_name: self.cluster_name,
         };
         let log_config = LogConfig {
@@ -539,7 +533,7 @@ pub struct RaftConfig {
 
     /// The total cache size for snapshot blocks.
     ///
-    /// By default it is 1GB.
+    /// By default, it is 1GB.
     #[clap(long, default_value = "1073741824")]
     pub snapshot_db_block_cache_size: u64,
 
@@ -573,14 +567,6 @@ pub struct RaftConfig {
     ///  Otherwise this argument is ignored.
     #[clap(long, default_value = "0")]
     pub id: u64,
-
-    /// For test only: specifies the tree name prefix
-    #[clap(long, default_value = "")]
-    pub sled_tree_prefix: String,
-
-    /// The maximum memory in MB that sled can use for caching. Default is 10GB
-    #[clap(long, default_value = "10240")]
-    pub sled_max_cache_size_mb: u64,
 
     /// The node name. If the user specifies a name, the user-supplied name is used,
     /// if not, the default name is used
@@ -630,8 +616,6 @@ impl From<RaftConfig> for InnerRaftConfig {
             leave_via: x.leave_via,
             leave_id: x.leave_id,
             id: x.id,
-            sled_tree_prefix: x.sled_tree_prefix,
-            sled_max_cache_size_mb: x.sled_max_cache_size_mb,
             cluster_name: x.cluster_name,
             wait_leader_timeout: x.wait_leader_timeout,
         }
@@ -668,8 +652,6 @@ impl From<InnerRaftConfig> for RaftConfig {
             leave_via: inner.leave_via,
             leave_id: inner.leave_id,
             id: inner.id,
-            sled_tree_prefix: inner.sled_tree_prefix,
-            sled_max_cache_size_mb: inner.sled_max_cache_size_mb,
             cluster_name: inner.cluster_name,
             wait_leader_timeout: inner.wait_leader_timeout,
         }

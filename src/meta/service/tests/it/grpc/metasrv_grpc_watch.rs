@@ -311,12 +311,14 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     // - Before applying, 32 expired keys will be cleaned.
     // - When applying, touched expired keys will be cleaned.
 
+    fn sec(x: u64) -> Duration {
+        Duration::from_secs(x)
+    }
+
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let watch_prefix = "w_";
     let now_sec = now();
-    let expire = now_sec + 11;
-    // dbg!(now_sec, expire);
 
     info!("--- prepare data that are gonna expire");
     {
@@ -332,31 +334,19 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             txn.if_then
-                .push(TxnOp::put_with_ttl(&k, b(&k), Some(Duration::from_secs(1))));
+                .push(TxnOp::put_with_ttl(&k, b(&k), Some(sec(1))));
         }
 
         // Expired key won't be cleaned when they are read, although read returns None.
 
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b1",
-            b("w_b1"),
-            Some(Duration::from_secs(6)),
-        ));
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b2",
-            b("w_b2"),
-            Some(Duration::from_secs(6)),
-        ));
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b3a",
-            b("w_b3a"),
-            Some(Duration::from_secs(6)),
-        ));
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b3b",
-            b("w_b3b"),
-            Some(Duration::from_secs(11)),
-        ));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b1", b("w_b1"), Some(sec(6))));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b2", b("w_b2"), Some(sec(6))));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b3a", b("w_b3a"), Some(sec(6))));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b3b", b("w_b3b"), Some(sec(15))));
 
         client.transaction(txn).await?;
     }
@@ -373,8 +363,8 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         watch_client.request(watch).await?
     };
 
-    info!("--- sleep {} for expiration", expire - now_sec);
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    info!("--- sleep 10 for expiration");
+    tokio::time::sleep(sec(10)).await;
 
     info!("--- apply another txn in another thread to override keys");
     {
@@ -430,20 +420,20 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
                 "w_b3b",
                 seq + 3,
                 "w_b3b",
-                Some(KvMeta::new_expire(now_sec + 16)),
+                Some(KvMeta::new_expire(now_sec + 15)),
             ), // expired
         ];
 
-        // remove the millisecond part of expire_at
+        // The evaluated expire_at could not equal to the real expire_at, so we need to tidy the expire_at.
         fn tidy(mut ev: Event) -> Event {
             if let Some(ref mut prev) = ev.prev {
                 if let Some(ref mut meta) = prev.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 1000 * 1000);
+                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
                 }
             }
             if let Some(ref mut current) = ev.current {
                 if let Some(ref mut meta) = current.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 1000 * 1000);
+                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
                 }
             }
             ev
