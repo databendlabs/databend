@@ -489,14 +489,13 @@ HashJoin
 query T
 explain select * from t1, t2 where t1.a > t2.a and t1.a > 5 and t2.a > 10;
 ----
-HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+MergeJoin
+├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 ├── join type: INNER
-├── build keys: []
-├── probe keys: []
-├── filters: [t1.a (#0) > t2.a (#2)]
+├── range join conditions: [t2.a (#2) "lt" t1.a (#0)]
+├── other conditions: []
 ├── estimated rows: 0.00
-├── TableScan(Build)
+├── TableScan(Left)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
@@ -505,7 +504,7 @@ HashJoin
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
 │   └── estimated rows: 0.00
-└── TableScan(Probe)
+└── TableScan(Right)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
@@ -519,14 +518,13 @@ HashJoin
 query T
 explain select * from t1, t2 where t1.a > t2.a and t1.a > 5 and t1.a > 10;
 ----
-HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+MergeJoin
+├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 ├── join type: INNER
-├── build keys: []
-├── probe keys: []
-├── filters: [t1.a (#0) > t2.a (#2)]
+├── range join conditions: [t2.a (#2) "lt" t1.a (#0)]
+├── other conditions: []
 ├── estimated rows: 0.00
-├── TableScan(Build)
+├── TableScan(Left)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
@@ -535,7 +533,7 @@ HashJoin
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 0.00
-└── TableScan(Probe)
+└── TableScan(Right)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
