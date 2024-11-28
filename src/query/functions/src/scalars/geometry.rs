@@ -28,6 +28,7 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
+use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::ewkb_to_geo;
