@@ -4832,6 +4832,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
+ "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",

@@ -178,7 +178,19 @@ impl VirtualColumnReader {
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            let column = BlockEntry::new(data_type, value);
+            let column = if let Some(cast_func_name) = &virtual_column_field.cast_func_name {
+                let (cast_value, cast_data_type) = eval_function(
+                    None,
+                    cast_func_name,
+                    [(value, data_type)],
+                    &func_ctx,
+                    data_block.num_rows(),
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                BlockEntry::new(cast_data_type, cast_value)
+            } else {
+                BlockEntry::new(data_type, value)
+            };
             data_block.add_column(column);
         }
 

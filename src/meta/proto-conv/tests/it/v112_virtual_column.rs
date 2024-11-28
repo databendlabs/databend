@@ -31,12 +31,15 @@ use crate::common;
 //
 // The message bytes are built from the output of `proto_conv::test_build_pb_buf()`
 #[test]
-fn test_decode_v41_virtual_column() -> anyhow::Result<()> {
-    let schema_v41 = vec![
-        8, 7, 18, 7, 118, 58, 107, 49, 58, 107, 50, 18, 7, 118, 91, 49, 93, 91, 50, 93, 26, 23, 50,
-        48, 50, 51, 45, 48, 51, 45, 48, 57, 32, 49, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 34,
-        23, 50, 48, 50, 51, 45, 48, 53, 45, 50, 57, 32, 49, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84,
-        67, 160, 6, 41, 168, 6, 24,
+fn test_decode_v112_virtual_column() -> anyhow::Result<()> {
+    let schema_v112 = vec![
+        8, 7, 18, 7, 118, 58, 107, 49, 58, 107, 50, 18, 7, 118, 91, 49, 93, 91, 50, 93, 18, 7, 118,
+        58, 107, 51, 58, 107, 52, 26, 23, 50, 48, 50, 51, 45, 48, 51, 45, 48, 57, 32, 49, 48, 58,
+        48, 48, 58, 48, 48, 32, 85, 84, 67, 34, 23, 50, 48, 50, 51, 45, 48, 53, 45, 50, 57, 32, 49,
+        48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 42, 18, 178, 2, 9, 210, 2, 0, 160, 6, 111, 168,
+        6, 24, 160, 6, 111, 168, 6, 24, 42, 18, 178, 2, 9, 210, 2, 0, 160, 6, 111, 168, 6, 24, 160,
+        6, 111, 168, 6, 24, 42, 18, 178, 2, 9, 146, 2, 0, 160, 6, 111, 168, 6, 24, 160, 6, 111,
+        168, 6, 24, 160, 6, 112, 168, 6, 24,
     ];
 
     let want = || {
@@ -49,6 +52,10 @@ fn test_decode_v41_virtual_column() -> anyhow::Result<()> {
             (
                 "v[1][2]".to_string(),
                 TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
+            (
+                "v:k3:k4".to_string(),
+                TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
         ];
         let created_on = Utc.with_ymd_and_hms(2023, 3, 9, 10, 0, 0).unwrap();
@@ -63,7 +70,7 @@ fn test_decode_v41_virtual_column() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), schema_v41.as_slice(), 41, want())?;
+    common::test_load_old(func_name!(), schema_v112.as_slice(), 112, want())?;
 
     Ok(())
 }
