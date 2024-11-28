@@ -316,6 +316,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 if query.offset.is_some() {
                     return Err("ORDER BY must appear before OFFSET");
                 }
+                let order_by = order_by
+                    .into_iter()
+                    .filter(|x| matches!(x.expr, Expr::ColumnRef { .. }))
+                    .collect();
                 query.order_by = order_by;
             }
             SetOperationElement::Limit { limit } => {
