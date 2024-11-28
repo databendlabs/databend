@@ -257,15 +257,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!(
-                                    "Incompatible SRID: {} and {}",
-                                    l_srid.unwrap_or_default(),
-                                    r_srid.unwrap_or_default()
-                                ),
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
                             return;
                         }
@@ -298,15 +290,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!(
-                                    "Incompatible SRID: {} and {}",
-                                    l_srid.unwrap_or_default(),
-                                    r_srid.unwrap_or_default()
-                                ),
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
                             return;
                         }
@@ -339,15 +323,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!(
-                                    "Incompatible SRID: {} and {}",
-                                    l_srid.unwrap_or_default(),
-                                    r_srid.unwrap_or_default()
-                                ),
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
                             return;
                         }
@@ -380,15 +356,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!(
-                                    "Incompatible SRID: {} and {}",
-                                    l_srid.unwrap_or_default(),
-                                    r_srid.unwrap_or_default()
-                                ),
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
                             return;
                         }
@@ -421,15 +389,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!(
-                                    "Incompatible SRID: {} and {}",
-                                    l_srid.unwrap_or_default(),
-                                    r_srid.unwrap_or_default()
-                                ),
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
                             return;
                         }
@@ -463,15 +423,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ewkb_to_geo(&mut Ewkb(r_ewkb)),
                     ) {
                         (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                            if !l_srid.eq(&r_srid) {
-                                ctx.set_error(
-                                    builder.len(),
-                                    format!(
-                                        "Incompatible SRID: {} and {}",
-                                        l_srid.unwrap_or_default(),
-                                        r_srid.unwrap_or_default()
-                                    ),
-                                );
+                            if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                                 builder.push(F64::from(0_f64));
                                 return;
                             }
@@ -800,11 +752,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 match (ewkb_to_geo(&mut Ewkb(l_ewkb)), ewkb_to_geo(&mut Ewkb(r_ewkb))) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!("Incompatible SRID: {} and {}", l_srid.unwrap_or_default(), r_srid.unwrap_or_default())
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.commit_row();
                             return;
                         }
@@ -2029,5 +1977,26 @@ fn round_geometry_coordinates(geom: Geometry<f64>) -> Geometry<f64> {
             coord!(x: round_coordinate(triangle.1.x), y: round_coordinate(triangle.1.y)),
             coord!(x: round_coordinate(triangle.2.x), y: round_coordinate(triangle.2.y)),
         )),
+    }
+}
+
+fn check_incompatible_srid(
+    l_srid: Option<i32>,
+    r_srid: Option<i32>,
+    len: usize,
+    ctx: &mut EvalContext,
+) -> bool {
+    if !l_srid.eq(&r_srid) {
+        ctx.set_error(
+            len,
+            format!(
+                "Incompatible SRID: {} and {}",
+                l_srid.unwrap_or_default(),
+                r_srid.unwrap_or_default()
+            ),
+        );
+        false
+    } else {
+        true
     }
 }
