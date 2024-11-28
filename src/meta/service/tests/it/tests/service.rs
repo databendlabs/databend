@@ -160,9 +160,6 @@ impl MetaSrvTestContext {
 
         let host = "127.0.0.1";
 
-        // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
-        config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
-
         {
             let grpc_port = next_port();
             config.grpc_api_address = format!("{}:{}", host, grpc_port);

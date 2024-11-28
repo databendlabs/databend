@@ -134,7 +134,7 @@ async fn import_v003(
     raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
-    let db = init_get_sled_db(raft_config.raft_dir.clone(), raft_config.sled_cache_size());
+    let db = init_get_sled_db(raft_config.raft_dir.clone(), 1024 * 1024 * 1024);
 
     let mut n = 0;
     let mut max_log_id: Option<LogId> = None;
@@ -386,7 +386,7 @@ async fn init_new_cluster(
 fn clear(args: &ImportArgs) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Clear All Sled Trees Before Import:");
-    let db = init_get_sled_db(args.raft_dir.clone().unwrap(), 64 * 1024 * 1024 * 1024);
+    let db = init_get_sled_db(args.raft_dir.clone().unwrap(), 1024 * 1024 * 1024);
 
     let tree_names = db.tree_names();
     for n in tree_names.iter() {
