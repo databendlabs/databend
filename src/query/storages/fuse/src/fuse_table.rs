@@ -568,6 +568,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn support_distributed_insert(&self) -> bool {
+        true
+    }
+
     fn has_exact_total_row_count(&self) -> bool {
         true
     }
