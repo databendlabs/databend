@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::CreateOption;
@@ -88,22 +89,26 @@ impl Binder {
                 .iter()
                 .map(|ident| self.normalize_identifier(ident).name)
                 .collect();
-            let cte_info = CteInfo {
+            let mut cte_info = CteInfo {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 recursive: with.recursive,
                 cte_idx: idx,
                 columns: vec![],
                 materialized: cte.materialized,
+                m_cte_name_to_temp_table: HashMap::new(),
             };
+            // If the CTE is materialized, we'll construct a temp table for it.
+            if cte.materialized {
+                let temp_table_name = self.m_cte_to_temp_table(cte)?;
+                cte_info
+                    .m_cte_name_to_temp_table
+                    .insert(cte.alias.name.name.clone(), temp_table_name);
+            }
             bind_context
                 .cte_context
                 .cte_map
                 .insert(table_name, cte_info);
-            // If the CTE is materialized, we'll construct a temp table for it.
-            if cte.materialized {
-                self.m_cte_to_temp_table(cte)?;
-            }
         }
 
         Ok(())
@@ -177,21 +182,28 @@ impl Binder {
         ))
     }
 
-    fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<()> {
-        let engine = if self.ctx.get_settings().get_persist_materialized_cte()?
-            || !self.ctx.get_cluster().is_empty()
-        {
+    // The return value is temp_table name`
+    fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<String> {
+        let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
             Engine::Fuse
         } else {
             Engine::Memory
         };
         let database = self.ctx.get_current_database();
         let catalog = self.ctx.get_current_catalog();
+        let query_id = self.ctx.get_id();
+        // Navigate the temp table for cte to `cte_name + query_id`
+        // Avoid the conflict of the temp table name with the same name of user's temp table.
+        let table_name = format!(
+            "{}_{}",
+            cte.alias.name.name,
+            query_id.split('-').next().unwrap_or(&query_id)
+        );
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::CreateOrReplace,
             catalog: Some(Identifier::from_name(Span::None, catalog.clone())),
             database: Some(Identifier::from_name(Span::None, database.clone())),
-            table: cte.alias.name.clone(),
+            table: Identifier::from_name(cte.alias.name.span, table_name.clone()),
             source: None,
             engine: Some(engine),
             uri_location: None,
@@ -212,9 +224,8 @@ impl Binder {
             return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
         };
 
-        // Todo: clear the table with the same name in table cache
         self.ctx
             .remove_table_from_cache(&catalog, &database, &cte.alias.name.name);
-        Ok(())
+        Ok(table_name)
     }
 }

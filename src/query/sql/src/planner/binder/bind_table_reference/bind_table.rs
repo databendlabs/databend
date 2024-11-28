@@ -97,6 +97,19 @@ impl Binder {
             };
         }
 
+        let mut temp_table_name = None;
+        if let Some(cte_info) = cte_map.get(&table_name)
+            && cte_info.materialized
+        {
+            temp_table_name = Some(
+                cte_info
+                    .m_cte_name_to_temp_table
+                    .get(&table_name)
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
@@ -104,7 +117,11 @@ impl Binder {
             match self.resolve_data_source(
                 catalog.as_str(),
                 database.as_str(),
-                table_name.as_str(),
+                if let Some(temp_table_name) = temp_table_name.as_ref() {
+                    temp_table_name.as_str()
+                } else {
+                    table_name.as_str()
+                },
                 navigation.as_ref(),
                 max_batch_size,
                 self.ctx.clone().get_abort_checker(),
@@ -150,6 +167,7 @@ impl Binder {
                     database.clone(),
                     table_meta,
                     table_name_alias,
+                    None,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
@@ -228,6 +246,7 @@ impl Binder {
                         database.clone(),
                         table_meta,
                         table_name_alias,
+                        None,
                         false,
                         false,
                         false,
@@ -259,6 +278,7 @@ impl Binder {
                     catalog,
                     database.clone(),
                     table_meta,
+                    Some(table_name.clone()),
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
