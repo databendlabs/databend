@@ -412,6 +412,37 @@ order by
 2455 Customer#000002455 481592.405 2070.99 GERMANY RVn1ZSRtLqPlJLIZxvpmsbgC02 17-946-225-9977 al asymptotes. finally ironic accounts cajole furiously. permanently unusual theodolites aro
 12106 Customer#000012106 479414.213 5342.11 UNITED STATES wth3twOmu6vy 34-905-346-4472 ly after the blithely regular foxes. accounts haggle carefully alongside of the blithely even ideas.
 
+query I
+explain analyze select
+    ps_partkey,
+    sum(ps_supplycost * ps_availqty) as value
+from
+    ctl.tpch.partsupp,
+    ctl.tpch.supplier,
+    ctl.tpch.nation
+where
+    ps_suppkey = s_suppkey
+  and s_nationkey = n_nationkey
+  and n_name = 'GERMANY'
+group by
+    ps_partkey having
+    sum(ps_supplycost * ps_availqty) > (
+    select
+    sum(ps_supplycost * ps_availqty) * 0.000002
+    from
+    ctl.tpch.partsupp,
+    ctl.tpch.supplier,
+    ctl.tpch.nation
+    where
+    ps_suppkey = s_suppkey
+                  and s_nationkey = n_nationkey
+                  and n_name = 'GERMANY'
+    )
+order by
+    value desc limit 100;
+----
+1
+
 # Q11
 query I
 select
