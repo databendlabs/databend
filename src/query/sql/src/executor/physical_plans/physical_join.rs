@@ -51,7 +51,7 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     if left_rel_expr.derive_cardinality()?.cardinality <= 1.0
         || right_rel_expr.derive_cardinality()?.cardinality <= 1.0
     {
-        // If the cardinality is less than or equal to 1, We use CROSS JOIN + FILTER instead of MERGE JOIN.
+        // If the cardinality is less than or equal to 1, we use CROSS JOIN + FILTER instead of MERGE JOIN.
         return Ok(PhysicalJoinType::Hash);
     }
 
