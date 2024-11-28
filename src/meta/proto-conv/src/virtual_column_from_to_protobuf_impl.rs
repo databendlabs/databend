@@ -48,6 +48,15 @@ impl FromToProto for mt::VirtualColumnMeta {
                 })
                 .collect()
         } else {
+            if p.virtual_columns.len() != p.data_types.len() {
+                return Err(Incompatible {
+                    reason: format!(
+                        "Incompatible virtual columns length is {}, but data types length is {}",
+                        p.virtual_columns.len(),
+                        p.data_types.len()
+                    ),
+                });
+            }
             let mut virtual_columns = Vec::new();
             for (v, ty) in p.virtual_columns.iter().zip(p.data_types.iter()) {
                 virtual_columns.push((v.clone(), TableDataType::from_pb(ty.clone())?));
