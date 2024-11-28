@@ -90,9 +90,9 @@ impl HashJoinProbeState {
                 }
 
                 if FROM_LEFT_SINGLE && match_count > 1 {
-                    // return Err(ErrorCode::Internal(
-                    //     "Scalar subquery can't return more than one row",
-                    // ));
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
                 }
 
                 // Fill `probe_indexes`.
@@ -128,9 +128,9 @@ impl HashJoinProbeState {
                 }
 
                 if FROM_LEFT_SINGLE && match_count > 1 {
-                    // return Err(ErrorCode::Internal(
-                    //     "Scalar subquery can't return more than one row",
-                    // ));
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
                 }
 
                 // Fill `probe_indexes`.
@@ -281,9 +281,9 @@ impl HashJoinProbeState {
         }
 
         if FROM_LEFT_SINGLE {
-            // return Err(ErrorCode::Internal(
-            //     "Scalar subquery can't return more than one row",
-            // ));
+            return Err(ErrorCode::Internal(
+                "Scalar subquery can't return more than one row",
+            ));
         }
 
         for i in 0..match_count {
@@ -310,9 +310,9 @@ impl HashJoinProbeState {
             next_idx += 1;
         } else {
             if FROM_LEFT_SINGLE {
-                // return Err(ErrorCode::Internal(
-                //     "Scalar subquery can't return more than one row",
-                // ));
+                return Err(ErrorCode::Internal(
+                    "Scalar subquery can't return more than one row",
+                ));
             }
             pointers[key_idx] = next_matched_ptr;
         }
