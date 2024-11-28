@@ -265,7 +265,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
         let snapshot_files = fuse_table.list_snapshot_files().await?;
         let time_point = now - Duration::hours(12);
-        let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+        let snapshot_loc = fuse_table.snapshot_loc().unwrap();
         let table = fuse_table
             .navigate_to_time_point(snapshot_loc, time_point, ctx.clone().get_abort_checker())
             .await?;

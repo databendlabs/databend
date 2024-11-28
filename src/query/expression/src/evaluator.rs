@@ -211,7 +211,6 @@ impl<'a> Evaluator<'a> {
                         })
                         .all_equal()
                 );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
 
                 let errors = if !child_suppress_error {
                     None
@@ -228,7 +227,7 @@ impl<'a> Evaluator<'a> {
                 };
 
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                let result = (eval)(&args, &mut ctx);
 
                 ctx.render_error(
                     *span,
@@ -1203,7 +1202,6 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.run(expr))
                     .collect::<Result<Vec<_>>>()?;
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.data_block.num_rows(),
@@ -1212,7 +1210,7 @@ impl<'a> Evaluator<'a> {
                     func_ctx: self.func_ctx,
                     suppress_error: false,
                 };
-                let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
+                let result = (eval)(&args, &mut ctx, max_nums_per_row);
                 ctx.render_error(
                     *span,
                     id.params(),
@@ -1701,10 +1699,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                let cols_ref = args
-                    .iter()
-                    .map(|(val, _)| Value::as_ref(val))
-                    .collect::<Vec<_>>();
+                let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
 
                 let errors = if !child_suppress_error {
                     None
@@ -1720,8 +1715,7 @@ impl<'a> Evaluator<'a> {
                     suppress_error: options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
+                let result = (eval)(&args, &mut ctx);
 
                 ctx.render_error(
                     *span,

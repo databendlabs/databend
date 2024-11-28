@@ -61,7 +61,6 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use dtparse::parse;
 use jiff::civil::date;
 use jiff::civil::datetime;
@@ -220,7 +219,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     );
 
     fn eval_string_to_timestamp(
-        val: ValueRef<StringType>,
+        val: Value<StringType>,
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
@@ -496,10 +495,7 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
         error_to_null(eval_date_to_timestamp),
     );
 
-    fn eval_date_to_timestamp(
-        val: ValueRef<DateType>,
-        ctx: &mut EvalContext,
-    ) -> Value<TimestampType> {
+    fn eval_date_to_timestamp(val: Value<DateType>, ctx: &mut EvalContext) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, _| {
             output.push(calc_date_to_timestamp(val, ctx.func_ctx.jiff_tz.clone()));
         })(val, ctx)
@@ -541,8 +537,32 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
         error_to_null(eval_number_to_timestamp),
     );
 
+    registry.register_passthrough_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
+        "to_timestamp",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Int64Type, UInt64Type, TimestampType>(
+            |val, scale, output, _| {
+                let mut n = val * 10i64.pow(6 - scale.clamp(0, 6) as u32);
+                clamp_timestamp(&mut n);
+                output.push(n)
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
+        "try_to_timestamp",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Int64Type, UInt64Type, TimestampType>(
+            |val, scale, output, _| {
+                let mut n = val * 10i64.pow(6 - scale.clamp(0, 6) as u32);
+                clamp_timestamp(&mut n);
+                output.push(n);
+            },
+        ),
+    );
+
     fn eval_number_to_timestamp(
-        val: ValueRef<Int64Type>,
+        val: Value<Int64Type>,
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
@@ -564,7 +584,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
         error_to_null(eval_string_to_date),
     );
 
-    fn eval_string_to_date(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
+    fn eval_string_to_date(val: Value<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
             if ctx.func_ctx.enable_strict_datetime_parser {
                 match string_to_date(val, &ctx.func_ctx.jiff_tz) {
@@ -623,10 +643,7 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
         error_to_null(eval_timestamp_to_date),
     );
 
-    fn eval_timestamp_to_date(
-        val: ValueRef<TimestampType>,
-        ctx: &mut EvalContext,
-    ) -> Value<DateType> {
+    fn eval_timestamp_to_date(val: Value<TimestampType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
             let tz = ctx.func_ctx.jiff_tz.clone();
             output.push(calc_timestamp_to_date(val, tz));
@@ -666,7 +683,7 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
         error_to_null(eval_number_to_date),
     );
 
-    fn eval_number_to_date(val: ValueRef<Int64Type>, ctx: &mut EvalContext) -> Value<DateType> {
+    fn eval_number_to_date(val: Value<Int64Type>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, _| {
             output.push(clamp_date(val))
         })(val, ctx)
@@ -788,8 +805,8 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         "to_int64",
         |_, domain| FunctionDomain::Domain(*domain),
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(scalar),
-            ValueRef::Column(col) => Value::Column(col),
+            Value::Scalar(scalar) => Value::Scalar(scalar),
+            Value::Column(col) => Value::Column(col),
         },
     );
 
@@ -802,8 +819,8 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            ValueRef::Column(col) => Value::Column(NullableColumn::new(
+            Value::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
+            Value::Column(col) => Value::Column(NullableColumn::new(
                 col.iter().map(|val| *val as i64).collect(),
                 Bitmap::new_constant(true, col.len()),
             )),
@@ -819,8 +836,8 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
-            ValueRef::Column(col) => {
+            Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
+            Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
                 Value::Column(NullableColumn::new(col, validity))
             }
