@@ -82,3 +82,19 @@ pub fn get_change_type(table_alias_name: &Option<String>) -> Option<ChangeType> 
     }
     change_type
 }
+
+pub fn is_hilbert_recluster(table_alias_name: &Option<String>) -> bool {
+    if let Some(table_alias) = table_alias_name {
+        let alias_param = table_alias.split('$').collect::<Vec<_>>();
+        if alias_param.len() == 2 && alias_param[1].len() == 8 {
+            if let Ok(suffix) = i64::from_str_radix(alias_param[1], 16) {
+                // 2023-01-01 00:00:00.
+                let base_timestamp = 1672502400;
+                if suffix > base_timestamp && alias_param[0] == "_compact"{
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
