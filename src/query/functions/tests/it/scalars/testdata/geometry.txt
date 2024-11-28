@@ -1253,3 +1253,120 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------+
 
 
+ast            : ST_INTERSECTS(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(2 0, 0 2)'))
+raw expr       : ST_INTERSECTS(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(2 0, 0 2)'))
+checked expr   : st_intersects<Geometry, Geometry>(to_geometry<String>("POINT(0 0)"), to_geometry<String>("LINESTRING(2 0, 0 2)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_INTERSECTS(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(0 0, 0 2)'))
+raw expr       : ST_INTERSECTS(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(0 0, 0 2)'))
+checked expr   : st_intersects<Geometry, Geometry>(to_geometry<String>("POINT(0 0)"), to_geometry<String>("LINESTRING(0 0, 0 2)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_INTERSECTS(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+raw expr       : ST_INTERSECTS(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+checked expr   : st_intersects<Geometry, Geometry>(to_geometry<String>("POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))"), to_geometry<String>("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_DISJOINT(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(2 0, 0 2)'))
+raw expr       : ST_DISJOINT(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(2 0, 0 2)'))
+checked expr   : st_disjoint<Geometry, Geometry>(to_geometry<String>("POINT(0 0)"), to_geometry<String>("LINESTRING(2 0, 0 2)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_DISJOINT(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(0 0, 0 2)'))
+raw expr       : ST_DISJOINT(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(0 0, 0 2)'))
+checked expr   : st_disjoint<Geometry, Geometry>(to_geometry<String>("POINT(0 0)"), to_geometry<String>("LINESTRING(0 0, 0 2)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_DISJOINT(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+raw expr       : ST_DISJOINT(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+checked expr   : st_disjoint<Geometry, Geometry>(to_geometry<String>("POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))"), to_geometry<String>("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_WITHIN(TO_GEOMETRY('POINT(1 2)'), TO_GEOMETRY('LINESTRING(0 0, 2 4)'))
+raw expr       : ST_WITHIN(TO_GEOMETRY('POINT(1 2)'), TO_GEOMETRY('LINESTRING(0 0, 2 4)'))
+checked expr   : st_within<Geometry, Geometry>(to_geometry<String>("POINT(1 2)"), to_geometry<String>("LINESTRING(0 0, 2 4)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_WITHIN(TO_GEOMETRY('POINT(10 20)'), TO_GEOMETRY('POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))'))
+raw expr       : ST_WITHIN(TO_GEOMETRY('POINT(10 20)'), TO_GEOMETRY('POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))'))
+checked expr   : st_within<Geometry, Geometry>(to_geometry<String>("POINT(10 20)"), to_geometry<String>("POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_WITHIN(TO_GEOMETRY('POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))'), TO_GEOMETRY('POINT(10 20)'))
+raw expr       : ST_WITHIN(TO_GEOMETRY('POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))'), TO_GEOMETRY('POINT(10 20)'))
+checked expr   : st_within<Geometry, Geometry>(to_geometry<String>("POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))"), to_geometry<String>("POINT(10 20)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_EQUALS(TO_GEOMETRY('LINESTRING(0 0, 10 10)'), TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'))
+raw expr       : ST_EQUALS(TO_GEOMETRY('LINESTRING(0 0, 10 10)'), TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'))
+checked expr   : st_equals<Geometry, Geometry>(to_geometry<String>("LINESTRING(0 0, 10 10)"), to_geometry<String>("LINESTRING(0 0, 5 5, 10 10)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_EQUALS(TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'), TO_GEOMETRY('LINESTRING(0 0, 10 10)'))
+raw expr       : ST_EQUALS(TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'), TO_GEOMETRY('LINESTRING(0 0, 10 10)'))
+checked expr   : st_equals<Geometry, Geometry>(to_geometry<String>("LINESTRING(0 0, 5 5, 10 10)"), to_geometry<String>("LINESTRING(0 0, 10 10)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_EQUALS(TO_GEOMETRY('LINESTRING(10 10, 1 2)'), TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'))
+raw expr       : ST_EQUALS(TO_GEOMETRY('LINESTRING(10 10, 1 2)'), TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'))
+checked expr   : st_equals<Geometry, Geometry>(to_geometry<String>("LINESTRING(10 10, 1 2)"), to_geometry<String>("LINESTRING(0 0, 5 5, 10 10)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_EQUALS(TO_GEOMETRY('POINT(10 10)'), TO_GEOMETRY('LINESTRING(10 10, 10 10)'))
+raw expr       : ST_EQUALS(TO_GEOMETRY('POINT(10 10)'), TO_GEOMETRY('LINESTRING(10 10, 10 10)'))
+checked expr   : st_equals<Geometry, Geometry>(to_geometry<String>("POINT(10 10)"), to_geometry<String>("LINESTRING(10 10, 10 10)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+

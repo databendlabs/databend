@@ -60,6 +60,10 @@ fn test_geometry() {
     test_st_ymax(file);
     test_st_ymin(file);
     test_st_transform(file);
+    test_st_intersects(file);
+    test_st_disjoint(file);
+    test_st_within(file);
+    test_st_equals(file);
 }
 
 fn test_haversine(file: &mut impl Write) {
@@ -678,4 +682,81 @@ fn test_st_transform(file: &mut impl Write) {
         ("b", Int32Type::from_data(vec![4326])),
         ("c", Int32Type::from_data(vec![28992])),
     ]);
+}
+
+fn test_st_intersects(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_INTERSECTS(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(2 0, 0 2)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_INTERSECTS(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(0 0, 0 2)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_INTERSECTS(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))",
+        &[],
+    );
+}
+
+fn test_st_disjoint(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_DISJOINT(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(2 0, 0 2)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_DISJOINT(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('LINESTRING(0 0, 0 2)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_DISJOINT(TO_GEOMETRY('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))",
+        &[],
+    );
+}
+
+fn test_st_within(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_WITHIN(TO_GEOMETRY('POINT(1 2)'), TO_GEOMETRY('LINESTRING(0 0, 2 4)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_WITHIN(TO_GEOMETRY('POINT(10 20)'), TO_GEOMETRY('POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_WITHIN(TO_GEOMETRY('POLYGON((0 0, 0 40, 40 40, 40 0, 0 0))'), TO_GEOMETRY('POINT(10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_equals(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_EQUALS(TO_GEOMETRY('LINESTRING(0 0, 10 10)'), TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_EQUALS(TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'), TO_GEOMETRY('LINESTRING(0 0, 10 10)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_EQUALS(TO_GEOMETRY('LINESTRING(10 10, 1 2)'), TO_GEOMETRY('LINESTRING(0 0, 5 5, 10 10)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_EQUALS(TO_GEOMETRY('POINT(10 10)'), TO_GEOMETRY('LINESTRING(10 10, 10 10)'))",
+        &[],
+    );
 }
