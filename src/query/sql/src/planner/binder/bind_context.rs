@@ -212,6 +212,7 @@ pub struct CteInfo {
     pub cte_idx: IndexType,
     // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
+    pub m_cte_name_to_temp_table: HashMap<String, String>,
 }
 
 impl BindContext {
