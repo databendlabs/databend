@@ -339,6 +339,10 @@ where
 
         Ok(Some(self.build_output()?))
     }
+
+    pub fn streams(self) -> Vec<S> {
+        self.unsorted_streams
+    }
 }
 
 pub type HeapMerger<R, S> = Merger<HeapSort<R>, S>;

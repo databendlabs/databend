@@ -48,8 +48,8 @@ use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
-use enum_as_inner::EnumAsInner;
 
+use crate::spillers::Layout;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
 
@@ -77,13 +77,14 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     output_data: VecDeque<DataBlock>,
 
     state: State,
-    spiller: Spiller,
+    spiller: Arc<Spiller>,
 
     batch_rows: usize,
     /// Blocks to merge one time.
     num_merge: usize,
 
-    blocks: Vec<VecDeque<Block>>,
+    subsequent: Vec<BoundBlockStream<A::Rows>>,
+    current: Vec<BoundBlockStream<A::Rows>>,
 
     merger: Option<Merger<A, BlockStream>>,
 
@@ -310,26 +311,28 @@ where
         }
         debug_assert!(merger.is_finished());
 
-        self.blocks.push(spilled);
+        self.subsequent.push(BoundBlockStream::<A::Rows> {
+            sort_desc: self.sort_desc.clone(),
+            blocks: spilled,
+            bound: None,
+            spiller: self.spiller.clone(),
+        });
         Ok(())
     }
 
     async fn restore(&mut self) -> Result<()> {
-        let bound = A::Rows::from_column(&self.bound(), &self.sort_desc)?; // todo check
-        let streams = self
-            .blocks
-            .iter_mut()
-            .map(|blocks| BoundBlockStream::<A::Rows> {
-                sort_desc: &self.sort_desc,
-                blocks,
-                bound: bound.clone(),
-                spiller: &self.spiller,
-            })
-            .collect();
+        while self.current.is_empty() {
+            self.choice_list();
+        }
+        self.restore_cur().await
+    }
+
+    async fn restore_cur(&mut self) -> Result<()> {
+        let cur = std::mem::take(&mut self.current);
 
         let mut merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
             self.schema.clone(),
-            streams,
+            cur,
             self.sort_desc.clone(),
             self.batch_rows,
             self.limit, // todo
@@ -345,7 +348,27 @@ where
             self.output_block(data);
         }
 
+        let streams = merger.streams();
+        self.subsequent
+            .extend(streams.into_iter().filter(|s| !s.blocks.is_empty()));
+
         Ok(())
+    }
+
+    fn choice_list(&mut self) {
+        let bound = A::Rows::from_column(&self.bound(), &self.sort_desc).unwrap(); // todo check
+
+        let (cur, sub): (Vec<_>, Vec<_>) = self
+            .subsequent
+            .drain(..)
+            .map(|mut s| {
+                s.bound = Some(bound.clone());
+                s
+            })
+            .partition(|s| s.should_include_first());
+
+        self.current = cur;
+        self.subsequent = sub;
     }
 
     fn should_process(&self) -> bool {
@@ -365,11 +388,16 @@ where
     }
 
     async fn spill_block(&mut self, block: DataBlock) -> Result<Block> {
+        let size = block.memory_size();
         let domain = get_domain(block.get_last_column());
-        let location = self.spiller.spill(vec![block]).await?;
+        let (location, layout) = self.spiller.spill_unmanage(vec![block]).await?;
         Ok(Block {
-            data: BlockData::Spilled(location),
+            data: None,
+            size,
             domain,
+            location,
+            layout,
+            readed: 0,
         })
     }
 
@@ -379,14 +407,12 @@ where
 }
 
 struct Block {
-    data: BlockData,
+    data: Option<DataBlock>,
+    size: usize,
     domain: Column,
-}
-
-#[derive(EnumAsInner, Debug)]
-enum BlockData {
-    Memory(DataBlock),
-    Spilled(Location),
+    location: Location,
+    layout: Layout,
+    readed: usize,
 }
 
 impl Block {
@@ -398,13 +424,14 @@ impl Block {
     // }
 
     fn slice(&mut self, pos: usize) -> DataBlock {
-        let data = self.data.as_memory().unwrap();
+        let data = self.data.as_ref().unwrap();
 
         let left = data.slice(0..pos);
         let right = data.slice(pos..data.num_rows());
 
         self.domain = get_domain(right.get_last_column());
-        self.data = BlockData::Memory(right);
+        self.data = Some(right);
+        self.readed += pos;
         left
     }
 
@@ -413,62 +440,66 @@ impl Block {
     }
 }
 
-struct BoundBlockStream<'a, R: Rows> {
-    sort_desc: &'a [SortColumnDescription],
-    blocks: &'a mut VecDeque<Block>,
-    bound: R,
-    spiller: &'a Spiller,
+struct BoundBlockStream<R: Rows + Send> {
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    blocks: VecDeque<Block>,
+    bound: Option<R>,
+    spiller: Arc<Spiller>,
 }
 
-unsafe impl<'a, R: Rows> Send for BoundBlockStream<'a, R> {}
-
 #[async_trait::async_trait]
-impl<'a, R: Rows + Send> SortedStream for BoundBlockStream<'a, R> {
+impl<R: Rows + Send> SortedStream for BoundBlockStream<R> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
-            let block = self.block_slice();
-            let col = block.get_last_column().clone();
-            Ok((Some((block, col)), false))
+            let data = self.pop_front_data();
+            let col = data.get_last_column().clone();
+            Ok((Some((data, col)), false))
         } else {
             Ok((None, false))
         }
     }
 }
 
-impl<'a, R: Rows> BoundBlockStream<'a, R> {
+impl<R: Rows + Send> BoundBlockStream<R> {
     fn should_include_first(&self) -> bool {
         let Some(block) = self.blocks.front() else {
             return false;
         };
-        block.domain::<R>(&self.sort_desc).first() < self.bound.row(0)
+        block.domain::<R>(&self.sort_desc).first() < self.bound.as_ref().unwrap().row(0)
     }
 
-    fn block_slice(&mut self) -> DataBlock {
+    fn pop_front_data(&mut self) -> DataBlock {
         let block = self.blocks.front_mut().unwrap();
-        let BlockData::Memory(data) = &block.data else {
-            unreachable!()
-        };
+        let data = block.data.as_ref().unwrap();
 
         let rows = R::from_column(data.get_last_column(), &self.sort_desc).unwrap();
 
         // todo binary_search
-        match (0..rows.len()).position(|i| rows.row(i) >= self.bound.row(0)) {
+        let bound = self.bound.as_ref().unwrap().row(0);
+        match (0..rows.len()).position(|i| rows.row(i) >= bound) {
             Some(pos) => block.slice(pos),
-            None => self.blocks.pop_front().unwrap().data.into_memory().unwrap(),
+            None => {
+                let mut block = self.blocks.pop_front().unwrap();
+                block.data.take().unwrap()
+            }
         }
     }
 
     async fn restore_first(&mut self) -> Result<()> {
         let block = self.blocks.front_mut().unwrap();
-        match &block.data {
-            BlockData::Memory(_) => Ok(()),
-            BlockData::Spilled(location) => {
-                let data = self.spiller.read_spilled_file(location).await?;
-                block.data = BlockData::Memory(data);
-                Ok(())
-            }
+        if block.data.is_none() {
+            let data = self
+                .spiller
+                .read_unmanage_spilled_file(&block.location, &block.layout)
+                .await?;
+            block.data = Some(if block.readed != 0 {
+                data.slice(block.readed..data.num_columns())
+            } else {
+                data
+            });
         }
+        Ok(())
     }
 }
 
@@ -496,5 +527,151 @@ fn get_domain(col: &Column) -> Column {
 
             col.filter(&bitmap.freeze())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::schema;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::Value;
+    use databend_common_pipeline_transforms::processors::sort::convert_rows;
+    use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
+    use databend_common_storage::DataOperator;
+
+    use super::*;
+    use crate::spillers::SpillerConfig;
+    use crate::spillers::SpillerType;
+    use crate::test_kits::*;
+
+    fn test_data() -> (DataSchemaRef, DataBlock) {
+        let col1 = Int32Type::from_data(vec![7, 7, 8, 11, 3, 5, 10, 11]);
+        let col2 = StringType::from_data(vec!["e", "w", "d", "g", "h", "d", "e", "f"]);
+
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("a", DataType::Number(NumberDataType::Int32)),
+            DataField::new("b", DataType::String),
+        ]);
+
+        let block = DataBlock::new_from_columns(vec![col1, col2]);
+
+        (schema, block)
+    }
+
+    async fn run_bound_block_stream<R: Rows + Send>(
+        spiller: Arc<Spiller>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
+        bound: Column,
+        block_part: usize,
+        want: Option<Column>,
+    ) -> Result<()> {
+        let (schema, block) = test_data();
+        let block = DataBlock::sort(&block, &sort_desc, None)?;
+        let bound = Some(R::from_column(&bound, &sort_desc)?);
+
+        let blocks = vec![
+            block.slice(0..block_part),
+            block.slice(block_part..block.num_rows()),
+        ]
+        .into_iter()
+        .map(|mut data| {
+            let col = convert_rows(schema.clone(), &sort_desc, data.clone()).unwrap();
+            data.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
+            let domain = get_domain(data.get_last_column());
+            let size = data.memory_size();
+
+            Block {
+                data: Some(data),
+                domain,
+                size,
+                location: Location::Remote("fake".to_string()),
+                layout: Layout::Parquet,
+                readed: 0,
+            }
+        })
+        .collect::<VecDeque<_>>();
+
+        let mut stream = BoundBlockStream::<R> {
+            sort_desc: sort_desc.clone(),
+            blocks,
+            bound,
+            spiller: spiller.clone(),
+        };
+
+        let (got, _) = stream.async_next().await?;
+
+        // println!("{got:?}");
+
+        match want {
+            Some(col) => assert_eq!(got.unwrap().1, col),
+            None => assert!(got.is_none()),
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_bound_block_stream() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let op = DataOperator::instance().operator();
+        let spill_config = SpillerConfig {
+            spiller_type: SpillerType::OrderBy,
+            location_prefix: "_spill_test".to_string(),
+            disk_spill: None,
+            use_parquet: true,
+        };
+        let spiller = Arc::new(Spiller::create(ctx.clone(), op, spill_config)?);
+
+        {
+            let sort_desc = Arc::new(vec![SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }]);
+
+            run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Int32Type::from_data(vec![5]),
+                4,
+                Some(Int32Type::from_data(vec![3])),
+            )
+            .await?;
+
+            run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Int32Type::from_data(vec![3]),
+                4,
+                None,
+            )
+            .await?;
+        }
+
+        {
+            let sort_desc = Arc::new(vec![SortColumnDescription {
+                offset: 1,
+                asc: false,
+                nulls_first: false,
+            }]);
+
+            run_bound_block_stream::<SimpleRowsDesc<StringType>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                StringType::from_data(vec!["f"]),
+                4,
+                Some(StringType::from_data(vec!["w", "h", "g"])),
+            )
+            .await?;
+        }
+
+        Ok(())
     }
 }
