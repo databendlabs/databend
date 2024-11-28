@@ -164,7 +164,7 @@ impl FuseTable {
                     .join(", ");
 
                 format!(
-                    "with _change as materialized \
+                    "with _change as \
                     ( \
                         select * \
                         from ( \

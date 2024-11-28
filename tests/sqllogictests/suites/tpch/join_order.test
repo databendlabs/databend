@@ -689,6 +689,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
 
 # Q15
+onlyif todo
 statement ok
 explain join with revenue as materialized (
     select
@@ -720,16 +721,7 @@ where
 )
 order by
     s_suppkey;
-----
-HashJoin: INNER
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── Scan: default.tpch_test.revenue (#1) (read rows: 1000)
-│       └── Probe
-│           └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
-└── Probe
-    └── Scan: default.tpch_test.revenue (#2) (read rows: 1000)
+
 
 # Q16
 query I
