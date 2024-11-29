@@ -60,6 +60,8 @@ pub struct VirtualColumnField {
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: Scalar,
+    /// optional cast function name, used to cast value to other type.
+    pub cast_func_name: Option<String>,
     /// Virtual column data type.
     pub data_type: Box<TableDataType>,
     /// Is the virtual column is created,

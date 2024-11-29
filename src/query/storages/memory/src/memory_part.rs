@@ -16,15 +16,13 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
 
+/// Memory table lazy partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct MemoryPartInfo {
-    pub total: usize,
-    pub part_start: usize,
-    pub part_end: usize,
-}
+pub struct MemoryPartInfo {}
 
-#[typetag::serde(name = "memory")]
+#[typetag::serde(name = "memory_part")]
 impl PartInfo for MemoryPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
@@ -42,11 +40,7 @@ impl PartInfo for MemoryPartInfo {
 }
 
 impl MemoryPartInfo {
-    pub fn create(start: usize, end: usize, total: usize) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(MemoryPartInfo {
-            total,
-            part_start: start,
-            part_end: end,
-        }))
+    pub fn create() -> PartInfoPtr {
+        Arc::new(Box::new(MemoryPartInfo {}))
     }
 }

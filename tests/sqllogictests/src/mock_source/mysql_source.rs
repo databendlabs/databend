@@ -24,7 +24,6 @@ use msql_srv::MysqlShim;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
 use mysql_common::Value;
-use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::Expr;
 use sqlparser::ast::SelectItem;
 use sqlparser::ast::SetExpr;
@@ -73,7 +72,7 @@ struct Backend {
     block: Vec<Vec<Value>>,
 
     prepared_id: u32,
-    prepared: HashMap<u32, (usize, usize)>,
+    prepared: HashMap<u32, (usize, Vec<usize>, Vec<Expr>)>,
 }
 
 impl Backend {
@@ -156,25 +155,26 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
 
         let mut table = None;
         let mut key = None;
-        let mut value = None;
+        let mut values = vec![];
+        let mut in_list_keys = vec![];
 
-        // Only support simple SQL select one field with an equal filter.
-        // for example: SELECT name FROM user WHERE id = 1;
+        // Only support SQL select two fields with an in expr.
+        // for example: SELECT id, name FROM user WHERE id in (1,2,3,4,5);
         if asts.len() == 1 {
             if let Statement::Query(query) = &asts[0] {
                 if let SetExpr::Select(select) = *query.body.clone() {
-                    if let SelectItem::UnnamedExpr(Expr::Identifier(ident)) = &select.projection[0]
-                    {
-                        value = Some(ident.value.clone());
+                    for proj in select.projection {
+                        if let SelectItem::UnnamedExpr(Expr::Identifier(ident)) = &proj {
+                            values.push(Some(ident.value.clone()));
+                        }
                     }
                     if let TableFactor::Table { name, .. } = &select.from[0].relation {
                         table = Some(name.0[0].value.clone());
                     }
-                    if let Some(Expr::BinaryOp { left, op, .. }) = &select.selection {
-                        if op == &BinaryOperator::Eq {
-                            if let Expr::Identifier(ident) = *left.clone() {
-                                key = Some(ident.value.clone());
-                            }
+                    if let Some(Expr::InList { expr, list, .. }) = &select.selection {
+                        if let Expr::Identifier(ident) = *expr.clone() {
+                            key = Some(ident.value.clone());
+                            in_list_keys.extend(list.clone());
                         }
                     }
                 }
@@ -184,36 +184,44 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
         self.prepared_id += 1;
         let prepared_id = self.prepared_id;
 
-        if table.is_some() && key.is_some() && value.is_some() {
+        if table.is_some() && key.is_some() && !values.is_empty() {
             let table = table.unwrap();
-            let key = key.unwrap();
-            let value = value.unwrap();
 
+            let key = key.unwrap();
             let key_col = &self
                 .schema
                 .iter()
                 .enumerate()
                 .find(|&(_, f)| f.column == key);
 
-            let value_col = &self
-                .schema
-                .iter()
-                .enumerate()
-                .find(|&(_, f)| f.column == value);
+            let mut value_columns = vec![];
+            for value in values {
+                let value = value.unwrap();
+                let value_col = &self
+                    .schema
+                    .iter()
+                    .enumerate()
+                    .find(|&(_, f)| f.column == value);
+                value_columns.push(*value_col);
+            }
 
-            if table == self.table && key_col.is_some() && value_col.is_some() {
+            if table == self.table && key_col.is_some() && !value_columns.is_empty() {
                 let (key_idx, key_col) = key_col.unwrap();
-                let (value_idx, value_col) = value_col.unwrap();
-
-                let prepared_idices = (key_idx, value_idx);
-                self.prepared.insert(prepared_id, prepared_idices);
 
                 // keys are bind as string type.
                 let mut key_col = key_col.clone();
                 key_col.coltype = ColumnType::MYSQL_TYPE_VAR_STRING;
 
                 let key_cols = vec![key_col];
-                let value_cols = vec![value_col.clone()];
+                let mut value_cols = vec![];
+                let mut value_idx_vec = vec![];
+                for value_col in value_columns {
+                    let (value_idx, value_col) = value_col.unwrap();
+                    value_idx_vec.push(value_idx);
+                    value_cols.push(value_col.clone());
+                }
+                let prepared_idices = (key_idx, value_idx_vec, in_list_keys);
+                self.prepared.insert(prepared_id, prepared_idices);
 
                 // add key and value columns for execute.
                 return info.reply(prepared_id, key_cols.as_slice(), value_cols.as_slice());
@@ -227,61 +235,97 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
     fn on_execute(
         &mut self,
         id: u32,
-        param_parser: msql_srv::ParamParser,
+        _: msql_srv::ParamParser,
         results: QueryResultWriter<W>,
     ) -> io::Result<()> {
-        let params: Vec<_> = param_parser
-            .into_iter()
-            .map(|p| p.value)
-            .collect::<Vec<_>>();
-
-        // ignore if params are empty.
-        if params.len() != 1 {
-            return results.completed(0, 0);
-        }
-        let param = params[0];
-
-        let (key_idx, value_idx) = self.prepared.get(&id).unwrap();
-
+        let (key_idx, value_idx_vec, in_list_keys) = self.prepared.get(&id).unwrap();
         let key_field = self.schema[*key_idx].clone();
         let key_column = self.block[*key_idx].clone();
 
-        let mut row = None;
-        // find matched row by compare key params.
+        // find matched rows by compare key params.
+        let mut rows: Vec<Option<usize>> = vec![];
         match key_field.coltype {
-            ColumnType::MYSQL_TYPE_TINY
-            | ColumnType::MYSQL_TYPE_SHORT
-            | ColumnType::MYSQL_TYPE_LONG
-            | ColumnType::MYSQL_TYPE_LONGLONG => {
-                let param: &str = param.into();
-                let key = param.parse::<i64>().unwrap();
-                let key_param = Value::Int(key);
-                for (i, key) in key_column.iter().enumerate() {
-                    if key == &key_param {
-                        row = Some(i);
-                        break;
+            ColumnType::MYSQL_TYPE_TINY => {
+                for param in in_list_keys {
+                    let param = format!("{}", param);
+                    if param == "NULL" {
+                        continue;
+                    }
+                    let key = param.parse::<bool>().unwrap();
+                    let key_param = Value::Int(key.into());
+                    for (i, key) in key_column.iter().enumerate() {
+                        if key == &key_param {
+                            rows.push(Some(i));
+                            break;
+                        }
+                    }
+                }
+            }
+            ColumnType::MYSQL_TYPE_SHORT => {
+                for param in in_list_keys {
+                    let param = format!("{}", param);
+                    if param == "NULL" {
+                        continue;
+                    }
+                    let key = param.parse::<u64>().unwrap();
+                    let key_param = Value::UInt(key);
+                    for (i, key) in key_column.iter().enumerate() {
+                        if key == &key_param {
+                            rows.push(Some(i));
+                            break;
+                        }
+                    }
+                }
+            }
+            ColumnType::MYSQL_TYPE_LONG | ColumnType::MYSQL_TYPE_LONGLONG => {
+                for param in in_list_keys {
+                    let param = format!("{}", param);
+                    if param == "NULL" {
+                        continue;
+                    }
+                    let key = param.parse::<i64>().unwrap();
+                    let key_param = Value::Int(key);
+                    for (i, key) in key_column.iter().enumerate() {
+                        if key == &key_param {
+                            rows.push(Some(i));
+                            break;
+                        }
                     }
                 }
             }
             ColumnType::MYSQL_TYPE_FLOAT | ColumnType::MYSQL_TYPE_DOUBLE => {
-                let param: &str = param.into();
-                let key = param.parse::<f64>().unwrap();
-                let key_param = Value::Double(key);
-                for (i, key) in key_column.iter().enumerate() {
-                    if key == &key_param {
-                        row = Some(i);
-                        break;
+                for param in in_list_keys {
+                    let param = format!("{}", param);
+                    if param == "NULL" {
+                        continue;
+                    }
+                    let key = param.parse::<f64>().unwrap();
+                    let key_param = Value::Double(key);
+                    for (i, key) in key_column.iter().enumerate() {
+                        if key == &key_param {
+                            rows.push(Some(i));
+                            break;
+                        }
                     }
                 }
             }
             ColumnType::MYSQL_TYPE_VAR_STRING => {
-                let param: &str = param.into();
-                let key = param.as_bytes().to_vec();
-                let key_param = Value::Bytes(key);
-                for (i, key) in key_column.iter().enumerate() {
-                    if key == &key_param {
-                        row = Some(i);
-                        break;
+                for param in in_list_keys {
+                    let param = format!("{}", param);
+                    if param == "NULL" {
+                        continue;
+                    }
+                    let param_str = param
+                        .strip_prefix('\'')
+                        .and_then(|s| s.strip_suffix('\''))
+                        .unwrap_or(&param);
+                    let key = param_str.as_bytes().to_vec();
+                    let key_param = Value::Bytes(key);
+                    for (i, key) in key_column.iter().enumerate() {
+                        if key == &key_param {
+                            rows.push(Some(i));
+                            break;
+                        }
                     }
                 }
             }
@@ -289,65 +333,79 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
         }
 
         // return NULL if params not matched.
-        if row.is_none() {
+        if rows.is_empty() {
             return results.completed(0, 0);
         }
-        let row = row.unwrap();
 
-        let value_field = self.schema[*value_idx].clone();
-        let value_column = self.block[*value_idx].clone();
-        let value = value_column[row].clone();
+        let value_idx1 = value_idx_vec[0];
+        let value_field1 = self.schema[value_idx1].clone();
+        let value_column1 = self.block[value_idx1].clone();
 
-        let cols = vec![value_field.clone()];
+        let value_idx2 = value_idx_vec[1];
+        let value_field2 = self.schema[value_idx2].clone();
+        let value_column2 = self.block[value_idx2].clone();
+
+        let cols = vec![value_field1.clone(), value_field2.clone()];
 
         let mut rw = results.start(&cols)?;
-        match value {
-            Value::Bytes(v) => {
-                rw.write_col(v)?;
+
+        for row in rows.into_iter().map(|r| r.unwrap()) {
+            let value1 = value_column1[row].clone();
+            let value2 = value_column2[row].clone();
+            for (value, value_field) in [
+                (value1, value_field1.clone()),
+                (value2, value_field2.clone()),
+            ] {
+                match value {
+                    Value::Bytes(v) => {
+                        rw.write_col(v)?;
+                    }
+                    Value::Int(v) => match value_field.coltype {
+                        ColumnType::MYSQL_TYPE_TINY => {
+                            rw.write_col(v as i8)?;
+                        }
+                        ColumnType::MYSQL_TYPE_SHORT => {
+                            rw.write_col(v as u16)?;
+                        }
+                        ColumnType::MYSQL_TYPE_LONG => {
+                            rw.write_col(v as i32)?;
+                        }
+                        ColumnType::MYSQL_TYPE_LONGLONG => {
+                            rw.write_col(v)?;
+                        }
+                        _ => {
+                            unreachable!()
+                        }
+                    },
+                    Value::UInt(v) => match value_field.coltype {
+                        ColumnType::MYSQL_TYPE_TINY => {
+                            rw.write_col(v as u8)?;
+                        }
+                        ColumnType::MYSQL_TYPE_SHORT => {
+                            rw.write_col(v as u16)?;
+                        }
+                        ColumnType::MYSQL_TYPE_LONG => {
+                            rw.write_col(v as u32)?;
+                        }
+                        ColumnType::MYSQL_TYPE_LONGLONG => {
+                            rw.write_col(v)?;
+                        }
+                        _ => {
+                            unreachable!()
+                        }
+                    },
+                    Value::Float(v) => {
+                        rw.write_col(v)?;
+                    }
+                    Value::Double(v) => {
+                        rw.write_col(v)?;
+                    }
+                    _ => {
+                        rw.write_col("")?;
+                    }
+                }
             }
-            Value::Int(v) => match value_field.coltype {
-                ColumnType::MYSQL_TYPE_TINY => {
-                    rw.write_col(v as i8)?;
-                }
-                ColumnType::MYSQL_TYPE_SHORT => {
-                    rw.write_col(v as i16)?;
-                }
-                ColumnType::MYSQL_TYPE_LONG => {
-                    rw.write_col(v as i32)?;
-                }
-                ColumnType::MYSQL_TYPE_LONGLONG => {
-                    rw.write_col(v)?;
-                }
-                _ => {
-                    unreachable!()
-                }
-            },
-            Value::UInt(v) => match value_field.coltype {
-                ColumnType::MYSQL_TYPE_TINY => {
-                    rw.write_col(v as u8)?;
-                }
-                ColumnType::MYSQL_TYPE_SHORT => {
-                    rw.write_col(v as u16)?;
-                }
-                ColumnType::MYSQL_TYPE_LONG => {
-                    rw.write_col(v as u32)?;
-                }
-                ColumnType::MYSQL_TYPE_LONGLONG => {
-                    rw.write_col(v)?;
-                }
-                _ => {
-                    unreachable!()
-                }
-            },
-            Value::Float(v) => {
-                rw.write_col(v)?;
-            }
-            Value::Double(v) => {
-                rw.write_col(v)?;
-            }
-            _ => {
-                rw.write_col("")?;
-            }
+            rw.end_row()?;
         }
         rw.finish()
     }

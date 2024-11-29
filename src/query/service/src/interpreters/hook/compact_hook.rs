@@ -147,9 +147,6 @@ async fn compact_table(
         .await?;
     let settings = ctx.get_settings();
 
-    let do_recluster = !table.cluster_keys(ctx.clone()).is_empty();
-    let do_compact = compaction_limits.block_limit.is_some() || !do_recluster;
-
     // evict the table from cache
     ctx.evict_table_from_cache(
         &compact_target.catalog,
@@ -157,7 +154,8 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
-    if do_compact {
+    {
+        // do compact.
         let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
@@ -191,21 +189,24 @@ async fn compact_table(
         }
     }
 
-    if do_recluster {
-        let recluster = RelOperator::Recluster(Recluster {
-            catalog: compact_target.catalog,
-            database: compact_target.database,
-            table: compact_target.table,
-            filters: None,
-            limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-        });
-        let s_expr = SExpr::create_leaf(Arc::new(recluster));
-        let recluster_interpreter =
-            ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-        // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-        // we do not need to use `PipelineCompleteExecutor` to execute it.
-        let build_res = recluster_interpreter.execute2().await?;
-        assert!(build_res.main_pipeline.is_empty());
+    {
+        // do recluster.
+        if !table.cluster_keys(ctx.clone()).is_empty() {
+            let recluster = RelOperator::Recluster(Recluster {
+                catalog: compact_target.catalog,
+                database: compact_target.database,
+                table: compact_target.table,
+                filters: None,
+                limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
+            });
+            let s_expr = SExpr::create_leaf(Arc::new(recluster));
+            let recluster_interpreter =
+                ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
+            // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+            // we do not need to use `PipelineCompleteExecutor` to execute it.
+            let build_res = recluster_interpreter.execute2().await?;
+            assert!(build_res.main_pipeline.is_empty());
+        }
     }
 
     Ok(())
