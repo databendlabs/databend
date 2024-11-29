@@ -61,6 +61,11 @@ impl Table for NullTable {
         &self.table_info
     }
 
+    /// Null do not keep data, it's safe to make it non-local.
+    fn is_local(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,

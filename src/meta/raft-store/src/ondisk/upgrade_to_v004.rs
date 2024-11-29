@@ -59,7 +59,7 @@ impl OnDisk {
         let raft_log = RaftLogV004::open(raft_log_config)?;
         let mut importer = importer::Importer::new(raft_log);
 
-        let db = init_get_sled_db(self.config.raft_dir.clone(), self.config.sled_cache_size());
+        let db = init_get_sled_db(self.config.raft_dir.clone(), 1024 * 1024 * 1024);
 
         // Read the purged index
         let first_log_index = {
@@ -213,7 +213,7 @@ impl OnDisk {
 
         self.progress(format_args!("    Remove V003 log from sled db",));
 
-        let db = init_get_sled_db(self.config.raft_dir.clone(), self.config.sled_cache_size());
+        let db = init_get_sled_db(self.config.raft_dir.clone(), 1024 * 1024 * 1024);
         for tree_name in db.tree_names() {
             if tree_name == "__sled__default" {
                 continue;

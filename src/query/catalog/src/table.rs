@@ -108,6 +108,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn support_distributed_insert(&self) -> bool {
+        false
+    }
+
     /// whether table has the exact number of total rows
     fn has_exact_total_row_count(&self) -> bool {
         false

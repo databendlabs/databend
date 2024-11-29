@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
@@ -75,7 +76,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
-        virtual_columns: Vec<String>,
+        virtual_columns: Vec<(String, TableDataType)>,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {

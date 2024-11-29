@@ -25,7 +25,7 @@ pub fn process_sled_db<F>(config: &Config, convert: F) -> anyhow::Result<()>
 where F: Fn(RaftStoreEntry) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
     let raft_config = &config.raft_config;
 
-    let db = init_get_sled_db(raft_config.raft_dir.clone(), 64 * 1024 * 1024 * 1024);
+    let db = init_get_sled_db(raft_config.raft_dir.clone(), 1024 * 1024 * 1024);
 
     let mut tree_names = db.tree_names();
     tree_names.sort();

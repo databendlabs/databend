@@ -231,6 +231,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            virtual_column_context: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
