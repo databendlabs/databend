@@ -20,11 +20,14 @@ use criterion::Criterion;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Value;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -220,6 +223,29 @@ fn bench(c: &mut Criterion) {
                 let _c = (0..length)
                     .map(|i| left[i] + right[i])
                     .collect::<Vec<i32>>();
+            })
+        });
+
+        let value1 = Value::<Int32Type>::Column(left.clone());
+        let value2 = Value::<Int32Type>::Column(right.clone());
+
+        group.bench_function(format!("register_new/{length}"), |b| {
+            b.iter(|| {
+                let iter = (0..length).map(|i| {
+                    let a = unsafe { value1.index_unchecked(i) };
+                    let b = unsafe { value2.index_unchecked(i) };
+                    a + b
+                });
+                let _c = Int32Type::column_from_iter(iter, &[]);
+            })
+        });
+
+        group.bench_function(format!("register_old/{length}"), |b| {
+            b.iter(|| {
+                let a = value1.as_column().unwrap();
+                let b = value2.as_column().unwrap();
+                let iter = a.iter().zip(b.iter()).map(|(a, b)| *a + b);
+                let _c = Int32Type::column_from_iter(iter, &[]);
             })
         });
     }

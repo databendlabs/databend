@@ -393,7 +393,9 @@ impl Binder {
 
         let original_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::GroupClaue);
-        match group_by {
+
+        let group_by = Self::expand_group(group_by.clone())?;
+        match &group_by {
             GroupBy::Normal(exprs) => self.resolve_group_items(
                 bind_context,
                 select_list,
@@ -416,25 +418,91 @@ impl Binder {
             GroupBy::GroupingSets(sets) => {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)?;
             }
-            // TODO: avoid too many clones.
-            GroupBy::Rollup(exprs) => {
-                // ROLLUP (a,b,c) => GROUPING SETS ((a,b,c), (a,b), (a), ())
-                let mut sets = Vec::with_capacity(exprs.len() + 1);
-                for i in (0..=exprs.len()).rev() {
-                    sets.push(exprs[0..i].to_vec());
-                }
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
-            }
-            GroupBy::Cube(exprs) => {
-                // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
-                let sets = (0..=exprs.len())
-                    .flat_map(|count| exprs.clone().into_iter().combinations(count))
-                    .collect::<Vec<_>>();
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
-            }
+            _ => unreachable!(),
         }
         bind_context.set_expr_context(original_context);
         Ok(())
+    }
+
+    pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {
+        match group_by {
+            GroupBy::Normal(_) | GroupBy::All | GroupBy::GroupingSets(_) => Ok(group_by),
+            GroupBy::Cube(exprs) => {
+                // Expand CUBE to GroupingSets
+                let sets = Self::generate_cube_sets(exprs);
+                Ok(GroupBy::GroupingSets(sets))
+            }
+            GroupBy::Rollup(exprs) => {
+                // Expand ROLLUP to GroupingSets
+                let sets = Self::generate_rollup_sets(exprs);
+                Ok(GroupBy::GroupingSets(sets))
+            }
+            GroupBy::Combined(groups) => {
+                // Flatten and expand all nested GroupBy variants
+                let mut combined_sets = Vec::new();
+                for group in groups {
+                    match Self::expand_group(group)? {
+                        GroupBy::Normal(exprs) => {
+                            combined_sets = Self::cartesian_product(combined_sets, vec![exprs]);
+                        }
+                        GroupBy::GroupingSets(sets) => {
+                            combined_sets = Self::cartesian_product(combined_sets, sets);
+                        }
+                        _other => unreachable!(),
+                    }
+                }
+                Ok(GroupBy::GroupingSets(combined_sets))
+            }
+        }
+    }
+
+    /// Generate GroupingSets from CUBE (expr1, expr2, ...)
+    fn generate_cube_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+        let mut result = Vec::new();
+        let n = exprs.len();
+
+        // Iterate through all possible subsets of the given expressions
+        for i in 0..(1 << n) {
+            let mut subset = Vec::new();
+            for j in 0..n {
+                if (i & (1 << j)) != 0 {
+                    subset.push(exprs[j].clone());
+                }
+            }
+            result.push(subset);
+        }
+
+        result
+    }
+
+    /// Generate GroupingSets from ROLLUP (expr1, expr2, ...)
+    fn generate_rollup_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+        let mut result = Vec::new();
+        for i in (0..=exprs.len()).rev() {
+            result.push(exprs[..i].to_vec());
+        }
+        result
+    }
+
+    /// Perform Cartesian product of two sets of grouping sets
+    fn cartesian_product(set1: Vec<Vec<Expr>>, set2: Vec<Vec<Expr>>) -> Vec<Vec<Expr>> {
+        if set1.is_empty() {
+            return set2;
+        }
+
+        if set2.is_empty() {
+            return set1;
+        }
+
+        let mut result = Vec::new();
+        for s1 in set1 {
+            for s2 in &set2 {
+                let mut combined = s1.clone();
+                combined.extend(s2.clone());
+                result.push(combined);
+            }
+        }
+        result
     }
 
     pub fn bind_aggregate(
@@ -525,6 +593,11 @@ impl Binder {
                 set
             })
             .collect::<Vec<_>>();
+
+        // Because we are not using union all to implement grouping sets
+        // We will remove the duplicated grouping sets here.
+        // For example: SELECT  brand, segment,  SUM (quantity) FROM     sales GROUP BY  GROUPING sets(brand, segment),  GROUPING sets(brand, segment);
+        // brand X segment will not appear twice in the result, the results are not standard but accpetable.
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         let mut dup_group_items = Vec::with_capacity(agg_info.group_items.len());
         for (i, item) in agg_info.group_items.iter().enumerate() {

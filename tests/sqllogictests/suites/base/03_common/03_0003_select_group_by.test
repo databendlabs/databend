@@ -300,3 +300,88 @@ select sum(number + 3 ), number % 3  from numbers(10) group by  sum(number + 3 )
 
 statement error (?s)1065.*GROUP BY items can't contain aggregate functions or window functions
 select sum(number + 3 ), number % 3  from numbers(10) group by  1, 2;
+
+
+# test grouping sets, rollup
+
+statement ok
+CREATE OR REPLACE TABLE sales (
+    brand VARCHAR NOT NULL,
+    segment VARCHAR NOT NULL,
+    quantity INT NOT NULL
+);
+
+statement ok
+INSERT INTO sales (brand, segment, quantity)
+VALUES
+    ('ABC', 'Premium', 100),
+    ('ABC', 'Basic', 200),
+    ('XYZ', 'Premium', 100),
+    ('XYZ', 'Basic', 300);
+
+query ITTI
+SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    brand, GROUPING SETS(segment, quantity) order by 1,2,3;
+----
+100 ABC NULL 100
+100 XYZ NULL 100
+200 ABC NULL 200
+300 XYZ NULL 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+
+query ITTI
+SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    brand, rollup(segment, quantity) order by 1,2,3;
+----
+100 ABC Premium 100
+100 XYZ Premium 100
+200 ABC Basic 200
+300 XYZ Basic 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL ABC NULL 300
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+NULL XYZ NULL 400
+
+query ITTI
+SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    brand, rollup(quantity) , segment order by 1,2,3;
+----
+100 ABC Premium 100
+100 XYZ Premium 100
+200 ABC Basic 200
+300 XYZ Basic 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+
+
+
+
+## results are deduplicated in grouping sets, the results are not standard but accpetable.
+query ITTI
+SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    brand, rollup(quantity), GROUPING sets(brand, segment, quantity) order by 1,2,3;
+----
+100 ABC Premium 100
+100 ABC NULL 100
+100 XYZ Premium 100
+100 XYZ NULL 100
+200 ABC Basic 200
+200 ABC NULL 200
+300 XYZ Basic 300
+300 XYZ NULL 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL ABC NULL 300
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+NULL XYZ NULL 400
+
+## filter push down into grouping sets
+query ITTI
+select * from (SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    rollup( quantity,     brand,     segment) ) e   where e.segment = 'Basic';
+----
+300 XYZ Basic 300
+200 ABC Basic 200

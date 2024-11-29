@@ -207,9 +207,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             nulls_first: Some(self.flip_coin()),
                         }))
                     }
-                    GroupBy::Rollup(group_by)
-                    | GroupBy::Cube(group_by)
-                    | GroupBy::Normal(group_by) => {
+                    GroupBy::Normal(group_by) => {
                         orders.extend(group_by.iter().map(|expr| OrderByExpr {
                             expr: expr.clone(),
                             asc: Some(self.flip_coin()),
@@ -351,12 +349,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             groupby_items.push(groupby_item);
         }
 
-        match self.rng.gen_range(0..=4) {
+        match self.rng.gen_range(0..=2) {
             0 => Some(GroupBy::Normal(groupby_items)),
             1 => Some(GroupBy::All),
             2 => Some(GroupBy::GroupingSets(vec![groupby_items])),
-            3 => Some(GroupBy::Cube(groupby_items)),
-            4 => Some(GroupBy::Rollup(groupby_items)),
             _ => unreachable!(),
         }
     }
@@ -370,9 +366,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         };
 
         match group_by {
-            Some(GroupBy::Normal(group_by))
-            | Some(GroupBy::Cube(group_by))
-            | Some(GroupBy::Rollup(group_by)) => {
+            Some(GroupBy::Normal(group_by)) => {
                 let ty = self.gen_data_type();
                 let agg_expr = self.gen_agg_func(&ty);
                 targets.push(SelectTarget::AliasedExpr {
