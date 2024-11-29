@@ -372,17 +372,16 @@ impl DictionaryOperator {
         pool: &MySqlPool,
         sql: &String,
     ) -> Result<Value<AnyType>> {
+        // todo: The current method formats the key as a string, which causes some performance overhead.
+        // The next step is to use the key's native types directly, such as bool, i32, etc.
         let key_cnt = column.len();
         let mut all_keys = Vec::with_capacity(key_cnt);
         let mut key_set = HashSet::with_capacity(key_cnt);
         for item in column.iter() {
-            let key = self.format_key(item.clone());
-            // Note: ScalarRef::NULL is formatted as "NULL", and ScalarRef::String("NULL") as "\'NULL\'".
-            // If the key is ScalarRef::NULL, default value will be returned instead of sqlx query.
-            if key != "NULL" {
-                key_set.insert(item);
+            if item != ScalarRef::Null {
+                key_set.insert(item.clone());
             }
-            all_keys.push(key);
+            all_keys.push(self.format_key(item));
         }
 
         let mut builder = ColumnBuilder::with_capacity(value_type, key_cnt);
