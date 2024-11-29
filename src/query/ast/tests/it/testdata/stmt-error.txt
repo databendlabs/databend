@@ -321,7 +321,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
-  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -331,7 +331,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CONNECTION = ();
-  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -594,7 +594,7 @@ error:
   --> SQL:1:57
   |
 1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
-  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
+  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `CASE_SENSITIVE`, `)`, `,`, `FILES`, or `CONNECTION`
   | |                                                        
   | while parsing `SELECT ...`
 
