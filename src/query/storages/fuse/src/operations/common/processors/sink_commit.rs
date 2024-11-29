@@ -137,23 +137,18 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
-        let code = e.code();
-        // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
-        // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
-        if self.prev_snapshot_id.is_some() && code == ErrorCode::TABLE_VERSION_MISMATCHED {
+        if self.forbid_retry {
             return false;
         }
 
-        code == ErrorCode::TABLE_VERSION_MISMATCHED
-            || (self.purge && code == ErrorCode::STORAGE_NOT_FOUND)
+        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
+            || (self.purge && e.code() == ErrorCode::STORAGE_NOT_FOUND)
     }
 
     fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
         // currently, the only error that we know,  which indicates there are no side effects
         // is TABLE_VERSION_MISMATCHED
         e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
-    fn can_retry(&self, e: &ErrorCode) -> bool {
-        !self.forbid_retry && FuseTable::is_error_recoverable(e, self.purge)
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -448,7 +443,7 @@ where F: SnapshotGenerator + Send + 'static
                         info!("commit mutation success, targets {:?}", target_descriptions);
                         self.state = State::Finish;
                     }
-                    Err(e) if self.can_retry(&e) => {
+                    Err(e) if self.is_error_recoverable(&e) => {
                         let table_info = self.table.get_table_info();
                         match self.backoff.next_backoff() {
                             Some(d) => {

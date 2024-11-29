@@ -46,6 +46,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::planner::query_executor::QueryExecutor;
+use crate::plans::Append;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Exchange;
 use crate::plans::Join;
@@ -294,11 +295,20 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             overwrite,
             forbid_occ_retry,
         } => {
+            let support_distributed_insert = {
+                let append: Append = s_expr.plan().clone().try_into()?;
+                let metadata = metadata.read();
+                metadata
+                    .table(append.table_index)
+                    .table()
+                    .support_distributed_insert()
+            };
             let enable_distributed = opt_ctx.enable_distributed_optimization
                 && opt_ctx
                     .table_ctx
                     .get_settings()
-                    .get_enable_distributed_copy()?;
+                    .get_enable_distributed_copy()?
+                && support_distributed_insert;
             info!(
                 "after optimization enable_distributed_copy? : {}",
                 enable_distributed
