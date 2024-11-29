@@ -268,15 +268,13 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let use_query = matches!(&stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
+        let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
 
         if use_query {
             let mut select_list =
                 Vec::with_capacity(copy_into_table_plan.required_source_schema.num_fields());
-                  let case_sensitive = plan
-                                .stage_table_info
-                                .copy_into_table_options
-                                .column_match_mode
-                                == Some(ColumnMatchMode::CaseSensitive);
+
             for dest_field in copy_into_table_plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
@@ -331,6 +329,7 @@ impl<'a> Binder {
                     stage_table_info.files_info.clone(),
                     &None,
                     stage_table_info.files_to_copy.clone(),
+                    case_sensitive,
                 )
                 .await?;
             copy_into_table_plan.project_columns = Some(bind_context.columns.clone());
@@ -486,6 +485,8 @@ impl<'a> Binder {
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
         let table_ctx = self.ctx.clone();
+        let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
         let (s_expr, mut from_context) = self
             .bind_stage_table(
                 table_ctx,
@@ -494,6 +495,7 @@ impl<'a> Binder {
                 stage_table_info.files_info.clone(),
                 alias,
                 stage_table_info.files_to_copy.clone(),
+                case_sensitive,
             )
             .await?;
 
