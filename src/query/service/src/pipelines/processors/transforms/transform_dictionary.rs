@@ -374,19 +374,26 @@ impl DictionaryOperator {
     ) -> Result<Value<AnyType>> {
         let key_cnt = column.len();
         let mut all_keys = Vec::with_capacity(key_cnt);
-        let mut unique_keys = Vec::with_capacity(key_cnt);
         let mut key_set = HashSet::with_capacity(key_cnt);
         for item in column.iter() {
             let key = self.format_key(item.clone());
-            all_keys.push(key.clone());
-            if !key_set.contains(&key) {
-                unique_keys.push(item);
-                key_set.insert(key);
+            // Note: ScalarRef::NULL is formatted as "NULL", and ScalarRef::String("NULL") as "\'NULL\'".
+            // If the key is ScalarRef::NULL, default value will be returned instead of sqlx query.
+            if key != "NULL" {
+                key_set.insert(item);
             }
+            all_keys.push(key);
         }
-        let new_sql = format!("{} {}", sql, self.format_keys(unique_keys));
-        let key_type = column.data_type().remove_nullable();
+
         let mut builder = ColumnBuilder::with_capacity(value_type, key_cnt);
+        if key_set.is_empty() {
+            for _ in 0..key_cnt {
+                builder.push(default_value.as_ref());
+            }
+            return Ok(Value::Column(builder.build()));
+        }
+        let new_sql = format!("{} ({})", sql, self.format_keys(key_set));
+        let key_type = column.data_type().remove_nullable();
         match value_type.remove_nullable() {
             DataType::Boolean => {
                 let kv_pairs: HashMap<String, bool> =
@@ -473,9 +480,9 @@ impl DictionaryOperator {
     }
 
     #[inline]
-    fn format_keys(&self, keys: Vec<ScalarRef<'_>>) -> String {
+    fn format_keys(&self, keys: HashSet<ScalarRef>) -> String {
         format!(
-            "({})",
+            "{}",
             keys.into_iter()
                 .map(|key| self.format_key(key))
                 .collect::<Vec<String>>()
