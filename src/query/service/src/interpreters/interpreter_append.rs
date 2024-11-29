@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -83,6 +84,17 @@ impl Interpreter for AppendInterpreter {
         };
 
         target_table.check_mutable()?;
+        if append
+            .project_columns
+            .as_ref()
+            .is_some_and(|p| p.len() != append.required_source_schema.num_fields())
+        {
+            return Err(ErrorCode::BadArguments(format!(
+                "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
+                append.project_columns.as_ref().unwrap().len(),
+                append.required_source_schema.num_fields(),
+            )));
+        }
 
         // 1. build source and append pipeline
         let mut build_res = {
