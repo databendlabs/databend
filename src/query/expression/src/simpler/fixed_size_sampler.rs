@@ -147,7 +147,7 @@ fn compact_indices(indices: &mut Vec<BlockRowIndex>, blocks: &mut Vec<DataBlock>
         .collect();
 }
 
-pub fn compact_blocks(
+fn compact_blocks(
     indices: &mut Vec<BlockRowIndex>,
     blocks: &mut Vec<DataBlock>,
     block_size: usize,

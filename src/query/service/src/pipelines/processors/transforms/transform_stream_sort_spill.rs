@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
+use databend_common_expression::simpler::FixedRateSimpler;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
@@ -32,7 +33,6 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Domain;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -80,6 +80,7 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
 
     state: State,
     spiller: Arc<Spiller>,
+    simpler: FixedRateSimpler,
 
     batch_rows: usize,
     /// Blocks to merge one time.
@@ -308,6 +309,11 @@ where
 
     async fn on_spill(&mut self) -> Result<()> {
         let blocks = mem::take(&mut self.input_data);
+
+        for data in &blocks {
+            self.simpler.add_block(data.clone())
+        }
+        self.simpler.compact_blocks();
 
         let mut merger = Merger::<A, BlockStream>::create(
             self.schema.clone(),

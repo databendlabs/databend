@@ -15,7 +15,6 @@
 use rand::Rng;
 use rate_sampling::Sampling;
 
-use super::fixed_size_sampler::compact_blocks;
 use crate::BlockRowIndex;
 use crate::DataBlock;
 
@@ -23,10 +22,11 @@ pub struct FixedRateSimpler<R: Rng> {
     columns: Vec<usize>,
     block_size: usize,
 
-    blocks: Vec<DataBlock>,
     indices: Vec<BlockRowIndex>,
-    core: Sampling<R>,
+    // dense_blocks: Vec<DataBlock>,
+    pub sparse_blocks: Vec<DataBlock>,
 
+    core: Sampling<R>,
     s: usize,
 }
 
@@ -43,8 +43,9 @@ impl<R: Rng> FixedRateSimpler<R> {
         Some(Self {
             columns,
             block_size,
-            blocks: Vec::new(),
             indices: Vec::new(),
+            sparse_blocks: Vec::new(),
+            // dense_blocks: Vec::new(),
             core,
             s,
         })
@@ -53,7 +54,7 @@ impl<R: Rng> FixedRateSimpler<R> {
     pub fn add_block(&mut self, data: DataBlock) -> bool {
         let rows = data.num_rows();
         assert!(rows > 0);
-        let block_idx = self.blocks.len() as u32;
+        let block_idx = self.sparse_blocks.len() as u32;
         let change = self.add_indices(rows, block_idx);
         if change {
             let columns = self
@@ -61,7 +62,7 @@ impl<R: Rng> FixedRateSimpler<R> {
                 .iter()
                 .map(|&offset| data.get_by_offset(offset).to_owned())
                 .collect::<Vec<_>>();
-            self.blocks.push(DataBlock::new(columns, rows));
+            self.sparse_blocks.push(DataBlock::new(columns, rows));
         }
         change
     }
@@ -82,20 +83,38 @@ impl<R: Rng> FixedRateSimpler<R> {
     }
 
     pub fn compact_blocks(&mut self) {
-        compact_blocks(&mut self.indices, &mut self.blocks, self.block_size)
+        compact_blocks(&mut self.indices, &mut self.sparse_blocks, self.block_size)
     }
 
     pub fn memory_size(self) -> usize {
-        self.blocks.iter().map(|b| b.memory_size()).sum()
-    }
-
-    pub fn take_blocks(&mut self) -> Vec<DataBlock> {
-        std::mem::take(&mut self.blocks)
+        self.sparse_blocks.iter().map(|b| b.memory_size()).sum()
     }
 
     pub fn num_rows(&self) -> usize {
         self.indices.len()
     }
+}
+
+fn compact_blocks(
+    indices: &mut Vec<BlockRowIndex>,
+    blocks: &mut Vec<DataBlock>,
+    block_size: usize,
+) {
+    *blocks = indices
+        .chunks_mut(block_size)
+        .enumerate()
+        .map(|(i, indices)| {
+            let rows = indices.len();
+            let block = DataBlock::take_blocks(blocks, indices, rows);
+
+            for (j, (b, r, _)) in indices.iter_mut().enumerate() {
+                *b = i as u32;
+                *r = j as u32;
+            }
+
+            block
+        })
+        .collect::<Vec<_>>();
 }
 
 mod rate_sampling {
@@ -145,7 +164,7 @@ mod tests {
         let mut simpler = FixedRateSimpler {
             columns: vec![0],
             block_size: 65536,
-            blocks: Vec::new(),
+            sparse_blocks: Vec::new(),
             indices: Vec::new(),
             core,
             s,
