@@ -41,7 +41,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
-    pub(crate) fn build_copy_into_table(&mut self, copy: &PhysicalAppend) -> Result<()> {
+    pub(crate) fn build_append(&mut self, copy: &PhysicalAppend) -> Result<()> {
         let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
         self.ctx
             .set_read_block_thresholds(to_table.get_block_thresholds());

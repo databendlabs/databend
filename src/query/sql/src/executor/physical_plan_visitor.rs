@@ -92,7 +92,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
-            PhysicalPlan::Append(plan) => self.replace_copy_into_table(plan),
+            PhysicalPlan::Append(plan) => self.replace_append(plan),
             PhysicalPlan::CopyIntoLocation(plan) => self.replace_copy_into_location(plan),
             PhysicalPlan::ReplaceAsyncSourcer(plan) => self.replace_async_sourcer(plan),
             PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
@@ -402,7 +402,7 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &PhysicalAppend) -> Result<PhysicalPlan> {
+    fn replace_append(&mut self, plan: &PhysicalAppend) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Append(Box::new(PhysicalAppend {

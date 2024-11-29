@@ -142,9 +142,7 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
             RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
-            RelOperator::Append(copy_into_table) => {
-                self.build_copy_into_table(s_expr, copy_into_table).await
-            }
+            RelOperator::Append(append) => self.build_append(s_expr, append).await,
             RelOperator::ValueScan(value_scan) => self.build_value_scan(value_scan).await,
         }
     }

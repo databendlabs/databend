@@ -195,7 +195,7 @@ impl PipelineBuilder {
             }
 
             // Copy into.
-            PhysicalPlan::Append(copy) => self.build_copy_into_table(copy),
+            PhysicalPlan::Append(append) => self.build_append(append),
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
             // Replace.

@@ -65,15 +65,15 @@ impl Interpreter for AppendInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "append_interpreter_execute");
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
 
-        let copy_into_table: Append = self.s_expr.plan().clone().try_into()?;
+        let append: Append = self.s_expr.plan().clone().try_into()?;
         let (target_table, catalog, database, table) = {
             let metadata = self.metadata.read();
-            let t = metadata.table(copy_into_table.table_index);
+            let t = metadata.table(append.table_index);
             (
                 t.table(),
                 t.catalog().to_string(),
@@ -162,8 +162,8 @@ impl Interpreter for AppendInterpreter {
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let copy_into_table: Append = self.s_expr.plan().clone().try_into()?;
-        match &copy_into_table.append_type {
+        let append: Append = self.s_expr.plan().clone().try_into()?;
+        match &append.append_type {
             AppendType::CopyInto => {
                 let blocks = self.get_copy_into_table_result()?;
                 Ok(Box::pin(DataBlockStream::create(None, blocks)))

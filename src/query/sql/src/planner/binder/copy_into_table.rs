@@ -257,7 +257,7 @@ impl<'a> Binder {
     async fn bind_copy_into_table_from_location(
         &mut self,
         bind_ctx: &BindContext,
-        copy_into_table_plan: Append,
+        mut copy_into_table_plan: Append,
         stage_table_info: StageTableInfo,
     ) -> Result<Plan> {
         let use_query = matches!(&stage_table_info.stage_info.file_format_params,
@@ -304,7 +304,7 @@ impl<'a> Binder {
             )
             .await
         } else {
-            let (scan, _) = self
+            let (scan, bind_context) = self
                 .bind_stage_table(
                     self.ctx.clone(),
                     bind_ctx,
@@ -314,6 +314,7 @@ impl<'a> Binder {
                     stage_table_info.files_to_copy.clone(),
                 )
                 .await?;
+            copy_into_table_plan.project_columns = Some(bind_context.columns.clone());
 
             let copy_into =
                 SExpr::create_unary(Arc::new(copy_into_table_plan.into()), Arc::new(scan));

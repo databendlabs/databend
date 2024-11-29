@@ -178,7 +178,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         })))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &PhysicalAppend) -> Result<PhysicalPlan> {
+    fn replace_append(&mut self, plan: &PhysicalAppend) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::Append(Box::new(PhysicalAppend {
             plan_id: plan.plan_id,

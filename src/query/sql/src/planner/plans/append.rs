@@ -301,14 +301,19 @@ impl Operator for Append {
 }
 
 impl PhysicalPlanBuilder {
-    pub async fn build_copy_into_table(
+    pub async fn build_append(
         &mut self,
         s_expr: &SExpr,
         plan: &crate::plans::Append,
     ) -> Result<PhysicalPlan> {
         let target_table = self.metadata.read().table(plan.table_index).table();
 
-        let source = self.build(s_expr.child(0)?, Default::default()).await?;
+        let column_set = plan
+            .project_columns
+            .as_ref()
+            .map(|project_columns| project_columns.iter().map(|c| c.index).collect())
+            .unwrap_or_default();
+        let source = self.build(s_expr.child(0)?, column_set).await?;
 
         Ok(PhysicalPlan::Append(Box::new(PhysicalAppend {
             plan_id: 0,
@@ -317,7 +322,7 @@ impl PhysicalPlanBuilder {
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
             table_info: target_table.get_table_info().clone(),
-            project_columns: None,
+            project_columns: plan.project_columns.clone(),
         })))
     }
 }
