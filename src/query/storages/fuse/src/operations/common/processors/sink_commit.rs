@@ -36,7 +36,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
@@ -92,7 +91,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     new_segment_locs: Vec<Location>,
     start_time: Instant,
-    prev_snapshot_id: Option<SnapshotId>,
+    forbid_retry: bool,
 
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
@@ -111,7 +110,7 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
-        prev_snapshot_id: Option<SnapshotId>,
+        forbid_retry: bool,
         deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
         let purge = Self::do_purge(table, &snapshot_gen);
@@ -130,20 +129,15 @@ where F: SnapshotGenerator + Send + 'static
             input,
             new_segment_locs: vec![],
             start_time: Instant::now(),
-            prev_snapshot_id,
+            forbid_retry,
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
             deduplicated_label,
         })))
     }
 
-    fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
-        // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
-        // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
-        if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
-            return false;
-        }
-        FuseTable::is_error_recoverable(e, self.purge)
+    fn can_retry(&self, e: &ErrorCode) -> bool {
+        !self.forbid_retry && FuseTable::is_error_recoverable(e, self.purge)
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -330,28 +324,15 @@ where F: SnapshotGenerator + Send + 'static
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();
-                // check if snapshot has been changed
-                let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
-                    previous
-                        .as_ref()
-                        .map_or(true, |previous| previous.snapshot_id != prev_snapshot_id)
-                });
-                if snapshot_has_changed {
-                    // if snapshot has changed abort operation
-                    self.state = State::Abort(ErrorCode::StorageOther(
-                        "commit failed because the snapshot had changed during the commit process",
-                    ));
-                } else {
-                    self.snapshot_gen
-                        .fill_default_values(schema, &previous)
-                        .await?;
+                self.snapshot_gen
+                    .fill_default_values(schema, &previous)
+                    .await?;
 
-                    self.state = State::GenerateSnapshot {
-                        previous,
-                        cluster_key_meta: fuse_table.cluster_key_meta.clone(),
-                        table_info,
-                    };
-                }
+                self.state = State::GenerateSnapshot {
+                    previous,
+                    cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                    table_info,
+                };
             }
             State::TryCommit {
                 data,
@@ -451,7 +432,7 @@ where F: SnapshotGenerator + Send + 'static
                         info!("commit mutation success, targets {:?}", target_descriptions);
                         self.state = State::Finish;
                     }
-                    Err(e) if self.is_error_recoverable(&e) => {
+                    Err(e) if self.can_retry(&e) => {
                         let table_info = self.table.get_table_info();
                         match self.backoff.next_backoff() {
                             Some(d) => {

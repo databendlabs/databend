@@ -33,16 +33,12 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::field_default_value;
+use databend_common_sql::plans::create_append_plan_from_subquery;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
-use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::Planner;
-use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -50,10 +46,10 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
+use super::InterpreterFactory;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -163,12 +159,6 @@ impl ModifyTableColumnInterpreter {
 
         let catalog_name = table_info.catalog();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let prev_snapshot_id = fuse_table
-            .read_table_snapshot()
-            .await
-            .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -359,54 +349,23 @@ impl ModifyTableColumnInterpreter {
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _extras) = planner.plan_sql(&sql).await?;
 
-        // 3. build physical plan by plan
-        let (select_plan, select_column_bindings) = match plan {
-            Plan::Query {
-                s_expr,
-                metadata,
-                bind_context,
-                ..
-            } => {
-                let mut builder1 =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (
-                    builder1.build(&s_expr, bind_context.column_set()).await?,
-                    bind_context.columns.clone(),
-                )
-            }
-            _ => unreachable!(),
-        };
-
-        // 4. define select schema and insert schema of DistributedInsertSelect plan
         table_info.meta.schema = new_schema.clone().into();
-        let new_table = FuseTable::try_create(table_info)?;
+        let new_table = self.ctx.build_table_by_table_info(&table_info, None)?;
 
-        // 5. build DistributedInsertSelect plan
-        let insert_plan =
-            PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-                plan_id: select_plan.get_id(),
-                input: Box::new(select_plan),
-                table_info: new_table.get_table_info().clone(),
-                select_schema: Arc::new(Arc::new(schema).into()),
-                select_column_bindings,
-                insert_schema: Arc::new(Arc::new(new_schema).into()),
-                cast_needed: true,
-            }));
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan).await?;
-
-        // 6. commit new meta schema and snapshots
-        new_table.commit_insertion(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            None,
-            vec![],
+        let append_plan = create_append_plan_from_subquery(
+            &plan,
+            self.plan.catalog.clone(),
+            self.plan.database.clone(),
+            new_table,
+            Arc::new(DataSchema::from(&new_schema)),
             true,
-            prev_snapshot_id,
-            None,
-        )?;
-
-        Ok(build_res)
+            self.ctx.clone(),
+        )
+        .await?;
+        InterpreterFactory::get(self.ctx.clone(), &append_plan)
+            .await?
+            .execute2()
+            .await
     }
 
     // unset data mask policy to a column is a ee feature.

@@ -287,11 +287,12 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
             options,
         })),
-        Plan::CopyIntoTable {
+        Plan::Append {
             s_expr,
             metadata,
             stage_table_info,
             overwrite,
+            forbid_occ_retry,
         } => {
             let enable_distributed = opt_ctx.enable_distributed_optimization
                 && opt_ctx
@@ -320,11 +321,12 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     SExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(optimized_source))
                 }
             };
-            Ok(Plan::CopyIntoTable {
+            Ok(Plan::Append {
                 s_expr: Box::new(optimized),
                 metadata,
                 stage_table_info,
                 overwrite,
+                forbid_occ_retry,
             })
         }
         Plan::DataMutation { s_expr, .. } => optimize_mutation(opt_ctx, *s_expr).await,

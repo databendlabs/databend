@@ -398,7 +398,7 @@ impl QueryEntry {
             Plan::InsertMultiTable(_)
             | Plan::Replace(_)
             | Plan::DataMutation { .. }
-            | Plan::CopyIntoTable { .. }
+            | Plan::Append { .. }
             | Plan::CopyIntoLocation(_) => {
                 return true;
             }

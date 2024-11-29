@@ -72,7 +72,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                None,
+                false,
                 plan.deduplicated_label.clone(),
             )
         })

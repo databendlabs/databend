@@ -25,11 +25,11 @@ use databend_common_expression::TableSchemaRefExt;
 
 use super::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::executor::physical_plans::MutationKind;
 use crate::executor::physical_plans::Values;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::CopyIntoTablePlan;
+use crate::plans::Append;
+use crate::plans::AppendType;
 use crate::plans::Plan;
 use crate::plans::ValueScan;
 use crate::BindContext;
@@ -100,6 +100,17 @@ impl Binder {
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
+        let table_index = self.metadata.write().add_table(
+            catalog_name.clone(),
+            database_name.clone(),
+            table.clone(),
+            None,
+            false,
+            false,
+            false,
+            false,
+        );
+
         let schema = self.schema_project(&table.schema(), columns)?;
         let schema: DataSchemaRef = Arc::new(schema.into());
 
@@ -166,18 +177,16 @@ impl Binder {
             }
         };
 
-        let copy_into = CopyIntoTablePlan {
-            catalog_name,
-            database_name,
-            table_name,
+        let copy_into = Append {
+            table_index,
             required_values_schema: schema.clone(),
             values_consts: vec![],
             required_source_schema: schema,
-            mutation_kind: MutationKind::Insert,
+            append_type: AppendType::Insert,
             project_columns,
         };
 
-        Ok(Plan::CopyIntoTable {
+        Ok(Plan::Append {
             s_expr: Box::new(SExpr::create_unary(
                 Arc::new(copy_into.into()),
                 Arc::new(source),
@@ -185,6 +194,7 @@ impl Binder {
             metadata: self.metadata.clone(),
             stage_table_info: None,
             overwrite: *overwrite,
+            forbid_occ_retry: false,
         })
     }
 }

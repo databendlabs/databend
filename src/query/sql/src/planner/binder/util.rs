@@ -88,7 +88,7 @@ impl Binder {
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::CopyIntoTable(_)
+            | RelOperator::Append(_)
             | RelOperator::ValueScan(_)
             | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(

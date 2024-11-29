@@ -78,7 +78,6 @@ pub enum MutationKind {
     Replace,
     Recluster,
     Insert,
-    CopyInto,
     Compact,
     MergeInto,
 }
@@ -93,7 +92,6 @@ impl Display for MutationKind {
             MutationKind::Replace => write!(f, "Replace"),
             MutationKind::Compact => write!(f, "Compact"),
             MutationKind::MergeInto => write!(f, "MergeInto"),
-            MutationKind::CopyInto => write!(f, "CopyInto"),
         }
     }
 }

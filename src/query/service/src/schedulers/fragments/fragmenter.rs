@@ -18,13 +18,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::physical_plans::MutationSource;
+use databend_common_sql::executor::physical_plans::PhysicalAppend;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -178,9 +178,9 @@ impl PhysicalPlanReplacer for Fragmenter {
         })))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &PhysicalAppend) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+        Ok(PhysicalPlan::Append(Box::new(PhysicalAppend {
             plan_id: plan.plan_id,
             input: Box::new(input),
             ..plan.clone()

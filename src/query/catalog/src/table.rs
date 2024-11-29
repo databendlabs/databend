@@ -37,7 +37,6 @@ use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
-use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -236,7 +235,7 @@ pub trait Table: Sync + Send {
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        prev_snapshot_id: Option<SnapshotId>,
+        forbid_occ_retry: bool,
         _deduplicated_label: Option<String>,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (
@@ -245,7 +244,7 @@ pub trait Table: Sync + Send {
             update_stream_meta,
             pipeline,
             overwrite,
-            prev_snapshot_id,
+            forbid_occ_retry,
         );
 
         Ok(())

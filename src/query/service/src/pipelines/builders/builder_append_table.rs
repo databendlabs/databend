@@ -47,7 +47,7 @@ impl PipelineBuilder {
             copied_files,
             update_stream_meta,
             overwrite,
-            None,
+            false,
             deduplicated_label,
         )?;
 

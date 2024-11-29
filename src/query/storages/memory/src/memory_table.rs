@@ -49,7 +49,6 @@ use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
-use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -257,7 +256,7 @@ impl Table for MemoryTable {
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        _prev_snapshot_id: Option<SnapshotId>,
+        _forbid_occ_retry: bool,
         _deduplicated_label: Option<String>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;

@@ -18,7 +18,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::CopyIntoTablePlan;
+use super::Append;
 use super::MutationSource;
 use super::ValueScan;
 use crate::optimizer::PhysicalProperty;
@@ -123,7 +123,7 @@ pub enum RelOp {
     Recluster,
     CompactBlock,
     MutationSource,
-    CopyIntoTable,
+    Append,
     ValueScan,
 
     // Pattern
@@ -157,7 +157,7 @@ pub enum RelOperator {
     Recluster(Recluster),
     CompactBlock(OptimizeCompactBlock),
     MutationSource(MutationSource),
-    CopyIntoTable(CopyIntoTablePlan),
+    Append(Append),
     ValueScan(ValueScan),
 }
 
@@ -188,7 +188,7 @@ impl Operator for RelOperator {
             RelOperator::Recluster(rel_op) => rel_op.rel_op(),
             RelOperator::CompactBlock(rel_op) => rel_op.rel_op(),
             RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
-            RelOperator::CopyIntoTable(rel_op) => rel_op.rel_op(),
+            RelOperator::Append(rel_op) => rel_op.rel_op(),
             RelOperator::ValueScan(rel_op) => rel_op.rel_op(),
         }
     }
@@ -219,7 +219,7 @@ impl Operator for RelOperator {
             RelOperator::Recluster(rel_op) => rel_op.arity(),
             RelOperator::CompactBlock(rel_op) => rel_op.arity(),
             RelOperator::MutationSource(rel_op) => rel_op.arity(),
-            RelOperator::CopyIntoTable(rel_op) => rel_op.arity(),
+            RelOperator::Append(rel_op) => rel_op.arity(),
             RelOperator::ValueScan(rel_op) => rel_op.arity(),
         }
     }
@@ -250,7 +250,7 @@ impl Operator for RelOperator {
             RelOperator::Recluster(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::CopyIntoTable(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Append(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ValueScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
@@ -281,7 +281,7 @@ impl Operator for RelOperator {
             RelOperator::Recluster(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::CopyIntoTable(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Append(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ValueScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
@@ -312,7 +312,7 @@ impl Operator for RelOperator {
             RelOperator::Recluster(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::CopyIntoTable(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::Append(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::ValueScan(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
@@ -397,7 +397,7 @@ impl Operator for RelOperator {
             RelOperator::MutationSource(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
-            RelOperator::CopyIntoTable(rel_op) => {
+            RelOperator::Append(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::ValueScan(rel_op) => {
@@ -485,7 +485,7 @@ impl Operator for RelOperator {
             RelOperator::MutationSource(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
-            RelOperator::CopyIntoTable(rel_op) => {
+            RelOperator::Append(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::ValueScan(rel_op) => {
@@ -942,20 +942,20 @@ impl TryFrom<RelOperator> for MutationSource {
     }
 }
 
-impl From<CopyIntoTablePlan> for RelOperator {
-    fn from(v: CopyIntoTablePlan) -> Self {
-        Self::CopyIntoTable(v)
+impl From<Append> for RelOperator {
+    fn from(v: Append) -> Self {
+        Self::Append(v)
     }
 }
 
-impl TryFrom<RelOperator> for CopyIntoTablePlan {
+impl TryFrom<RelOperator> for Append {
     type Error = ErrorCode;
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::CopyIntoTable(value) = value {
+        if let RelOperator::Append(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to CopyIntoTable",
+                "Cannot downcast {:?} to Append",
                 value.rel_op()
             )))
         }

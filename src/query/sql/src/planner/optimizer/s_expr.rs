@@ -340,7 +340,7 @@ impl SExpr {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
-            | RelOperator::CopyIntoTable(_)
+            | RelOperator::Append(_)
             | RelOperator::ValueScan(_)
             | RelOperator::CompactBlock(_) => {}
         };
@@ -443,7 +443,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::RecursiveCteScan(_)
         | RelOperator::Mutation(_)
         | RelOperator::Recluster(_)
-        | RelOperator::CopyIntoTable(_)
+        | RelOperator::Append(_)
         | RelOperator::ValueScan(_)
         | RelOperator::CompactBlock(_) => false,
         RelOperator::Join(op) => {

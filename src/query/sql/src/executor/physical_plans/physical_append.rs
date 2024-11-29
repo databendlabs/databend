@@ -22,7 +22,7 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CopyIntoTable {
+pub struct PhysicalAppend {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
 
@@ -33,7 +33,7 @@ pub struct CopyIntoTable {
     pub project_columns: Option<Vec<ColumnBinding>>,
 }
 
-impl CopyIntoTable {
+impl PhysicalAppend {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![]))
     }

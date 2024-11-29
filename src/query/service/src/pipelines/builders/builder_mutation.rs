@@ -41,7 +41,6 @@ use databend_common_storages_fuse::FuseTable;
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
-
 impl PipelineBuilder {
     // build mutation serialize and mutation pipeline
     pub(crate) fn build_mutation(&mut self, merge_into: &Mutation) -> Result<()> {

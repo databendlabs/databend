@@ -180,9 +180,6 @@ impl PipelineBuilder {
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
-            PhysicalPlan::DistributedInsertSelect(insert_select) => {
-                self.build_distributed_insert_select(insert_select)
-            }
             PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Udf(udf) => self.build_udf(udf),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
@@ -198,7 +195,7 @@ impl PipelineBuilder {
             }
 
             // Copy into.
-            PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
+            PhysicalPlan::Append(copy) => self.build_copy_into_table(copy),
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
             // Replace.

@@ -847,7 +847,7 @@ impl TestFixture {
                 None,
                 vec![],
                 overwrite,
-                None,
+                false,
                 None,
             )?;
         } else {

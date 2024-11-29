@@ -200,7 +200,7 @@ impl SubqueryRewriter {
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
             | RelOperator::Recluster(_)
-            | RelOperator::CopyIntoTable(_)
+            | RelOperator::Append(_)
             | RelOperator::ValueScan(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }

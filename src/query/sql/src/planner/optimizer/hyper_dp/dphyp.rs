@@ -300,7 +300,7 @@ impl DPhpy {
             | RelOperator::MutationSource(_)
             | RelOperator::Recluster(_)
             | RelOperator::CompactBlock(_)
-            | RelOperator::CopyIntoTable(_)
+            | RelOperator::Append(_)
             | RelOperator::ValueScan(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

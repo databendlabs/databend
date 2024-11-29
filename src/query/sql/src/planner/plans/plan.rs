@@ -238,11 +238,12 @@ pub enum Plan {
         metadata: MetadataRef,
     },
 
-    CopyIntoTable {
+    Append {
         s_expr: Box<SExpr>,
         metadata: MetadataRef,
         stage_table_info: Option<Box<StageTableInfo>>,
         overwrite: bool,
+        forbid_occ_retry: bool,
     },
     CopyIntoLocation(CopyIntoLocationPlan),
 
@@ -418,7 +419,7 @@ impl Plan {
     pub fn kind(&self) -> QueryKind {
         match self {
             Plan::Query { .. } => QueryKind::Query,
-            Plan::CopyIntoTable { .. } => QueryKind::CopyIntoTable,
+            Plan::Append { .. } => QueryKind::CopyIntoTable,
             Plan::Explain { .. }
             | Plan::ExplainAnalyze { .. }
             | Plan::ExplainAst { .. }

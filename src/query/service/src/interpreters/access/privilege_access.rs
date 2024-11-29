@@ -1164,7 +1164,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
             }
-            Plan::CopyIntoTable { .. } => {
+            Plan::Append { .. } => {
                 // match &plan.source{
 
                 // }

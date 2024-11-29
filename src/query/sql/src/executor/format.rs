@@ -37,9 +37,7 @@ use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
-use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
@@ -55,6 +53,7 @@ use crate::executor::physical_plans::MutationManipulate;
 use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::MutationSplit;
+use crate::executor::physical_plans::PhysicalAppend;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -362,16 +361,13 @@ fn to_format_tree(
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan, metadata),
         PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::DistributedInsertSelect(plan) => {
-            distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
-        }
         PhysicalPlan::Recluster(_) => Ok(FormatTreeNode::new("Recluster".to_string())),
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
+        PhysicalPlan::Append(plan) => format_append(plan),
         PhysicalPlan::CopyIntoLocation(plan) => copy_into_location(plan),
         PhysicalPlan::ReplaceAsyncSourcer(_) => {
             Ok(FormatTreeNode::new("ReplaceAsyncSourcer".to_string()))
@@ -693,11 +689,8 @@ fn format_add_stream_column(
     to_format_tree(&plan.input, metadata, profs)
 }
 
-fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new(format!(
-        "CopyIntoTable: {}",
-        plan.table_info
-    )))
+fn format_append(plan: &PhysicalAppend) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new(format!("Append: {}", plan.table_info)))
 }
 
 fn copy_into_location(_: &CopyIntoLocation) -> Result<FormatTreeNode<String>> {
@@ -1685,19 +1678,6 @@ fn exchange_sink_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "ExchangeSink".to_string(),
-        children,
-    ))
-}
-
-fn distributed_insert_to_format_tree(
-    plan: &DistributedInsertSelect,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
-
-    Ok(FormatTreeNode::with_children(
-        "DistributedInsertSelect".to_string(),
         children,
     ))
 }

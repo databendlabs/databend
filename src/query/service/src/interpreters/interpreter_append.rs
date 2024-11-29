@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -25,6 +26,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::AppendType;
 use log::debug;
 use log::info;
 
@@ -37,22 +39,23 @@ use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::CopyIntoTablePlan;
+use crate::sql::plans::Append;
 use crate::sql::MetadataRef;
 use crate::stream::DataBlockStream;
 
-pub struct CopyIntoTableInterpreter {
+pub struct AppendInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     metadata: MetadataRef,
     stage_table_info: Option<Box<StageTableInfo>>,
     overwrite: bool,
+    col_type_modified: bool,
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CopyIntoTableInterpreter {
+impl Interpreter for AppendInterpreter {
     fn name(&self) -> &str {
-        "CopyIntoTableInterpreterV2"
+        "AppendInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -67,7 +70,21 @@ impl Interpreter for CopyIntoTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // build source and append pipeline
+        let copy_into_table: Append = self.s_expr.plan().clone().try_into()?;
+        let (target_table, catalog, database, table) = {
+            let metadata = self.metadata.read();
+            let t = metadata.table(copy_into_table.table_index);
+            (
+                t.table(),
+                t.catalog().to_string(),
+                t.database().to_string(),
+                t.name().to_string(),
+            )
+        };
+
+        target_table.check_mutable()?;
+
+        // 1. build source and append pipeline
         let mut build_res = {
             let mut physical_plan_builder =
                 PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
@@ -77,16 +94,7 @@ impl Interpreter for CopyIntoTableInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?
         };
 
-        // build commit pipeline
-        let copy_into_table: CopyIntoTablePlan = self.s_expr.plan().clone().try_into()?;
-        let target_table = self
-            .ctx
-            .get_table(
-                &copy_into_table.catalog_name,
-                &copy_into_table.database_name,
-                &copy_into_table.table_name,
-            )
-            .await?;
+        // 2. build commit pipeline
         let copied_files_meta_req = match &self.stage_table_info {
             Some(stage_table_info) => PipelineBuilder::build_upsert_copied_files_to_meta_req(
                 self.ctx.clone(),
@@ -107,11 +115,11 @@ impl Interpreter for CopyIntoTableInterpreter {
             copied_files_meta_req,
             update_stream_meta,
             self.overwrite,
-            None,
+            self.col_type_modified,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 
-        // Purge files on pipeline finished.
+        // 3. Purge files on pipeline finished.
         if let Some(stage_table_info) = &self.stage_table_info {
             let files_to_copy = stage_table_info
                 .files_to_copy
@@ -137,14 +145,13 @@ impl Interpreter for CopyIntoTableInterpreter {
             )?;
         }
 
-        // Execute hook.
+        // 4. Execute hook.
         {
-            let copy_into_table: CopyIntoTablePlan = self.s_expr.plan().clone().try_into()?;
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
-                copy_into_table.catalog_name.to_string(),
-                copy_into_table.database_name.to_string(),
-                copy_into_table.table_name.to_string(),
+                catalog,
+                database,
+                table,
                 MutationKind::Insert,
                 LockTableOption::LockNoRetry,
             );
@@ -155,33 +162,33 @@ impl Interpreter for CopyIntoTableInterpreter {
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let copy_into_table: CopyIntoTablePlan = self.s_expr.plan().clone().try_into()?;
-        match &copy_into_table.mutation_kind {
-            MutationKind::CopyInto => {
+        let copy_into_table: Append = self.s_expr.plan().clone().try_into()?;
+        match &copy_into_table.append_type {
+            AppendType::CopyInto => {
                 let blocks = self.get_copy_into_table_result()?;
                 Ok(Box::pin(DataBlockStream::create(None, blocks)))
             }
-            MutationKind::Insert => Ok(Box::pin(DataBlockStream::create(None, vec![]))),
-            _ => unreachable!(),
+            AppendType::Insert => Ok(Box::pin(DataBlockStream::create(None, vec![]))),
         }
     }
 }
 
-impl CopyIntoTableInterpreter {
-    /// Create a CopyInterpreter with context and [`CopyIntoTablePlan`].
+impl AppendInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         metadata: MetadataRef,
         stage_table_info: Option<Box<StageTableInfo>>,
         overwrite: bool,
+        col_type_modified: bool,
     ) -> Result<Self> {
-        Ok(CopyIntoTableInterpreter {
+        Ok(AppendInterpreter {
             ctx,
             s_expr,
             metadata,
             stage_table_info,
             overwrite,
+            col_type_modified,
         })
     }
 

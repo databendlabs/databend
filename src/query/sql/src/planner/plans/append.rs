@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -37,39 +38,106 @@ use databend_common_storage::init_stage_operator;
 use log::info;
 
 use super::Operator;
+use super::Plan;
 use super::RelOp;
-use crate::executor::physical_plans::CopyIntoTable;
-use crate::executor::physical_plans::MutationKind;
+use crate::executor::physical_plans::PhysicalAppend;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::optimize;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::SExpr;
 use crate::ColumnBinding;
+use crate::IndexType;
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct CopyIntoTablePlan {
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
+pub struct Append {
+    // Use table index instead of catalog_name, database_name, table_name here, means once a logic plan is built,
+    // the target table is determined, and we won't call get_table() again.
+    pub table_index: IndexType,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
     pub project_columns: Option<Vec<ColumnBinding>>,
-    pub mutation_kind: MutationKind,
+    pub append_type: AppendType,
 }
 
-impl Hash for CopyIntoTablePlan {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.catalog_name.hash(state);
-        self.database_name.hash(state);
-        self.table_name.hash(state);
+#[derive(Clone, PartialEq, Eq)]
+pub enum AppendType {
+    Insert,
+    CopyInto,
+}
+
+pub async fn create_append_plan_from_subquery(
+    subquery: &Plan,
+    catalog_name: String,
+    database_name: String,
+    table: Arc<dyn Table>,
+    target_schema: DataSchemaRef,
+    forbid_occ_retry: bool,
+    ctx: Arc<dyn TableContext>,
+) -> Result<Plan> {
+    let (project_columns, source, metadata) = match subquery {
+        Plan::Query {
+            bind_context,
+            s_expr,
+            metadata,
+            ..
+        } => (
+            Some(bind_context.columns.clone()),
+            *s_expr.clone(),
+            metadata.clone(),
+        ),
+        _ => unreachable!(),
+    };
+
+    let table_index = metadata.write().add_table(
+        catalog_name,
+        database_name,
+        table,
+        None,
+        false,
+        false,
+        false,
+        false,
+    );
+
+    let insert_plan = Append {
+        table_index,
+        required_values_schema: target_schema.clone(),
+        values_consts: vec![],
+        required_source_schema: target_schema,
+        project_columns,
+        append_type: AppendType::Insert,
+    };
+
+    let s_expr = SExpr::create_unary(Arc::new(insert_plan.into()), Arc::new(source));
+    let plan = Plan::Append {
+        s_expr: Box::new(s_expr),
+        metadata: metadata.clone(),
+        stage_table_info: None,
+        overwrite: false,
+        forbid_occ_retry,
+    };
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata)
+        .with_enable_distributed_optimization(!ctx.get_cluster().is_empty());
+
+    optimize(opt_ctx, plan).await
+}
+
+impl Hash for Append {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
+        todo!()
     }
 }
 
-impl CopyIntoTablePlan {
+impl Append {
     pub async fn collect_files(
         &self,
         ctx: &dyn TableContext,
         stage_table_info: &mut StageTableInfo,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
     ) -> Result<()> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
@@ -121,8 +189,8 @@ impl CopyIntoTablePlan {
                 return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
-                "force mode, ignore file filtering. ({}.{})",
-                &self.database_name, &self.table_name
+                "force mode, ignore file filtering {}.{}.{}",
+                catalog_name, database_name, table_name
             );
             (all_source_file_infos, vec![])
         } else {
@@ -135,9 +203,9 @@ impl CopyIntoTablePlan {
                 duplicated_files,
             } = ctx
                 .filter_out_copied_files(
-                    &self.catalog_name,
-                    &self.database_name,
-                    &self.table_name,
+                    catalog_name,
+                    database_name,
+                    table_name,
                     &all_source_file_infos,
                     max_files,
                 )
@@ -176,7 +244,7 @@ impl CopyIntoTablePlan {
     }
 }
 
-impl Debug for CopyIntoTablePlan {
+impl Debug for Append {
     fn fmt(&self, _f: &mut Formatter) -> std::fmt::Result {
         // let CopyIntoTablePlan {
         //     catalog_info,
@@ -201,7 +269,7 @@ impl Debug for CopyIntoTablePlan {
     }
 }
 
-impl CopyIntoTablePlan {
+impl Append {
     fn copy_into_table_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             DataField::new("File", DataType::String),
@@ -219,17 +287,16 @@ impl CopyIntoTablePlan {
     }
 
     pub fn schema(&self) -> DataSchemaRef {
-        match self.mutation_kind {
-            MutationKind::CopyInto => Self::copy_into_table_schema(),
-            MutationKind::Insert => Arc::new(DataSchema::empty()),
-            _ => unreachable!(),
+        match self.append_type {
+            AppendType::CopyInto => Self::copy_into_table_schema(),
+            AppendType::Insert => Arc::new(DataSchema::empty()),
         }
     }
 }
 
-impl Operator for CopyIntoTablePlan {
+impl Operator for Append {
     fn rel_op(&self) -> RelOp {
-        RelOp::CopyIntoTable
+        RelOp::Append
     }
 }
 
@@ -237,22 +304,19 @@ impl PhysicalPlanBuilder {
     pub async fn build_copy_into_table(
         &mut self,
         s_expr: &SExpr,
-        plan: &crate::plans::CopyIntoTablePlan,
+        plan: &crate::plans::Append,
     ) -> Result<PhysicalPlan> {
-        let to_table = self
-            .ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
-            .await?;
+        let target_table = self.metadata.read().table(plan.table_index).table();
 
         let source = self.build(s_expr.child(0)?, Default::default()).await?;
 
-        Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+        Ok(PhysicalPlan::Append(Box::new(PhysicalAppend {
             plan_id: 0,
             input: Box::new(source),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
-            table_info: to_table.get_table_info().clone(),
+            table_info: target_table.get_table_info().clone(),
             project_columns: None,
         })))
     }

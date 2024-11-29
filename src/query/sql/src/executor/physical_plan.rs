@@ -45,9 +45,7 @@ use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
-use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
@@ -59,6 +57,7 @@ use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::Mutation;
+use crate::executor::physical_plans::PhysicalAppend;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
@@ -102,15 +101,12 @@ pub enum PhysicalPlan {
     Udf(Udf),
     RecursiveCteScan(RecursiveCteScan),
 
-    /// For insert into ... select ... in cluster
-    DistributedInsertSelect(Box<DistributedInsertSelect>),
-
     /// Synthesized by fragmented
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
 
     /// Copy into table
-    CopyIntoTable(Box<CopyIntoTable>),
+    Append(Box<PhysicalAppend>),
     ValueScan(Box<PhysicalValueScan>),
     CopyIntoLocation(Box<CopyIntoLocation>),
 
@@ -274,11 +270,6 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::DistributedInsertSelect(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
             PhysicalPlan::ExchangeSource(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -287,7 +278,7 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
-            PhysicalPlan::CopyIntoTable(plan) => {
+            PhysicalPlan::Append(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -430,7 +421,6 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(v) => v.plan_id,
             PhysicalPlan::Exchange(v) => v.plan_id,
             PhysicalPlan::UnionAll(v) => v.plan_id,
-            PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
             PhysicalPlan::CteScan(v) => v.plan_id,
@@ -447,7 +437,7 @@ impl PhysicalPlan {
             PhysicalPlan::MutationOrganize(v) => v.plan_id,
             PhysicalPlan::AddStreamColumn(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
-            PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::Append(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
             PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
             PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
@@ -489,7 +479,7 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
-            PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
+            PhysicalPlan::Append(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
@@ -510,7 +500,6 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
-            | PhysicalPlan::DistributedInsertSelect(_)
             | PhysicalPlan::Recluster(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
@@ -548,14 +537,13 @@ impl PhysicalPlan {
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
             PhysicalPlan::Exchange(_) => "Exchange".to_string(),
             PhysicalPlan::UnionAll(_) => "UnionAll".to_string(),
-            PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::CompactSource(_) => "CompactBlock".to_string(),
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
-            PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
+            PhysicalPlan::Append(_) => "Append".to_string(),
             PhysicalPlan::CopyIntoLocation(_) => "CopyIntoLocation".to_string(),
             PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
@@ -619,9 +607,6 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
-            PhysicalPlan::DistributedInsertSelect(plan) => {
-                Box::new(std::iter::once(plan.input.as_ref()))
-            }
             PhysicalPlan::CommitSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RangeJoin(plan) => Box::new(
@@ -657,7 +642,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::CopyIntoTable(v) => Box::new(std::iter::once(v.input.as_ref())),
+            PhysicalPlan::Append(v) => Box::new(std::iter::once(v.input.as_ref())),
         }
     }
 
@@ -673,7 +658,6 @@ impl PhysicalPlan {
             PhysicalPlan::Limit(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
@@ -689,7 +673,7 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
-            | PhysicalPlan::CopyIntoTable(_)
+            | PhysicalPlan::Append(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)

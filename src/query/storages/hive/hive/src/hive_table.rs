@@ -53,7 +53,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_pruner::partition_prunner::PartitionPruner;
-use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use log::info;
@@ -447,7 +446,7 @@ impl Table for HiveTable {
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
-        _prev_snapshot_id: Option<SnapshotId>,
+        _forbid_occ_retry: bool,
         _deduplicated_label: Option<String>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(

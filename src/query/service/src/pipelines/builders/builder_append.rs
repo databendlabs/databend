@@ -29,7 +29,7 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
+use databend_common_sql::executor::physical_plans::PhysicalAppend;
 use databend_common_storage::StageFileInfo;
 use log::debug;
 use log::info;
@@ -41,7 +41,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
-    pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
+    pub(crate) fn build_copy_into_table(&mut self, copy: &PhysicalAppend) -> Result<()> {
         let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
         self.ctx
             .set_read_block_thresholds(to_table.get_block_thresholds());
@@ -111,7 +111,7 @@ impl PipelineBuilder {
     fn build_append_data_pipeline(
         ctx: Arc<QueryContext>,
         main_pipeline: &mut Pipeline,
-        plan: &CopyIntoTable,
+        plan: &PhysicalAppend,
         source_schema: Arc<DataSchema>,
         to_table: Arc<dyn Table>,
     ) -> Result<()> {
