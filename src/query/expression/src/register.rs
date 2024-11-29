@@ -18,7 +18,6 @@
 #![allow(unused_variables)]
 #![allow(clippy::redundant_closure)]
 use crate::property::Domain;
-use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
