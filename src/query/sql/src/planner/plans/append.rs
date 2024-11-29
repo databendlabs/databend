@@ -75,6 +75,7 @@ pub async fn create_append_plan_from_subquery(
     target_schema: DataSchemaRef,
     forbid_occ_retry: bool,
     ctx: Arc<dyn TableContext>,
+    overwrite: bool,
 ) -> Result<Plan> {
     let (project_columns, source, metadata) = match subquery {
         Plan::Query {
@@ -115,7 +116,7 @@ pub async fn create_append_plan_from_subquery(
         s_expr: Box::new(s_expr),
         metadata: metadata.clone(),
         stage_table_info: None,
-        overwrite: false,
+        overwrite,
         forbid_occ_retry,
     };
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata)

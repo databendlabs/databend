@@ -233,6 +233,7 @@ impl CreateTableInterpreter {
             Arc::new(self.plan.schema.clone().into()),
             false,
             self.ctx.clone(),
+            false,
         )
         .await?;
         let mut pipeline = InterpreterFactory::get(self.ctx.clone(), &append_plan)

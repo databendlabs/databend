@@ -360,6 +360,7 @@ impl ModifyTableColumnInterpreter {
             Arc::new(DataSchema::from(&new_schema)),
             true,
             self.ctx.clone(),
+            true,
         )
         .await?;
         InterpreterFactory::get(self.ctx.clone(), &append_plan)
