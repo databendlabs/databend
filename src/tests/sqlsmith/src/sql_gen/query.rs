@@ -207,7 +207,9 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             nulls_first: Some(self.flip_coin()),
                         }))
                     }
-                    GroupBy::Normal(group_by) => {
+                    GroupBy::Rollup(group_by)
+                    | GroupBy::Cube(group_by)
+                    | GroupBy::Normal(group_by) => {
                         orders.extend(group_by.iter().map(|expr| OrderByExpr {
                             expr: expr.clone(),
                             asc: Some(self.flip_coin()),
@@ -234,6 +236,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             orders.push(order_by_expr);
                         }
                     }
+                    _ => unimplemented!(),
                 }
             } else {
                 for _ in 0..order_nums {
