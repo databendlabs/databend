@@ -448,7 +448,11 @@ impl Binder {
                         GroupBy::GroupingSets(sets) => {
                             combined_sets = Self::cartesian_product(combined_sets, sets);
                         }
-                        _other => unreachable!(),
+                        other => {
+                            return Err(ErrorCode::SyntaxException(
+                                "COMBINED GROUP BY does not support {:?}",
+                            ));
+                        }
                     }
                 }
                 Ok(GroupBy::GroupingSets(combined_sets))
@@ -597,7 +601,7 @@ impl Binder {
         // Because we are not using union all to implement grouping sets
         // We will remove the duplicated grouping sets here.
         // For example: SELECT  brand, segment,  SUM (quantity) FROM     sales GROUP BY  GROUPING sets(brand, segment),  GROUPING sets(brand, segment);
-        // brand X segment will not appear twice in the result, the results are not standard but accpetable.
+        // brand X segment will not appear twice in the result, the results are not standard but acceptable.
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         let mut dup_group_items = Vec::with_capacity(agg_info.group_items.len());
         for (i, item) in agg_info.group_items.iter().enumerate() {

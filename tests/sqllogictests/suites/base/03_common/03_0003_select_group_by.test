@@ -360,7 +360,7 @@ NULL XYZ Premium 100
 
 
 
-## results are deduplicated in grouping sets, the results are not standard but accpetable.
+## results are deduplicated in grouping sets, the results are not standard but acceptable.
 query ITTI
 SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    brand, rollup(quantity), GROUPING sets(brand, segment, quantity) order by 1,2,3;
 ----
@@ -385,3 +385,6 @@ select * from (SELECT  quantity,     brand,     segment,     SUM (quantity) FROM
 ----
 300 XYZ Basic 300
 200 ABC Basic 200
+
+statement error
+SELECT  quantity,     brand,     segment,     SUM (quantity) FROM     sales GROUP BY    brand, rollup(quantity), all;
