@@ -403,7 +403,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     alias: None,
                 }));
             }
-            None => {
+            _ => {
                 let select_num = self.rng.gen_range(1..=7);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();

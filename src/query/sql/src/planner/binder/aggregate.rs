@@ -449,9 +449,9 @@ impl Binder {
                             combined_sets = Self::cartesian_product(combined_sets, sets);
                         }
                         other => {
-                            return Err(ErrorCode::SyntaxException(
-                                "COMBINED GROUP BY does not support {:?}",
-                            ));
+                            return Err(ErrorCode::SyntaxException(format!(
+                                "COMBINED GROUP BY does not support {other:?}"
+                            )));
                         }
                     }
                 }
