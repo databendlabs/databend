@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod fixed_rate_sampler;
 mod fixed_size_sampler;
 
+pub use fixed_rate_sampler::FixedRateSimpler;
 pub use fixed_size_sampler::FixedSizeSimpler;

@@ -100,51 +100,11 @@ impl<R: Rng> FixedSizeSimpler<R> {
     }
 
     pub fn compact_indices(&mut self) {
-        let used_set: HashSet<_> = self.indices.iter().map(|&(b, _, _)| b).collect();
-        if used_set.len() == self.blocks.len() {
-            return;
-        }
-
-        let mut used: Vec<_> = used_set.iter().cloned().collect();
-        used.sort();
-
-        self.indices = self
-            .indices
-            .drain(..)
-            .map(|(b, r, c)| (used.binary_search(&b).unwrap() as u32, r, c))
-            .collect();
-
-        self.blocks = self
-            .blocks
-            .drain(..)
-            .enumerate()
-            .filter_map(|(i, block)| {
-                if used_set.contains(&(i as u32)) {
-                    Some(block)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        compact_indices(&mut self.indices, &mut self.blocks)
     }
 
     pub fn compact_blocks(&mut self) {
-        self.blocks = self
-            .indices
-            .chunks_mut(self.block_size)
-            .enumerate()
-            .map(|(i, indices)| {
-                let rows = indices.len();
-                let block = DataBlock::take_blocks(&self.blocks, indices, rows);
-
-                for (j, (b, r, _)) in indices.iter_mut().enumerate() {
-                    *b = i as u32;
-                    *r = j as u32;
-                }
-
-                block
-            })
-            .collect::<Vec<_>>();
+        compact_blocks(&mut self.indices, &mut self.blocks, self.block_size);
     }
 
     pub fn memory_size(self) -> usize {
@@ -158,6 +118,55 @@ impl<R: Rng> FixedSizeSimpler<R> {
     pub fn k(&self) -> usize {
         self.k
     }
+}
+
+fn compact_indices(indices: &mut Vec<BlockRowIndex>, blocks: &mut Vec<DataBlock>) {
+    let used_set: HashSet<_> = indices.iter().map(|&(b, _, _)| b).collect();
+    if used_set.len() == blocks.len() {
+        return;
+    }
+
+    let mut used: Vec<_> = used_set.iter().cloned().collect();
+    used.sort();
+
+    *indices = indices
+        .drain(..)
+        .map(|(b, r, c)| (used.binary_search(&b).unwrap() as u32, r, c))
+        .collect();
+
+    *blocks = blocks
+        .drain(..)
+        .enumerate()
+        .filter_map(|(i, block)| {
+            if used_set.contains(&(i as u32)) {
+                Some(block)
+            } else {
+                None
+            }
+        })
+        .collect();
+}
+
+pub fn compact_blocks(
+    indices: &mut Vec<BlockRowIndex>,
+    blocks: &mut Vec<DataBlock>,
+    block_size: usize,
+) {
+    *blocks = indices
+        .chunks_mut(block_size)
+        .enumerate()
+        .map(|(i, indices)| {
+            let rows = indices.len();
+            let block = DataBlock::take_blocks(blocks, indices, rows);
+
+            for (j, (b, r, _)) in indices.iter_mut().enumerate() {
+                *b = i as u32;
+                *r = j as u32;
+            }
+
+            block
+        })
+        .collect::<Vec<_>>();
 }
 
 mod reservoir_sampling {
