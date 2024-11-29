@@ -67,8 +67,16 @@ impl Binder {
                 files: options.files.clone(),
             };
             let table_ctx = self.ctx.clone();
-            self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
-                .await
+            self.bind_stage_table(
+                table_ctx,
+                bind_context,
+                stage_info,
+                files_info,
+                alias,
+                None,
+                options.case_sensitive.unwrap_or(false),
+            )
+            .await
         })
     }
 }
