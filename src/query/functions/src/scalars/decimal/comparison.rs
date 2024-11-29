@@ -27,7 +27,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use ethnum::i256;
 
 use super::convert_to_decimal;
@@ -254,7 +253,7 @@ macro_rules! op_decimal {
                         .cmp(&(b * i256::from(10).pow(m2)))
                         .$op()
                 };
-                compare_decimal(&left.as_ref(), $b, f, $ctx)
+                compare_decimal(&left, $b, f, $ctx)
             }
             (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(s2)) => {
                 let dest_type = DecimalDataType::Decimal256(DecimalSize {
@@ -273,15 +272,15 @@ macro_rules! op_decimal {
                         .cmp(&(b * i256::from(10).pow(m2)))
                         .$op()
                 };
-                compare_decimal($a, &right.as_ref(), f, $ctx)
+                compare_decimal($a, &right, f, $ctx)
             }
         }
     };
 }
 
 fn compare_decimal<T, F>(
-    a: &ValueRef<AnyType>,
-    b: &ValueRef<AnyType>,
+    a: &Value<AnyType>,
+    b: &Value<AnyType>,
     f: F,
     ctx: &mut EvalContext,
 ) -> Value<AnyType>

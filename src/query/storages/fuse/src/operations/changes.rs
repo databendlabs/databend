@@ -39,6 +39,7 @@ use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
@@ -75,7 +76,7 @@ impl FuseTable {
         } else {
             self.clone()
         };
-        let location = source.snapshot_loc().await?;
+        let location = source.snapshot_loc();
         let seq = match navigation {
             Some(NavigationPoint::StreamInfo(info)) => info
                 .options()
@@ -222,9 +223,8 @@ impl FuseTable {
                         let latest_segments: HashSet<&Location> =
                             HashSet::from_iter(&latest_snapshot.segments);
 
-                        let (base_snapshot, _) =
-                            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator())
-                                .await?;
+                        let base_snapshot =
+                            self.changes_read_offset_snapshot(base_location).await?;
                         let base_segments = HashSet::from_iter(&base_snapshot.segments);
 
                         // If the base segments are a subset of the latest segments,
@@ -338,7 +338,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         base: &Option<String>,
     ) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
-        let latest = self.snapshot_loc().await?;
+        let latest = self.snapshot_loc();
 
         let latest_segments = if let Some(snapshot) = latest {
             let (sn, _) =
@@ -349,8 +349,7 @@ impl FuseTable {
         };
 
         let base_segments = if let Some(snapshot) = base {
-            let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator()).await?;
+            let sn = self.changes_read_offset_snapshot(snapshot).await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
@@ -435,8 +434,7 @@ impl FuseTable {
             return self.table_statistics(ctx, true, None).await;
         };
 
-        let (base_snapshot, _) =
-            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator()).await?;
+        let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;
         let base_summary = base_snapshot.summary.clone();
         let latest_summary = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot.summary.clone()
@@ -497,6 +495,19 @@ impl FuseTable {
                     Ok(min_stats())
                 }
             }
+        }
+    }
+
+    pub async fn changes_read_offset_snapshot(
+        &self,
+        base_location: &String,
+    ) -> Result<Arc<TableSnapshot>> {
+        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator()).await {
+            Ok((base_snapshot, _)) => Ok(base_snapshot),
+            Err(_) => Err(ErrorCode::IllegalStream(format!(
+                "Failed to read the offset snapshot: {:?}, maybe purged",
+                base_location
+            ))),
         }
     }
 }

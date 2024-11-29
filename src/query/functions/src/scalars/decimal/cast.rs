@@ -37,7 +37,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use ethnum::i256;
 use num_traits::AsPrimitive;
 
@@ -152,12 +151,12 @@ pub(crate) fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegist
 
         let eval = if is_f32 {
             let arg_type = arg_type.clone();
-            Box::new(move |args: &[ValueRef<AnyType>], tx: &mut EvalContext| {
+            Box::new(move |args: &[Value<AnyType>], tx: &mut EvalContext| {
                 decimal_to_float::<F32>(&args[0], arg_type.clone(), tx)
             }) as _
         } else {
             let arg_type = arg_type.clone();
-            Box::new(move |args: &[ValueRef<AnyType>], tx: &mut EvalContext| {
+            Box::new(move |args: &[Value<AnyType>], tx: &mut EvalContext| {
                 decimal_to_float::<F64>(&args[0], arg_type.clone(), tx)
             }) as _
         };
@@ -300,7 +299,7 @@ pub(crate) fn register_decimal_to_string(registry: &mut FunctionRegistry) {
 }
 
 fn decimal_to_string(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     from_type: DataType,
     _ctx: &mut EvalContext,
 ) -> Value<AnyType> {
@@ -309,10 +308,10 @@ fn decimal_to_string(
 
     with_decimal_mapped_type!(|DECIMAL_TYPE| match from_type {
         DecimalDataType::DECIMAL_TYPE(from_size) => {
-            let arg: ValueRef<DecimalType<DECIMAL_TYPE>> = arg.try_downcast().unwrap();
+            let arg: Value<DecimalType<DECIMAL_TYPE>> = arg.try_downcast().unwrap();
 
             match arg {
-                ValueRef::Column(col) => {
+                Value::Column(col) => {
                     let mut builder = StringColumnBuilder::with_capacity(col.len());
                     for x in DecimalType::<DECIMAL_TYPE>::iter_column(&col) {
                         builder.put_str(&DECIMAL_TYPE::display(x, from_size.scale));
@@ -320,7 +319,7 @@ fn decimal_to_string(
                     }
                     Value::Column(Column::String(builder.build()))
                 }
-                ValueRef::Scalar(x) => Value::Scalar(Scalar::String(
+                Value::Scalar(x) => Value::Scalar(Scalar::String(
                     DECIMAL_TYPE::display(x, from_size.scale).into(),
                 )),
             }
@@ -329,7 +328,7 @@ fn decimal_to_string(
 }
 
 pub fn convert_to_decimal(
-    arg: &ValueRef<AnyType>,
+    arg: &Value<AnyType>,
     ctx: &mut EvalContext,
     from_type: &DataType,
     dest_type: DecimalDataType,
@@ -439,7 +438,7 @@ pub fn convert_to_decimal_domain(
         suppress_error: false,
     };
     let dest_size = dest_type.size();
-    let res = convert_to_decimal(&value.as_ref(), &mut ctx, &from_type, dest_type);
+    let res = convert_to_decimal(&value, &mut ctx, &from_type, dest_type);
 
     if ctx.errors.is_some() {
         return None;
@@ -462,7 +461,7 @@ pub fn convert_to_decimal_domain(
 }
 
 fn string_to_decimal<T>(
-    from: ValueRef<StringType>,
+    from: Value<StringType>,
     ctx: &mut EvalContext,
     size: DecimalSize,
 ) -> Value<DecimalType<T>>
@@ -487,7 +486,7 @@ where
 }
 
 fn integer_to_decimal<T, S>(
-    from: ValueRef<S>,
+    from: Value<S>,
     ctx: &mut EvalContext,
     size: DecimalSize,
 ) -> Value<DecimalType<T>>
@@ -525,7 +524,7 @@ where
 }
 
 fn float_to_decimal<T: Decimal, S: ArgType>(
-    from: ValueRef<S>,
+    from: Value<S>,
     ctx: &mut EvalContext,
     size: DecimalSize,
 ) -> Value<DecimalType<T>>
@@ -576,7 +575,7 @@ fn get_round_val<T: Decimal>(x: T, scale: u32, ctx: &mut EvalContext) -> Option<
 }
 
 fn decimal_256_to_128(
-    buffer: &ValueRef<AnyType>,
+    buffer: &Value<AnyType>,
     from_size: DecimalSize,
     dest_size: DecimalSize,
     ctx: &mut EvalContext,
@@ -637,7 +636,7 @@ macro_rules! m_decimal_to_decimal {
         type F = $from_type_name;
         type T = $dest_type_name;
 
-        let buffer: ValueRef<DecimalType<F>> = $value.try_downcast().unwrap();
+        let buffer: Value<DecimalType<F>> = $value.try_downcast().unwrap();
         // faster path
         let result: Value<DecimalType<T>> = if $from_size.scale == $dest_size.scale
             && $from_size.precision <= $dest_size.precision
@@ -712,7 +711,7 @@ macro_rules! m_decimal_to_decimal {
 }
 
 fn decimal_to_decimal(
-    arg: &ValueRef<AnyType>,
+    arg: &Value<AnyType>,
     ctx: &mut EvalContext,
     from_type: DecimalDataType,
     dest_type: DecimalDataType,
@@ -769,7 +768,7 @@ impl DecimalConvert<i256, F64> for F64 {
 }
 
 fn decimal_to_float<T>(
-    arg: &ValueRef<AnyType>,
+    arg: &Value<AnyType>,
     from_type: DataType,
     ctx: &mut EvalContext,
 ) -> Value<AnyType>
@@ -794,7 +793,7 @@ where
 }
 
 fn decimal_to_int<T: Number>(
-    arg: &ValueRef<AnyType>,
+    arg: &Value<AnyType>,
     from_type: DataType,
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {

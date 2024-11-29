@@ -509,7 +509,6 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.evaluator.data_block().num_rows(),
@@ -519,7 +518,7 @@ impl<'a> Selector<'a> {
                     suppress_error: eval_options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                let result = (eval)(&args, &mut ctx);
                 ctx.render_error(
                     *span,
                     id.params(),

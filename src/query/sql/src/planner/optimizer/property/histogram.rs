@@ -77,13 +77,13 @@ pub fn histogram_from_ndv(
     let mut buckets: Vec<HistogramBucket> = Vec::with_capacity(num_buckets);
     let sample_set = UniformSampleSet { min, max };
 
-    for idx in 0..num_buckets + 1 {
-        let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
+    for idx in 0..num_buckets {
         let lower_bound = if idx == 0 {
             sample_set.min.clone()
         } else {
             buckets[idx - 1].upper_bound().clone()
         };
+        let upper_bound = sample_set.get_upper_bound(num_buckets, idx + 1)?;
         let bucket = HistogramBucket::new(
             lower_bound,
             upper_bound,

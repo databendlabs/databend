@@ -293,7 +293,7 @@ impl EvalDaysImpl {
     }
 
     pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> i64 {
-        let mut value = date.wrapping_add(delta.as_() * MICROSECS_PER_DAY);
+        let mut value = date.wrapping_add(delta.as_().wrapping_mul(MICROSECS_PER_DAY));
         clamp_timestamp(&mut value);
         value
     }
@@ -311,12 +311,13 @@ pub struct EvalTimesImpl;
 impl EvalTimesImpl {
     pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> i32 {
         clamp_date(
-            (date as i64 * MICROSECS_PER_DAY).wrapping_add(delta.as_() * factor * MICROS_PER_SEC),
+            (date as i64 * MICROSECS_PER_DAY)
+                .wrapping_add(delta.as_().wrapping_mul(factor * MICROS_PER_SEC)),
         )
     }
 
     pub fn eval_timestamp(us: i64, delta: impl AsPrimitive<i64>, factor: i64) -> i64 {
-        let mut ts = us.wrapping_add(delta.as_() * factor * MICROS_PER_SEC);
+        let mut ts = us.wrapping_add(delta.as_().wrapping_mul(factor * MICROS_PER_SEC));
         clamp_timestamp(&mut ts);
         ts
     }

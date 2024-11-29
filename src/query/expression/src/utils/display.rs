@@ -61,7 +61,6 @@ use crate::types::ValueType;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
-use crate::values::ValueRef;
 use crate::with_integer_mapped_type;
 use crate::Column;
 use crate::ColumnIndex;
@@ -100,7 +99,7 @@ impl Display for DataBlock {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|entry| entry.value.as_ref().index(index).unwrap().to_string())
+                .map(|entry| entry.value.index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);
@@ -886,15 +885,6 @@ impl<T: ValueType> Display for Value<T> {
         match self {
             Value::Scalar(scalar) => write!(f, "{:?}", scalar),
             Value::Column(col) => write!(f, "{:?}", col),
-        }
-    }
-}
-
-impl<'a, T: ValueType> Display for ValueRef<'a, T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ValueRef::Scalar(scalar) => write!(f, "{:?}", scalar),
-            ValueRef::Column(col) => write!(f, "{:?}", col),
         }
     }
 }

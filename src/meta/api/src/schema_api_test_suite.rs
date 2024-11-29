@@ -6416,7 +6416,26 @@ impl SchemaApiTestSuite {
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+                virtual_columns: vec![
+                    (
+                        "variant:k1".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant[1]".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant:k1:k2".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ),
+                    (
+                        "variant:k1:k3".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                    ),
+                ],
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6425,7 +6444,26 @@ impl SchemaApiTestSuite {
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+                virtual_columns: vec![
+                    (
+                        "variant:k1".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant[1]".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant:k1:k2".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ),
+                    (
+                        "variant:k1:k3".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                    ),
+                ],
             };
 
             let res = mt.create_virtual_column(req).await;
@@ -6439,8 +6477,24 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                "variant:k1".to_string(),
-                "variant[1]".to_string(),
+                (
+                    "variant:k1".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant[1]".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant:k1:k2".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                (
+                    "variant:k1:k3".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64
+                    ))),
+                ),
             ]);
 
             let req = ListVirtualColumnsReq::new(&tenant, Some(u64::MAX));
@@ -6454,7 +6508,26 @@ impl SchemaApiTestSuite {
             let req = UpdateVirtualColumnReq {
                 if_exists: false,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
+                virtual_columns: vec![
+                    (
+                        "variant:k2".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant[2]".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant:k2:k3".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ),
+                    (
+                        "variant:k2:k4".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                    ),
+                ],
             };
 
             mt.update_virtual_column(req).await?;
@@ -6467,8 +6540,24 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                "variant:k2".to_string(),
-                "variant[2]".to_string(),
+                (
+                    "variant:k2".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant[2]".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant:k2:k3".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                (
+                    "variant:k2:k4".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64
+                    ))),
+                ),
             ]);
         }
 
@@ -6495,7 +6584,26 @@ impl SchemaApiTestSuite {
             let req = UpdateVirtualColumnReq {
                 if_exists: false,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k3".to_string(), "variant[3]".to_string()],
+                virtual_columns: vec![
+                    (
+                        "variant:k3".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant[3]".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant:k3:k4".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ),
+                    (
+                        "variant:k3:k5".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                    ),
+                ],
             };
 
             let res = mt.update_virtual_column(req).await;
@@ -6507,7 +6615,26 @@ impl SchemaApiTestSuite {
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+                virtual_columns: vec![
+                    (
+                        "variant:k1".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant[1]".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant:k1:k4".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ),
+                    (
+                        "variant:k1:k5".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                    ),
+                ],
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6517,14 +6644,39 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                "variant:k1".to_string(),
-                "variant[1]".to_string(),
+                (
+                    "variant:k1".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant[1]".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant:k1:k4".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                (
+                    "variant:k1:k5".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64
+                    ))),
+                ),
             ]);
 
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::CreateOrReplace,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k2".to_string()],
+                virtual_columns: vec![
+                    (
+                        "variant:k2".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    ),
+                    (
+                        "variant:k3".to_string(),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ),
+                ],
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6533,7 +6685,16 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec!["variant:k2".to_string(),]);
+            assert_eq!(res[0].virtual_columns, vec![
+                (
+                    "variant:k2".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::Variant))
+                ),
+                (
+                    "variant:k3".to_string(),
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                )
+            ]);
         }
 
         Ok(())
