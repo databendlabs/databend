@@ -57,14 +57,14 @@ use crate::sql::IndexType;
 
 macro_rules! sqlx_fetch_optional {
     ($pool:expr, $sql:expr, $key_type:ty, $val_type:ty, $format_val_fn:expr) => {{
-        let res: Option<($key_type, $val_type)> =
+        let res: Option<(Option<$key_type>, Option<$val_type>)> =
             sqlx::query_as(&$sql).fetch_optional($pool).await?;
-        Ok(res.map(|(_, v)| $format_val_fn(v)))
+        Ok(res.and_then(|(_, v)| v.map($format_val_fn)))
     }};
 }
 
 macro_rules! fetch_single_row_by_sqlx {
-    ($pool:expr, $sql:expr, $key_scalar:expr, $val_type:ty, $format_val_fn:expr) => {{
+    ($pool:expr, $sql:expr, $key_scalar:expr, $val_type:ty, $format_val_fn:expr) => {
         match $key_scalar {
             DataType::Boolean => {
                 sqlx_fetch_optional!($pool, $sql, bool, $val_type, $format_val_fn)
@@ -88,45 +88,62 @@ macro_rules! fetch_single_row_by_sqlx {
                 $key_scalar,
             ))),
         }
-    }};
+    };
 }
 
 macro_rules! fetch_all_rows_by_sqlx {
     ($pool:expr, $sql:expr, $key_scalar:expr, $val_type:ty, $format_key_fn:expr) => {
         match $key_scalar {
             DataType::Boolean => {
-                let res: Vec<(bool, $val_type)> = sqlx::query_as($sql).fetch_all($pool).await?;
+                let res: Vec<(Option<bool>, Option<$val_type>)> =
+                    sqlx::query_as($sql).fetch_all($pool).await?;
                 res.into_iter()
-                    .map(|(k, v)| ($format_key_fn(ScalarRef::Boolean(k)), v))
+                    .filter_map(|(key, val)| match (key, val) {
+                        (Some(k), Some(v)) => Some(($format_key_fn(ScalarRef::Boolean(k)), v)),
+                        _ => None,
+                    })
                     .collect()
             }
             DataType::String => {
-                let res: Vec<(String, $val_type)> = sqlx::query_as($sql).fetch_all($pool).await?;
+                let res: Vec<(Option<String>, Option<$val_type>)> =
+                    sqlx::query_as($sql).fetch_all($pool).await?;
                 res.into_iter()
-                    .map(|(k, v)| ($format_key_fn(ScalarRef::String(&k)), v))
+                    .filter_map(|(key, val)| match (key, val) {
+                        (Some(k), Some(v)) => Some(($format_key_fn(ScalarRef::String(&k)), v)),
+                        _ => None,
+                    })
                     .collect()
             }
             DataType::Number(num_ty) => {
                 with_integer_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
-                        let res: Vec<(NUM_TYPE, $val_type)> =
+                        let res: Vec<(Option<NUM_TYPE>, Option<$val_type>)> =
                             sqlx::query_as($sql).fetch_all($pool).await?;
                         res.into_iter()
-                            .map(|(k, v)| (format!("{}", k), v))
+                            .filter_map(|(key, val)| match (key, val) {
+                                (Some(k), Some(v)) => Some((format!("{}", k), v)),
+                                _ => None,
+                            })
                             .collect()
                     }
                     NumberDataType::Float32 => {
-                        let res: Vec<(f32, $val_type)> =
+                        let res: Vec<(Option<f32>, Option<$val_type>)> =
                             sqlx::query_as($sql).fetch_all($pool).await?;
                         res.into_iter()
-                            .map(|(k, v)| (format!("{}", k), v))
+                            .filter_map(|(key, val)| match (key, val) {
+                                (Some(k), Some(v)) => Some((format!("{}", k), v)),
+                                _ => None,
+                            })
                             .collect()
                     }
                     NumberDataType::Float64 => {
-                        let res: Vec<(f64, $val_type)> =
+                        let res: Vec<(Option<f64>, Option<$val_type>)> =
                             sqlx::query_as($sql).fetch_all($pool).await?;
                         res.into_iter()
-                            .map(|(k, v)| (format!("{}", k), v))
+                            .filter_map(|(key, val)| match (key, val) {
+                                (Some(k), Some(v)) => Some((format!("{}", k), v)),
+                                _ => None,
+                            })
                             .collect()
                     }
                 })
