@@ -179,7 +179,11 @@ impl Interpreter for AppendInterpreter {
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let append: Append = self.s_expr.plan().clone().try_into()?;
+        let append: Append = match &self.s_expr.plan() {
+            RelOperator::Append(append) => append.clone(),
+            RelOperator::Exchange(_) => self.s_expr.child(0).unwrap().plan().clone().try_into()?,
+            _ => unreachable!(),
+        };
         match &append.append_type {
             AppendType::CopyInto => {
                 let blocks = self.get_copy_into_table_result()?;

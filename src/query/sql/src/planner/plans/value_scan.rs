@@ -19,6 +19,9 @@ use crate::executor::physical_plans::PhysicalValueScan;
 use crate::executor::physical_plans::Values;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::Distribution;
+use crate::optimizer::PhysicalProperty;
+use crate::optimizer::RelExpr;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -41,6 +44,12 @@ impl Operator for ValueScan {
 
     fn arity(&self) -> usize {
         0
+    }
+
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
     }
 }
 
