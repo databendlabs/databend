@@ -114,17 +114,13 @@ pub async fn create_append_plan_from_subquery(
 
     let optimized_append = optimize_append(insert_plan, source, metadata.clone(), ctx.as_ref())?;
 
-    let plan = Plan::Append {
+    Plan::Append {
         s_expr: Box::new(optimized_append),
         metadata: metadata.clone(),
         stage_table_info: None,
         overwrite,
         forbid_occ_retry,
-    };
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata)
-        .with_enable_distributed_optimization(!ctx.get_cluster().is_empty());
-
-    optimize(opt_ctx, plan).await
+    }
 }
 
 impl Hash for Append {
