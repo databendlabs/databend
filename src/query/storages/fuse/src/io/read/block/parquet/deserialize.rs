@@ -47,7 +47,6 @@ pub fn column_chunks_to_record_batch(
                 TableDataType::Decimal(DecimalDataType::Decimal256(_))
             )
         });
-    log::info!("deserialize {block_path} with use_v1: {use_v1}");
     let arrow_schema = table_schema_to_arrow_schema(original_schema);
     let parquet_schema = if !use_v1 {
         arrow_to_parquet_schema(&arrow_schema)?
