@@ -468,9 +468,9 @@ impl Binder {
         // Iterate through all possible subsets of the given expressions
         for i in 0..(1 << n) {
             let mut subset = Vec::new();
-            for j in 0..n {
+            for (j, expr) in exprs.iter().enumerate() {
                 if (i & (1 << j)) != 0 {
-                    subset.push(exprs[j].clone());
+                    subset.push(expr.clone());
                 }
             }
             result.push(subset);
