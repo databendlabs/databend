@@ -43,9 +43,7 @@ use super::RelOp;
 use crate::executor::physical_plans::PhysicalAppend;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::optimize;
 use crate::optimizer::optimize_append;
-use crate::optimizer::OptimizerContext;
 use crate::optimizer::SExpr;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -114,13 +112,13 @@ pub async fn create_append_plan_from_subquery(
 
     let optimized_append = optimize_append(insert_plan, source, metadata.clone(), ctx.as_ref())?;
 
-    Plan::Append {
+    Ok(Plan::Append {
         s_expr: Box::new(optimized_append),
         metadata: metadata.clone(),
         stage_table_info: None,
         overwrite,
         forbid_occ_retry,
-    }
+    })
 }
 
 impl Hash for Append {

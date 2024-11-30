@@ -611,6 +611,9 @@ pub fn optimize_append(
             let exchange = Arc::new(RelOperator::Exchange(Exchange::Merge));
             Ok(SExpr::create_unary(exchange, Arc::new(copy_into)))
         }
-        false => Ok(SExpr::create_unary(Arc::new(append.into()), Arc::new(source))),
+        false => Ok(SExpr::create_unary(
+            Arc::new(append.into()),
+            Arc::new(source),
+        )),
     }
 }
