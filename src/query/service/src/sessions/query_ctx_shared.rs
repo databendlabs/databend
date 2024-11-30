@@ -237,7 +237,7 @@ impl QueryContextShared {
     }
 
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        *self.on_error_mode.read()
+        self.on_error_mode.read().clone()
     }
 
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
