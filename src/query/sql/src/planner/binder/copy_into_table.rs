@@ -36,6 +36,7 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
@@ -57,6 +58,7 @@ use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use log::debug;
@@ -321,17 +323,20 @@ impl<'a> Binder {
             )
             .await
         } else {
-            let (scan, bind_context) = self
-                .bind_stage_table(
-                    self.ctx.clone(),
-                    bind_ctx,
-                    stage_table_info.stage_info.clone(),
-                    stage_table_info.files_info.clone(),
-                    &None,
-                    stage_table_info.files_to_copy.clone(),
-                    case_sensitive,
-                )
-                .await?;
+            let table = StageTable::try_create(stage_table_info.clone())?;
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                None,
+                false,
+                false,
+                true,
+                false,
+            );
+
+            let (scan, bind_context) =
+                self.bind_base_table(bind_ctx, "system", table_index, None, &None)?;
             copy_into_table_plan.project_columns = Some(bind_context.columns.clone());
 
             let copy_into =

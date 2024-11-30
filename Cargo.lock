@@ -4029,6 +4029,7 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-result-cache",
+ "databend-common-storages-stage",
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
