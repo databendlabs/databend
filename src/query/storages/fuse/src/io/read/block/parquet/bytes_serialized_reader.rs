@@ -228,14 +228,16 @@ impl PageReader for InMemorySerializedPageReader {
             };
 
             let data_len = header.compressed_page_size as usize;
-            self.offset += data_len;
-            self.remaining_bytes -= data_len;
 
             if header.type_ == PageType::INDEX_PAGE {
+                self.offset += data_len;
+                self.remaining_bytes -= data_len;
                 continue;
             }
 
             let buffer = self.bytes.slice(self.offset..self.offset + data_len);
+            self.offset += data_len;
+            self.remaining_bytes -= data_len;
 
             if buffer.len() != data_len {
                 panic!(
