@@ -295,44 +295,17 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             overwrite,
             forbid_occ_retry,
         } => {
-            let support_distributed_insert = {
-                let append: Append = s_expr.plan().clone().try_into()?;
-                let metadata = metadata.read();
-                metadata
-                    .table(append.table_index)
-                    .table()
-                    .support_distributed_insert()
-            };
-            let enable_distributed = opt_ctx.enable_distributed_optimization
-                && opt_ctx
-                    .table_ctx
-                    .get_settings()
-                    .get_enable_distributed_copy()?
-                && support_distributed_insert;
-            info!(
-                "after optimization enable_distributed_copy? : {}",
-                enable_distributed
-            );
-            let mut optimized_source =
-                optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
-            let optimized = match enable_distributed {
-                true => {
-                    if let RelOperator::Exchange(Exchange::Merge) = optimized_source.plan.as_ref() {
-                        optimized_source = optimized_source.child(0).unwrap().clone();
-                    }
-                    let copy_into = SExpr::create_unary(
-                        Arc::new(s_expr.plan().clone()),
-                        Arc::new(optimized_source),
-                    );
-                    let exchange = Arc::new(RelOperator::Exchange(Exchange::Merge));
-                    SExpr::create_unary(exchange, Arc::new(copy_into))
-                }
-                false => {
-                    SExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(optimized_source))
-                }
-            };
+            let append: Append = s_expr.plan().clone().try_into()?;
+            let source = s_expr.child(0)?.clone();
+            let optimized_source = optimize_query(&mut opt_ctx, source).await?;
+            let optimized_append = optimize_append(
+                append,
+                optimized_source,
+                metadata.clone(),
+                opt_ctx.table_ctx.as_ref(),
+            )?;
             Ok(Plan::Append {
-                s_expr: Box::new(optimized),
+                s_expr: Box::new(optimized_append),
                 metadata,
                 stage_table_info,
                 overwrite,
@@ -609,4 +582,35 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
         )),
         metadata: opt_ctx.metadata.clone(),
     })
+}
+
+pub fn optimize_append(
+    append: Append,
+    source: SExpr,
+    metadata: MetadataRef,
+    table_ctx: &dyn TableContext,
+) -> Result<SExpr> {
+    let support_distributed_insert = {
+        let metadata = metadata.read();
+        metadata
+            .table(append.table_index)
+            .table()
+            .support_distributed_insert()
+    };
+    let enable_distributed = table_ctx.get_settings().get_enable_distributed_copy()?
+        && support_distributed_insert
+        && matches!(source.plan(), RelOperator::Exchange(Exchange::Merge));
+    info!(
+        "after optimization enable_distributed_copy? : {}",
+        enable_distributed
+    );
+    match enable_distributed {
+        true => {
+            let source = source.child(0).unwrap().clone();
+            let copy_into = SExpr::create_unary(Arc::new(append.into()), Arc::new(source));
+            let exchange = Arc::new(RelOperator::Exchange(Exchange::Merge));
+            Ok(SExpr::create_unary(exchange, Arc::new(copy_into)))
+        }
+        false => Ok(SExpr::create_unary(Arc::new(append.into()), Arc::new(source))),
+    }
 }

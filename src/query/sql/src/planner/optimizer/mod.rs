@@ -43,6 +43,7 @@ pub use hyper_dp::DPhpy;
 pub use m_expr::MExpr;
 pub use memo::Memo;
 pub use optimizer::optimize;
+pub use optimizer::optimize_append;
 pub use optimizer::optimize_query;
 pub use optimizer::OptimizerContext;
 pub use optimizer::RecursiveOptimizer;

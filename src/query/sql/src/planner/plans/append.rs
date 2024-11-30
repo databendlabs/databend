@@ -44,6 +44,7 @@ use crate::executor::physical_plans::PhysicalAppend;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::optimize;
+use crate::optimizer::optimize_append;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::SExpr;
 use crate::ColumnBinding;
@@ -111,9 +112,10 @@ pub async fn create_append_plan_from_subquery(
         append_type: AppendType::Insert,
     };
 
-    let s_expr = SExpr::create_unary(Arc::new(insert_plan.into()), Arc::new(source));
+    let optimized_append = optimize_append(insert_plan, source, metadata.clone(), ctx.as_ref())?;
+
     let plan = Plan::Append {
-        s_expr: Box::new(s_expr),
+        s_expr: Box::new(optimized_append),
         metadata: metadata.clone(),
         stage_table_info: None,
         overwrite,

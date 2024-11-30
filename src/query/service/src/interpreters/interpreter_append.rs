@@ -75,7 +75,12 @@ impl Interpreter for AppendInterpreter {
         let append: Append = match &self.s_expr.plan() {
             RelOperator::Append(append) => append.clone(),
             RelOperator::Exchange(_) => self.s_expr.child(0).unwrap().plan().clone().try_into()?,
-            _ => unreachable!(),
+            plan => {
+                return Err(ErrorCode::Internal(format!(
+                    "AppendInterpreter: unexpected plan type: {:?}",
+                    plan
+                )));
+            }
         };
         let (target_table, catalog, database, table) = {
             let metadata = self.metadata.read();
