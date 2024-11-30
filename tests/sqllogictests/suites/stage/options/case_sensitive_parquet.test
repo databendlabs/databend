@@ -1,0 +1,95 @@
+statement ok
+create or replace table t1 (a int, `B` int);
+
+statement ok
+create or replace table t2 (a int, `A` int);
+
+statement ok
+insert into t1 values (1, 2);
+
+statement ok
+insert into t2 values (1, 2);
+
+statement ok
+create or replace stage s1;
+
+statement ok
+copy into @s1/t1 from t1;
+
+statement ok
+copy into @s1/t2 from t2
+
+query
+select a, b from @s1/t1;
+----
+1 2
+
+query error column B doesn't exist
+select a, `B` from @s1/t1;
+
+query error column b doesn't exist
+select a, b from @s1/t1(case_sensitive=>true);
+
+query
+select a, `B` from @s1/t1(case_sensitive=>true);
+----
+1 2
+
+query
+copy into t1 from @s1/t1 return_failed_only=true force=true
+
+query
+copy into t1 from @s1/t1 return_failed_only=true column_match_mode=case_sensitive force=true
+
+query error must be one of
+copy into t1 from @s1/t1 return_failed_only=true column_match_mode=CaseSensitive force=true
+
+query error ambiguous
+select a from @s1/t2;
+
+query
+select a, `A` from @s1/t2(case_sensitive=>true);
+----
+1 2
+
+query error ambiguous
+copy into t2 from @s1/t2 return_failed_only=true
+
+query
+copy into t2 from @s1/t2 return_failed_only=true column_match_mode=case_sensitive force=true
+
+statement ok
+truncate table t1
+
+query
+copy into t1 from @s1/t1 return_failed_only=true file_format=(type=Parquet, missing_field_as=null) force=true
+
+query
+select * from t1
+----
+1 2
+
+statement ok
+truncate table t1
+
+query
+copy into t1 from @s1/t1 return_failed_only=true column_match_mode=case_sensitive file_format=(type=Parquet, missing_field_as=null) force=true
+
+query
+select * from t1
+----
+1 2
+
+statement ok
+truncate table t2
+
+query error multi field named
+copy into t2 from @s1/t2 return_failed_only=true file_format=(type=Parquet, missing_field_as=null) force=true
+
+query
+copy into t2 from @s1/t2 return_failed_only=true column_match_mode=case_sensitive file_format=(type=Parquet, missing_field_as=null) force=true
+
+query
+select * from t2
+----
+1 2

@@ -643,7 +643,7 @@ impl<'a> Binder {
         };
 
         match plan.kind() {
-            QueryKind::Query { .. } | QueryKind::Explain { .. } => {}
+            QueryKind::Query | QueryKind::Explain => {}
             _ => {
                 let meta_data_guard = self.metadata.read();
                 let tables = meta_data_guard.tables();

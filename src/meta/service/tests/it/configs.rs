@@ -89,7 +89,6 @@ cluster_name = "foo_cluster"
         assert!(!cfg.raft_config.single);
         assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
         assert_eq!(cfg.raft_config.id, 20);
-        assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");
         assert_eq!(cfg.raft_config.cluster_name, "foo_cluster");
     });
 

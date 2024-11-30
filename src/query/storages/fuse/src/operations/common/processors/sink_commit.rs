@@ -138,12 +138,21 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
+        let code = e.code();
         // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
         // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
-        if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
+        if self.prev_snapshot_id.is_some() && code == ErrorCode::TABLE_VERSION_MISMATCHED {
             return false;
         }
-        FuseTable::is_error_recoverable(e, self.purge)
+
+        code == ErrorCode::TABLE_VERSION_MISMATCHED
+            || (self.purge && code == ErrorCode::STORAGE_NOT_FOUND)
+    }
+
+    fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
+        // currently, the only error that we know,  which indicates there are no side effects
+        // is TABLE_VERSION_MISMATCHED
+        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -469,7 +478,7 @@ where F: SnapshotGenerator + Send + 'static
                             None => {
                                 // Commit not fulfilled. try to abort the operations.
                                 // if it is safe to do so.
-                                if FuseTable::no_side_effects_in_meta_store(&e) {
+                                if Self::no_side_effects_in_meta_store(&e) {
                                     // if we are sure that table state inside metastore has not been
                                     // modified by this operation, abort this operation.
                                     self.state = State::Abort(e);

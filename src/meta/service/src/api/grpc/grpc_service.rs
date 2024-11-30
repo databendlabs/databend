@@ -57,7 +57,6 @@ use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
-use log::info;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -109,7 +108,7 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
-        info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+        debug!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
         let m = &self.meta_node;
         let reply = match &req {
@@ -134,7 +133,7 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
         let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
 
-        info!("{}: Received ReadRequest: {:?}", func_name!(), req);
+        debug!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
         let req = ForwardRequest::new(1, req);
 
@@ -156,7 +155,7 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, TxnReply), Status> {
         let txn = request.into_inner();
 
-        info!("{}: Received TxnRequest: {}", func_name!(), txn);
+        debug!("{}: Received TxnRequest: {}", func_name!(), txn);
 
         let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
 
