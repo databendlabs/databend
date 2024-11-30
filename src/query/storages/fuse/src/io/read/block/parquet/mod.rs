@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
@@ -35,8 +36,11 @@ use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
 mod arrow_parquet;
 mod deserialize;
+mod buffer;
+mod bytes_serialized_reader;
 
 pub use adapter::RowGroupImplBuilder;
+pub use buffer::UncompressedBuffer;
 pub use deserialize::column_chunks_to_record_batch;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;
@@ -50,6 +54,7 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: &Compression,
         block_path: &str,
+        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> databend_common_exception::Result<DataBlock> {
         if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
@@ -60,6 +65,7 @@ impl BlockReader {
             &column_chunks,
             compression,
             block_path,
+            uncompressed_buffer,
         )?;
         let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);

@@ -717,4 +717,7 @@ impl Settings {
     pub fn get_max_spill_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_spill_io_requests")
     }
+    pub fn get_parquet_uncompressed_buffer_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_uncompressed_buffer_size")
+    }
 }

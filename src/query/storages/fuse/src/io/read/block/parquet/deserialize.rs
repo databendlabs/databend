@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
@@ -31,6 +32,7 @@ use parquet::basic::Compression as ParquetCompression;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 use crate::io::read::block::parquet::arrow_parquet::arrow_to_parquet_schema_fix;
+use crate::io::read::UncompressedBuffer;
 
 /// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
 pub fn column_chunks_to_record_batch(
@@ -39,6 +41,7 @@ pub fn column_chunks_to_record_batch(
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
     block_path: &str,
+    uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
 ) -> databend_common_exception::Result<RecordBatch> {
     let use_v1 = is_possible_non_standard_decimal_block(block_path)?
         && original_schema.fields.iter().any(|f| {
@@ -65,6 +68,7 @@ pub fn column_chunks_to_record_batch(
         num_rows,
         &parquet_schema,
         ParquetCompression::from(*compression),
+        uncompressed_buffer,
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {

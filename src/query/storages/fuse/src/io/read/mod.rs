@@ -23,6 +23,7 @@ mod utils;
 mod virtual_column;
 
 pub use agg_index::AggIndexReader;
+pub use block::parquet::UncompressedBuffer;
 pub use block::BlockReader;
 pub use block::MergeIOReadResult;
 pub use block::NativeReaderExt;
