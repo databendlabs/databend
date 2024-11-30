@@ -28,6 +28,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::AppendType;
+use databend_common_sql::plans::RelOperator;
 use log::debug;
 use log::info;
 
@@ -71,7 +72,11 @@ impl Interpreter for AppendInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let append: Append = self.s_expr.plan().clone().try_into()?;
+        let append: Append = match &self.s_expr.plan() {
+            RelOperator::Append(append) => append.clone(),
+            RelOperator::Exchange(_) => self.s_expr.child(0).unwrap().plan().clone().try_into()?,
+            _ => unreachable!(),
+        };
         let (target_table, catalog, database, table) = {
             let metadata = self.metadata.read();
             let t = metadata.table(append.table_index);
