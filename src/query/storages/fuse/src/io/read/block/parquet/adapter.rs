@@ -24,8 +24,9 @@ use parquet::column::page::PageIterator;
 use parquet::column::page::PageReader;
 use parquet::errors::Result as ParquetResult;
 use parquet::file::metadata::ColumnChunkMetaData;
-use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescriptor;
+
+use crate::io::read::block::parquet::bytes_serialized_reader::InMemorySerializedPageReader;
 
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
@@ -89,11 +90,9 @@ impl RowGroups for RowGroupImpl {
     fn column_chunks(&self, i: usize) -> ParquetResult<Box<dyn PageIterator>> {
         let column_chunk = Arc::new(self.column_chunks.get(&i).unwrap().clone());
         let column_chunk_meta = self.column_chunk_metadatas.get(&i).unwrap();
-        let page_reader = Box::new(SerializedPageReader::new(
+        let page_reader = Box::new(InMemorySerializedPageReader::new(
             column_chunk,
             column_chunk_meta,
-            self.num_rows(),
-            None,
         )?);
 
         Ok(Box::new(PageIteratorImpl {

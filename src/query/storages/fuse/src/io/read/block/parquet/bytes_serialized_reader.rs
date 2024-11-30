@@ -13,23 +13,23 @@
 // limitations under the License.
 
 use std::io::Read;
-use std::iter;
+use std::sync::Arc;
+
 use bytes::Bytes;
-use parquet::basic::{Encoding, Type};
-use parquet::bloom_filter::Sbbf;
-use parquet::column::page::{Page, PageMetadata, PageReader};
-use parquet::compression::{Codec, CodecOptionsBuilder, create_codec};
+use parquet::basic::Encoding;
+use parquet::basic::Type;
+use parquet::column::page::Page;
+use parquet::column::page::PageMetadata;
+use parquet::column::page::PageReader;
+use parquet::compression::create_codec;
+use parquet::compression::Codec;
+use parquet::compression::CodecOptionsBuilder;
 use parquet::errors::ParquetError;
-use parquet::file::metadata::{ColumnChunkMetaData, ParquetMetaData, ParquetMetaDataReader, RowGroupMetaData};
-use parquet::file::page_index::offset_index::OffsetIndexMetaData;
-use parquet::file::properties::{ReaderProperties, ReaderPropertiesPtr};
-use parquet::file::reader::{ChunkReader, FileReader, RowGroupReader};
+use parquet::file::metadata::ColumnChunkMetaData;
 use parquet::file::statistics;
-use parquet::format::{PageHeader, PageLocation, PageType};
-use parquet::record::reader::RowIter;
-use parquet::record::Row;
+use parquet::format::PageHeader;
+use parquet::format::PageType;
 use parquet::thrift::TSerializable;
-use tantivy_common::HasLen;
 use thrift::protocol::TCompactInputProtocol;
 
 /// Reads a [`PageHeader`] from the provided [`Read`]
@@ -101,9 +101,10 @@ pub(crate) fn decode_page(
             )?;
 
             if decompressed.len() != uncompressed_size {
-                panic!("Actual decompressed size doesn't match the expected one ({} vs {})",
-                       decompressed.len(),
-                       uncompressed_size
+                panic!(
+                    "Actual decompressed size doesn't match the expected one ({} vs {})",
+                    decompressed.len(),
+                    uncompressed_size
                 );
             }
 
@@ -166,7 +167,7 @@ pub(crate) fn decode_page(
 
 pub struct InMemorySerializedPageReader {
     /// The data
-    bytes: Bytes,
+    bytes: Arc<Bytes>,
 
     /// The compression codec for this column chunk. Only set for non-PLAIN codec.
     decompressor: Option<Box<dyn Codec>>,
@@ -185,7 +186,7 @@ pub struct InMemorySerializedPageReader {
 }
 
 impl InMemorySerializedPageReader {
-    pub fn new(bytes: Bytes, meta: &ColumnChunkMetaData, total_rows: usize) -> parquet::errors::Result<Self> {
+    pub fn new(bytes: Arc<Bytes>, meta: &ColumnChunkMetaData) -> parquet::errors::Result<Self> {
         let options = CodecOptionsBuilder::default().build();
         let decompressor = create_codec(meta.compression(), &options)?;
         let (start, len) = meta.byte_range();
@@ -237,7 +238,11 @@ impl PageReader for InMemorySerializedPageReader {
             let buffer = self.bytes.slice(self.offset..self.offset + data_len);
 
             if buffer.len() != data_len {
-                panic!("Expected to read {} bytes of page, read only {}", data_len, buffer.len());
+                panic!(
+                    "Expected to read {} bytes of page, read only {}",
+                    data_len,
+                    buffer.len()
+                );
             }
 
             return Ok(Some(decode_page(

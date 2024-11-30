@@ -33,8 +33,8 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 
 mod adapter;
-mod deserialize;
 mod bytes_serialized_reader;
+mod deserialize;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
