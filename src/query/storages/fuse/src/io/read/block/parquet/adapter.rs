@@ -27,6 +27,7 @@ use parquet::file::metadata::ColumnChunkMetaData;
 use parquet::schema::types::SchemaDescriptor;
 
 use crate::io::read::block::parquet::bytes_serialized_reader::InMemorySerializedPageReader;
+use crate::io::read::UncompressedBuffer;
 
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
@@ -34,6 +35,7 @@ pub struct RowGroupImplBuilder<'a> {
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
     schema_descriptor: &'a SchemaDescriptor,
     compression: Compression,
+    uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
 }
 
 impl<'a> RowGroupImplBuilder<'a> {
@@ -41,6 +43,7 @@ impl<'a> RowGroupImplBuilder<'a> {
         num_rows: usize,
         schema_descriptor: &'a SchemaDescriptor,
         compression: Compression,
+        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Self {
         Self {
             num_rows,
@@ -48,6 +51,7 @@ impl<'a> RowGroupImplBuilder<'a> {
             column_chunk_metadatas: HashMap::new(),
             schema_descriptor,
             compression,
+            uncompressed_buffer,
         }
     }
 
@@ -69,6 +73,9 @@ impl<'a> RowGroupImplBuilder<'a> {
             num_rows: self.num_rows,
             column_chunks: self.column_chunks,
             column_chunk_metadatas: self.column_chunk_metadatas,
+            uncompressed_buffer: self
+                .uncompressed_buffer
+                .unwrap_or_else(|| UncompressedBuffer::new(0)),
         }
     }
 }
@@ -77,6 +84,7 @@ impl<'a> RowGroupImplBuilder<'a> {
 pub struct RowGroupImpl {
     num_rows: usize,
     column_chunks: HashMap<usize, Bytes>,
+    uncompressed_buffer: Arc<UncompressedBuffer>,
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
 }
 
@@ -93,6 +101,7 @@ impl RowGroups for RowGroupImpl {
         let page_reader = Box::new(InMemorySerializedPageReader::new(
             column_chunk,
             column_chunk_meta,
+            self.uncompressed_buffer.clone(),
         )?);
 
         Ok(Box::new(PageIteratorImpl {

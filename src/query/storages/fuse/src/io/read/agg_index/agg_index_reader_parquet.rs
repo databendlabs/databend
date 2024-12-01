@@ -122,6 +122,7 @@ impl AggIndexReader {
             columns_chunks,
             &part.compression,
             &part.location,
+            None,
         )?;
 
         self.apply_agg_info(block)

@@ -821,4 +821,8 @@ impl Settings {
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
+
+    pub fn get_parquet_uncompressed_buffer_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_uncompressed_buffer_size")
+    }
 }

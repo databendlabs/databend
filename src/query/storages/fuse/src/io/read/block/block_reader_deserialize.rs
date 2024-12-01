@@ -79,6 +79,7 @@ impl BlockReader {
                 column_chunks,
                 compression,
                 block_path,
+                None,
             ),
             FuseStorageFormat::Native => {
                 self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
@@ -120,6 +121,7 @@ impl BlockReader {
                 column_chunks,
                 &meta.compression,
                 &meta.location.0,
+                None,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
                 &meta.location.0,

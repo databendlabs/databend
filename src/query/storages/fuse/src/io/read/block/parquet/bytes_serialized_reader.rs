@@ -32,6 +32,8 @@ use parquet::format::PageType;
 use parquet::thrift::TSerializable;
 use thrift::protocol::TCompactInputProtocol;
 
+use crate::io::read::UncompressedBuffer;
+
 /// Reads a [`PageHeader`] from the provided [`Read`]
 pub(crate) fn read_page_header<T: Read>(input: &mut T) -> parquet::errors::Result<PageHeader> {
     let mut prot = TCompactInputProtocol::new(input);
@@ -69,6 +71,7 @@ pub(crate) fn decode_page(
     buffer: Bytes,
     physical_type: Type,
     decompressor: Option<&mut Box<dyn Codec>>,
+    uncompressed_buffer: &UncompressedBuffer,
 ) -> parquet::errors::Result<Page> {
     // When processing data page v2, depending on enabled compression for the
     // page, we should account for uncompressed data ('offset') of
@@ -91,14 +94,10 @@ pub(crate) fn decode_page(
     let buffer = match decompressor {
         Some(decompressor) if can_decompress => {
             let uncompressed_size = page_header.uncompressed_page_size as usize;
-            let mut decompressed = Vec::with_capacity(uncompressed_size);
+            let decompressed = uncompressed_buffer.buffer_mut(uncompressed_size);
             let compressed = &buffer.as_ref()[offset..];
             decompressed.extend_from_slice(&buffer.as_ref()[..offset]);
-            decompressor.decompress(
-                compressed,
-                &mut decompressed,
-                Some(uncompressed_size - offset),
-            )?;
+            decompressor.decompress(compressed, decompressed, Some(uncompressed_size - offset))?;
 
             if decompressed.len() != uncompressed_size {
                 panic!(
@@ -108,7 +107,7 @@ pub(crate) fn decode_page(
                 );
             }
 
-            Bytes::from(decompressed)
+            uncompressed_buffer.borrow_bytes()
         }
         _ => buffer,
     };
@@ -183,10 +182,16 @@ pub struct InMemorySerializedPageReader {
 
     // If the next page header has already been "peeked", we will cache it and it`s length here
     next_page_header: Option<Box<PageHeader>>,
+
+    uncompressed_buffer: Arc<UncompressedBuffer>,
 }
 
 impl InMemorySerializedPageReader {
-    pub fn new(bytes: Arc<Bytes>, meta: &ColumnChunkMetaData) -> parquet::errors::Result<Self> {
+    pub fn new(
+        bytes: Arc<Bytes>,
+        meta: &ColumnChunkMetaData,
+        uncompressed_buffer: Arc<UncompressedBuffer>,
+    ) -> parquet::errors::Result<Self> {
         let options = CodecOptionsBuilder::default().build();
         let decompressor = create_codec(meta.compression(), &options)?;
         let (start, len) = meta.byte_range();
@@ -194,6 +199,7 @@ impl InMemorySerializedPageReader {
         Ok(Self {
             bytes,
             decompressor,
+            uncompressed_buffer,
             physical_type: meta.column_type(),
             offset: start as usize,
             remaining_bytes: len as usize,
@@ -252,6 +258,7 @@ impl PageReader for InMemorySerializedPageReader {
                 buffer,
                 self.physical_type,
                 self.decompressor.as_mut(),
+                &self.uncompressed_buffer,
             )?));
         }
     }

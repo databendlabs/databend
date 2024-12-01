@@ -141,6 +141,7 @@ impl VirtualColumnReader {
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
+                    None,
                 )
             })
             .transpose()?;

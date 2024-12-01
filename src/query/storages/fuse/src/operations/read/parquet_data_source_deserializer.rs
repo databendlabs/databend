@@ -49,6 +49,7 @@ use super::parquet_data_source::ParquetDataSource;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::io::read::UncompressedBuffer;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -67,6 +68,7 @@ pub struct DeserializeDataTransform {
     output_data: Option<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
+    uncompressed_buffer: Arc<UncompressedBuffer>,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<ParquetDataSource>,
 
@@ -110,6 +112,8 @@ impl DeserializeDataTransform {
             src_schema = DataSchema::new(fields);
         }
 
+        let settings = ctx.get_settings();
+        let uncompressed_buffer_size = settings.get_parquet_uncompressed_buffer_size()? as usize;
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
@@ -134,6 +138,7 @@ impl DeserializeDataTransform {
             need_reserve_block_info,
             need_wait_runtime_filter,
             runtime_filter_ready: None,
+            uncompressed_buffer: UncompressedBuffer::new(uncompressed_buffer_size),
         })))
     }
 
@@ -287,6 +292,7 @@ impl Processor for DeserializeDataTransform {
                         columns_chunks,
                         &part.compression,
                         &part.location,
+                        Some(self.uncompressed_buffer.clone()),
                     )?;
 
                     let origin_num_rows = data_block.num_rows();

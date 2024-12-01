@@ -952,6 +952,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("parquet_uncompressed_buffer_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2 * 1024 * 1024),
+                    desc: "Sets the byte size of the buffer used for reading Parquet files.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
