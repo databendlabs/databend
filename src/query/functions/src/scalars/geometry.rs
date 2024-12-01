@@ -1664,7 +1664,6 @@ fn st_transform_impl(
 /// EWKT (extended well-known text).
 /// EWKB (extended well-known binary) in hexadecimal format (without a leading 0x).
 /// GEOJSON
-
 fn json_to_geometry_impl(binary: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
     let s = to_string(binary);
     let json = GeoJson(s.as_str());

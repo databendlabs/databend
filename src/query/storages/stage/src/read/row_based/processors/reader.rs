@@ -53,12 +53,12 @@ impl BytesReader {
         prefetch_num: usize,
     ) -> Result<Self> {
         // TODO: Use 8MiB as default IO size for now, we can extract as a new config.
-        let default_io_size = 8 * 1024 * 1024;
+        let default_io_size: usize = 8 * 1024 * 1024;
         // Calculate the IO size, which:
         //
         // - is the multiple of read_batch_size.
         // - is larger or equal to default_io_size.
-        let io_size = ((default_io_size + read_batch_size - 1) / read_batch_size) * read_batch_size;
+        let io_size = default_io_size.div_ceil(read_batch_size);
 
         Ok(Self {
             table_ctx,

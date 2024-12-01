@@ -269,7 +269,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     pub fn option_iter<'a>(
         &'a self,
         validity: Option<&'a Bitmap>,
-    ) -> ZipValidity<&'a T, BinaryViewColumnIter<T>, BitmapIter<'a>> {
+    ) -> ZipValidity<&'a T, BinaryViewColumnIter<'a, T>, BitmapIter<'a>> {
         let bitmap_iter = validity.as_ref().map(|v| v.iter());
         ZipValidity::new(self.iter(), bitmap_iter)
     }

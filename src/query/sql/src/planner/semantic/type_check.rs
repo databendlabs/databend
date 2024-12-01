@@ -1391,7 +1391,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve general window function call.
-
     fn resolve_general_window_function(
         &mut self,
         span: Span,

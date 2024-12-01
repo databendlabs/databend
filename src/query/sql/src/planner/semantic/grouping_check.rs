@@ -42,7 +42,7 @@ impl<'a> GroupingChecker<'a> {
     }
 }
 
-impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
+impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if !self
             .bind_context

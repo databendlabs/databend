@@ -261,11 +261,9 @@ impl PipelineBuilder {
         materialized_side_builder.hash_join_states = self.hash_join_states.clone();
         let mut materialized_side_pipeline =
             materialized_side_builder.finalize(materialized_side)?;
-        assert!(
-            materialized_side_pipeline
-                .main_pipeline
-                .is_pulling_pipeline()?
-        );
+        assert!(materialized_side_pipeline
+            .main_pipeline
+            .is_pulling_pipeline()?);
 
         PipelineBuilder::build_result_projection(
             &self.func_ctx,

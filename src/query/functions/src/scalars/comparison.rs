@@ -462,10 +462,18 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
     }
 
     register_tuple_cmp_op(registry, "eq", true, |lhs, rhs| {
-        if lhs != rhs { Some(false) } else { None }
+        if lhs != rhs {
+            Some(false)
+        } else {
+            None
+        }
     });
     register_tuple_cmp_op(registry, "noteq", false, |lhs, rhs| {
-        if lhs != rhs { Some(true) } else { None }
+        if lhs != rhs {
+            Some(true)
+        } else {
+            None
+        }
     });
     register_tuple_cmp_op(registry, "gt", false, |lhs, rhs| {
         match lhs.partial_cmp(&rhs) {
@@ -664,13 +672,13 @@ fn variant_vectorize_like(
 
 fn vectorize_regexp(
     func: impl Fn(
-        &str,
-        &str,
-        &mut MutableBitmap,
-        &mut EvalContext,
-        &mut HashMap<String, Regex>,
-        &mut HashMap<Vec<u8>, String>,
-    ) + Copy,
+            &str,
+            &str,
+            &mut MutableBitmap,
+            &mut EvalContext,
+            &mut HashMap<String, Regex>,
+            &mut HashMap<Vec<u8>, String>,
+        ) + Copy,
 ) -> impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
     move |arg1, arg2, ctx| {
         let mut map = HashMap::new();

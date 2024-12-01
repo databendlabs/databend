@@ -37,7 +37,7 @@ impl<'a> WindowChecker<'a> {
     }
 }
 
-impl<'a> VisitorMut<'_> for WindowChecker<'a> {
+impl VisitorMut<'_> for WindowChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         match expr {
             ScalarExpr::WindowFunction(win) => {

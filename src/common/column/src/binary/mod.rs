@@ -113,7 +113,7 @@ impl BinaryColumn {
     pub fn option_iter<'a>(
         &'a self,
         validity: Option<&'a Bitmap>,
-    ) -> ZipValidity<&'a [u8], BinaryColumnIter, BitmapIter<'a>> {
+    ) -> ZipValidity<&'a [u8], BinaryColumnIter<'a>, BitmapIter<'a>> {
         let bitmap_iter = validity.as_ref().map(|v| v.iter());
         ZipValidity::new(self.iter(), bitmap_iter)
     }

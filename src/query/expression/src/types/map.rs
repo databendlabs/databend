@@ -313,7 +313,7 @@ impl<'a, K: ValueType, V: ValueType> Iterator for KvIterator<'a, K, V> {
     }
 }
 
-unsafe impl<'a, K: ValueType, V: ValueType> TrustedLen for KvIterator<'a, K, V> {}
+unsafe impl<K: ValueType, V: ValueType> TrustedLen for KvIterator<'_, K, V> {}
 
 // Structurally equals to `Array(Tuple(K, V))` but treated distinct from `Array(Tuple(K, V))`
 // in unification.

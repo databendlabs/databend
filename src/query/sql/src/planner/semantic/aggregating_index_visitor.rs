@@ -139,24 +139,21 @@ impl AggregatingIndexRewriter {
             }
         });
 
-        match group_by {
-            Some(group_by) => match group_by {
-                GroupBy::Normal(groups) => {
-                    groups.iter().for_each(|expr| {
-                        // if group by item not in targets, we will add it in.
-                        if !select_list_exprs.contains(&expr.to_string()) {
-                            let target = SelectTarget::AliasedExpr {
-                                expr: Box::new(expr.clone()),
-                                alias: None,
-                            };
-                            new_select_list.push(target);
-                        }
-                    });
-                }
-                _ => unreachable!(),
-            },
-            None => {}
-        }
+        if let Some(group_by) = group_by { match group_by {
+            GroupBy::Normal(groups) => {
+                groups.iter().for_each(|expr| {
+                    // if group by item not in targets, we will add it in.
+                    if !select_list_exprs.contains(&expr.to_string()) {
+                        let target = SelectTarget::AliasedExpr {
+                            expr: Box::new(expr.clone()),
+                            alias: None,
+                        };
+                        new_select_list.push(target);
+                    }
+                });
+            }
+            _ => unreachable!(),
+        } }
 
         // replace the select list with our rewritten new select list.
         *select_list = new_select_list;

@@ -121,7 +121,7 @@ pub fn get_layout_offsets(
         let layout = func.state_layout();
         let align = layout.align();
 
-        total_size = (total_size + align - 1) / align * align;
+        total_size = (total_size + align - 1).div_ceil(align);
 
         offsets.push(total_size);
 

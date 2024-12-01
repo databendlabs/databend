@@ -194,10 +194,7 @@ impl EventDispatcher {
     ) -> Result<Watcher, &'static str> {
         info!("add_watcher: {:?}", create);
 
-        let range = match EventDispatcher::build_key_range(create.key.clone(), &create.key_end) {
-            Ok(range) => range,
-            Err(e) => return Err(e),
-        };
+        let range = EventDispatcher::build_key_range(create.key.clone(), &create.key_end)?;
 
         self.current_watcher_id += 1;
         let watcher_id = self.current_watcher_id;
