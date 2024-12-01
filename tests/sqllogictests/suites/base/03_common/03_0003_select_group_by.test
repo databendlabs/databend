@@ -381,7 +381,7 @@ NULL XYZ NULL 400
 
 ## filter push down into grouping sets
 query ITTI
-select * from (SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    rollup( quantity, brand, segment) ) e   where e.segment = 'Basic';
+select * from (SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    rollup( quantity, brand, segment) ) e   where e.segment = 'Basic' order by quantity desc;
 ----
 300 XYZ Basic 300
 200 ABC Basic 200
