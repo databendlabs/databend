@@ -355,8 +355,7 @@ where K: UnsizedKeyable + ?Sized
     }
 }
 
-unsafe impl<K, V> TrustedLen for ShortStringHashtableIter<'_, K, V> where K: UnsizedKeyable + ?Sized
-{}
+unsafe impl<K, V> TrustedLen for ShortStringHashtableIter<'_, K, V> where K: UnsizedKeyable + ?Sized {}
 
 pub struct ShortStringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
