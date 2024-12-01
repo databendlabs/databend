@@ -43,12 +43,10 @@ impl UncompressedBuffer {
 
             if size > buffer.capacity() {
                 // avoid reallocate
-                let mut new_buffer = vec![0; size];
+                let mut new_buffer = Vec::with_capacity(size);
                 std::mem::swap(buffer, &mut new_buffer);
-            } else if size > buffer.len() {
-                buffer.resize(size, 0);
             } else {
-                buffer.truncate(size);
+                buffer.clear();
             }
             buffer
         }
