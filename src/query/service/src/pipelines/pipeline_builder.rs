@@ -199,9 +199,6 @@ impl PipelineBuilder {
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
             // Replace.
-            PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => {
-                self.build_async_sourcer(async_sourcer)
-            }
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
 

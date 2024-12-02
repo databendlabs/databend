@@ -30,10 +30,11 @@ use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::OnConflictField;
-use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
+use databend_common_sql::executor::physical_plans::PhysicalValueScan;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
+use databend_common_sql::executor::physical_plans::Values;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
@@ -373,48 +374,28 @@ impl ReplaceInterpreter {
     #[async_backtrace::framed]
     async fn connect_input_source<'a>(
         &'a self,
-        _ctx: Arc<QueryContext>,
-        _source: &'a InsertInputSource,
-        _schema: DataSchemaRef,
+        ctx: Arc<QueryContext>,
+        source: &'a InsertInputSource,
+        schema: DataSchemaRef,
         _purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     ) -> Result<ReplaceSourceCtx> {
-        // match source {
-        //     InsertInputSource::Values(source) => self
-        //         .connect_value_source(schema.clone(), source)
-        //         .map(|root| ReplaceSourceCtx {
-        //             root,
-        //             select_ctx: None,
-        //             update_stream_meta: vec![],
-        //             bind_context: None,
-        //         }),
+        match source {
+            InsertInputSource::Values(source) => self
+                .connect_value_source(schema.clone(), source)
+                .map(|root| ReplaceSourceCtx {
+                    root,
+                    select_ctx: None,
+                    update_stream_meta: vec![],
+                    bind_context: None,
+                }),
 
-        //     InsertInputSource::SelectPlan(plan) => {
-        //         self.connect_query_plan_source(ctx.clone(), plan).await
-        //     }
-        //     InsertInputSource::Stage(plan) => match *plan.clone() {
-        //         Plan::CopyIntoTable(copy_plan) => {
-        //             let interpreter =
-        //                 CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-        //             let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
-
-        //             // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
-
-        //             *purge_info = Some((
-        //                 copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
-        //                 copy_plan.stage_table_info.stage_info.clone(),
-        //                 copy_plan.stage_table_info.copy_into_table_options.clone(),
-        //             ));
-        //             Ok(ReplaceSourceCtx {
-        //                 root: Box::new(physical_plan),
-        //                 select_ctx: None,
-        //                 update_stream_meta: vec![],
-        //                 bind_context: None,
-        //             })
-        //         }
-        //         _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
-        //     },
-        // }
-        todo!()
+            InsertInputSource::SelectPlan(plan) => {
+                self.connect_query_plan_source(ctx.clone(), plan).await
+            }
+            InsertInputSource::Stage(_) => Err(ErrorCode::StorageUnsupported(
+                "stage attachment is deprecated in replace into statement",
+            )),
+        }
     }
 
     fn connect_value_source(
@@ -422,13 +403,20 @@ impl ReplaceInterpreter {
         schema: DataSchemaRef,
         source: &InsertValue,
     ) -> Result<Box<PhysicalPlan>> {
-        Ok(Box::new(PhysicalPlan::ReplaceAsyncSourcer(
-            ReplaceAsyncSourcer {
-                schema,
-                plan_id: u32::MAX,
-                source: source.clone(),
+        let values = match source {
+            InsertValue::Values { rows } => Values::Values(Arc::new(rows.clone())),
+            InsertValue::RawValues { data, start } => Values::RawValues {
+                rest_str: Arc::new(data.clone()),
+                start: *start,
             },
-        )))
+        };
+        Ok(Box::new(PhysicalPlan::ValueScan(Box::new(
+            PhysicalValueScan {
+                plan_id: u32::MAX,
+                values,
+                output_schema: schema.clone(),
+            },
+        ))))
     }
 
     #[async_backtrace::framed]

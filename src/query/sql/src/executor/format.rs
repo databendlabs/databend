@@ -369,9 +369,6 @@ fn to_format_tree(
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Append(plan) => format_append(plan),
         PhysicalPlan::CopyIntoLocation(plan) => copy_into_location(plan),
-        PhysicalPlan::ReplaceAsyncSourcer(_) => {
-            Ok(FormatTreeNode::new("ReplaceAsyncSourcer".to_string()))
-        }
         PhysicalPlan::ReplaceDeduplicate(_) => {
             Ok(FormatTreeNode::new("ReplaceDeduplicate".to_string()))
         }

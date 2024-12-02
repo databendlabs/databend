@@ -55,7 +55,6 @@ use crate::executor::physical_plans::PhysicalAppend;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
-use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
@@ -94,7 +93,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::Append(plan) => self.replace_append(plan),
             PhysicalPlan::CopyIntoLocation(plan) => self.replace_copy_into_location(plan),
-            PhysicalPlan::ReplaceAsyncSourcer(plan) => self.replace_async_sourcer(plan),
             PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MutationSource(plan) => self.replace_mutation_source(plan),
@@ -436,10 +434,6 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_async_sourcer(&mut self, plan: &ReplaceAsyncSourcer) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::ReplaceAsyncSourcer(plan.clone()))
-    }
-
     fn replace_deduplicate(&mut self, plan: &ReplaceDeduplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ReplaceDeduplicate(Box::new(
@@ -637,7 +631,6 @@ impl PhysicalPlan {
             visit(plan);
             match plan {
                 PhysicalPlan::TableScan(_)
-                | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
                 | PhysicalPlan::RecursiveCteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)

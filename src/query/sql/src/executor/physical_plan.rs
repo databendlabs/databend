@@ -62,7 +62,6 @@ use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
 use crate::executor::physical_plans::RecursiveCteScan;
-use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
@@ -111,7 +110,6 @@ pub enum PhysicalPlan {
     CopyIntoLocation(Box<CopyIntoLocation>),
 
     /// Replace
-    ReplaceAsyncSourcer(ReplaceAsyncSourcer),
     ReplaceDeduplicate(Box<ReplaceDeduplicate>),
     ReplaceInto(Box<ReplaceInto>),
 
@@ -336,10 +334,6 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::ReplaceAsyncSourcer(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
             PhysicalPlan::ReplaceDeduplicate(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -439,7 +433,6 @@ impl PhysicalPlan {
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::Append(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
-            PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
             PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
             PhysicalPlan::CompactSource(v) => v.plan_id,
@@ -495,7 +488,6 @@ impl PhysicalPlan {
             PhysicalPlan::AddStreamColumn(plan) => plan.output_schema(),
             PhysicalPlan::Mutation(_)
             | PhysicalPlan::ColumnMutation(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::CompactSource(_)
@@ -545,7 +537,6 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::Append(_) => "Append".to_string(),
             PhysicalPlan::CopyIntoLocation(_) => "CopyIntoLocation".to_string(),
-            PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MutationSource(_) => "MutationSource".to_string(),
@@ -584,7 +575,6 @@ impl PhysicalPlan {
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::ValueScan(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
@@ -674,7 +664,6 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::Append(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MutationSource(_)

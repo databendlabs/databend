@@ -39,7 +39,6 @@ use databend_common_pipeline_transforms::processors::build_compact_block_pipelin
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
@@ -67,36 +66,6 @@ impl PipelineBuilder {
     ) -> Result<bool> {
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
-    }
-
-    // build async sourcer pipeline.
-    pub(crate) fn build_async_sourcer(
-        &mut self,
-        _async_sourcer: &ReplaceAsyncSourcer,
-    ) -> Result<()> {
-        // self.main_pipeline.add_source(
-        //     |output| {
-        //         let name_resolution_ctx = NameResolutionContext::try_from(self.settings.as_ref())?;
-        //         match &async_sourcer.source {
-        //             InsertValue::Values { rows } => {
-        //                 let inner = ValueSource::new(rows.clone(), async_sourcer.schema.clone());
-        //                 AsyncSourcer::create(self.ctx.clone(), output, inner)
-        //             }
-        //             InsertValue::RawValues { data, start } => {
-        //                 let inner = RawValueSource::new(
-        //                     data.clone(),
-        //                     self.ctx.clone(),
-        //                     name_resolution_ctx,
-        //                     async_sourcer.schema.clone(),
-        //                     *start,
-        //                 );
-        //                 AsyncSourcer::create(self.ctx.clone(), output, inner)
-        //             }
-        //         }
-        //     },
-        //     1,
-        // )?;
-        Ok(())
     }
 
     // build replace into pipeline.
@@ -460,7 +429,6 @@ impl RawValueSource {
         schema: DataSchemaRef,
         start: usize,
     ) -> Self {
-        println!("schema: {:?}", schema);
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
 
