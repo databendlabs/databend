@@ -25,6 +25,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::Append;
+use super::AppendType;
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
 use super::RenameDictionaryPlan;
@@ -147,6 +149,7 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
@@ -244,6 +247,8 @@ pub enum Plan {
         stage_table_info: Option<Box<StageTableInfo>>,
         overwrite: bool,
         forbid_occ_retry: bool,
+        append_type: AppendType,
+        target_table_index: IndexType,
     },
     CopyIntoLocation(CopyIntoLocationPlan),
 
@@ -476,7 +481,6 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::DescPasswordPolicy(plan) => plan.schema(),
-            // Plan::CopyIntoTable(plan) => plan.schema(),
             Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
@@ -489,6 +493,7 @@ impl Plan {
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
+            Plan::Append { append_type, .. } => Append::schema(append_type),
 
             _ => Arc::new(DataSchema::empty()),
         }

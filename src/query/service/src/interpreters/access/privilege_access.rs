@@ -40,6 +40,7 @@ use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RewriteKind;
+use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -1002,18 +1003,22 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
-            // Others.
-            // Plan::Insert(plan) => {
-            //     let target_table_privileges = if plan.overwrite {
-            //         vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
-            //     } else {
-            //         vec![UserPrivilegeType::Insert]
-            //     };
-            //     for privilege in target_table_privileges {
-            //         self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false, false).await?;
-            //     }
-            //     self.validate_insert_source(ctx, &plan.source).await?;
-            // }
+            Plan::Append { s_expr, target_table_index,metadata,overwrite,.. } => {
+                let target_table_privileges = if *overwrite {
+                    vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
+                } else {
+                    vec![UserPrivilegeType::Insert]
+                };
+                let (catalog, database, table) = {
+                    let metadata_guard = metadata.read();
+                    let table_entry = metadata_guard.table(*target_table_index);
+                    (table_entry.catalog().to_string(), table_entry.database().to_string(), table_entry.name().to_string())
+                };
+                for privilege in target_table_privileges {
+                    self.validate_table_access(&catalog, &database, &table, privilege, false, false).await?;
+                }
+                self.check(ctx, &Plan::Query { s_expr:s_expr.clone(), metadata: metadata.clone(), bind_context: Box::new(BindContext::new()), rewrite_kind: None, formatted_ast: None, ignore_result: false }).await?;
+            }
             Plan::InsertMultiTable(plan) => {
                 let target_table_privileges = if plan.overwrite {
                     vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
@@ -1163,16 +1168,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
-            }
-            Plan::Append { .. } => {
-                // match &plan.source{
-
-                // }
-                // self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                // self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
-                // if let Some(query) = &plan.query {
-                //     self.check(ctx, query).await?;
-                // }
             }
             Plan::CopyIntoLocation(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;

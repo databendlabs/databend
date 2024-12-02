@@ -182,7 +182,6 @@ impl Binder {
             required_values_schema: schema.clone(),
             values_consts: vec![],
             required_source_schema: schema,
-            append_type: AppendType::Insert,
             project_columns,
         };
 
@@ -195,6 +194,8 @@ impl Binder {
             stage_table_info: None,
             overwrite: *overwrite,
             forbid_occ_retry: false,
+            append_type: AppendType::Insert,
+            target_table_index: table_index,
         })
     }
 }

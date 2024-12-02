@@ -57,10 +57,9 @@ pub struct Append {
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
     pub project_columns: Option<Vec<ColumnBinding>>,
-    pub append_type: AppendType,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum AppendType {
     Insert,
     CopyInto,
@@ -107,7 +106,6 @@ pub async fn create_append_plan_from_subquery(
         values_consts: vec![],
         required_source_schema: target_schema,
         project_columns,
-        append_type: AppendType::Insert,
     };
 
     let optimized_append = optimize_append(insert_plan, source, metadata.clone(), ctx.as_ref())?;
@@ -118,6 +116,8 @@ pub async fn create_append_plan_from_subquery(
         stage_table_info: None,
         overwrite,
         forbid_occ_retry,
+        append_type: AppendType::Insert,
+        target_table_index: table_index,
     })
 }
 
@@ -283,8 +283,8 @@ impl Append {
         ])
     }
 
-    pub fn schema(&self) -> DataSchemaRef {
-        match self.append_type {
+    pub fn schema(append_type: &AppendType) -> DataSchemaRef {
+        match append_type {
             AppendType::CopyInto => Self::copy_into_table_schema(),
             AppendType::Insert => Arc::new(DataSchema::empty()),
         }
@@ -303,6 +303,17 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         plan: &crate::plans::Append,
     ) -> Result<PhysicalPlan> {
+        if plan
+            .project_columns
+            .as_ref()
+            .is_some_and(|p| p.len() != plan.required_source_schema.num_fields())
+        {
+            return Err(ErrorCode::BadArguments(format!(
+                "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
+                plan.project_columns.as_ref().unwrap().len(),
+                plan.required_source_schema.num_fields(),
+            )));
+        }
         let target_table = self.metadata.read().table(plan.table_index).table();
 
         let column_set = plan

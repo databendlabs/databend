@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -28,8 +27,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::AppendType;
-use databend_common_sql::plans::RelOperator;
-use log::debug;
+use databend_common_sql::IndexType;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -41,7 +39,6 @@ use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::Append;
 use crate::sql::MetadataRef;
 use crate::stream::DataBlockStream;
 
@@ -49,9 +46,11 @@ pub struct AppendInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     metadata: MetadataRef,
+    target_table_index: IndexType,
     stage_table_info: Option<Box<StageTableInfo>>,
     overwrite: bool,
-    col_type_modified: bool,
+    forbid_occ_retry: bool,
+    append_type: AppendType,
 }
 
 #[async_trait::async_trait]
@@ -67,24 +66,12 @@ impl Interpreter for AppendInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "append_interpreter_execute");
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
-
-        let append: Append = match &self.s_expr.plan() {
-            RelOperator::Append(append) => append.clone(),
-            RelOperator::Exchange(_) => self.s_expr.child(0).unwrap().plan().clone().try_into()?,
-            plan => {
-                return Err(ErrorCode::Internal(format!(
-                    "AppendInterpreter: unexpected plan type: {:?}",
-                    plan
-                )));
-            }
-        };
         let (target_table, catalog, database, table) = {
             let metadata = self.metadata.read();
-            let t = metadata.table(append.table_index);
+            let t = metadata.table(self.target_table_index);
             (
                 t.table(),
                 t.catalog().to_string(),
@@ -92,19 +79,7 @@ impl Interpreter for AppendInterpreter {
                 t.name().to_string(),
             )
         };
-
         target_table.check_mutable()?;
-        if append
-            .project_columns
-            .as_ref()
-            .is_some_and(|p| p.len() != append.required_source_schema.num_fields())
-        {
-            return Err(ErrorCode::BadArguments(format!(
-                "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
-                append.project_columns.as_ref().unwrap().len(),
-                append.required_source_schema.num_fields(),
-            )));
-        }
 
         // 1. build source and append pipeline
         let mut build_res = {
@@ -137,7 +112,7 @@ impl Interpreter for AppendInterpreter {
             copied_files_meta_req,
             update_stream_meta,
             self.overwrite,
-            self.col_type_modified,
+            self.forbid_occ_retry,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 
@@ -184,12 +159,7 @@ impl Interpreter for AppendInterpreter {
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let append: Append = match &self.s_expr.plan() {
-            RelOperator::Append(append) => append.clone(),
-            RelOperator::Exchange(_) => self.s_expr.child(0).unwrap().plan().clone().try_into()?,
-            _ => unreachable!(),
-        };
-        match &append.append_type {
+        match &self.append_type {
             AppendType::CopyInto => {
                 let blocks = self.get_copy_into_table_result()?;
                 Ok(Box::pin(DataBlockStream::create(None, blocks)))
@@ -206,7 +176,9 @@ impl AppendInterpreter {
         metadata: MetadataRef,
         stage_table_info: Option<Box<StageTableInfo>>,
         overwrite: bool,
-        col_type_modified: bool,
+        forbid_occ_retry: bool,
+        append_type: AppendType,
+        table_index: IndexType,
     ) -> Result<Self> {
         Ok(AppendInterpreter {
             ctx,
@@ -214,7 +186,9 @@ impl AppendInterpreter {
             metadata,
             stage_table_info,
             overwrite,
-            col_type_modified,
+            forbid_occ_retry,
+            append_type,
+            target_table_index: table_index,
         })
     }
 

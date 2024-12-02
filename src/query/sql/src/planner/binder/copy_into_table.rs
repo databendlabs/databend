@@ -107,6 +107,7 @@ impl<'a> Binder {
                     bind_context,
                     copy_into_table_plan,
                     stage_table_info,
+                    AppendType::CopyInto,
                 )
                 .await
             }
@@ -255,7 +256,6 @@ impl<'a> Binder {
             required_source_schema: required_values_schema.clone(),
             required_values_schema: required_values_schema.clone(),
             project_columns: None,
-            append_type: AppendType::CopyInto,
         };
         Ok((copy_into_plan, stage_table_info))
     }
@@ -267,6 +267,7 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         mut copy_into_table_plan: Append,
         stage_table_info: StageTableInfo,
+        append_type: AppendType,
     ) -> Result<Plan> {
         let use_query = matches!(&stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
@@ -343,10 +344,12 @@ impl<'a> Binder {
                 SExpr::create_unary(Arc::new(copy_into_table_plan.into()), Arc::new(scan));
             Ok(Plan::Append {
                 s_expr: Box::new(copy_into),
+                target_table_index: table_index,
                 metadata: self.metadata.clone(),
                 stage_table_info: Some(Box::new(stage_table_info)),
                 overwrite: false,
                 forbid_occ_retry: false,
+                append_type,
             })
         }
     }
@@ -467,7 +470,6 @@ impl<'a> Binder {
             required_values_schema,
             values_consts: const_columns,
             required_source_schema: data_schema.clone(),
-            append_type: AppendType::Insert,
             project_columns: None,
         };
 
@@ -475,6 +477,7 @@ impl<'a> Binder {
             bind_context,
             copy_into_table_plan,
             stage_table_info,
+            AppendType::Insert,
         )
         .await
     }
@@ -564,15 +567,18 @@ impl<'a> Binder {
             }
         }
 
+        let target_table_index = copy_into_table_plan.table_index;
         let copy_into =
             SExpr::create_unary(Arc::new(copy_into_table_plan.into()), Arc::new(s_expr));
 
         Ok(Plan::Append {
             s_expr: Box::new(copy_into),
+            target_table_index,
             metadata: self.metadata.clone(),
             stage_table_info: Some(Box::new(stage_table_info)),
             overwrite: false,
             forbid_occ_retry: false,
+            append_type: AppendType::CopyInto,
         })
     }
 

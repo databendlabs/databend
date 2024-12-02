@@ -294,6 +294,8 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             stage_table_info,
             overwrite,
             forbid_occ_retry,
+            append_type,
+            target_table_index,
         } => {
             let append: Append = s_expr.plan().clone().try_into()?;
             let source = s_expr.child(0)?.clone();
@@ -310,6 +312,8 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                 stage_table_info,
                 overwrite,
                 forbid_occ_retry,
+                append_type,
+                target_table_index,
             })
         }
         Plan::DataMutation { s_expr, .. } => optimize_mutation(opt_ctx, *s_expr).await,
