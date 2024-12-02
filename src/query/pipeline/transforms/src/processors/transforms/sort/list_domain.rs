@@ -393,11 +393,16 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct EndDomain {
-    pub min: usize,
-    pub max: usize,
+    min: usize,
+    max: usize,
 }
 
 impl EndDomain {
+    pub fn new(min: usize, max: usize) -> EndDomain {
+        assert!(min <= max);
+        EndDomain { min, max }
+    }
+
     fn done(&self) -> bool {
         self.min == self.max
     }
@@ -489,10 +494,7 @@ impl std::iter::Sum for EndDomain {
 
 impl From<std::ops::RangeInclusive<usize>> for EndDomain {
     fn from(value: std::ops::RangeInclusive<usize>) -> Self {
-        EndDomain {
-            min: *value.start(),
-            max: *value.end(),
-        }
+        EndDomain::new(*value.start(), *value.end())
     }
 }
 
