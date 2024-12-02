@@ -47,6 +47,29 @@ fn bench(c: &mut Criterion) {
             group.bench_function(format!("concat_string_view/{length}"), |b| {
                 b.iter(|| Column::concat_columns(str_col.clone()).unwrap())
             });
+
+            let binary_col = BinaryType::column_from_iter(b.iter().cloned(), &[]);
+            let mut c = 0;
+            group.bench_function(format!("binary_sum_len/{length}"), |b| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..binary_col.len() {
+                        sum += binary_col.value(i).len();
+                    }
+
+                    c += sum;
+                })
+            });
+
+            group.bench_function(format!("binary_sum_len_unchecked/{length}"), |b| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..binary_col.len() {
+                        sum += unsafe { binary_col.index_unchecked(i).len() };
+                    }
+                    c += sum;
+                })
+            });
         }
     }
 
@@ -229,7 +252,7 @@ criterion_group!(benches, bench);
 criterion_main!(benches);
 
 fn generate_random_string_data(rng: &mut StdRng, length: usize) -> (Vec<String>, Vec<Vec<u8>>) {
-    let iter_str: Vec<_> = (0..10000)
+    let iter_str: Vec<_> = (0..102400)
         .map(|_| {
             let random_string: String = (0..length)
                 .map(|_| {
