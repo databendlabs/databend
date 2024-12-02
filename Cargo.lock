@@ -1645,6 +1645,11 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
+version = "3.12.0"
+source = "git+https://github.com/fitzgen/bumpalo.git?rev=50ba1bdd406665bd2e6ba430e167a38ed1b13964#50ba1bdd406665bd2e6ba430e167a38ed1b13964"
+
+[[package]]
+name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
@@ -2510,7 +2515,7 @@ version = "0.109.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0d5b0dcd4a4e18c6352304d76f1c63258b5b2c248fc261b89c3a02952d51ff"
 dependencies = [
- "bumpalo",
+ "bumpalo 3.16.0",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
@@ -3277,7 +3282,7 @@ dependencies = [
  "async-backtrace",
  "base64 0.22.1",
  "borsh",
- "bumpalo",
+ "bumpalo 3.12.0",
  "chrono",
  "chrono-tz 0.8.6",
  "comfy-table",
@@ -3365,7 +3370,7 @@ dependencies = [
  "blake3",
  "borsh",
  "bstr",
- "bumpalo",
+ "bumpalo 3.12.0",
  "chrono",
  "comfy-table",
  "crc32fast",
@@ -3440,7 +3445,7 @@ name = "databend-common-hashtable"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.11",
- "bumpalo",
+ "bumpalo 3.12.0",
  "cfg-if",
  "databend-common-base",
  "databend-common-column",
@@ -4951,7 +4956,7 @@ dependencies = [
  "backon",
  "base64 0.22.1",
  "buf-list",
- "bumpalo",
+ "bumpalo 3.12.0",
  "byte-unit 4.0.19",
  "byteorder",
  "bytes",
@@ -13343,7 +13348,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa84f535d2d2413ee4055537b34858544bb6e17f94da83215e699c094ae4b651"
 dependencies = [
  "arrayref",
- "bumpalo",
+ "bumpalo 3.16.0",
  "bytes",
  "cfg-if",
  "faststr",
@@ -15347,7 +15352,7 @@ version = "0.2.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9de396da306523044d3302746f1208fa71d7532227f15e347e2d93e4145dd77b"
 dependencies = [
- "bumpalo",
+ "bumpalo 3.16.0",
  "log",
  "once_cell",
  "proc-macro2",
@@ -15461,7 +15466,7 @@ dependencies = [
  "addr2line 0.21.0",
  "anyhow",
  "async-trait",
- "bumpalo",
+ "bumpalo 3.16.0",
  "cc",
  "cfg-if",
  "encoding_rs",
@@ -15720,7 +15725,7 @@ version = "215.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ff1d00d893593249e60720be04a7c1f42f1c4dc3806a2869f4e66ab61eb54cb"
 dependencies = [
- "bumpalo",
+ "bumpalo 3.16.0",
  "leb128",
  "memchr",
  "unicode-width",
