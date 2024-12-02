@@ -265,7 +265,7 @@ impl<'a> Binder {
     async fn bind_copy_into_table_from_location(
         &mut self,
         bind_ctx: &BindContext,
-        mut copy_into_table_plan: Append,
+        mut append_plan: Append,
         stage_table_info: StageTableInfo,
         append_type: AppendType,
     ) -> Result<Plan> {
@@ -276,9 +276,9 @@ impl<'a> Binder {
 
         if use_query {
             let mut select_list =
-                Vec::with_capacity(copy_into_table_plan.required_source_schema.num_fields());
+                Vec::with_capacity(append_plan.required_source_schema.num_fields());
 
-            for dest_field in copy_into_table_plan.required_source_schema.fields().iter() {
+            for dest_field in append_plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
                     column: ColumnRef {
@@ -317,7 +317,7 @@ impl<'a> Binder {
 
             self.bind_copy_from_query_into_table(
                 bind_ctx,
-                copy_into_table_plan,
+                append_plan,
                 stage_table_info,
                 &select_list,
                 &None,
@@ -338,13 +338,13 @@ impl<'a> Binder {
 
             let (scan, bind_context) =
                 self.bind_base_table(bind_ctx, "system", table_index, None, &None)?;
-            copy_into_table_plan.project_columns = Some(bind_context.columns.clone());
+            append_plan.project_columns = Some(bind_context.columns.clone());
+            let target_table_index = append_plan.table_index;
 
-            let copy_into =
-                SExpr::create_unary(Arc::new(copy_into_table_plan.into()), Arc::new(scan));
+            let s_expr = SExpr::create_unary(Arc::new(append_plan.into()), Arc::new(scan));
             Ok(Plan::Append {
-                s_expr: Box::new(copy_into),
-                target_table_index: table_index,
+                s_expr: Box::new(s_expr),
+                target_table_index,
                 metadata: self.metadata.clone(),
                 stage_table_info: Some(Box::new(stage_table_info)),
                 overwrite: false,
