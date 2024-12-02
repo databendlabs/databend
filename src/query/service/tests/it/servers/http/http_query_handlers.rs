@@ -1384,6 +1384,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1409,6 +1410,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1429,6 +1431,7 @@ async fn test_affect() -> Result<()> {
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1451,6 +1454,7 @@ async fn test_affect() -> Result<()> {
                 name: "db2".to_string(),
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("db2".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1475,6 +1479,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![true],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
