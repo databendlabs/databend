@@ -26,6 +26,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::Append;
 use databend_common_sql::plans::AppendType;
 use databend_common_sql::IndexType;
 use log::info;
@@ -69,16 +70,8 @@ impl Interpreter for AppendInterpreter {
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
-        let (target_table, catalog, database, table) = {
-            let metadata = self.metadata.read();
-            let t = metadata.table(self.target_table_index);
-            (
-                t.table(),
-                t.catalog().to_string(),
-                t.database().to_string(),
-                t.name().to_string(),
-            )
-        };
+        let (target_table, catalog, database, table) =
+            Append::target_table(&self.metadata, self.target_table_index);
         target_table.check_mutable()?;
 
         // 1. build source and append pipeline

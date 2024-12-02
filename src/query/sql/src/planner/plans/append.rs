@@ -47,6 +47,7 @@ use crate::optimizer::optimize_append;
 use crate::optimizer::SExpr;
 use crate::ColumnBinding;
 use crate::IndexType;
+use crate::MetadataRef;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Append {
@@ -288,6 +289,20 @@ impl Append {
             AppendType::CopyInto => Self::copy_into_table_schema(),
             AppendType::Insert => Arc::new(DataSchema::empty()),
         }
+    }
+
+    pub fn target_table(
+        metadata: &MetadataRef,
+        table_index: IndexType,
+    ) -> (Arc<dyn Table>, String, String, String) {
+        let metadata = metadata.read();
+        let t = metadata.table(table_index);
+        (
+            t.table(),
+            t.catalog().to_string(),
+            t.database().to_string(),
+            t.name().to_string(),
+        )
     }
 }
 

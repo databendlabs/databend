@@ -13,25 +13,31 @@ create table t2(a int, b int);
 query T
 explain insert overwrite t1 values(1, 2), (2, 3), (3, 4), (8, 9);
 ----
-InsertPlan (values):
-├── table: default.default.t1
-├── inserted columns: [t1.a (#0),t1.b (#1)]
-└── overwrite: true
+Append
+├── target table: [catalog: default] [desc: 'default'.'t1']
+├── required columns: [#a, #b]
+└── ValueScan
+    └── values: [4] rows
 
 query T
 explain insert into t2 select * from t1 where a=1;
 ----
-InsertPlan (subquery):
-├── table: default.default.t2
-├── inserted columns: [t2.a (#0),t2.b (#1)]
-├── overwrite: false
+Append
+├── target table: [catalog: default] [desc: 'default'.'t2']
+├── required columns: [#a, #b]
 └── Filter
-    ├── filters: [eq(t1.a (#0), 1)]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: [eq(t1.a (#0), 1)]
-        ├── order by: []
-        └── limit: NONE
+    ├── output columns: [t1.a (#2), t1.b (#3)]
+    ├── filters: [is_true(t1.a (#2) = 1)]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.t1
+        ├── output columns: [a (#2), b (#3)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(t1.a (#2) = 1)], limit: NONE]
+        └── estimated rows: 0.00
 
 
 

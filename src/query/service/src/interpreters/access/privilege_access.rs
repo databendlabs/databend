@@ -34,6 +34,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::optimizer::get_udf_names;
+use databend_common_sql::plans::Append;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
@@ -1009,11 +1010,8 @@ impl AccessChecker for PrivilegeAccess {
                 } else {
                     vec![UserPrivilegeType::Insert]
                 };
-                let (catalog, database, table) = {
-                    let metadata_guard = metadata.read();
-                    let table_entry = metadata_guard.table(*target_table_index);
-                    (table_entry.catalog().to_string(), table_entry.database().to_string(), table_entry.name().to_string())
-                };
+                let (_, catalog, database, table) =
+                    Append::target_table(metadata, *target_table_index);
                 for privilege in target_table_privileges {
                     self.validate_table_access(&catalog, &database, &table, privilege, false, false).await?;
                 }

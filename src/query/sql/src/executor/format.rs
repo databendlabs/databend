@@ -26,6 +26,8 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
+use super::physical_plans::PhysicalValueScan;
+use super::physical_plans::Values;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -367,7 +369,7 @@ fn to_format_tree(
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::Append(plan) => format_append(plan),
+        PhysicalPlan::Append(plan) => append_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CopyIntoLocation(plan) => copy_into_location(plan),
         PhysicalPlan::ReplaceDeduplicate(_) => {
             Ok(FormatTreeNode::new("ReplaceDeduplicate".to_string()))
@@ -478,9 +480,7 @@ fn to_format_tree(
             ))
         }
         PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::ValueScan(plan) => {
-            Ok(FormatTreeNode::new(format!("ValueScan: {}", plan.plan_id)))
-        }
+        PhysicalPlan::ValueScan(plan) => value_scan_to_format_tree(plan, metadata, profs),
     }
 }
 
@@ -686,8 +686,56 @@ fn format_add_stream_column(
     to_format_tree(&plan.input, metadata, profs)
 }
 
-fn format_append(plan: &PhysicalAppend) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new(format!("Append: {}", plan.table_info)))
+fn append_to_format_tree(
+    plan: &PhysicalAppend,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+    let target_table = FormatTreeNode::new(format!(
+        "target table: [catalog: {}] [desc: {}]",
+        plan.table_info.catalog_info.name_ident.catalog_name, plan.table_info.desc
+    ));
+    children.push(target_table);
+    let required_columns =
+        format_output_columns(plan.required_values_schema.clone(), metadata, false);
+    children.push(FormatTreeNode::new(format!(
+        "required columns: [{}]",
+        required_columns
+    )));
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
+    Ok(FormatTreeNode::with_children(
+        "Append".to_string(),
+        children,
+    ))
+}
+
+fn value_scan_to_format_tree(
+    plan: &PhysicalValueScan,
+    _metadata: &Metadata,
+    _profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+    match &plan.values {
+        Values::Values(values) => {
+            children.push(FormatTreeNode::new(format!(
+                "values: [{}] rows",
+                values.len()
+            )));
+        }
+        Values::RawValues { rest_str, start } => {
+            children.push(FormatTreeNode::new(format!(
+                "raw values: string length [{}], start [{}]",
+                rest_str.len(),
+                start
+            )));
+        }
+    }
+    Ok(FormatTreeNode::with_children(
+        "ValueScan".to_string(),
+        children,
+    ))
 }
 
 fn copy_into_location(_: &CopyIntoLocation) -> Result<FormatTreeNode<String>> {
