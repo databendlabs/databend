@@ -69,7 +69,7 @@ pub fn run_mysql_source() {
 struct Backend {
     table: String,
     schema: Vec<Column>,
-    block: Vec<Vec<Value>>,
+    block: Vec<Vec<Option<Value>>>,
 
     prepared_id: u32,
     prepared: HashMap<u32, (usize, Vec<usize>, Vec<Expr>)>,
@@ -112,27 +112,42 @@ impl Backend {
             },
         ];
 
-        let block = vec![
-            vec![Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4)],
+        let block: Vec<Vec<Option<Value>>> = vec![
             vec![
-                Value::Bytes("Alice".as_bytes().to_vec()),
-                Value::Bytes("Bob".as_bytes().to_vec()),
-                Value::Bytes("Lily".as_bytes().to_vec()),
-                Value::Bytes("Tom".as_bytes().to_vec()),
+                Some(Value::Int(1)),
+                Some(Value::Int(2)),
+                Some(Value::Int(3)),
+                Some(Value::Int(4)),
+                Some(Value::Int(5)),
             ],
             vec![
-                Value::UInt(24),
-                Value::UInt(35),
-                Value::UInt(41),
-                Value::UInt(55),
+                Some(Value::Bytes("Alice".as_bytes().to_vec())),
+                Some(Value::Bytes("Bob".as_bytes().to_vec())),
+                Some(Value::Bytes("Lily".as_bytes().to_vec())),
+                Some(Value::Bytes("Tom".as_bytes().to_vec())),
+                None,
             ],
             vec![
-                Value::Double(100.0),
-                Value::Double(200.1),
-                Value::Double(1000.20),
-                Value::Double(3000.55),
+                Some(Value::UInt(24)),
+                Some(Value::UInt(35)),
+                Some(Value::UInt(41)),
+                Some(Value::UInt(55)),
+                None,
             ],
-            vec![Value::Int(1), Value::Int(0), Value::Int(1), Value::Int(0)],
+            vec![
+                Some(Value::Double(100.0)),
+                Some(Value::Double(200.1)),
+                Some(Value::Double(1000.20)),
+                Some(Value::Double(3000.55)),
+                None,
+            ],
+            vec![
+                Some(Value::Int(1)),
+                Some(Value::Int(0)),
+                Some(Value::Int(1)),
+                Some(Value::Int(0)),
+                None,
+            ],
         ];
 
         Self {
@@ -242,7 +257,7 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
         let key_field = self.schema[*key_idx].clone();
         let key_column = self.block[*key_idx].clone();
 
-        // find matched rows by compare key params.
+        // step-1: find matched rows by compare key params.
         let mut rows: Vec<Option<usize>> = vec![];
         match key_field.coltype {
             ColumnType::MYSQL_TYPE_TINY => {
@@ -254,9 +269,11 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     let key = param.parse::<bool>().unwrap();
                     let key_param = Value::Int(key.into());
                     for (i, key) in key_column.iter().enumerate() {
-                        if key == &key_param {
-                            rows.push(Some(i));
-                            break;
+                        if let Some(key) = key {
+                            if key == &key_param {
+                                rows.push(Some(i));
+                                break;
+                            }
                         }
                     }
                 }
@@ -270,9 +287,11 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     let key = param.parse::<u64>().unwrap();
                     let key_param = Value::UInt(key);
                     for (i, key) in key_column.iter().enumerate() {
-                        if key == &key_param {
-                            rows.push(Some(i));
-                            break;
+                        if let Some(key) = key {
+                            if key == &key_param {
+                                rows.push(Some(i));
+                                break;
+                            }
                         }
                     }
                 }
@@ -286,9 +305,11 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     let key = param.parse::<i64>().unwrap();
                     let key_param = Value::Int(key);
                     for (i, key) in key_column.iter().enumerate() {
-                        if key == &key_param {
-                            rows.push(Some(i));
-                            break;
+                        if let Some(key) = key {
+                            if key == &key_param {
+                                rows.push(Some(i));
+                                break;
+                            }
                         }
                     }
                 }
@@ -302,9 +323,11 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     let key = param.parse::<f64>().unwrap();
                     let key_param = Value::Double(key);
                     for (i, key) in key_column.iter().enumerate() {
-                        if key == &key_param {
-                            rows.push(Some(i));
-                            break;
+                        if let Some(key) = key {
+                            if key == &key_param {
+                                rows.push(Some(i));
+                                break;
+                            }
                         }
                     }
                 }
@@ -322,9 +345,11 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     let key = param_str.as_bytes().to_vec();
                     let key_param = Value::Bytes(key);
                     for (i, key) in key_column.iter().enumerate() {
-                        if key == &key_param {
-                            rows.push(Some(i));
-                            break;
+                        if let Some(key) = key {
+                            if key == &key_param {
+                                rows.push(Some(i));
+                                break;
+                            }
                         }
                     }
                 }
@@ -332,6 +357,7 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
             _ => {}
         }
 
+        // step-2: write columns based on the matched rows
         // return NULL if params not matched.
         if rows.is_empty() {
             return results.completed(0, 0);
@@ -346,7 +372,6 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
         let value_column2 = self.block[value_idx2].clone();
 
         let cols = vec![value_field1.clone(), value_field2.clone()];
-
         let mut rw = results.start(&cols)?;
 
         for row in rows.into_iter().map(|r| r.unwrap()) {
@@ -357,51 +382,56 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                 (value2, value_field2.clone()),
             ] {
                 match value {
-                    Value::Bytes(v) => {
-                        rw.write_col(v)?;
-                    }
-                    Value::Int(v) => match value_field.coltype {
-                        ColumnType::MYSQL_TYPE_TINY => {
-                            rw.write_col(v as i8)?;
+                    Some(val) => match val {
+                        Value::Bytes(v) => {
+                            rw.write_col(v)?;
                         }
-                        ColumnType::MYSQL_TYPE_SHORT => {
-                            rw.write_col(v as u16)?;
+                        Value::Int(v) => match value_field.coltype {
+                            ColumnType::MYSQL_TYPE_TINY => {
+                                rw.write_col(v as i8)?;
+                            }
+                            ColumnType::MYSQL_TYPE_SHORT => {
+                                rw.write_col(v as u16)?;
+                            }
+                            ColumnType::MYSQL_TYPE_LONG => {
+                                rw.write_col(v as i32)?;
+                            }
+                            ColumnType::MYSQL_TYPE_LONGLONG => {
+                                rw.write_col(v)?;
+                            }
+                            _ => {
+                                unreachable!()
+                            }
+                        },
+                        Value::UInt(v) => match value_field.coltype {
+                            ColumnType::MYSQL_TYPE_TINY => {
+                                rw.write_col(v as u8)?;
+                            }
+                            ColumnType::MYSQL_TYPE_SHORT => {
+                                rw.write_col(v as u16)?;
+                            }
+                            ColumnType::MYSQL_TYPE_LONG => {
+                                rw.write_col(v as u32)?;
+                            }
+                            ColumnType::MYSQL_TYPE_LONGLONG => {
+                                rw.write_col(v)?;
+                            }
+                            _ => {
+                                unreachable!()
+                            }
+                        },
+                        Value::Float(v) => {
+                            rw.write_col(v)?;
                         }
-                        ColumnType::MYSQL_TYPE_LONG => {
-                            rw.write_col(v as i32)?;
-                        }
-                        ColumnType::MYSQL_TYPE_LONGLONG => {
+                        Value::Double(v) => {
                             rw.write_col(v)?;
                         }
                         _ => {
-                            unreachable!()
+                            rw.write_col("")?;
                         }
                     },
-                    Value::UInt(v) => match value_field.coltype {
-                        ColumnType::MYSQL_TYPE_TINY => {
-                            rw.write_col(v as u8)?;
-                        }
-                        ColumnType::MYSQL_TYPE_SHORT => {
-                            rw.write_col(v as u16)?;
-                        }
-                        ColumnType::MYSQL_TYPE_LONG => {
-                            rw.write_col(v as u32)?;
-                        }
-                        ColumnType::MYSQL_TYPE_LONGLONG => {
-                            rw.write_col(v)?;
-                        }
-                        _ => {
-                            unreachable!()
-                        }
-                    },
-                    Value::Float(v) => {
-                        rw.write_col(v)?;
-                    }
-                    Value::Double(v) => {
-                        rw.write_col(v)?;
-                    }
-                    _ => {
-                        rw.write_col("")?;
+                    None => {
+                        rw.write_col(None::<i64>)?;
                     }
                 }
             }
