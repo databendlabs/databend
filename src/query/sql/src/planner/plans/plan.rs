@@ -144,6 +144,7 @@ use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
+use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
@@ -189,6 +190,7 @@ pub enum Plan {
     ShowCreateCatalog(Box<ShowCreateCatalogPlan>),
     CreateCatalog(Box<CreateCatalogPlan>),
     DropCatalog(Box<DropCatalogPlan>),
+    UseCatalog(Box<UseCatalogPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),

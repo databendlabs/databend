@@ -272,6 +272,15 @@ fn pretty_group_by(group_by: Option<GroupBy>) -> RcDoc<'static> {
                 )
                 .append(RcDoc::line())
                 .append(RcDoc::text(")")),
+
+            GroupBy::Combined(sets) => RcDoc::line()
+                .append(RcDoc::text("GROUP BY ").append(RcDoc::line().nest(NEST_FACTOR)))
+                .append(
+                    interweave_comma(sets.into_iter().map(|s| RcDoc::text(s.to_string())))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line()),
         }
     } else {
         RcDoc::nil()

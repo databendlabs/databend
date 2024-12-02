@@ -142,7 +142,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t_variant(id Int null, var Variant null) Engine = Fuse
 
 statement ok
-INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')),                            (2, parse_json('{"k":"v"}')),                            (3, parse_json('"abcd"')),                            (4, parse_json('"abcd"')),                            (5, parse_json('12')),                            (6, parse_json('12')),                            (7, parse_json('[1,2,3]')),                            (8, parse_json('[1,2,3]'))
+INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')),        (2, parse_json('{"k":"v"}')),        (3, parse_json('"abcd"')),        (4, parse_json('"abcd"')),        (5, parse_json('12')),        (6, parse_json('12')),        (7, parse_json('[1,2,3]')),        (8, parse_json('[1,2,3]'))
 
 query IIT
 SELECT max(id) as n, min(id), var FROM t_variant GROUP BY var ORDER BY n ASC
@@ -159,7 +159,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t_array(id Int null, arr Array(Int32)) Engine = Fuse
 
 statement ok
-INSERT INTO t_array VALUES(1, []),                          (2, []),                          (3, [1,2,3]),                          (4, [1,2,3]),                          (5, [4,5,6]),                          (6, [4,5,6])
+INSERT INTO t_array VALUES(1, []),      (2, []),      (3, [1,2,3]),      (4, [1,2,3]),      (5, [4,5,6]),      (6, [4,5,6])
 
 query I
 select count() from numbers(10) group by 'ab'
@@ -300,3 +300,91 @@ select sum(number + 3 ), number % 3  from numbers(10) group by  sum(number + 3 )
 
 statement error (?s)1065.*GROUP BY items can't contain aggregate functions or window functions
 select sum(number + 3 ), number % 3  from numbers(10) group by  1, 2;
+
+
+# test grouping sets, rollup
+
+statement ok
+CREATE OR REPLACE TABLE sales (
+    brand VARCHAR NOT NULL,
+    segment VARCHAR NOT NULL,
+    quantity INT NOT NULL
+);
+
+statement ok
+INSERT INTO sales (brand, segment, quantity)
+VALUES
+    ('ABC', 'Premium', 100),
+    ('ABC', 'Basic', 200),
+    ('XYZ', 'Premium', 100),
+    ('XYZ', 'Basic', 300);
+
+query ITTI
+SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, GROUPING SETS(segment, quantity) order by 1,2,3;
+----
+100 ABC NULL 100
+100 XYZ NULL 100
+200 ABC NULL 200
+300 XYZ NULL 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+
+query ITTI
+SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, rollup(segment, quantity) order by 1,2,3;
+----
+100 ABC Premium 100
+100 XYZ Premium 100
+200 ABC Basic 200
+300 XYZ Basic 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL ABC NULL 300
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+NULL XYZ NULL 400
+
+query ITTI
+SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, rollup(quantity) , segment order by 1,2,3;
+----
+100 ABC Premium 100
+100 XYZ Premium 100
+200 ABC Basic 200
+300 XYZ Basic 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+
+
+
+
+## results are deduplicated in grouping sets, the results are not standard but acceptable.
+query ITTI
+SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, rollup(quantity), GROUPING sets(brand, segment, quantity) order by 1,2,3;
+----
+100 ABC Premium 100
+100 ABC NULL 100
+100 XYZ Premium 100
+100 XYZ NULL 100
+200 ABC Basic 200
+200 ABC NULL 200
+300 XYZ Basic 300
+300 XYZ NULL 300
+NULL ABC Basic 200
+NULL ABC Premium 100
+NULL ABC NULL 300
+NULL XYZ Basic 300
+NULL XYZ Premium 100
+NULL XYZ NULL 400
+
+## filter push down into grouping sets
+query ITTI
+select * from (SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    rollup( quantity, brand, segment) ) e   where e.segment = 'Basic' order by quantity desc;
+----
+300 XYZ Basic 300
+200 ABC Basic 200
+
+statement error
+SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, rollup(quantity), all;
