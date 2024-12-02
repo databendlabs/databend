@@ -37,7 +37,11 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         mode: TruncateMode,
     ) -> Result<()> {
-        self.build_truncate_pipeline(ctx, pipeline, mode)
+        if self.read_table_snapshot().await?.is_some() {
+            self.build_truncate_pipeline(ctx, pipeline, mode)
+        } else {
+            Ok(())
+        }
     }
 
     #[inline]
