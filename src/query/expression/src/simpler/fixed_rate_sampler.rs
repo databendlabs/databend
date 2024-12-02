@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 use rand::Rng;
 use rate_sampling::Sampling;
 
@@ -22,9 +24,9 @@ pub struct FixedRateSimpler<R: Rng> {
     columns: Vec<usize>,
     block_size: usize,
 
-    indices: Vec<BlockRowIndex>,
-    // dense_blocks: Vec<DataBlock>,
-    pub sparse_blocks: Vec<DataBlock>,
+    indices: VecDeque<Vec<BlockRowIndex>>,
+    sparse_blocks: Vec<DataBlock>,
+    pub dense_blocks: Vec<DataBlock>,
 
     core: Sampling<R>,
     s: usize,
@@ -43,9 +45,9 @@ impl<R: Rng> FixedRateSimpler<R> {
         Some(Self {
             columns,
             block_size,
-            indices: Vec::new(),
+            indices: VecDeque::new(),
             sparse_blocks: Vec::new(),
-            // dense_blocks: Vec::new(),
+            dense_blocks: Vec::new(),
             core,
             s,
         })
@@ -74,7 +76,14 @@ impl<R: Rng> FixedRateSimpler<R> {
         while rows - cur > self.s {
             change = true;
             cur += self.s;
-            self.indices.push((block_idx, cur as u32, 1));
+            match self.indices.back_mut() {
+                Some(back) if back.len() < self.block_size => back.push((block_idx, cur as u32, 1)),
+                _ => {
+                    let mut v = Vec::with_capacity(self.block_size);
+                    v.push((block_idx, cur as u32, 1));
+                    self.indices.push_back(v)
+                }
+            }
             self.s = self.core.search();
         }
 
@@ -82,8 +91,34 @@ impl<R: Rng> FixedRateSimpler<R> {
         change
     }
 
-    pub fn compact_blocks(&mut self) {
-        compact_blocks(&mut self.indices, &mut self.sparse_blocks, self.block_size)
+    pub fn compact_blocks(&mut self, is_final: bool) {
+        while self
+            .indices
+            .front()
+            .map_or(false, |indices| indices.len() == self.block_size)
+        {
+            let indices = self.indices.pop_front().unwrap();
+            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+            self.dense_blocks.push(block)
+        }
+
+        let Some(mut indices) = self.indices.pop_front() else {
+            self.sparse_blocks.clear();
+            return;
+        };
+        debug_assert!(self.indices.is_empty());
+
+        let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+        self.sparse_blocks.clear();
+        if is_final {
+            self.dense_blocks.push(block)
+        } else {
+            for index in indices.iter_mut() {
+                index.0 = 0
+            }
+            self.indices.push_back(indices);
+            self.sparse_blocks.push(block);
+        }
     }
 
     pub fn memory_size(self) -> usize {
@@ -93,28 +128,6 @@ impl<R: Rng> FixedRateSimpler<R> {
     pub fn num_rows(&self) -> usize {
         self.indices.len()
     }
-}
-
-fn compact_blocks(
-    indices: &mut Vec<BlockRowIndex>,
-    blocks: &mut Vec<DataBlock>,
-    block_size: usize,
-) {
-    *blocks = indices
-        .chunks_mut(block_size)
-        .enumerate()
-        .map(|(i, indices)| {
-            let rows = indices.len();
-            let block = DataBlock::take_blocks(blocks, indices, rows);
-
-            for (j, (b, r, _)) in indices.iter_mut().enumerate() {
-                *b = i as u32;
-                *r = j as u32;
-            }
-
-            block
-        })
-        .collect::<Vec<_>>();
 }
 
 mod rate_sampling {
@@ -155,6 +168,8 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
+    use crate::types::Int32Type;
+    use crate::utils::FromData;
 
     #[test]
     fn test_add_indices() {
@@ -164,8 +179,9 @@ mod tests {
         let mut simpler = FixedRateSimpler {
             columns: vec![0],
             block_size: 65536,
+            indices: VecDeque::new(),
             sparse_blocks: Vec::new(),
-            indices: Vec::new(),
+            dense_blocks: Vec::new(),
             core,
             s,
         };
@@ -173,7 +189,7 @@ mod tests {
         simpler.add_indices(15, 0);
 
         let want: Vec<BlockRowIndex> = vec![(0, 6, 1), (0, 9, 1), (0, 14, 1)];
-        assert_eq!(&want, &simpler.indices);
+        assert_eq!(Some(&want), simpler.indices.front());
         assert_eq!(3, simpler.s);
 
         simpler.add_indices(20, 1);
@@ -187,7 +203,103 @@ mod tests {
             (1, 15, 1),
             (1, 18, 1),
         ];
-        assert_eq!(&want, &simpler.indices);
+        assert_eq!(Some(&want), simpler.indices.front());
         assert_eq!(1, simpler.s);
+    }
+
+    #[test]
+    fn test_compact_blocks() {
+        let rng = StdRng::seed_from_u64(0);
+
+        let sparse_blocks = vec![
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3, 4, 5])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![6, 7, 8, 9, 10])]),
+        ];
+
+        let indices = VecDeque::from(vec![vec![(0, 1, 1), (0, 2, 1), (1, 0, 1)], vec![
+            (1, 1, 1),
+            (1, 2, 1),
+        ]]);
+
+        {
+            let core = Sampling::new(3..=6, rng.clone());
+            let mut simpler = FixedRateSimpler {
+                columns: vec![0],
+                block_size: 3,
+                indices: indices.clone(),
+                sparse_blocks: sparse_blocks.clone(),
+                dense_blocks: Vec::new(),
+                core,
+                s: 0,
+            };
+
+            simpler.compact_blocks(false);
+
+            assert_eq!(Some(&vec![(0, 1, 1), (0, 2, 1)]), simpler.indices.front());
+            assert_eq!(
+                &Int32Type::from_data(vec![7, 8]),
+                simpler.sparse_blocks[0].get_last_column()
+            );
+            assert_eq!(
+                &Int32Type::from_data(vec![2, 3, 6]),
+                simpler.dense_blocks[0].get_last_column()
+            );
+        }
+
+        {
+            let core = Sampling::new(3..=6, rng.clone());
+            let mut simpler = FixedRateSimpler {
+                columns: vec![0],
+                block_size: 3,
+                indices: indices.clone(),
+                sparse_blocks: sparse_blocks.clone(),
+                dense_blocks: Vec::new(),
+                core,
+                s: 0,
+            };
+
+            simpler.compact_blocks(true);
+
+            assert!(simpler.indices.is_empty());
+            assert_eq!(
+                &Int32Type::from_data(vec![2, 3, 6]),
+                simpler.dense_blocks[0].get_last_column()
+            );
+            assert_eq!(
+                &Int32Type::from_data(vec![7, 8]),
+                simpler.dense_blocks[1].get_last_column()
+            );
+        }
+
+        {
+            let indices = VecDeque::from(vec![vec![(0, 1, 1), (0, 2, 1), (1, 0, 1)], vec![
+                (1, 1, 1),
+                (1, 2, 1),
+                (1, 3, 1),
+            ]]);
+
+            let core = Sampling::new(3..=6, rng.clone());
+            let mut simpler = FixedRateSimpler {
+                columns: vec![0],
+                block_size: 3,
+                indices: indices.clone(),
+                sparse_blocks: sparse_blocks.clone(),
+                dense_blocks: Vec::new(),
+                core,
+                s: 0,
+            };
+
+            simpler.compact_blocks(false);
+
+            assert!(simpler.indices.is_empty());
+            assert_eq!(
+                &Int32Type::from_data(vec![2, 3, 6]),
+                simpler.dense_blocks[0].get_last_column()
+            );
+            assert_eq!(
+                &Int32Type::from_data(vec![7, 8, 9]),
+                simpler.dense_blocks[1].get_last_column()
+            );
+        }
     }
 }
