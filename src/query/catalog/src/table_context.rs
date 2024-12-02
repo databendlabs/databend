@@ -294,11 +294,23 @@ pub trait TableContext: Send + Sync {
 
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+    fn add_inserted_segment_location(&self, segment_loc: Location) -> Result<()>;
 
-    fn clear_segment_locations(&self) -> Result<()>;
+    fn clear_inserted_segment_locations(&self) -> Result<()>;
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+    fn get_inserted_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_target_segment_location(&self, _index: usize, _location: Location) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn get_target_segment_locations(&self) -> Result<Vec<(usize, Location)>> {
+        unimplemented!()
+    }
+
+    fn clear_target_segment_locations(&self) -> Result<()> {
+        unimplemented!()
+    }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 

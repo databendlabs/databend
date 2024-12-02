@@ -90,7 +90,7 @@ pub fn is_hilbert_recluster(table_alias_name: &Option<String>) -> bool {
             if let Ok(suffix) = i64::from_str_radix(alias_param[1], 16) {
                 // 2023-01-01 00:00:00.
                 let base_timestamp = 1672502400;
-                if suffix > base_timestamp && alias_param[0] == "_compact"{
+                if suffix > base_timestamp && alias_param[0] == "_compact" {
                     return true;
                 }
             }

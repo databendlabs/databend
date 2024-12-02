@@ -28,7 +28,8 @@ use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_view::view_table::QUERY;
-use databend_storages_common_table_meta::table::{get_change_type, is_hilbert_recluster};
+use databend_storages_common_table_meta::table::get_change_type;
+use databend_storages_common_table_meta::table::is_hilbert_recluster;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
