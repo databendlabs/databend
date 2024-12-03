@@ -375,6 +375,10 @@ pub trait TableContext: Send + Sync {
     fn get_shared_settings(&self) -> Arc<Settings>;
 
     fn get_runtime(&self) -> Result<Arc<Runtime>>;
+
+    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()>;
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

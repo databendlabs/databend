@@ -1000,6 +1000,14 @@ impl TableContext for CtxDelegation {
     fn get_runtime(&self) -> Result<Arc<Runtime>> {
         todo!()
     }
+
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

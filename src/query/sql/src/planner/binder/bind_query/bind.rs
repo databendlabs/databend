@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::CreateOption;
@@ -26,6 +25,7 @@ use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
 use databend_common_ast::ast::CTE;
 use databend_common_ast::Span;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -89,21 +89,17 @@ impl Binder {
                 .iter()
                 .map(|ident| self.normalize_identifier(ident).name)
                 .collect();
-            let mut cte_info = CteInfo {
+            let cte_info = CteInfo {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 recursive: with.recursive,
                 cte_idx: idx,
                 columns: vec![],
                 materialized: cte.materialized,
-                m_cte_name_to_temp_table: HashMap::new(),
             };
             // If the CTE is materialized, we'll construct a temp table for it.
             if cte.materialized {
-                let temp_table_name = self.m_cte_to_temp_table(cte)?;
-                cte_info
-                    .m_cte_name_to_temp_table
-                    .insert(cte.alias.name.name.clone(), temp_table_name);
+                self.m_cte_to_temp_table(cte)?;
             }
             bind_context
                 .cte_context
@@ -183,27 +179,27 @@ impl Binder {
     }
 
     // The return value is temp_table name`
-    fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<String> {
+    fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<()> {
         let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
             Engine::Fuse
         } else {
             Engine::Memory
         };
         let database = self.ctx.get_current_database();
-        let catalog = self.ctx.get_current_catalog();
-        let query_id = self.ctx.get_id();
-        // Navigate the temp table for cte to `cte_name + query_id`
-        // Avoid the conflict of the temp table name with the same name of user's temp table.
-        let table_name = format!(
-            "{}_{}",
-            cte.alias.name.name,
-            query_id.split('-').next().unwrap_or(&query_id)
-        );
+        if self
+            .ctx
+            .is_temp_table(CATALOG_DEFAULT, &database, &cte.alias.name.name)
+        {
+            return Err(ErrorCode::Internal(format!(
+                "Temporary table {:?} already exists in current session, please change the materialized CTE name",
+                cte.alias.name.name
+            )));
+        }
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::CreateOrReplace,
-            catalog: Some(Identifier::from_name(Span::None, catalog.clone())),
+            catalog: Some(Identifier::from_name(Span::None, CATALOG_DEFAULT)),
             database: Some(Identifier::from_name(Span::None, database.clone())),
-            table: Identifier::from_name(cte.alias.name.span, table_name.clone()),
+            table: cte.alias.name.clone(),
             source: None,
             engine: Some(engine),
             uri_location: None,
@@ -225,7 +221,10 @@ impl Binder {
         };
 
         self.ctx
-            .remove_table_from_cache(&catalog, &database, &cte.alias.name.name);
-        Ok(table_name)
+            .add_m_cte_temp_table(&database, &cte.alias.name.name);
+
+        self.ctx
+            .remove_table_from_cache(CATALOG_DEFAULT, &database, &cte.alias.name.name);
+        Ok(())
     }
 }
