@@ -136,7 +136,7 @@ impl Processor for TransformRangeJoinLeft {
                 if let Some(task_id) = task_id {
                     let res = match self.state.ie_join_state {
                         Some(ref _ie_join_state) => self.state.ie_join(task_id)?,
-                        None => self.state.merge_join(task_id)?,
+                        None => self.state.range_join(task_id)?,
                     };
                     for block in res {
                         if !block.is_empty() {
