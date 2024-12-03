@@ -92,7 +92,9 @@ where
 
         let column_iter = T::iter_column(&other);
         match validity {
-            Some(validity) if validity.null_count() > 0 => {
+            Some(validity)
+                if validity.null_count() > 0 && validity.null_count() < validity.len() =>
+            {
                 let v = column_iter
                     .zip(validity)
                     .filter(|(_, valid)| *valid)
@@ -102,7 +104,7 @@ where
                     let _ = self.add(v, function_data);
                 }
             }
-            Some(validity) if validity.null_count() == 0 => {}
+            Some(validity) if validity.null_count() == validity.len() => {}
             _ => {
                 let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
                 if let Some(v) = v {
