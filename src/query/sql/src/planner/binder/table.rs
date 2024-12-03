@@ -137,7 +137,6 @@ impl Binder {
             "system".to_string(),
             table.clone(),
             table_alias_name,
-            None,
             false,
             false,
             true,

@@ -98,7 +98,6 @@ impl Dataframe {
                 database.to_string(),
                 table_meta,
                 None,
-                None,
                 false,
                 false,
                 false,

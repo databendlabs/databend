@@ -349,18 +349,13 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
-        table_name: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_index: bool,
         source_of_stage: bool,
         consume: bool,
     ) -> IndexType {
-        let table_name = if let Some(table_name) = table_name {
-            table_name
-        } else {
-            table_meta.name().to_string()
-        };
+        let table_name = table_meta.name().to_string();
 
         let table_index = self.tables.len();
         // If exists table alias name, use it instead of origin name
