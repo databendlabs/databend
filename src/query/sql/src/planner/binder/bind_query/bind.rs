@@ -30,6 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::binder::CteInfo;
+use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -186,13 +187,14 @@ impl Binder {
             Engine::Memory
         };
         let database = self.ctx.get_current_database();
+        let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
         if self
             .ctx
-            .is_temp_table(CATALOG_DEFAULT, &database, &cte.alias.name.name)
+            .is_temp_table(CATALOG_DEFAULT, &database, &table_name)
         {
             return Err(ErrorCode::Internal(format!(
                 "Temporary table {:?} already exists in current session, please change the materialized CTE name",
-                cte.alias.name.name
+                table_name
             )));
         }
         let create_table_stmt = CreateTableStmt {
@@ -220,11 +222,10 @@ impl Binder {
             return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
         };
 
-        self.ctx
-            .add_m_cte_temp_table(&database, &cte.alias.name.name);
+        self.ctx.add_m_cte_temp_table(&database, &table_name);
 
         self.ctx
-            .remove_table_from_cache(CATALOG_DEFAULT, &database, &cte.alias.name.name);
+            .remove_table_from_cache(CATALOG_DEFAULT, &database, &table_name);
         Ok(())
     }
 }
