@@ -122,7 +122,7 @@ impl<O: Offset> Offsets<O> {
     /// # Error
     /// This function errors iff the new last item is larger than what `O` supports.
     /// # Panic
-    /// This function asserts that `length > 0`.
+    /// This function asserts that `length >= O::zero()`.
     #[inline]
     pub fn try_push(&mut self, length: O) -> Result<(), Error> {
         let old_length = self.last();
@@ -171,7 +171,7 @@ impl<O: Offset> Offsets<O> {
 
     /// Returns a range (start, end) corresponding to the position `index`
     /// # Panic
-    /// This function panics iff `index >= self.len()`
+    /// This function panics iff `index >= self.len_proxy()`
     #[inline]
     pub fn start_end(&self, index: usize) -> (usize, usize) {
         // soundness: the invariant of the function
@@ -456,7 +456,7 @@ impl<O: Offset> OffsetsBuffer<O> {
 
     /// Returns a range (start, end) corresponding to the position `index`
     /// # Panic
-    /// This function panics iff `index >= self.len()`
+    /// This function panics iff `index >= self.len_proxy()`
     #[inline]
     pub fn start_end(&self, index: usize) -> (usize, usize) {
         // soundness: the invariant of the function

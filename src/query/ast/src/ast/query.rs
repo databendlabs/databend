@@ -189,38 +189,8 @@ impl Display for SelectStmt {
         // GROUP BY clause
         if self.group_by.is_some() {
             write!(f, " GROUP BY ")?;
-            match self.group_by.as_ref().unwrap() {
-                GroupBy::Normal(exprs) => {
-                    write_comma_separated_list(f, exprs)?;
-                }
-                GroupBy::All => {
-                    write!(f, "ALL")?;
-                }
-                GroupBy::GroupingSets(sets) => {
-                    write!(f, "GROUPING SETS (")?;
-                    for (i, set) in sets.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "(")?;
-                        write_comma_separated_list(f, set)?;
-                        write!(f, ")")?;
-                    }
-                    write!(f, ")")?;
-                }
-                GroupBy::Cube(exprs) => {
-                    write!(f, "CUBE (")?;
-                    write_comma_separated_list(f, exprs)?;
-                    write!(f, ")")?;
-                }
-                GroupBy::Rollup(exprs) => {
-                    write!(f, "ROLLUP (")?;
-                    write_comma_separated_list(f, exprs)?;
-                    write!(f, ")")?;
-                }
-            }
+            write!(f, "{}", self.group_by.as_ref().unwrap())?;
         }
-
         // HAVING clause
         if let Some(having) = &self.having {
             write!(f, " HAVING {having}")?;
@@ -254,6 +224,60 @@ pub enum GroupBy {
     Cube(Vec<Expr>),
     /// GROUP BY ROLLUP ( expr [, expr]* )
     Rollup(Vec<Expr>),
+    Combined(Vec<GroupBy>),
+}
+
+impl GroupBy {
+    pub fn normal_items(&self) -> Vec<Expr> {
+        match self {
+            GroupBy::Normal(exprs) => exprs.clone(),
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl Display for GroupBy {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            GroupBy::Normal(exprs) => {
+                write_comma_separated_list(f, exprs)?;
+            }
+            GroupBy::All => {
+                write!(f, "ALL")?;
+            }
+            GroupBy::GroupingSets(sets) => {
+                write!(f, "GROUPING SETS (")?;
+                for (i, set) in sets.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, set)?;
+                    write!(f, ")")?;
+                }
+                write!(f, ")")?;
+            }
+            GroupBy::Cube(exprs) => {
+                write!(f, "CUBE (")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, ")")?;
+            }
+            GroupBy::Rollup(exprs) => {
+                write!(f, "ROLLUP (")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, ")")?;
+            }
+            GroupBy::Combined(group_bys) => {
+                for (i, group_by) in group_bys.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", group_by)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`

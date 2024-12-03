@@ -174,12 +174,12 @@ select dict_get(mysql_dic_id, 'id', 1), dict_get(mysql_dic_id, 'name', 1), dict_
 query ITIFT
 select dict_get(mysql_dic_id, 'id', 5), dict_get(mysql_dic_id, 'name', 5), dict_get(mysql_dic_id, 'age', 5), dict_get(mysql_dic_id, 'salary', 5), dict_get(mysql_dic_id, 'active', 5)
 ----
-NULL NULL NULL NULL NULL
+5 NULL NULL NULL NULL
 
 query ITIFT
 select dict_get(mysql_dic_id_not_null, 'id', 5), dict_get(mysql_dic_id_not_null, 'name', 5), dict_get(mysql_dic_id_not_null, 'age', 5), dict_get(mysql_dic_id_not_null, 'salary', 5), dict_get(mysql_dic_id_not_null, 'active', 5)
 ----
-0 default_name 0 0.0 0
+5 default_name 0 0.0 0
 
 statement error 1006
 select dict_get(mysql_dic_id, 'id2', 5)

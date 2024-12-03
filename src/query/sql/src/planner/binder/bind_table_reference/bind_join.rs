@@ -701,7 +701,7 @@ impl<'a> JoinConditionResolver<'a> {
         //   - Each side of `=` only contains columns from one table and the both sides are disjoint.
         //     For example, `t1.a + t1.b = t2.a` is a valid one while `t1.a + t2.a = t2.b` isn't.
         //
-        // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
+        // Only equi-predicate can be exploited by common join algorithms(e.g. sort-range join, hash join).
 
         let mut added = if let Some((left, right)) = split_equivalent_predicate_expr(predicate) {
             let (left, _) = scalar_binder.bind(&left)?;

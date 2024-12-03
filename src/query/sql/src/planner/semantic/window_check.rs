@@ -14,11 +14,8 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionKind;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
-use crate::format_scalar;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::SubqueryExpr;
@@ -39,62 +36,30 @@ impl<'a> WindowChecker<'a> {
 
 impl<'a> VisitorMut<'_> for WindowChecker<'a> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        match expr {
-            ScalarExpr::WindowFunction(win) => {
-                if let Some(column) = self
-                    .bind_context
-                    .windows
-                    .window_functions_map
-                    .get(&win.display_name)
-                {
-                    let window_info = &self.bind_context.windows.window_functions[*column];
-                    let column_binding = ColumnBindingBuilder::new(
-                        win.display_name.clone(),
-                        window_info.index,
-                        Box::new(window_info.func.return_type()),
-                        Visibility::Visible,
-                    )
-                    .build();
-                    *expr = BoundColumnRef {
-                        span: None,
-                        column: column_binding,
-                    }
-                    .into();
-                    return Ok(());
+        if let ScalarExpr::WindowFunction(win) = expr {
+            if let Some(column) = self
+                .bind_context
+                .windows
+                .window_functions_map
+                .get(&win.display_name)
+            {
+                let window_info = &self.bind_context.windows.window_functions[*column];
+                let column_binding = ColumnBindingBuilder::new(
+                    win.display_name.clone(),
+                    window_info.index,
+                    Box::new(window_info.func.return_type()),
+                    Visibility::Visible,
+                )
+                .build();
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
                 }
-
-                return Err(ErrorCode::Internal("Window Check: Invalid window function"));
+                .into();
+                return Ok(());
             }
-            ScalarExpr::FunctionCall(func) => {
-                if BUILTIN_FUNCTIONS
-                    .get_property(&func.func_name)
-                    .map(|property| property.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    let srf_display_name = format_scalar(expr);
-                    if let Some(index) = self.bind_context.srf_info.srfs_map.get(&srf_display_name)
-                    {
-                        // Rewrite srf function as a column.
-                        let srf_item = &self.bind_context.srf_info.srfs[*index];
 
-                        let column_binding = ColumnBindingBuilder::new(
-                            srf_display_name,
-                            srf_item.index,
-                            Box::new(srf_item.scalar.data_type()?),
-                            Visibility::Visible,
-                        )
-                        .build();
-                        *expr = BoundColumnRef {
-                            span: None,
-                            column: column_binding,
-                        }
-                        .into();
-                        return Ok(());
-                    }
-                    return Err(ErrorCode::Internal("Invalid Set-returning function"));
-                }
-            }
-            _ => {}
+            return Err(ErrorCode::Internal("Window Check: Invalid window function"));
         }
 
         walk_expr_mut(self, expr)

@@ -516,6 +516,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let use_catalog = map(
+        rule! {
+            USE ~ CATALOG ~ #ident
+        },
+        |(_, _, catalog)| Statement::UseCatalog { catalog },
+    );
 
     let show_databases = map(
         rule! {
@@ -2281,6 +2287,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
             | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
+        // use
+        rule!(
+                #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_database : "`USE <database>`"
+        ),
         // database
         rule!(
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
@@ -2290,7 +2301,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #use_database : "`USE <database>`"
         ),
         // network policy / password policy
         rule!(
