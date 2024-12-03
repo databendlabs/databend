@@ -1158,6 +1158,13 @@ impl DefaultSettings {
                     scope: SettingScope::Session,
                     range: None,
                 }),
+                ("hilbert_sample_size_per_block", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Specifies the number of sample points per block used in Hilbert clustering.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

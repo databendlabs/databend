@@ -357,6 +357,16 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             Ok(Plan::Set(plan))
         }
 
+        Plan::ReclusterTable { s_expr, is_final } => {
+            let s_expr = if s_expr.children.is_empty() {
+                s_expr
+            } else {
+                let input_s_expr = optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
+                Box::new(s_expr.replace_children(vec![Arc::new(input_s_expr)]))
+            };
+            Ok(Plan::ReclusterTable { s_expr, is_final })
+        }
+
         // Already done in binder
         // Plan::RefreshIndex(mut plan) => {
         //     // use fresh index
@@ -507,7 +517,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }
-    // If there still exists a Exchange::Merge operator, we should disable distributed optimization and
+    // If there still exists an Exchange::Merge operator, we should disable distributed optimization and
     // optimize the input plan again.
     if input_s_expr.has_merge_exchange() {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(false);

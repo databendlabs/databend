@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -23,7 +22,6 @@ use databend_common_exception::Result;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::Recluster;
-use databend_common_sql::MetadataRef;
 use log::error;
 use log::warn;
 
@@ -143,15 +141,18 @@ impl ReclusterTableInterpreter {
         let start = SystemTime::now();
         let plan: Recluster = self.s_expr.plan().clone().try_into()?;
 
-        // try add lock table.
+        // try to add lock table.
         let lock_guard = self
             .ctx
             .clone()
             .acquire_table_lock(&plan.catalog, &plan.database, &plan.table, &self.lock_opt)
             .await?;
 
-        let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-        let physical_plan = match builder.build(&self.s_expr, HashSet::new()).await {
+        let mut builder = PhysicalPlanBuilder::new(plan.metadata.clone(), self.ctx.clone(), false);
+        let physical_plan = match builder
+            .build(&self.s_expr, plan.bind_context.column_set())
+            .await
+        {
             Ok(res) => res,
             Err(e) => {
                 return if e.code() == ErrorCode::NO_NEED_TO_RECLUSTER {
@@ -176,7 +177,7 @@ impl ReclusterTableInterpreter {
 
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        self.ctx.clear_segment_locations()?;
+        self.ctx.clear_inserted_segment_locations()?;
         self.ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
         // make sure the executor is dropped before the next loop.

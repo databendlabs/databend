@@ -279,11 +279,23 @@ pub trait TableContext: Send + Sync {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+    fn add_inserted_segment_location(&self, segment_loc: Location) -> Result<()>;
 
-    fn clear_segment_locations(&self) -> Result<()>;
+    fn clear_inserted_segment_locations(&self) -> Result<()>;
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+    fn get_inserted_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_selected_segment_location(&self, _segment_loc: Location) {
+        unimplemented!()
+    }
+
+    fn get_selected_segment_locations(&self) -> Vec<Location> {
+        unimplemented!()
+    }
+
+    fn clear_selected_segment_locations(&self) {
+        unimplemented!()
+    }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 

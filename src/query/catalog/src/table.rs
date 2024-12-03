@@ -19,6 +19,9 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -134,6 +137,28 @@ pub trait Table: Sync + Send {
             .and_then(|s| s.parse::<ClusterType>().ok())
             .unwrap_or(ClusterType::Linear);
         Some(cluster_type)
+    }
+
+    fn resolve_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Option<Vec<Expr>> {
+        let Some((_, cluster_key_str)) = &self.cluster_key_meta() else {
+            return None;
+        };
+        let tokens = tokenize_sql(cluster_key_str).unwrap();
+        let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect).unwrap();
+        // unwrap tuple.
+        if ast_exprs.len() == 1 {
+            if let Expr::Tuple { exprs, .. } = &ast_exprs[0] {
+                ast_exprs = exprs.clone();
+            }
+        } else {
+            // Defensive check:
+            // `ast_exprs` should always contain one element which can be one of the following:
+            // 1. A tuple of composite cluster keys
+            // 2. A single cluster key
+            unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+        }
+        Some(ast_exprs)
     }
 
     fn change_tracking_enabled(&self) -> bool {
