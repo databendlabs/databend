@@ -210,9 +210,9 @@ where
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if !OVERFLOW {
+            let mut sum = T::Scalar::from_u64_array(self.value);
             let col = T::upcast_column(other);
             let buffer = DecimalType::<T::Scalar>::try_downcast_column(&col).unwrap();
-            let mut sum = T::Scalar::default();
             match validity {
                 Some(validity) if validity.unset_bits() > 0 => {
                     buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
