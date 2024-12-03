@@ -508,9 +508,6 @@ impl FusePruner {
             let res = worker?;
             metas.extend(res);
         }
-        // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-        // will get here, we can prevent other mutations like update and so on.
-        // TopN pruner.
         self.topn_pruning(metas)
     }
 

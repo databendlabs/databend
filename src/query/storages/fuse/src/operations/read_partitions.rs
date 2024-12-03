@@ -49,6 +49,7 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 use opendal::Operator;
 use sha2::Digest;
@@ -104,6 +105,14 @@ impl FuseTable {
         );
         match snapshot {
             Some(snapshot) => {
+                let selected_segment = ctx.get_selected_segment_locations();
+                let segment_locs = if !selected_segment.is_empty() {
+                    selected_segment
+                } else {
+                    snapshot.segments.clone()
+                };
+                let segment_len = segment_locs.len();
+
                 let snapshot_loc = self
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
@@ -115,10 +124,10 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if !dry_run && snapshot.segments.len() > nodes_num && distributed_pruning {
-                    let mut segments = Vec::with_capacity(snapshot.segments.len());
-                    for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
+                if !dry_run && segment_len > nodes_num && distributed_pruning {
+                    let mut segments = Vec::with_capacity(segment_locs.len());
+                    for (idx, segment_location) in segment_locs.into_iter().enumerate() {
+                        segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
                     return Ok((
@@ -126,8 +135,8 @@ impl FuseTable {
                             Some(snapshot_loc),
                             snapshot.summary.row_count as usize,
                             snapshot.summary.compressed_byte_size as usize,
-                            snapshot.segments.len(),
-                            snapshot.segments.len(),
+                            segment_len,
+                            segment_len,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                     ));
@@ -136,8 +145,7 @@ impl FuseTable {
                 let snapshot_loc = Some(snapshot_loc);
                 let table_schema = self.schema_with_stream();
                 let summary = snapshot.summary.block_count as usize;
-                let segments_location =
-                    create_segment_location_vector(snapshot.segments.clone(), snapshot_loc);
+                let segments_location = create_segment_location_vector(segment_locs, snapshot_loc);
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
@@ -471,31 +479,32 @@ impl FuseTable {
             None
         };
 
-        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(
-                &ctx,
-                dal,
-                table_schema.clone(),
-                &push_downs,
-                self.bloom_index_cols(),
-                bloom_index_builder,
-                self.get_storage_format(),
-            )?
-        } else {
-            let cluster_keys = self.cluster_keys(ctx.clone());
+        let pruner =
+            if !self.is_native() || self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
+                FusePruner::create(
+                    &ctx,
+                    dal,
+                    table_schema.clone(),
+                    &push_downs,
+                    self.bloom_index_cols(),
+                    bloom_index_builder,
+                    self.get_storage_format(),
+                )?
+            } else {
+                let cluster_keys = self.linear_cluster_keys(ctx.clone());
 
-            FusePruner::create_with_pages(
-                &ctx,
-                dal,
-                table_schema,
-                &push_downs,
-                self.cluster_key_meta.clone(),
-                cluster_keys,
-                self.bloom_index_cols(),
-                bloom_index_builder,
-                self.get_storage_format(),
-            )?
-        };
+                FusePruner::create_with_pages(
+                    &ctx,
+                    dal,
+                    table_schema,
+                    &push_downs,
+                    self.cluster_key_meta.clone(),
+                    cluster_keys,
+                    self.bloom_index_cols(),
+                    bloom_index_builder,
+                    self.get_storage_format(),
+                )?
+            };
         Ok(pruner)
     }
 

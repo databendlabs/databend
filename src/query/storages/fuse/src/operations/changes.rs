@@ -292,7 +292,10 @@ impl FuseTable {
             if !self.is_native() || self.cluster_key_meta().is_none() {
                 (vec![], None)
             } else {
-                (self.cluster_keys(ctx.clone()), self.cluster_key_meta())
+                (
+                    self.linear_cluster_keys(ctx.clone()),
+                    self.cluster_key_meta(),
+                )
             };
         let bloom_index_cols = self.bloom_index_cols();
         let mut pruner = FusePruner::create_with_pages(

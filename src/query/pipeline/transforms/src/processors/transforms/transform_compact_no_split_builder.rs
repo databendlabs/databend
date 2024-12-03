@@ -27,7 +27,7 @@ pub fn build_compact_block_no_split_pipeline(
     thresholds: BlockThresholds,
     max_threads: usize,
 ) -> Result<()> {
-    // has been resize 1.
+    pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactNoSplitBuilder::new(thresholds));
     pipeline.try_resize(max_threads)?;
     pipeline.add_block_meta_transformer(TransformCompactBlock::default);

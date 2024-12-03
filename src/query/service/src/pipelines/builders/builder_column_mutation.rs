@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::binder::MutationType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::ColumnMutation;
@@ -47,45 +46,28 @@ impl PipelineBuilder {
             .build_table_by_table_info(&column_mutation.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
-        if column_mutation.mutation_type == MutationType::Delete {
-            let cluster_stats_gen = table.get_cluster_stats_gen(
-                self.ctx.clone(),
-                0,
-                table.get_block_thresholds(),
-                None,
-            )?;
-            self.main_pipeline.add_transform(|input, output| {
-                let proc = TransformSerializeBlock::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    table,
-                    cluster_stats_gen.clone(),
-                    MutationKind::Delete,
-                )?;
-                proc.into_processor()
-            })?;
+        let block_thresholds = table.get_block_thresholds();
+        let cluster_stats_gen = if matches!(column_mutation.mutation_kind, MutationKind::Delete) {
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?
         } else {
-            let block_thresholds = table.get_block_thresholds();
-            let cluster_stats_gen = table.cluster_gen_for_append(
+            table.cluster_gen_for_append(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
                 block_thresholds,
                 None,
+            )?
+        };
+        self.main_pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeBlock::try_create(
+                self.ctx.clone(),
+                input,
+                output,
+                table,
+                cluster_stats_gen.clone(),
+                column_mutation.mutation_kind,
             )?;
-            self.main_pipeline.add_transform(|input, output| {
-                let proc = TransformSerializeBlock::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    table,
-                    cluster_stats_gen.clone(),
-                    MutationKind::Update,
-                )?;
-                proc.into_processor()
-            })?;
-        }
-
+            proc.into_processor()
+        })?;
         Ok(())
     }
 

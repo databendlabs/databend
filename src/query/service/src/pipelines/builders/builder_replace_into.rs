@@ -359,7 +359,7 @@ impl PipelineBuilder {
         } else {
             None
         };
-        let cluster_keys = table.cluster_keys(self.ctx.clone());
+        let cluster_keys = table.linear_cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
                 self.ctx.clone(),

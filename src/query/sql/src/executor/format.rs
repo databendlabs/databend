@@ -350,6 +350,9 @@ fn to_format_tree(
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::Recluster(_) => Ok(FormatTreeNode::new("Recluster".to_string())),
+        PhysicalPlan::HilbertSerialize(_) => {
+            Ok(FormatTreeNode::new("HilbertSerialize".to_string()))
+        }
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),

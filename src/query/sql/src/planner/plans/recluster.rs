@@ -13,24 +13,30 @@
 // limitations under the License.
 
 use databend_common_catalog::plan::Filters;
+use databend_storages_common_table_meta::table::ClusterType;
+use educe::Educe;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::BindContext;
+use crate::MetadataRef;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Educe)]
+#[educe(Eq, PartialEq, Hash)]
 pub struct Recluster {
     pub catalog: String,
     pub database: String,
     pub table: String,
 
     pub limit: Option<usize>,
+    #[educe(Eq(ignore), Hash(ignore))]
     pub filters: Option<Filters>,
-}
-
-impl std::hash::Hash for Recluster {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.table.hash(state);
-    }
+    #[educe(Hash(ignore))]
+    pub cluster_type: ClusterType,
+    #[educe(Eq(ignore), PartialEq(ignore), Hash(ignore))]
+    pub bind_context: Box<BindContext>,
+    #[educe(Eq(ignore), PartialEq(ignore), Hash(ignore))]
+    pub metadata: MetadataRef,
 }
 
 impl Operator for Recluster {
