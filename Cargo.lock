@@ -4697,6 +4697,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-hilbert-clustering"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+]
+
+[[package]]
 name = "databend-enterprise-inverted-index"
 version = "0.1.0"
 dependencies = [
@@ -4757,6 +4766,7 @@ dependencies = [
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
+ "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",

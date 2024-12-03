@@ -77,6 +77,8 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
@@ -1627,10 +1629,15 @@ impl Binder {
         } = cluster_opt;
 
         let expr_len = cluster_exprs.len();
-        if matches!(cluster_type, ClusterType::Hilbert) && !(2..=5).contains(&expr_len) {
-            return Err(ErrorCode::InvalidClusterKeys(
-                "Hilbert clustering requires the dimension to be between 2 and 5",
-            ));
+        if matches!(cluster_type, ClusterType::Hilbert) {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+
+            if !(2..=5).contains(&expr_len) {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "Hilbert clustering requires the dimension to be between 2 and 5",
+                ));
+            }
         }
 
         // Build a temporary BindContext to resolve the expr
