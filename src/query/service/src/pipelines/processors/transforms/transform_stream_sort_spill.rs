@@ -232,7 +232,7 @@ where
                             BoundBlockStream::<A::Rows> {
                                 sort_desc: self.sort_desc.clone(),
                                 blocks: vec![Block {
-                                    readed: 0,
+                                    readded: 0,
                                     location: None,
                                     size: data.memory_size(),
                                     domain: get_domain(data.get_last_column()),
@@ -478,7 +478,7 @@ where
             size,
             domain,
             location: Some(location),
-            readed: 0,
+            readded: 0,
         })
     }
 
@@ -537,7 +537,7 @@ struct Block {
     size: usize,
     location: Option<(Location, Layout)>,
     domain: Column,
-    readed: usize,
+    readded: usize,
 }
 
 impl Block {
@@ -557,7 +557,7 @@ impl Block {
         self.domain = get_domain(right.get_last_column());
         self.size = right.memory_size();
         self.data = Some(right);
-        self.readed += pos;
+        self.readded += pos;
         left
     }
 
@@ -632,8 +632,8 @@ impl<R: Rows + Send> BoundBlockStream<R> {
                 .spiller
                 .read_unmanage_spilled_file(&location.0, &location.1)
                 .await?;
-            block.data = Some(if block.readed != 0 {
-                data.slice(block.readed..data.num_columns())
+            block.data = Some(if block.readded != 0 {
+                data.slice(block.readded..data.num_columns())
             } else {
                 data
             });
@@ -822,7 +822,7 @@ mod tests {
                 domain,
                 size,
                 location: None,
-                readed: 0,
+                readded: 0,
             }
         })
         .collect::<VecDeque<_>>();
