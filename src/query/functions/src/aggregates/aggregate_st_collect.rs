@@ -20,17 +20,28 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
-use jiff::tz::TimeZone;
+use databend_common_expression::ScalarRef;
+use databend_common_io::ewkb_to_geo;
+use databend_common_io::geo_to_ewkb;
+use geo::Geometry;
+use geo::GeometryCollection;
+use geo::LineString;
+use geo::MultiLineString;
+use geo::MultiPoint;
+use geo::MultiPolygon;
+use geo::Point;
+use geo::Polygon;
+use geozero::wkb::Ewkb;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
@@ -41,7 +52,7 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct JsonArrayAggState<T>
+pub struct StCollectState<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -49,7 +60,7 @@ where
     values: Vec<T::Scalar>,
 }
 
-impl<T> Default for JsonArrayAggState<T>
+impl<T> Default for StCollectState<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -59,7 +70,7 @@ where
     }
 }
 
-impl<T> ScalarStateFunc<T> for JsonArrayAggState<T>
+impl<T> ScalarStateFunc<T> for StCollectState<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
@@ -101,43 +112,96 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let tz = TimeZone::UTC;
-        let mut items = Vec::with_capacity(self.values.len());
-        let values = mem::take(&mut self.values);
-        for value in values.into_iter() {
-            let v = T::upcast_scalar(value);
-            // NULL values are omitted from the output.
-            if v == Scalar::Null {
-                continue;
-            }
-            let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
-            items.push(val);
+        if self.values.is_empty() {
+            builder.push(ScalarRef::Null);
+            return Ok(());
         }
-        let mut data = vec![];
-        jsonb::build_array(items.iter().map(|b| &b[..]), &mut data).unwrap();
 
-        let array_value = Scalar::Variant(data);
-        builder.push(array_value.as_ref());
+        let mut has_point = false;
+        let mut has_line_string = false;
+        let mut has_polygon = false;
+        let mut has_other = false;
+
+        let mut srid = None;
+        let mut geos = Vec::with_capacity(self.values.len());
+        let values = mem::take(&mut self.values);
+        for (i, value) in values.into_iter().enumerate() {
+            let val = T::upcast_scalar(value);
+            let v = val.as_geometry().unwrap();
+            let (geo, geo_srid) = ewkb_to_geo(&mut Ewkb(v))?;
+            if i == 0 {
+                srid = geo_srid;
+            } else if !srid.eq(&geo_srid) {
+                return Err(ErrorCode::GeometryError(format!(
+                    "Incompatible SRID: {} and {}",
+                    srid.unwrap_or_default(),
+                    geo_srid.unwrap_or_default()
+                )));
+            }
+            match geo {
+                Geometry::Point(_) => {
+                    has_point = true;
+                }
+                Geometry::LineString(_) => {
+                    has_line_string = true;
+                }
+                Geometry::Polygon(_) => {
+                    has_polygon = true;
+                }
+                _ => {
+                    has_other = true;
+                }
+            }
+            geos.push(geo);
+        }
+        let geo = if has_point && !has_line_string && !has_polygon && !has_other {
+            let points: Vec<Point> = geos
+                .into_iter()
+                .map(|geo| geo.try_into().unwrap())
+                .collect();
+            let multi_point = MultiPoint::from_iter(points);
+            Geometry::MultiPoint(multi_point)
+        } else if !has_point && has_line_string && !has_polygon && !has_other {
+            let line_strings: Vec<LineString> = geos
+                .into_iter()
+                .map(|geo| geo.try_into().unwrap())
+                .collect();
+            let multi_line_string = MultiLineString::from_iter(line_strings);
+            Geometry::MultiLineString(multi_line_string)
+        } else if !has_point && !has_line_string && has_polygon && !has_other {
+            let polygons: Vec<Polygon> = geos
+                .into_iter()
+                .map(|geo| geo.try_into().unwrap())
+                .collect();
+            let multi_polygon = MultiPolygon::from_iter(polygons);
+            Geometry::MultiPolygon(multi_polygon)
+        } else {
+            let geo_collect = GeometryCollection::from_iter(geos);
+            Geometry::GeometryCollection(geo_collect)
+        };
+
+        let data = geo_to_ewkb(geo, srid)?;
+        let geometry_value = Scalar::Geometry(data);
+        builder.push(geometry_value.as_ref());
         Ok(())
     }
 }
 
 #[derive(Clone)]
-pub struct AggregateJsonArrayAggFunction<T, State> {
+pub struct AggregateStCollectFunction<T, State> {
     display_name: String,
     return_type: DataType,
     _t: PhantomData<T>,
     _state: PhantomData<State>,
 }
 
-impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
+impl<T, State> AggregateFunction for AggregateStCollectFunction<T, State>
 where
     T: ValueType + Send + Sync,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
-        "AggregateJsonArrayAggFunction"
+        "AggregateStCollectFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
@@ -166,8 +230,11 @@ where
                 state.add_batch(&column, Some(&nullable_column.validity))
             }
             _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
-                state.add_batch(&column, None)
+                if let Some(column) = T::try_downcast_column(&columns[0]) {
+                    state.add_batch(&column, None)
+                } else {
+                    Ok(())
+                }
             }
         }
     }
@@ -196,13 +263,14 @@ where
                     });
             }
             _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
-                let column_iter = T::iter_column(&column);
-                column_iter.zip(places.iter()).for_each(|(v, place)| {
-                    let addr = place.next(offset);
-                    let state = addr.get::<State>();
-                    state.add(Some(v.clone()))
-                });
+                if let Some(column) = T::try_downcast_column(&columns[0]) {
+                    let column_iter = T::iter_column(&column);
+                    column_iter.zip(places.iter()).for_each(|(v, place)| {
+                        let addr = place.next(offset);
+                        let state = addr.get::<State>();
+                        state.add(Some(v.clone()))
+                    });
+                }
             }
         }
 
@@ -223,9 +291,10 @@ where
                 }
             }
             _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
-                let v = T::index_column(&column, row);
-                state.add(v);
+                if let Some(column) = T::try_downcast_column(&columns[0]) {
+                    let v = T::index_column(&column, row);
+                    state.add(v);
+                }
             }
         }
 
@@ -265,19 +334,19 @@ where
     }
 }
 
-impl<T, State> fmt::Display for AggregateJsonArrayAggFunction<T, State> {
+impl<T, State> fmt::Display for AggregateStCollectFunction<T, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T, State> AggregateJsonArrayAggFunction<T, State>
+impl<T, State> AggregateStCollectFunction<T, State>
 where
     T: ValueType + Send + Sync,
     State: ScalarStateFunc<T>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateJsonArrayAggFunction::<T, State> {
+        let func = AggregateStCollectFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
             _t: PhantomData,
@@ -287,18 +356,26 @@ where
     }
 }
 
-pub fn try_create_aggregate_json_array_agg_function(
+pub fn try_create_aggregate_st_collect_function(
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, argument_types.len())?;
-    let return_type = DataType::Variant;
+    if argument_types[0].remove_nullable() != DataType::Geometry
+        && argument_types[0] != DataType::Null
+    {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "The argument of aggregate function {} must be Geometry",
+            display_name
+        )));
+    }
+    let return_type = DataType::Nullable(Box::new(DataType::Geometry));
 
-    type State = JsonArrayAggState<AnyType>;
-    AggregateJsonArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
+    type State = StCollectState<GeometryType>;
+    AggregateStCollectFunction::<GeometryType, State>::try_create(display_name, return_type)
 }
 
-pub fn aggregate_json_array_agg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_json_array_agg_function))
+pub fn aggregate_st_collect_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_st_collect_function))
 }
