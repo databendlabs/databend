@@ -345,20 +345,27 @@ pub trait Decimal:
     + Clone
     + PartialEq
     + Eq
+    + std::ops::AddAssign
     + PartialOrd
     + Ord
     + Sync
     + Send
     + 'static
 {
+    // the Layout align size of i128 and i256 have changed
+    // https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
+    // Here we keep this struct in aggregate state which minimize the align of the struct
+    type U64Array: Send + Sync + Copy + Default + Debug;
     fn zero() -> Self;
     fn one() -> Self;
     fn minus_one() -> Self;
 
     // 10**scale
     fn e(n: u32) -> Self;
-
     fn mem_size() -> usize;
+
+    fn to_u64_array(self) -> Self::U64Array;
+    fn from_u64_array(v: Self::U64Array) -> Self;
 
     fn checked_add(self, rhs: Self) -> Option<Self>;
     fn checked_sub(self, rhs: Self) -> Option<Self>;
@@ -427,6 +434,16 @@ pub trait Decimal:
 }
 
 impl Decimal for i128 {
+    type U64Array = [u64; 2];
+
+    fn to_u64_array(self) -> Self::U64Array {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn from_u64_array(v: Self::U64Array) -> Self {
+        unsafe { std::mem::transmute(v) }
+    }
+
     fn zero() -> Self {
         0_i128
     }
@@ -661,6 +678,16 @@ impl Decimal for i128 {
 }
 
 impl Decimal for i256 {
+    type U64Array = [u64; 4];
+
+    fn to_u64_array(self) -> Self::U64Array {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn from_u64_array(v: Self::U64Array) -> Self {
+        unsafe { std::mem::transmute(v) }
+    }
+
     fn zero() -> Self {
         i256::ZERO
     }
