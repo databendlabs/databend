@@ -33,7 +33,7 @@ use databend_common_sql::executor::physical_plans::Sort;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::create_transform_sort_spill;
+use crate::pipelines::processors::transforms::create_transform_stream_sort_spill;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
@@ -288,7 +288,7 @@ impl SortPipelineBuilder {
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
-                Ok(ProcessorPtr::create(create_transform_sort_spill(
+                Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
                     input,
                     output,
                     schema.clone(),

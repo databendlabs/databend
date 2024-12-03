@@ -13,22 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::assert_matches::debug_assert_matches;
 use std::collections::VecDeque;
-use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::simpler::FixedRateSimpler;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -41,15 +32,16 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::processors::sort::CommonRows;
+use databend_common_pipeline_transforms::processors::sort::select_row_type;
 use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
-use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
-use databend_common_pipeline_transforms::processors::sort::SimpleRowsDesc;
+use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 
 use crate::spillers::Layout;
 use crate::spillers::Location;
@@ -80,7 +72,8 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
 
     state: State,
     spiller: Arc<Spiller>,
-    simpler: FixedRateSimpler,
+    simpler: Option<FixedRateSimpler<StdRng>>,
+    bounds: Vec<Column>,
 
     batch_rows: usize,
     /// Blocks to merge one time.
@@ -175,6 +168,17 @@ where
 
                         self.input_data.push(block);
                         self.state = State::Spill;
+
+                        self.simpler = Some(
+                            FixedRateSimpler::new(
+                                vec![0],
+                                self.batch_rows,
+                                self.batch_rows * self.num_merge,
+                                self.batch_rows,
+                                StdRng::seed_from_u64(rand::random()),
+                            )
+                            .unwrap(),
+                        );
                         if self.input_full() {
                             Ok(Event::Async)
                         } else {
@@ -280,23 +284,25 @@ where
         spiller: Spiller,
         output_order_col: bool,
     ) -> Self {
-        todo!()
-        // Self {
-        //     input,
-        //     output,
-        //     schema,
-        //     limit,
-        //     output_order_col,
-        //     input_data: None,
-        //     output_data: None,
-        //     spiller,
-        //     state: State::Init,
-        //     num_merge: 0,
-        //     unmerged_blocks: VecDeque::new(),
-        //     final_merger: None,
-        //     batch_rows: 0,
-        //     sort_desc,
-        // }
+        Self {
+            input,
+            output,
+            schema,
+            output_order_col,
+            limit,
+            input_data: Vec::new(),
+            output_data: VecDeque::new(),
+            state: State::Init,
+            spiller: Arc::new(spiller),
+            simpler: None,
+            bounds: Vec::new(),
+            batch_rows: 0,
+            num_merge: 0,
+            subsequent: Vec::new(),
+            current: Vec::new(),
+            output_merger: None,
+            sort_desc,
+        }
     }
 
     #[inline(always)]
@@ -310,10 +316,11 @@ where
     async fn on_spill(&mut self) -> Result<()> {
         let blocks = mem::take(&mut self.input_data);
 
+        let simpler = self.simpler.as_mut().unwrap();
         for data in &blocks {
-            self.simpler.add_block(data.clone())
+            simpler.add_block(data.clone());
         }
-        self.simpler.compact_blocks();
+        simpler.compact_blocks(false);
 
         let mut merger = Merger::<A, BlockStream>::create(
             self.schema.clone(),
@@ -339,13 +346,26 @@ where
     }
 
     async fn on_restore(&mut self) -> Result<()> {
+        if self.simpler.is_some() {
+            self.determine_bounds()?;
+        }
+
+        if self.output_merger.is_some() {
+            return self.restore_output().await;
+        }
+
         while self.current.is_empty() {
             self.choice_list();
         }
-        if self.subsequent.len() > self.num_merge {
+
+        if self.current.len() > self.num_merge {
             self.merge().await
         } else {
-            self.restore_output().await
+            self.restore_output().await?;
+            if self.output_merger.is_none() && self.subsequent.is_empty() {
+                self.state = State::Finish;
+            };
+            Ok(())
         }
     }
 
@@ -436,9 +456,9 @@ where
         self.subsequent = sub;
     }
 
-    fn subsequent_memory(&self) -> usize {
-        self.subsequent.iter().map(|s| s.memory_used()).sum()
-    }
+    // fn subsequent_memory(&self) -> usize {
+    //     self.subsequent.iter().map(|s| s.memory_used()).sum()
+    // }
 
     fn input_full(&self) -> bool {
         let rows = self
@@ -462,8 +482,53 @@ where
         })
     }
 
-    fn next_bound(&self) -> Option<Column> {
-        todo!()
+    fn next_bound(&mut self) -> Option<Column> {
+        let bounds = self.bounds.last_mut()?;
+
+        match bounds.len() {
+            0 => unreachable!(),
+            1 => Some(self.bounds.pop().unwrap()),
+            _ => {
+                let bound = bounds.slice(0..1);
+                *bounds = bounds.slice(1..bounds.len());
+                Some(bound)
+            }
+        }
+    }
+
+    fn determine_bounds(&mut self) -> Result<()> {
+        let streams = self
+            .simpler
+            .take()
+            .unwrap()
+            .dense_blocks
+            .into_iter()
+            .map(|block| BlockStream(Some(block)))
+            .collect::<Vec<_>>();
+
+        let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
+        let sort_desc = Arc::new(vec![self.sort_desc[0].clone()]);
+        let mut merger = Merger::<A, BlockStream>::create(
+            schema,
+            streams,
+            sort_desc,
+            self.batch_rows, // todo
+            None,
+        );
+
+        let mut blocks = Vec::new();
+        while let Some(block) = merger.next_block()? {
+            blocks.push(block)
+        }
+        debug_assert!(merger.is_finished());
+
+        self.bounds = blocks
+            .iter()
+            .rev()
+            .map(|b| b.get_last_column().clone())
+            .collect::<Vec<_>>();
+
+        Ok(())
     }
 }
 
@@ -543,7 +608,7 @@ impl<R: Rows + Send> BoundBlockStream<R> {
                 let rows = R::from_column(data.get_last_column(), &self.sort_desc).unwrap();
 
                 // todo binary_search
-                let bound = self.bound.as_ref().unwrap().row(0);
+                let bound = bound.row(0);
                 match (0..rows.len()).position(|i| rows.row(i) >= bound) {
                     Some(pos) => block.slice(pos),
                     None => {
@@ -576,15 +641,15 @@ impl<R: Rows + Send> BoundBlockStream<R> {
         Ok(())
     }
 
-    fn need_restore(&self) -> bool {
-        self.blocks.front().map_or(false, |b| b.data.is_none())
-    }
+    // fn need_restore(&self) -> bool {
+    //     self.blocks.front().map_or(false, |b| b.data.is_none())
+    // }
 
-    fn memory_used(&self) -> usize {
-        self.blocks
-            .front()
-            .map_or(0, |b| if b.data.is_some() { b.size } else { 0 })
-    }
+    // fn memory_used(&self) -> usize {
+    //     self.blocks
+    //         .front()
+    //         .map_or(0, |b| if b.data.is_some() { b.size } else { 0 })
+    // }
 
     fn len(&self) -> usize {
         self.blocks.len()
@@ -622,9 +687,84 @@ fn get_domain(col: &Column) -> Column {
     }
 }
 
+pub fn create_transform_stream_sort_spill(
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    schema: DataSchemaRef,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    limit: Option<usize>,
+    spiller: Spiller,
+    output_order_col: bool,
+    enable_loser_tree: bool,
+) -> Box<dyn Processor> {
+    let mut builder = Builder {
+        schema,
+        sort_desc,
+        input,
+        output,
+        output_order_col,
+        limit,
+        spiller: Some(spiller),
+        enable_loser_tree,
+        processor: None,
+    };
+    select_row_type(&mut builder);
+    builder.processor.take().unwrap()
+}
+
+struct Builder {
+    schema: DataSchemaRef,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    output_order_col: bool,
+    limit: Option<usize>,
+    spiller: Option<Spiller>,
+    enable_loser_tree: bool,
+    processor: Option<Box<dyn Processor>>,
+}
+
+impl RowsTypeVisitor for Builder {
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    fn sort_desc(&self) -> &[SortColumnDescription] {
+        &self.sort_desc
+    }
+
+    fn visit_type<R: Rows + Send + 'static>(&mut self) {
+        let processor: Box<dyn Processor> = if self.enable_loser_tree {
+            Box::new(TransformStreamSortSpill::<LoserTreeSort<R>>::create(
+                self.input.clone(),
+                self.output.clone(),
+                self.schema.clone(),
+                self.sort_desc.clone(),
+                self.limit,
+                self.spiller.take().unwrap(),
+                self.output_order_col,
+            ))
+        } else {
+            Box::new(TransformStreamSortSpill::<HeapSort<R>>::create(
+                self.input.clone(),
+                self.output.clone(),
+                self.schema.clone(),
+                self.sort_desc.clone(),
+                self.limit,
+                self.spiller.take().unwrap(),
+                self.output_order_col,
+            ))
+        };
+        self.processor = Some(processor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::DataField;
@@ -633,6 +773,7 @@ mod tests {
     use databend_common_expression::Value;
     use databend_common_pipeline_transforms::processors::sort::convert_rows;
     use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
+    use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
     use databend_common_storage::DataOperator;
 
     use super::*;

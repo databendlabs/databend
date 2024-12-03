@@ -104,7 +104,22 @@ impl<R: Rng> FixedSizeSimpler<R> {
     }
 
     pub fn compact_blocks(&mut self) {
-        compact_blocks(&mut self.indices, &mut self.blocks, self.block_size);
+        self.blocks = self
+            .indices
+            .chunks_mut(self.block_size)
+            .enumerate()
+            .map(|(i, indices)| {
+                let rows = indices.len();
+                let block = DataBlock::take_blocks(&self.blocks, indices, rows);
+
+                for (j, (b, r, _)) in indices.iter_mut().enumerate() {
+                    *b = i as u32;
+                    *r = j as u32;
+                }
+
+                block
+            })
+            .collect::<Vec<_>>();
     }
 
     pub fn memory_size(self) -> usize {
@@ -145,28 +160,6 @@ fn compact_indices(indices: &mut Vec<BlockRowIndex>, blocks: &mut Vec<DataBlock>
             }
         })
         .collect();
-}
-
-fn compact_blocks(
-    indices: &mut Vec<BlockRowIndex>,
-    blocks: &mut Vec<DataBlock>,
-    block_size: usize,
-) {
-    *blocks = indices
-        .chunks_mut(block_size)
-        .enumerate()
-        .map(|(i, indices)| {
-            let rows = indices.len();
-            let block = DataBlock::take_blocks(blocks, indices, rows);
-
-            for (j, (b, r, _)) in indices.iter_mut().enumerate() {
-                *b = i as u32;
-                *r = j as u32;
-            }
-
-            block
-        })
-        .collect::<Vec<_>>();
 }
 
 mod reservoir_sampling {

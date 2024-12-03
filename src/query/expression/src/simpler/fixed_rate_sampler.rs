@@ -92,6 +92,10 @@ impl<R: Rng> FixedRateSimpler<R> {
     }
 
     pub fn compact_blocks(&mut self, is_final: bool) {
+        if self.sparse_blocks.is_empty() {
+            return;
+        }
+
         while self
             .indices
             .front()
@@ -108,17 +112,23 @@ impl<R: Rng> FixedRateSimpler<R> {
         };
         debug_assert!(self.indices.is_empty());
 
+        if is_final {
+            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+            self.sparse_blocks.clear();
+            self.dense_blocks.push(block);
+            return;
+        }
+
+        if self.sparse_blocks.len() == 1 {
+            return;
+        }
         let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
         self.sparse_blocks.clear();
-        if is_final {
-            self.dense_blocks.push(block)
-        } else {
-            for index in indices.iter_mut() {
-                index.0 = 0
-            }
-            self.indices.push_back(indices);
-            self.sparse_blocks.push(block);
+        for index in indices.iter_mut() {
+            index.0 = 0
         }
+        self.indices.push_back(indices);
+        self.sparse_blocks.push(block);
     }
 
     pub fn memory_size(self) -> usize {

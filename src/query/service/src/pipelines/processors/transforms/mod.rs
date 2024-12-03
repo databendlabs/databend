@@ -67,6 +67,7 @@ pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithoutSourceSchema;
 pub use transform_sort_spill::create_transform_sort_spill;
 pub use transform_srf::TransformSRF;
+pub use transform_stream_sort_spill::*;
 pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::*;
