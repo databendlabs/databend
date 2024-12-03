@@ -504,6 +504,7 @@ impl<'a> Binder {
                 alias,
                 stage_table_info.files_to_copy.clone(),
                 case_sensitive,
+                Some(stage_table_info.schema.clone()),
             )
             .await?;
 

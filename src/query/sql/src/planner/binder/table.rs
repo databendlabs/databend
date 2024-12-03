@@ -31,6 +31,7 @@ use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
 use databend_common_ast::Span;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
@@ -45,6 +46,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
@@ -53,6 +55,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storages_stage::StageTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
@@ -116,18 +119,34 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
         case_sensitive: bool,
+        inferred_schema: Option<TableSchemaRef>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
         let max_column_position = self.metadata.read().get_max_column_position();
-        let table = table_ctx
-            .create_stage_table(
-                stage_info,
+        let table = match files_to_copy.as_ref().is_some_and(|files| files.is_empty()) {
+            true => StageTable::try_create(StageTableInfo {
+                schema: inferred_schema.unwrap(),
+                default_values: None,
                 files_info,
+                stage_info,
                 files_to_copy,
-                max_column_position,
-                case_sensitive,
-            )
-            .await?;
+                duplicated_files_detected: vec![],
+                is_select: false,
+                copy_into_location_options: Default::default(),
+                copy_into_table_options: Default::default(),
+            })?,
+            false => {
+                table_ctx
+                    .create_stage_table(
+                        stage_info,
+                        files_info,
+                        files_to_copy,
+                        max_column_position,
+                        case_sensitive,
+                    )
+                    .await?
+            }
+        };
 
         let table_alias_name = if let Some(table_alias) = alias {
             Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
