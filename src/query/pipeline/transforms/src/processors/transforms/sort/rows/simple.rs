@@ -41,6 +41,7 @@ where
     T: ArgType,
     for<'a> T::ScalarRef<'a>: Ord,
 {
+    const IS_ASC_COLUMN: bool = true;
     type Item<'a> = T::ScalarRef<'a>
     where Self: 'a;
 
@@ -86,6 +87,7 @@ where
     T: ArgType,
     for<'a> T::ScalarRef<'a>: Ord,
 {
+    const IS_ASC_COLUMN: bool = false;
     type Item<'a> = Reverse<T::ScalarRef<'a>>
     where Self: 'a;
 

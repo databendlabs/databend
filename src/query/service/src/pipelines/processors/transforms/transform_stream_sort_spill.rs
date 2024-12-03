@@ -314,7 +314,7 @@ where
     }
 
     async fn on_spill(&mut self) -> Result<()> {
-        let blocks = mem::take(&mut self.input_data);
+        let mut blocks = mem::take(&mut self.input_data);
 
         let simpler = self.simpler.as_mut().unwrap();
         for data in &blocks {
@@ -322,19 +322,23 @@ where
         }
         simpler.compact_blocks(false);
 
-        let mut merger = Merger::<A, BlockStream>::create(
-            self.schema.clone(),
-            blocks.into_iter().map(|b| BlockStream(Some(b))).collect(),
-            self.sort_desc.clone(),
-            self.batch_rows,
-            self.limit,
-        );
-
         let mut spilled = VecDeque::new();
-        while let Some(block) = merger.next_block()? {
-            spilled.push_back(self.new_block(block).await?);
+        if blocks.len() == 1 {
+            spilled.push_back(self.new_block(blocks.pop().unwrap()).await?);
+        } else {
+            let mut merger = Merger::<A, BlockStream>::create(
+                self.schema.clone(),
+                blocks.into_iter().map(|b| BlockStream(Some(b))).collect(),
+                self.sort_desc.clone(),
+                self.batch_rows,
+                self.limit,
+            );
+
+            while let Some(block) = merger.next_block()? {
+                spilled.push_back(self.new_block(block).await?);
+            }
+            debug_assert!(merger.is_finished());
         }
-        debug_assert!(merger.is_finished());
 
         self.subsequent.push(BoundBlockStream::<A::Rows> {
             sort_desc: self.sort_desc.clone(),
@@ -406,6 +410,13 @@ where
         let merger = match &mut self.output_merger {
             Some(merger) => merger,
             None => {
+                if self.current.len() == 1 {
+                    let s = &mut self.current[0];
+                    s.restore_first().await?;
+                    self.output_data.push_back(s.pop_front_data());
+                    return Ok(());
+                }
+
                 let cur = mem::take(&mut self.current);
                 let merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
                     self.schema.clone(),
@@ -497,36 +508,67 @@ where
     }
 
     fn determine_bounds(&mut self) -> Result<()> {
-        let streams = self
-            .simpler
-            .take()
-            .unwrap()
-            .dense_blocks
-            .into_iter()
-            .map(|block| BlockStream(Some(block)))
-            .collect::<Vec<_>>();
+        let mut simpler = self.simpler.take().unwrap();
+        simpler.compact_blocks(true);
 
-        let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
-        let sort_desc = Arc::new(vec![self.sort_desc[0].clone()]);
-        let mut merger = Merger::<A, BlockStream>::create(
-            schema,
-            streams,
-            sort_desc,
-            self.batch_rows, // todo
-            None,
-        );
+        match simpler.dense_blocks.len() {
+            0 => (),
+            1 => self.bounds.push(
+                DataBlock::sort(
+                    &simpler.dense_blocks[0],
+                    &[SortColumnDescription {
+                        offset: 0,
+                        asc: A::Rows::IS_ASC_COLUMN,
+                        nulls_first: false,
+                    }],
+                    None,
+                )?
+                .get_last_column()
+                .clone(),
+            ),
+            _ => {
+                let streams = simpler
+                    .dense_blocks
+                    .into_iter()
+                    .map(|block| {
+                        BlockStream(Some(
+                            DataBlock::sort(
+                                &block,
+                                &[SortColumnDescription {
+                                    offset: 0,
+                                    asc: A::Rows::IS_ASC_COLUMN,
+                                    nulls_first: false,
+                                }],
+                                None,
+                            )
+                            .unwrap(),
+                        ))
+                    })
+                    .collect::<Vec<_>>();
 
-        let mut blocks = Vec::new();
-        while let Some(block) = merger.next_block()? {
-            blocks.push(block)
-        }
-        debug_assert!(merger.is_finished());
+                let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
+                let sort_desc = Arc::new(vec![self.sort_desc[0].clone()]);
+                let mut merger = Merger::<A, BlockStream>::create(
+                    schema,
+                    streams,
+                    sort_desc,
+                    self.batch_rows, // todo
+                    None,
+                );
 
-        self.bounds = blocks
-            .iter()
-            .rev()
-            .map(|b| b.get_last_column().clone())
-            .collect::<Vec<_>>();
+                let mut blocks = Vec::new();
+                while let Some(block) = merger.next_block()? {
+                    blocks.push(block)
+                }
+                debug_assert!(merger.is_finished());
+
+                self.bounds = blocks
+                    .iter()
+                    .rev()
+                    .map(|b| b.get_last_column().clone())
+                    .collect::<Vec<_>>();
+            }
+        };
 
         Ok(())
     }

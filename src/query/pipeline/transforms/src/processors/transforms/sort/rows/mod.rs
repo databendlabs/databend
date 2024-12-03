@@ -45,6 +45,7 @@ where Self: Sized
 pub trait Rows
 where Self: Sized + Clone + Debug
 {
+    const IS_ASC_COLUMN: bool;
     type Item<'a>: Ord + Debug
     where Self: 'a;
     type Type: ArgType;

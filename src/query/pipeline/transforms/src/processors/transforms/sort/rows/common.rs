@@ -37,6 +37,7 @@ use super::Rows;
 pub type CommonRows = BinaryColumn;
 
 impl Rows for BinaryColumn {
+    const IS_ASC_COLUMN: bool = true;
     type Item<'a> = &'a [u8];
     type Type = BinaryType;
 

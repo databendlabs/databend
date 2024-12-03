@@ -124,8 +124,9 @@ impl<R: Rng> FixedRateSimpler<R> {
         }
         let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
         self.sparse_blocks.clear();
-        for index in indices.iter_mut() {
-            index.0 = 0
+        for (i, index) in indices.iter_mut().enumerate() {
+            index.0 = 0;
+            index.1 = i as u32;
         }
         self.indices.push_back(indices);
         self.sparse_blocks.push(block);
@@ -156,7 +157,7 @@ mod rate_sampling {
         }
 
         pub fn new_expectation(expectation: usize, deviation: usize, r: R) -> Option<Self> {
-            if expectation >= deviation && usize::MAX - expectation >= deviation {
+            if expectation < deviation && usize::MAX - expectation >= deviation {
                 None
             } else {
                 Some(Self {
@@ -245,7 +246,7 @@ mod tests {
 
             simpler.compact_blocks(false);
 
-            assert_eq!(Some(&vec![(0, 1, 1), (0, 2, 1)]), simpler.indices.front());
+            assert_eq!(Some(&vec![(0, 0, 1), (0, 1, 1)]), simpler.indices.front());
             assert_eq!(
                 &Int32Type::from_data(vec![7, 8]),
                 simpler.sparse_blocks[0].get_last_column()
@@ -254,6 +255,10 @@ mod tests {
                 &Int32Type::from_data(vec![2, 3, 6]),
                 simpler.dense_blocks[0].get_last_column()
             );
+
+            simpler.compact_blocks(true);
+            assert!(simpler.indices.is_empty());
+            assert!(simpler.sparse_blocks.is_empty());
         }
 
         {
