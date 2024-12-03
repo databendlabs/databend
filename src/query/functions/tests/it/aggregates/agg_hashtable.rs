@@ -31,12 +31,12 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
+use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
-use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int16Type;

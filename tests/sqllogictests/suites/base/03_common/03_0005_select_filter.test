@@ -88,6 +88,7 @@ select * from t2 where a
 query TT
 select * from t2 where b
 ----
+0.0 2.10
 
 statement ok
 DROP DATABASE IF EXISTS databend6

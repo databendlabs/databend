@@ -27,7 +27,6 @@ use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
 
 use crate::common::new_block;
-use crate::rand_block_for_all_types;
 
 #[test]
 fn test_block_sort() -> Result<()> {
