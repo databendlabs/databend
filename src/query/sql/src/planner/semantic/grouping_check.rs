@@ -14,12 +14,9 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionKind;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::format_scalar;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
@@ -44,25 +41,6 @@ impl<'a> GroupingChecker<'a> {
 
 impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        if !self
-            .bind_context
-            .aggregate_info
-            .group_items_map
-            .contains_key(expr)
-        {
-            if let ScalarExpr::FunctionCall(func) = expr {
-                // The srf returns a tuple type column, and a `get` function
-                // is always used to extract the inner column.
-                // Try rewrite the srf to a column first, so that we can
-                // check if the expr is in the `group_items_map`.
-                if func.func_name == "get" {
-                    for arg in &mut func.arguments {
-                        self.visit(arg)?;
-                    }
-                }
-            }
-        }
-
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
@@ -158,35 +136,6 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
                 }
 
                 return Err(ErrorCode::Internal("Invalid aggregate function"));
-            }
-            ScalarExpr::FunctionCall(func) => {
-                if BUILTIN_FUNCTIONS
-                    .get_property(&func.func_name)
-                    .map(|property| property.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    let srf_display_name = format_scalar(expr);
-                    if let Some(index) = self.bind_context.srf_info.srfs_map.get(&srf_display_name)
-                    {
-                        // Rewrite srf function as a column.
-                        let srf_item = &self.bind_context.srf_info.srfs[*index];
-
-                        let column_binding = ColumnBindingBuilder::new(
-                            srf_display_name,
-                            srf_item.index,
-                            Box::new(srf_item.scalar.data_type()?),
-                            Visibility::Visible,
-                        )
-                        .build();
-                        *expr = BoundColumnRef {
-                            span: None,
-                            column: column_binding,
-                        }
-                        .into();
-                        return Ok(());
-                    }
-                    return Err(ErrorCode::Internal("Invalid Set-returning function"));
-                }
             }
             ScalarExpr::BoundColumnRef(column_ref) => {
                 if let Some(index) = self

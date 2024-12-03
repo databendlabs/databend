@@ -275,6 +275,20 @@ a1
 a2
 a3
 
+query TT
+SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY t.col1, unnest(split(t.col2, ',')) ORDER BY col2;
+----
+test a1
+test a2
+test a3
+
+query T
+SELECT t.col1 AS col1 FROM t_str AS t GROUP BY t.col1, unnest(split(t.col2, ','));
+----
+test
+test
+test
+
 statement ok
 DROP TABLE t_str
 

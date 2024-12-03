@@ -33,7 +33,7 @@ use itertools::Itertools;
 use super::prune_by_children;
 use super::ExprContext;
 use super::Finder;
-use crate::binder::project_set::SetReturningRewriter;
+use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -349,13 +349,6 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
-        if !bind_context.srf_info.srfs.is_empty() {
-            // Rewrite the Set-returning functions in Aggregate function as columns.
-            let mut srf_rewriter = SetReturningRewriter::new(bind_context, true);
-            for item in select_list.items.iter_mut() {
-                srf_rewriter.visit(&mut item.scalar)?;
-            }
-        }
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
             rewriter.visit(&mut item.scalar)?;
@@ -714,6 +707,9 @@ impl Binder {
                 .bind(expr)
                 .or_else(|e| self.resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
+            let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
+            analyzer.visit(&mut scalar_expr)?;
+
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
@@ -725,11 +721,6 @@ impl Binder {
             {
                 // The group key is duplicated
                 continue;
-            }
-
-            if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-                srf_rewriter.visit(&mut scalar_expr)?;
             }
 
             let group_item_name = format!("{:#}", expr);
@@ -877,12 +868,7 @@ impl Binder {
                     .set_span(expr.span()),
             )
         } else {
-            let (alias, mut scalar) = available_aliases[result[0]].clone();
-
-            if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-                srf_rewriter.visit(&mut scalar)?;
-            }
+            let (alias, scalar) = available_aliases[result[0]].clone();
 
             // check scalar first, avoid duplicate create column.
             let mut scalar_column_index = None;

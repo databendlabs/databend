@@ -91,6 +91,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
@@ -800,8 +801,8 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
                     let window = window.as_ref().unwrap();
-                    let rank_window = ["first_value", "first", "last_value", "last", "nth_value"];
-                    if !rank_window.contains(&func_name) && window.ignore_nulls.is_some() {
+                    if !RANK_WINDOW_FUNCTIONS.contains(&func_name) && window.ignore_nulls.is_some()
+                    {
                         return Err(ErrorCode::SemanticError(format!(
                             "window function {func_name} not support IGNORE/RESPECT NULLS option"
                         ))
@@ -2590,12 +2591,6 @@ impl<'a> TypeChecker<'a> {
         if self.in_window_function {
             return Err(ErrorCode::SemanticError(
                 "set-returning functions cannot be used in window spec",
-            )
-            .set_span(span));
-        }
-        if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-            return Err(ErrorCode::SemanticError(
-                "set-returning functions can only be used in SELECT".to_string(),
             )
             .set_span(span));
         }
