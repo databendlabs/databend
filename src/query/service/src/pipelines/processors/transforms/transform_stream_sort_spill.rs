@@ -465,7 +465,7 @@ where
         debug_assert!(self.current.is_empty());
         debug_assert!(!self.subsequent.is_empty());
         let Some(bound) = self.next_bound() else {
-            mem::replace(&mut self.current, &mut self.subsequent);
+            mem::swap(&mut self.current, &mut self.subsequent);
             for s in &mut self.current {
                 s.bound = None
             }
