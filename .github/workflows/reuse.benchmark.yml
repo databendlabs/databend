@@ -90,7 +90,7 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   load:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
