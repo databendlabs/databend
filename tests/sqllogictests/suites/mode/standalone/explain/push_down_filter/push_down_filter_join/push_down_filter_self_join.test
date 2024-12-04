@@ -1,8 +1,8 @@
 statement ok
-create table t1 as select number as a, number as b from numbers(10);
+create or replace table t1 as select number as a, number as b from numbers(10);
 
 statement ok
-create table t2 as select number as a, number as b from numbers(10);
+create or replace table t2 as select number as a, number as b from numbers(10);
 
 query T
 explain with A as  materialized (select * from t1 union all select * from t2),
@@ -17,7 +17,7 @@ HashJoin
 ├── build keys: [b2.a (#2)]
 ├── probe keys: [b1.a (#0)]
 ├── filters: [d.b (#1) < d.b (#3)]
-├── estimated rows: 0.00
+├── estimated rows: 400.00
 ├── TableScan(Build)
 │   ├── table: default.default.a
 │   ├── output columns: [a (#2), b (#3)]
@@ -26,7 +26,7 @@ HashJoin
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 0.00
+│   └── estimated rows: 20.00
 └── TableScan(Probe)
     ├── table: default.default.a
     ├── output columns: [a (#0), b (#1)]
@@ -35,4 +35,4 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+    └── estimated rows: 20.00
