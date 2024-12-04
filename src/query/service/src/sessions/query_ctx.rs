@@ -353,10 +353,6 @@ impl QueryContext {
         *self.shared.finish_time.write() = Some(time)
     }
 
-    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
     }
@@ -972,9 +968,8 @@ impl TableContext for QueryContext {
             .await
     }
 
-    fn remove_table_from_cache(&self, catalog: &str, database: &str, table: &str) {
-        self.shared
-            .remove_table_from_cache(catalog, database, table)
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
     }
 
     #[async_backtrace::framed]

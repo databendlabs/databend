@@ -357,16 +357,6 @@ impl QueryContextShared {
         Ok(res)
     }
 
-    pub fn remove_table_from_cache(&self, catalog_name: &str, database: &str, table: &str) {
-        let table_meta_key = (
-            catalog_name.to_string(),
-            database.to_string(),
-            table.to_string(),
-        );
-        let mut tables_refs = self.tables_refs.lock();
-        tables_refs.remove(&table_meta_key);
-    }
-
     #[async_backtrace::framed]
     async fn get_table_to_cache(
         &self,

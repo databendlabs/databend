@@ -818,7 +818,7 @@ impl TableContext for CtxDelegation {
         }
     }
 
-    fn remove_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) {
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
         todo!()
     }
 

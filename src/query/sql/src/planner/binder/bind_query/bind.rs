@@ -198,7 +198,7 @@ impl Binder {
             )));
         }
         let create_table_stmt = CreateTableStmt {
-            create_option: CreateOption::CreateOrReplace,
+            create_option: CreateOption::Create,
             catalog: Some(Identifier::from_name(Span::None, CATALOG_DEFAULT)),
             database: Some(Identifier::from_name(Span::None, database.clone())),
             table: cte.alias.name.clone(),
@@ -225,7 +225,6 @@ impl Binder {
         self.ctx.add_m_cte_temp_table(&database, &table_name);
 
         self.ctx
-            .remove_table_from_cache(CATALOG_DEFAULT, &database, &table_name);
-        Ok(())
+            .evict_table_from_cache(CATALOG_DEFAULT, &database, &table_name)
     }
 }

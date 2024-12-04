@@ -261,7 +261,7 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
 
-    fn remove_table_from_cache(&self, catalog: &str, database: &str, table: &str);
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 
     async fn get_table_with_batch(
         &self,
