@@ -166,6 +166,12 @@ where
                         self.batch_rows = params.batch_rows;
                         self.num_merge = params.num_merge;
 
+                        log::info!(
+                            "batch_rows {} num_merge {}",
+                            params.batch_rows,
+                            params.num_merge
+                        );
+
                         self.input_data.push(block);
                         self.state = State::Spill;
 
@@ -360,8 +366,23 @@ where
         }
 
         if self.output_merger.is_some() {
-            return self.restore_output().await;
+            if self.restore_output().await? {
+                self.state = State::Finish;
+            }
+            return Ok(());
         }
+
+        log::info!(
+            "self {:?} current.len {} current.blocks {} subsequent.len {} subsequent.blocks {}",
+            self as *const TransformStreamSortSpill<A>,
+            self.current.len(),
+            self.current.iter().map(|s| s.blocks.len()).sum::<usize>(),
+            self.subsequent.len(),
+            self.subsequent
+                .iter()
+                .map(|s| s.blocks.len())
+                .sum::<usize>()
+        );
 
         while self.current.is_empty() {
             self.choice_list();
@@ -370,15 +391,15 @@ where
         if self.current.len() > self.num_merge {
             self.merge().await
         } else {
-            self.restore_output().await?;
-            if self.output_merger.is_none() && self.subsequent.is_empty() {
+            if self.restore_output().await? {
                 self.state = State::Finish;
-            };
+            }
             Ok(())
         }
     }
 
     async fn merge(&mut self) -> Result<()> {
+        let bound = self.current[0].bound.clone();
         self.current.sort_by_key(|s| std::cmp::Reverse(s.len()));
         let streams = self
             .current
@@ -402,7 +423,7 @@ where
         self.current.push(BoundBlockStream::<A::Rows> {
             sort_desc: self.sort_desc.clone(),
             blocks: spilled,
-            bound: None,
+            bound,
             spiller: self.spiller.clone(),
         });
 
@@ -411,7 +432,7 @@ where
         Ok(())
     }
 
-    async fn restore_output(&mut self) -> Result<()> {
+    async fn restore_output(&mut self) -> Result<bool> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -421,10 +442,11 @@ where
                     self.output_data.push_back(s.pop_front_data());
 
                     if !s.is_empty() {
-                        self.subsequent.push(s)
+                        self.subsequent.push(s);
+                        return Ok(false);
                     }
 
-                    return Ok(());
+                    return Ok(self.subsequent.is_empty());
                 }
 
                 let merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
@@ -440,7 +462,7 @@ where
 
         if let Some(data) = merger.async_next_block().await? {
             self.output_block(data);
-            return Ok(());
+            return Ok(false);
         }
         debug_assert!(merger.is_finished());
 
@@ -448,21 +470,21 @@ where
         self.subsequent
             .extend(streams.into_iter().filter(|s| !s.is_empty()));
 
-        Ok(())
+        Ok(self.subsequent.is_empty())
     }
 
     fn choice_list(&mut self) {
         debug_assert!(self.current.is_empty());
+        debug_assert!(!self.subsequent.is_empty());
         let Some(bound) = self.next_bound() else {
-            let mut sub = mem::take(&mut self.subsequent);
-            for s in &mut sub {
+            mem::replace(&mut self.current, &mut self.subsequent);
+            for s in &mut self.current {
                 s.bound = None
             }
-            self.current = sub;
             return;
         };
 
-        let bound = A::Rows::from_column(&bound, &self.sort_desc).unwrap(); // todo check
+        let bound = A::Rows::from_column(&bound, &self.sort_desc).unwrap();
         (self.current, self.subsequent) = self
             .subsequent
             .drain(..)
@@ -478,11 +500,7 @@ where
     // }
 
     fn input_full(&self) -> bool {
-        let rows = self
-            .input_data
-            .iter()
-            .map(|b| b.num_columns())
-            .sum::<usize>();
+        let rows = self.input_data.iter().map(|b| b.num_rows()).sum::<usize>();
         rows >= self.num_merge * self.batch_rows
     }
 
@@ -558,7 +576,7 @@ where
                     schema,
                     streams,
                     sort_desc,
-                    self.batch_rows, // todo
+                    self.batch_rows,
                     None,
                 );
 
@@ -567,6 +585,8 @@ where
                     blocks.push(block)
                 }
                 debug_assert!(merger.is_finished());
+
+                log::info!("blocks {:?}", blocks);
 
                 self.bounds = blocks
                     .iter()
@@ -657,6 +677,13 @@ impl<R: Rows + Send> BoundBlockStream<R> {
 
                 // todo binary_search
                 let bound = bound.row(0);
+
+                // let mut domain = rows.domain();
+                // let target = rows.row(i);
+                // while !domain.done() {
+                //     domain = rows.search(&target, domain);
+                // }
+
                 match (0..rows.len()).position(|i| rows.row(i) >= bound) {
                     Some(pos) => block.slice(pos),
                     None => {
@@ -707,6 +734,29 @@ impl<R: Rows + Send> BoundBlockStream<R> {
         self.len() == 0
     }
 }
+
+// fn partition_point<R: Row>(&'a self, mut f: F) -> usize {
+//     let mut size = self.len();
+//     let mut left = 0;
+//     let mut right = size;
+//     while left < right {
+//         let mid = left + size / 2;
+
+//         let cmp = f(unsafe { self.get_unchecked(mid) });
+
+//         left = if cmp == Less { mid + 1 } else { left };
+//         right = if cmp == Greater { mid } else { right };
+//         if cmp == Equal {
+//             unsafe { hint::assert_unchecked(mid < self.len()) };
+//             return Ok(mid);
+//         }
+
+//         size = right - left;
+//     }
+
+//     unsafe { hint::assert_unchecked(left <= self.len()) };
+//     Err(left)
+// }
 
 struct SortRowsStream(Option<DataBlock>);
 

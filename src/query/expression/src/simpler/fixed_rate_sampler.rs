@@ -120,6 +120,7 @@ impl<R: Rng> FixedRateSimpler<R> {
         }
 
         if self.sparse_blocks.len() == 1 {
+            self.indices.push_back(indices);
             return;
         }
         let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
