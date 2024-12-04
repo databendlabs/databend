@@ -115,9 +115,7 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
             Some(data_block) => {
-                // Don't need to record the scan progress of `MaterializedCteSource`
-                // Because it reads data from memory.
-                if !data_block.is_empty() && self.name() != "MaterializedCteSource" {
+                if !data_block.is_empty() {
                     let progress_values = ProgressValues {
                         rows: data_block.num_rows(),
                         bytes: data_block.memory_size(),

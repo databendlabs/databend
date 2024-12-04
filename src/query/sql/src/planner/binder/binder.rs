@@ -179,8 +179,6 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
-                // Wrap `LogicalMaterializedCte` to `s_expr`
-                s_expr = bind_context.cte_context.wrap_m_cte(s_expr);
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {

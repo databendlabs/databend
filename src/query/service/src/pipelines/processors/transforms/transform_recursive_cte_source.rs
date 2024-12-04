@@ -318,8 +318,6 @@ async fn create_memory_table_for_cte_scan(
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
         PhysicalPlan::TableScan(_)
-        | PhysicalPlan::CteScan(_)
-        | PhysicalPlan::MaterializedCte(_)
         | PhysicalPlan::ConstantTableScan(_)
         | PhysicalPlan::ExpressionScan(_)
         | PhysicalPlan::CacheScan(_)
