@@ -37,8 +37,7 @@ pub struct HashableSchema {
 impl HashableSchema {
     pub fn try_create(arrow_schema: SchemaRef) -> Result<Self> {
         let table_schema = Arc::new(
-            TableSchema::try_from(arrow_schema.as_ref())
-                .map_err(|err| ErrorCode::from_std_error(err, false))?,
+            TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
         );
         let data_schema = Arc::new(DataSchema::from(table_schema.clone()));
 

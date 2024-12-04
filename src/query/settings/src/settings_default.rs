@@ -1029,8 +1029,7 @@ impl DefaultSettings {
     }
 
     fn max_memory_usage() -> Result<u64> {
-        let memory_info =
-            sys_info::mem_info().map_err(|err| ErrorCode::from_std_error(err, false))?;
+        let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
 
         Ok(match GlobalConfig::try_get_instance() {
             None => 1024 * memory_info.total * 80 / 100,

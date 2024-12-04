@@ -64,7 +64,6 @@ impl DNSResolver {
                 error.name(),
                 error.message(),
                 String::new(),
-                true,
                 None,
                 error.backtrace(),
             )),
