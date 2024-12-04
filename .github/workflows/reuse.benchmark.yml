@@ -126,7 +126,7 @@ jobs:
           echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql
 
   cloud:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     needs: load
     strategy:
       matrix:
