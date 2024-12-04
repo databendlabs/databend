@@ -358,6 +358,7 @@ where
             return self.restore_output().await;
         }
 
+        debug_assert!(self.current.is_empty());
         while self.current.is_empty() {
             self.choice_list();
         }
@@ -411,9 +412,14 @@ where
             Some(merger) => merger,
             None => {
                 if self.current.len() == 1 {
-                    let s = &mut self.current[0];
+                    let mut s = self.current.pop().unwrap();
                     s.restore_first().await?;
                     self.output_data.push_back(s.pop_front_data());
+
+                    if !s.is_empty() {
+                        self.subsequent.push(s)
+                    }
+
                     return Ok(());
                 }
 
@@ -433,7 +439,6 @@ where
             self.output_block(data);
             return Ok(());
         }
-
         debug_assert!(merger.is_finished());
 
         let streams = self.output_merger.take().unwrap().streams();
@@ -495,7 +500,6 @@ where
 
     fn next_bound(&mut self) -> Option<Column> {
         let bounds = self.bounds.last_mut()?;
-
         match bounds.len() {
             0 => unreachable!(),
             1 => Some(self.bounds.pop().unwrap()),
