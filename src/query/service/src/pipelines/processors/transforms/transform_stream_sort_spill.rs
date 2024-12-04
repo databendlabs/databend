@@ -108,7 +108,7 @@ where
     A::Rows: 'static,
 {
     fn name(&self) -> String {
-        String::from("TransformStreamSortSpill")
+        String::from("TransformSortSpill")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -372,18 +372,6 @@ where
             return Ok(());
         }
 
-        log::info!(
-            "self {:?} current.len {} current.blocks {} subsequent.len {} subsequent.blocks {}",
-            self as *const TransformStreamSortSpill<A>,
-            self.current.len(),
-            self.current.iter().map(|s| s.blocks.len()).sum::<usize>(),
-            self.subsequent.len(),
-            self.subsequent
-                .iter()
-                .map(|s| s.blocks.len())
-                .sum::<usize>()
-        );
-
         while self.current.is_empty() {
             self.choice_list();
         }
@@ -585,8 +573,6 @@ where
                     blocks.push(block)
                 }
                 debug_assert!(merger.is_finished());
-
-                log::info!("blocks {:?}", blocks);
 
                 self.bounds = blocks
                     .iter()
