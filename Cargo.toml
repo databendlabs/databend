@@ -294,7 +294,7 @@ gimli = "0.31.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.4.0"
-hashbrown = { version = "0.15.0", default-features = false }
+hashbrown = { version = "0.15.2", default-features = false }
 hashbrown_v0_14 = { package = "hashbrown", version = "0.14.0", default-features = false, features = ["ahash"] }
 hashlink = "0.8"
 headers = "0.4.0"
