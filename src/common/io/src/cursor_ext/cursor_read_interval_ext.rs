@@ -369,33 +369,6 @@ enum DatePartSpecifier {
     Hour,
 }
 
-impl TryFrom<&str> for DatePartSpecifier {
-    type Error = ErrorCode;
-
-    fn try_from(value: &str) -> Result<Self> {
-        match value.to_lowercase().as_str() {
-            "millennium" | "millennia" => Ok(DatePartSpecifier::Millennium),
-            "century" | "centuries" => Ok(DatePartSpecifier::Century),
-            "decade" | "decades" => Ok(DatePartSpecifier::Decade),
-            "year" | "years" | "y" => Ok(DatePartSpecifier::Year),
-            "quarter" | "quarters" | "q" => Ok(DatePartSpecifier::Quarter),
-            "month" | "months" | "mon" => Ok(DatePartSpecifier::Month),
-            "day" | "days" | "d" => Ok(DatePartSpecifier::Day),
-
-            "week" | "weeks" | "w" => Ok(DatePartSpecifier::Week),
-            "microsecond" | "microseconds" | "us" => Ok(DatePartSpecifier::Microseconds),
-            "millisecond" | "milliseconds" | "ms" => Ok(DatePartSpecifier::Milliseconds),
-            "second" | "seconds" | "s" => Ok(DatePartSpecifier::Second),
-            "minute" | "minutes" | "m" => Ok(DatePartSpecifier::Minute),
-            "hour" | "hours" | "h" => Ok(DatePartSpecifier::Hour),
-            _ => Err(ErrorCode::BadArguments(format!(
-                "Invalid date part specifier: {}",
-                value
-            ))),
-        }
-    }
-}
-
 fn try_get_date_part_specifier(specifier_str: &str) -> Result<DatePartSpecifier> {
     match specifier_str.to_lowercase().as_str() {
         "millennium" | "millennia" => Ok(DatePartSpecifier::Millennium),

@@ -295,9 +295,7 @@ impl From<&Column> for ArrayData {
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
-            Column::Interval(_) => {
-                todo!()
-            }
+            Column::Interval(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Array(col) => {
                 let child_data = ArrayData::from(&col.values);
                 let builder = ArrayDataBuilder::new(arrow_type)

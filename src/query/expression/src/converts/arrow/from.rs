@@ -260,9 +260,6 @@ impl Column {
             }
             DataType::Interval => {
                 todo!()
-                // let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Interval(IntervalUnit::MonthDayNano))?;
-                // let buffer: Buffer<months_days_ns> = array.to_data().buffers()[0].clone().into();
-                // Column::Interval(buffer)
             }
             DataType::Nullable(_) => {
                 let validity = match array.nulls() {

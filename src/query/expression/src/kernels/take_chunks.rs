@@ -694,8 +694,13 @@ impl Column {
                 .unwrap();
                 Column::Date(d)
             }
-            ColumnVec::Interval(_columns) => {
-                todo!()
+            ColumnVec::Interval(columns) => {
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let i =
+                    <IntervalType>::upcast_column(<IntervalType>::column_from_vec(builder, &[]))
+                        .into_interval()
+                        .unwrap();
+                Column::Interval(i)
             }
             ColumnVec::Array(columns) => {
                 let data_type = data_type.as_array().unwrap();

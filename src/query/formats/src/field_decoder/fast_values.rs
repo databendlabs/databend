@@ -157,7 +157,6 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader, positions),
             ColumnBuilder::Geography(c) => self.read_geography(c, reader, positions),
             ColumnBuilder::Binary(_) => Err(ErrorCode::Unimplemented("binary literal")),
-            // TODO
             ColumnBuilder::Interval(c) => self.read_interval(c, reader, positions),
             ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
                 Err(ErrorCode::Unimplemented("empty array/map literal"))
