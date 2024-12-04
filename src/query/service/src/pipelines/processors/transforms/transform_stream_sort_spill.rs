@@ -171,7 +171,7 @@ where
 
                         self.simpler = Some(
                             FixedRateSimpler::new(
-                                vec![0],
+                                vec![self.schema.fields().len() - 1],
                                 self.batch_rows,
                                 self.batch_rows * self.num_merge,
                                 self.batch_rows,
@@ -314,35 +314,40 @@ where
     }
 
     async fn on_spill(&mut self) -> Result<()> {
-        let mut blocks = mem::take(&mut self.input_data);
-
         let simpler = self.simpler.as_mut().unwrap();
-        for data in &blocks {
+        for data in &self.input_data {
             simpler.add_block(data.clone());
         }
         simpler.compact_blocks(false);
 
-        let mut spilled = VecDeque::new();
-        if blocks.len() == 1 {
-            spilled.push_back(self.new_block(blocks.pop().unwrap()).await?);
+        let blocks = if self.input_data.len() == 1 {
+            let data = self.input_data.pop().unwrap();
+            vec![self.new_block(data).await?].into()
         } else {
-            let mut merger = Merger::<A, BlockStream>::create(
+            let streams = self
+                .input_data
+                .drain(..)
+                .map(|b| SortRowsStream(Some(b)))
+                .collect();
+            let mut merger = Merger::<A, SortRowsStream>::create(
                 self.schema.clone(),
-                blocks.into_iter().map(|b| BlockStream(Some(b))).collect(),
+                streams,
                 self.sort_desc.clone(),
                 self.batch_rows,
                 self.limit,
             );
 
+            let mut spilled = VecDeque::new();
             while let Some(block) = merger.next_block()? {
                 spilled.push_back(self.new_block(block).await?);
             }
             debug_assert!(merger.is_finished());
-        }
+            spilled
+        };
 
         self.subsequent.push(BoundBlockStream::<A::Rows> {
             sort_desc: self.sort_desc.clone(),
-            blocks: spilled,
+            blocks,
             bound: None,
             spiller: self.spiller.clone(),
         });
@@ -358,7 +363,6 @@ where
             return self.restore_output().await;
         }
 
-        debug_assert!(self.current.is_empty());
         while self.current.is_empty() {
             self.choice_list();
         }
@@ -408,7 +412,7 @@ where
     }
 
     async fn restore_output(&mut self) -> Result<()> {
-        let merger = match &mut self.output_merger {
+        let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
                 if self.current.len() == 1 {
@@ -423,10 +427,9 @@ where
                     return Ok(());
                 }
 
-                let cur = mem::take(&mut self.current);
                 let merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
                     self.schema.clone(),
-                    cur,
+                    mem::take(&mut self.current),
                     self.sort_desc.clone(),
                     self.batch_rows,
                     None,
@@ -449,6 +452,7 @@ where
     }
 
     fn choice_list(&mut self) {
+        debug_assert!(self.current.is_empty());
         let Some(bound) = self.next_bound() else {
             let mut sub = mem::take(&mut self.subsequent);
             for s in &mut sub {
@@ -459,7 +463,7 @@ where
         };
 
         let bound = A::Rows::from_column(&bound, &self.sort_desc).unwrap(); // todo check
-        let (cur, sub): (Vec<_>, Vec<_>) = self
+        (self.current, self.subsequent) = self
             .subsequent
             .drain(..)
             .map(|mut s| {
@@ -467,9 +471,6 @@ where
                 s
             })
             .partition(|s| s.should_include_first());
-
-        self.current = cur;
-        self.subsequent = sub;
     }
 
     // fn subsequent_memory(&self) -> usize {
@@ -514,12 +515,14 @@ where
     fn determine_bounds(&mut self) -> Result<()> {
         let mut simpler = self.simpler.take().unwrap();
         simpler.compact_blocks(true);
+        //
+        let simpled_rows = simpler.dense_blocks;
 
-        match simpler.dense_blocks.len() {
+        match simpled_rows.len() {
             0 => (),
             1 => self.bounds.push(
                 DataBlock::sort(
-                    &simpler.dense_blocks[0],
+                    &simpled_rows[0],
                     &[SortColumnDescription {
                         offset: 0,
                         asc: A::Rows::IS_ASC_COLUMN,
@@ -531,11 +534,10 @@ where
                 .clone(),
             ),
             _ => {
-                let streams = simpler
-                    .dense_blocks
+                let streams = simpled_rows
                     .into_iter()
                     .map(|block| {
-                        BlockStream(Some(
+                        SortRowsStream(Some(
                             DataBlock::sort(
                                 &block,
                                 &[SortColumnDescription {
@@ -552,7 +554,7 @@ where
 
                 let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
                 let sort_desc = Arc::new(vec![self.sort_desc[0].clone()]);
-                let mut merger = Merger::<A, BlockStream>::create(
+                let mut merger = Merger::<A, SortRowsStream>::create(
                     schema,
                     streams,
                     sort_desc,
@@ -706,9 +708,9 @@ impl<R: Rows + Send> BoundBlockStream<R> {
     }
 }
 
-struct BlockStream(Option<DataBlock>);
+struct SortRowsStream(Option<DataBlock>);
 
-impl SortedStream for BlockStream {
+impl SortedStream for SortRowsStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         let data = self.0.take().map(|b| {
             let col = b.get_last_column().clone();
