@@ -96,9 +96,17 @@ def test_temp_table():
     assert not session_state["need_keep_alive"]
 
 
+def test_no_cookie_if_not_enabled():
+    client = requests.session()
+    resp = do_query(client, "select 1")
+    assert resp.status_code == 200, resp.text
+    assert len(client.cookies.items()) == 0
+
+
 def main():
     test_simple()
     test_temp_table()
+    test_no_cookie_if_not_enabled()
 
 
 if __name__ == "__main__":
