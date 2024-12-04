@@ -116,6 +116,7 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             self.num_values as usize,
             &self.schema_desc,
             ParquetCompression::UNCOMPRESSED,
+            None,
         );
         builder.add_column_chunk(self.column_id as usize, bytes.to_bytes());
         let row_group = Box::new(builder.build());
