@@ -723,13 +723,13 @@ order by
 ----
 HashJoin: INNER
 ├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── Scan: default.tpch_test.revenue (#1) (read rows: 1000)
-│       └── Probe
-│           └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
+│   └── Scan: default.tpch_test.revenue (#2) (read rows: 1000)
 └── Probe
-    └── Scan: default.tpch_test.revenue (#2) (read rows: 1000)
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpch_test.revenue (#1) (read rows: 1000)
+        └── Probe
+            └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
 
 
 # Q16
