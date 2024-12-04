@@ -338,6 +338,12 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             }
             Ok(Plan::Replace(plan))
         }
+        Plan::OptimizeClusterBy { s_expr } => {
+            let input_s_expr = optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
+            Ok(Plan::OptimizeClusterBy {
+                s_expr: Box::new(s_expr.replace_children(vec![Arc::new(input_s_expr)])),
+            })
+        }
 
         Plan::CreateTable(mut plan) => {
             if let Some(p) = &plan.as_select {
@@ -507,7 +513,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }
-    // If there still exists a Exchange::Merge operator, we should disable distributed optimization and
+    // If there still exists an Exchange::Merge operator, we should disable distributed optimization and
     // optimize the input plan again.
     if input_s_expr.has_merge_exchange() {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(false);

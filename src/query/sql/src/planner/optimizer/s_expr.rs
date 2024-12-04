@@ -340,6 +340,7 @@ impl SExpr {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
+            | RelOperator::OptimizeClusterBy(_)
             | RelOperator::CompactBlock(_) => {}
         };
         for child in &self.children {
@@ -441,6 +442,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::RecursiveCteScan(_)
         | RelOperator::Mutation(_)
         | RelOperator::Recluster(_)
+        | RelOperator::OptimizeClusterBy(_)
         | RelOperator::CompactBlock(_) => false,
         RelOperator::Join(op) => {
             op.equi_conditions.iter().any(|condition| {

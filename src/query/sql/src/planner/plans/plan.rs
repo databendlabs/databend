@@ -234,6 +234,9 @@ pub enum Plan {
         s_expr: Box<SExpr>,
         need_purge: bool,
     },
+    OptimizeClusterBy {
+        s_expr: Box<SExpr>,
+    },
 
     // Insert
     Insert(Box<Insert>),
@@ -433,7 +436,8 @@ impl Plan {
             | Plan::DataMutation { .. }
             | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
-            | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
+            | Plan::OptimizeCompactBlock { .. }
+            | Plan::OptimizeClusterBy { .. } => QueryKind::Update,
             _ => QueryKind::Other,
         }
     }

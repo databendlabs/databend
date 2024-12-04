@@ -17,6 +17,8 @@ use databend_common_catalog::table::NavigationPoint;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::BindContext;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub struct OptimizePurgePlan {
@@ -46,5 +48,47 @@ pub struct OptimizeCompactBlock {
 impl Operator for OptimizeCompactBlock {
     fn rel_op(&self) -> RelOp {
         RelOp::CompactBlock
+    }
+}
+
+#[derive(Clone)]
+pub struct OptimizeClusterBy {
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    pub metadata: MetadataRef,
+    pub bind_context: Box<BindContext>,
+}
+
+impl std::fmt::Debug for OptimizeClusterBy {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("OptimizeClusterBy")
+            .field("catalog", &self.catalog_name)
+            .field("database", &self.database_name)
+            .field("table", &self.table_name)
+            .finish()
+    }
+}
+
+impl Eq for OptimizeClusterBy {}
+
+impl PartialEq for OptimizeClusterBy {
+    fn eq(&self, other: &Self) -> bool {
+        self.catalog_name == other.catalog_name
+            && self.database_name == other.database_name
+            && self.table_name == other.table_name
+    }
+}
+
+impl std::hash::Hash for OptimizeClusterBy {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.database_name.hash(state);
+        self.table_name.hash(state);
+    }
+}
+
+impl Operator for OptimizeClusterBy {
+    fn rel_op(&self) -> RelOp {
+        RelOp::OptimizeClusterBy
     }
 }

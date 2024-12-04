@@ -74,14 +74,17 @@ impl Plan {
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
             Plan::ReclusterTable { .. } => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
-            Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
-            Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
-            Plan::OptimizeCompactBlock { .. } => Ok("OptimizeCompactBlock".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
             Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
             Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
             Plan::ExistsTable(_) => Ok("ExistsTable".to_string()),
+
+            // Optimize
+            Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
+            Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
+            Plan::OptimizeCompactBlock { .. } => Ok("OptimizeCompactBlock".to_string()),
+            Plan::OptimizeClusterBy { .. } => Ok("OptimizeClusterBy".to_string()),
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),

@@ -796,6 +796,7 @@ pub enum OptimizeTableAction {
     All,
     Purge { before: Option<TimeTravelPoint> },
     Compact { target: CompactTarget },
+    ClusterBy { exprs: Vec<Expr> },
 }
 
 impl Display for OptimizeTableAction {
@@ -819,6 +820,11 @@ impl Display for OptimizeTableAction {
                     }
                 }
                 Ok(())
+            }
+            OptimizeTableAction::ClusterBy { exprs } => {
+                write!(f, "CLUSTER BY HILBERT(")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, ")")
             }
         }
     }
