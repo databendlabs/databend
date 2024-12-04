@@ -12,43 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableInfo;
-use enum_as_inner::EnumAsInner;
 
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::plans::CopyIntoTableMode;
-use crate::plans::ValidationMode;
 use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CopyIntoTable {
+pub struct PhysicalAppend {
     pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
 
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
-    pub write_mode: CopyIntoTableMode,
-    pub validation_mode: ValidationMode,
-    pub stage_table_info: StageTableInfo,
     pub table_info: TableInfo,
-
     pub project_columns: Option<Vec<ColumnBinding>>,
-    pub source: CopyIntoTableSource,
-    pub is_transform: bool,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
-pub enum CopyIntoTableSource {
-    Query(Box<PhysicalPlan>),
-    Stage(Box<PhysicalPlan>),
-}
-
-impl CopyIntoTable {
+impl PhysicalAppend {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![]))
     }

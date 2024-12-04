@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::OneBlockSource;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
@@ -38,10 +37,11 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         mode: TruncateMode,
     ) -> Result<()> {
-        if let Some(prev_snapshot) = self.read_table_snapshot().await? {
-            self.build_truncate_pipeline(ctx, pipeline, mode, prev_snapshot)?;
+        if self.read_table_snapshot().await?.is_some() {
+            self.build_truncate_pipeline(ctx, pipeline, mode)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     #[inline]
@@ -51,14 +51,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         mode: TruncateMode,
-        prev_snapshot: Arc<TableSnapshot>,
     ) -> Result<()> {
         // Delete operation commit can retry multi-times if table version mismatched.
-        let prev_snapshot_id = if !matches!(mode, TruncateMode::Delete) {
-            Some(prev_snapshot.snapshot_id)
-        } else {
-            None
-        };
+        let forbid_occ_retry = !matches!(mode, TruncateMode::Delete);
         pipeline.add_source(
             |output| {
                 let meta = CommitMeta {
@@ -82,7 +77,7 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
-                prev_snapshot_id,
+                forbid_occ_retry,
                 None,
             )
         })

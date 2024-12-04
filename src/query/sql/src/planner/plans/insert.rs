@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -27,7 +28,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::Plan;
-use crate::plans::CopyIntoTablePlan;
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {
@@ -154,53 +154,9 @@ pub(crate) fn format_insert_source(
             )
             .format_pretty()?),
         },
-        InsertInputSource::Stage(plan) => match *plan.clone() {
-            Plan::CopyIntoTable(copy_plan) => {
-                let CopyIntoTablePlan {
-                    no_file_to_copy,
-                    from_attachment,
-                    required_values_schema,
-                    required_source_schema,
-                    write_mode,
-                    validation_mode,
-                    stage_table_info,
-                    enable_distributed,
-                    ..
-                } = &*copy_plan;
-                let required_values_schema = required_values_schema
-                    .fields()
-                    .iter()
-                    .map(|field| field.name().to_string())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let required_source_schema = required_source_schema
-                    .fields()
-                    .iter()
-                    .map(|field| field.name().to_string())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let stage_node = vec![
-                    FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
-                    FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
-                    FormatTreeNode::new(format!(
-                        "required_values_schema: [{required_values_schema}]"
-                    )),
-                    FormatTreeNode::new(format!(
-                        "required_source_schema: [{required_source_schema}]"
-                    )),
-                    FormatTreeNode::new(format!("write_mode: {write_mode}")),
-                    FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
-                    FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
-                    FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
-                ];
-                children.extend(stage_node);
-                Ok(
-                    FormatTreeNode::with_children(format!("{plan_name} (stage):"), children)
-                        .format_pretty()?,
-                )
-            }
-            _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
-        },
+        InsertInputSource::Stage(_) => Err(ErrorCode::StorageUnsupported(
+            "stage attachment is deprecated in replace into statement",
+        )),
     }
 }
 

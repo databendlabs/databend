@@ -71,7 +71,7 @@ pub enum FragmentKind {
     Merge,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy, PartialEq, Eq)]
 pub enum MutationKind {
     Delete,
     Update,

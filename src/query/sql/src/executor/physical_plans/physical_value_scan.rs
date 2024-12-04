@@ -12,21 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::DataSchemaRef;
-use databend_common_meta_app::schema::TableInfo;
+use std::sync::Arc;
 
-use crate::executor::PhysicalPlan;
-use crate::ColumnBinding;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
+pub enum Values {
+    Values(Arc<Vec<Vec<Scalar>>>),
+    RawValues { rest_str: Arc<String>, start: usize },
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DistributedInsertSelect {
-    /// A unique id of operator in a `PhysicalPlan` tree.
+pub struct PhysicalValueScan {
     pub plan_id: u32,
+    pub values: Values,
+    pub output_schema: DataSchemaRef,
+}
 
-    pub input: Box<PhysicalPlan>,
-    pub table_info: TableInfo,
-    pub insert_schema: DataSchemaRef,
-    pub select_schema: DataSchemaRef,
-    pub select_column_bindings: Vec<ColumnBinding>,
-    pub cast_needed: bool,
+impl PhysicalValueScan {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
 }

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
@@ -37,6 +36,7 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
@@ -58,6 +58,7 @@ use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use log::debug;
@@ -67,10 +68,10 @@ use parking_lot::RwLock;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
-use crate::plans::CopyIntoTableMode;
-use crate::plans::CopyIntoTablePlan;
+use crate::optimizer::SExpr;
+use crate::plans::Append;
+use crate::plans::AppendType;
 use crate::plans::Plan;
-use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
@@ -83,16 +84,32 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
     ) -> Result<Plan> {
+        let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
+            &stmt.dst.catalog,
+            &stmt.dst.database,
+            &stmt.dst.table,
+        );
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
-                let mut plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location, false)
+                let (copy_into_table_plan, mut stage_table_info) = self
+                    .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
-
-                // for copy from location, collect files explicitly
-                plan.collect_files(self.ctx.as_ref()).await?;
-                self.bind_copy_into_table_from_location(bind_context, plan)
-                    .await
+                copy_into_table_plan
+                    .collect_files(
+                        self.ctx.as_ref(),
+                        &mut stage_table_info,
+                        &catalog_name,
+                        &database_name,
+                        &table_name,
+                    )
+                    .await?;
+                self.bind_copy_into_table_from_location(
+                    bind_context,
+                    copy_into_table_plan,
+                    stage_table_info,
+                    AppendType::CopyInto,
+                )
+                .await
             }
             CopyIntoTableSource::Query(query) => {
                 self.init_cte(bind_context, &stmt.with)?;
@@ -103,12 +120,27 @@ impl<'a> Binder {
                     .write()
                     .set_max_column_position(max_column_position.max_pos);
                 let (select_list, location, alias) = check_transform_query(query)?;
-                let plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location, true)
+                let (copy_into_table_plan, mut stage_table_info) = self
+                    .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
 
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
-                    .await
+                copy_into_table_plan
+                    .collect_files(
+                        self.ctx.as_ref(),
+                        &mut stage_table_info,
+                        &catalog_name,
+                        &database_name,
+                        &table_name,
+                    )
+                    .await?;
+                self.bind_copy_from_query_into_table(
+                    bind_context,
+                    copy_into_table_plan,
+                    stage_table_info,
+                    select_list,
+                    alias,
+                )
+                .await
             }
         }
     }
@@ -138,22 +170,27 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
-        is_transform: bool,
-    ) -> Result<CopyIntoTablePlan> {
+    ) -> Result<(Append, StageTableInfo)> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
             &stmt.dst.database,
             &stmt.dst.table,
         );
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let catalog_info = catalog.info();
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
-        let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
-            .map_err(ErrorCode::SyntaxException)?;
+        let table_index = self.metadata.write().add_table(
+            catalog_name,
+            database_name,
+            table.clone(),
+            None,
+            false,
+            false,
+            false,
+            false,
+        );
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
         if !stmt.file_format.is_empty() {
@@ -201,32 +238,26 @@ impl<'a> Binder {
             None
         };
 
-        Ok(CopyIntoTablePlan {
-            catalog_info,
-            database_name,
-            table_name,
-            validation_mode,
-            is_transform,
-            no_file_to_copy: false,
-            from_attachment: false,
-            stage_table_info: StageTableInfo {
-                schema: stage_schema,
-                files_info,
-                stage_info,
-                files_to_copy: None,
-                duplicated_files_detected: vec![],
-                is_select: false,
-                default_values,
-                copy_into_location_options: Default::default(),
-                copy_into_table_options: stmt.options.clone(),
-            },
+        let stage_table_info = StageTableInfo {
+            schema: stage_schema,
+            files_info,
+            stage_info,
+            files_to_copy: None,
+            duplicated_files_detected: vec![],
+            is_select: false,
+            default_values,
+            copy_into_location_options: Default::default(),
+            copy_into_table_options: stmt.options.clone(),
+        };
+
+        let copy_into_plan = Append {
+            table_index,
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
             required_values_schema: required_values_schema.clone(),
-            write_mode: CopyIntoTableMode::Copy,
-            query: None,
-            enable_distributed: false,
-        })
+            project_columns: None,
+        };
+        Ok((copy_into_plan, stage_table_info))
     }
 
     /// Bind COPY INFO <table> FROM <stage_location>
@@ -234,19 +265,20 @@ impl<'a> Binder {
     async fn bind_copy_into_table_from_location(
         &mut self,
         bind_ctx: &BindContext,
-        plan: CopyIntoTablePlan,
+        mut append_plan: Append,
+        stage_table_info: StageTableInfo,
+        append_type: AppendType,
     ) -> Result<Plan> {
-        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
+        let use_query = matches!(&stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
+        let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
 
         if use_query {
-            let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
-            let case_sensitive = plan
-                .stage_table_info
-                .copy_into_table_options
-                .column_match_mode
-                == Some(ColumnMatchMode::CaseSensitive);
-            for dest_field in plan.required_source_schema.fields().iter() {
+            let mut select_list =
+                Vec::with_capacity(append_plan.required_source_schema.num_fields());
+
+            for dest_field in append_plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
                     column: ColumnRef {
@@ -283,10 +315,42 @@ impl<'a> Binder {
                 });
             }
 
-            self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
-                .await
+            self.bind_copy_from_query_into_table(
+                bind_ctx,
+                append_plan,
+                stage_table_info,
+                &select_list,
+                &None,
+            )
+            .await
         } else {
-            Ok(Plan::CopyIntoTable(Box::new(plan)))
+            let table = StageTable::try_create(stage_table_info.clone())?;
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                None,
+                false,
+                false,
+                true,
+                false,
+            );
+
+            let (scan, bind_context) =
+                self.bind_base_table(bind_ctx, "system", table_index, None, &None)?;
+            append_plan.project_columns = Some(bind_context.columns.clone());
+            let target_table_index = append_plan.table_index;
+
+            let s_expr = SExpr::create_unary(Arc::new(append_plan.into()), Arc::new(scan));
+            Ok(Plan::Append {
+                s_expr: Box::new(s_expr),
+                target_table_index,
+                metadata: self.metadata.clone(),
+                stage_table_info: Some(Box::new(stage_table_info)),
+                overwrite: false,
+                forbid_occ_retry: false,
+                append_type,
+            })
         }
     }
 
@@ -345,7 +409,6 @@ impl<'a> Binder {
         table_name: String,
         required_values_schema: DataSchemaRef,
         values_str: &str,
-        write_mode: CopyIntoTableMode,
     ) -> Result<Plan> {
         let (data_schema, const_columns) = if values_str.is_empty() {
             (required_values_schema.clone(), vec![])
@@ -353,9 +416,6 @@ impl<'a> Binder {
             self.prepared_values(values_str, &required_values_schema)
                 .await?
         };
-
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let catalog_info = catalog.info();
 
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
@@ -377,36 +437,49 @@ impl<'a> Binder {
             .prepare_default_values(bind_context, &data_schema)
             .await?;
 
-        let plan = CopyIntoTablePlan {
-            catalog_info,
-            database_name,
-            table_name,
-            no_file_to_copy: false,
-            from_attachment: true,
-            required_source_schema: data_schema.clone(),
-            required_values_schema,
-            values_consts: const_columns,
-            stage_table_info: StageTableInfo {
-                schema: stage_schema,
-                files_info,
-                stage_info,
-                files_to_copy: Some(files_to_copy),
-                duplicated_files_detected,
-                is_select: false,
-                default_values: Some(default_values),
-                copy_into_location_options: Default::default(),
-                copy_into_table_options: options,
-            },
-            write_mode,
-            query: None,
-            validation_mode: ValidationMode::None,
+        let table = self
+            .ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
 
-            enable_distributed: false,
-            is_transform: false,
+        let table_index = self.metadata.write().add_table(
+            catalog_name,
+            database_name,
+            table,
+            None,
+            false,
+            false,
+            false,
+            false,
+        );
+
+        let stage_table_info = StageTableInfo {
+            schema: stage_schema,
+            files_info,
+            stage_info,
+            files_to_copy: Some(files_to_copy),
+            duplicated_files_detected,
+            is_select: false,
+            default_values: Some(default_values),
+            copy_into_location_options: Default::default(),
+            copy_into_table_options: options,
         };
 
-        self.bind_copy_into_table_from_location(bind_context, plan)
-            .await
+        let copy_into_table_plan = Append {
+            table_index,
+            required_values_schema,
+            values_consts: const_columns,
+            required_source_schema: data_schema.clone(),
+            project_columns: None,
+        };
+
+        self.bind_copy_into_table_from_location(
+            bind_context,
+            copy_into_table_plan,
+            stage_table_info,
+            AppendType::Insert,
+        )
+        .await
     }
 
     /// Bind COPY INTO <table> FROM <query>
@@ -414,30 +487,24 @@ impl<'a> Binder {
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
-        mut plan: CopyIntoTablePlan,
+        mut copy_into_table_plan: Append,
+        stage_table_info: StageTableInfo,
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        plan.collect_files(self.ctx.as_ref()).await?;
-        if plan.no_file_to_copy {
-            return Ok(Plan::CopyIntoTable(Box::new(plan)));
-        }
-        let case_sensitive = plan
-            .stage_table_info
-            .copy_into_table_options
-            .column_match_mode
-            == Some(ColumnMatchMode::CaseSensitive);
-
         let table_ctx = self.ctx.clone();
+        let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
         let (s_expr, mut from_context) = self
             .bind_stage_table(
                 table_ctx,
                 bind_context,
-                plan.stage_table_info.stage_info.clone(),
-                plan.stage_table_info.files_info.clone(),
+                stage_table_info.stage_info.clone(),
+                stage_table_info.files_info.clone(),
                 alias,
-                plan.stage_table_info.files_to_copy.clone(),
+                stage_table_info.files_to_copy.clone(),
                 case_sensitive,
+                Some(stage_table_info.schema.clone()),
             )
             .await?;
 
@@ -459,13 +526,15 @@ impl<'a> Binder {
             &select_list,
         )?;
 
-        if projections.len() != plan.required_source_schema.num_fields() {
+        if projections.len() != copy_into_table_plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
                 "Number of columns in select list ({}) does not match that of the corresponding table ({})",
                 projections.len(),
-                plan.required_source_schema.num_fields(),
+                copy_into_table_plan.required_source_schema.num_fields(),
             )));
         }
+
+        copy_into_table_plan.project_columns = Some(projections.clone());
 
         let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
@@ -478,8 +547,7 @@ impl<'a> Binder {
         output_context.columns = from_context.columns;
 
         // disable variant check to allow copy invalid JSON into tables
-        let disable_variant_check = plan
-            .stage_table_info
+        let disable_variant_check = stage_table_info
             .copy_into_table_options
             .disable_variant_check;
         if disable_variant_check {
@@ -500,16 +568,19 @@ impl<'a> Binder {
             }
         }
 
-        plan.query = Some(Box::new(Plan::Query {
-            s_expr: Box::new(s_expr),
-            metadata: self.metadata.clone(),
-            bind_context: Box::new(output_context),
-            rewrite_kind: None,
-            ignore_result: false,
-            formatted_ast: None,
-        }));
+        let target_table_index = copy_into_table_plan.table_index;
+        let copy_into =
+            SExpr::create_unary(Arc::new(copy_into_table_plan.into()), Arc::new(s_expr));
 
-        Ok(Plan::CopyIntoTable(Box::new(plan)))
+        Ok(Plan::Append {
+            s_expr: Box::new(copy_into),
+            target_table_index,
+            metadata: self.metadata.clone(),
+            stage_table_info: Some(Box::new(stage_table_info)),
+            overwrite: false,
+            forbid_occ_retry: false,
+            append_type: AppendType::CopyInto,
+        })
     }
 
     #[async_backtrace::framed]

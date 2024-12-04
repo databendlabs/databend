@@ -142,7 +142,9 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         | RelOperator::Mutation(_)
         | RelOperator::MutationSource(_)
         | RelOperator::Recluster(_)
-        | RelOperator::CompactBlock(_) => {}
+        | RelOperator::CompactBlock(_)
+        | RelOperator::Append(_)
+        | RelOperator::ValueScan(_) => {}
     }
     Ok(())
 }

@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -24,6 +25,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::Append;
+use super::AppendType;
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
 use super::RenameDictionaryPlan;
@@ -43,8 +46,6 @@ use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallProcedurePlan;
-use crate::plans::CopyIntoTableMode;
-use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateConnectionPlan;
 use crate::plans::CreateDatabasePlan;
@@ -105,7 +106,6 @@ use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
-use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -150,6 +150,7 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
@@ -234,9 +235,6 @@ pub enum Plan {
         s_expr: Box<SExpr>,
         need_purge: bool,
     },
-
-    // Insert
-    Insert(Box<Insert>),
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     DataMutation {
@@ -245,7 +243,15 @@ pub enum Plan {
         metadata: MetadataRef,
     },
 
-    CopyIntoTable(Box<CopyIntoTablePlan>),
+    Append {
+        s_expr: Box<SExpr>,
+        metadata: MetadataRef,
+        stage_table_info: Option<Box<StageTableInfo>>,
+        overwrite: bool,
+        forbid_occ_retry: bool,
+        append_type: AppendType,
+        target_table_index: IndexType,
+    },
     CopyIntoLocation(CopyIntoLocationPlan),
 
     // Views
@@ -420,15 +426,11 @@ impl Plan {
     pub fn kind(&self) -> QueryKind {
         match self {
             Plan::Query { .. } => QueryKind::Query,
-            Plan::CopyIntoTable(copy_plan) => match copy_plan.write_mode {
-                CopyIntoTableMode::Insert { .. } => QueryKind::Insert,
-                _ => QueryKind::CopyIntoTable,
-            },
+            Plan::Append { .. } => QueryKind::CopyIntoTable,
             Plan::Explain { .. }
             | Plan::ExplainAnalyze { .. }
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
-            Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
             | Plan::DataMutation { .. }
             | Plan::OptimizePurge(_)
@@ -481,7 +483,6 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::DescPasswordPolicy(plan) => plan.schema(),
-            Plan::CopyIntoTable(plan) => plan.schema(),
             Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
@@ -494,6 +495,7 @@ impl Plan {
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
+            Plan::Append { append_type, .. } => Append::schema(append_type),
 
             _ => Arc::new(DataSchema::empty()),
         }

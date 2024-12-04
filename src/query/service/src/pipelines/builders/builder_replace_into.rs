@@ -34,16 +34,15 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+// use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
-use databend_common_sql::plans::InsertValue;
+// use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
@@ -67,36 +66,6 @@ impl PipelineBuilder {
     ) -> Result<bool> {
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
-    }
-
-    // build async sourcer pipeline.
-    pub(crate) fn build_async_sourcer(
-        &mut self,
-        async_sourcer: &ReplaceAsyncSourcer,
-    ) -> Result<()> {
-        self.main_pipeline.add_source(
-            |output| {
-                let name_resolution_ctx = NameResolutionContext::try_from(self.settings.as_ref())?;
-                match &async_sourcer.source {
-                    InsertValue::Values { rows } => {
-                        let inner = ValueSource::new(rows.clone(), async_sourcer.schema.clone());
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
-                    }
-                    InsertValue::RawValues { data, start } => {
-                        let inner = RawValueSource::new(
-                            data.clone(),
-                            self.ctx.clone(),
-                            name_resolution_ctx,
-                            async_sourcer.schema.clone(),
-                            *start,
-                        );
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
-                    }
-                }
-            },
-            1,
-        )?;
-        Ok(())
     }
 
     // build replace into pipeline.
@@ -398,9 +367,9 @@ pub struct ValueSource {
 }
 
 impl ValueSource {
-    pub fn new(rows: Vec<Vec<Scalar>>, schema: DataSchemaRef) -> Self {
+    pub fn new(rows: Arc<Vec<Vec<Scalar>>>, schema: DataSchemaRef) -> Self {
         Self {
-            rows: Arc::new(rows),
+            rows,
             schema,
             is_finished: false,
         }
@@ -442,7 +411,7 @@ impl AsyncSource for ValueSource {
 }
 
 pub struct RawValueSource {
-    data: String,
+    data: Arc<String>,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: NameResolutionContext,
     bind_context: BindContext,
@@ -454,7 +423,7 @@ pub struct RawValueSource {
 
 impl RawValueSource {
     pub fn new(
-        data: String,
+        data: Arc<String>,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,

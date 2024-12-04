@@ -395,11 +395,10 @@ impl QueryEntry {
             }
 
             // Write: Heavy actions.
-            Plan::Insert(_)
-            | Plan::InsertMultiTable(_)
+            Plan::InsertMultiTable(_)
             | Plan::Replace(_)
             | Plan::DataMutation { .. }
-            | Plan::CopyIntoTable(_)
+            | Plan::Append { .. }
             | Plan::CopyIntoLocation(_) => {
                 return true;
             }

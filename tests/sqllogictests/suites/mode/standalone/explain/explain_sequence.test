@@ -13,16 +13,22 @@ CREATE TABLE tmp(a int, b uint64, c int);
 query T
 explain INSERT INTO tmp select 10,nextval(seq),20 from numbers(3);
 ----
-InsertPlan (subquery):
-├── table: default.default.tmp
-├── inserted columns: [tmp.a (#0),tmp.b (#1),tmp.c (#2)]
-├── overwrite: false
+Append
+├── target table: [catalog: default] [desc: 'default'.'tmp']
+├── required columns: [#a, #b, #c]
 └── EvalScalar
-    ├── scalars: [10 AS (#1), nextval(seq) (#2) AS (#2), 20 AS (#3)]
+    ├── output columns: [nextval(seq) (#5), 10 (#4), 20 (#6)]
+    ├── expressions: [10, 20]
+    ├── estimated rows: 3.00
     └── AsyncFunction
-        ├── scalars: [nextval(seq) AS (#2)]
-        └── Scan
-            ├── table: system.numbers
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
+        ├── output columns: [nextval(seq) (#5)]
+        ├── estimated rows: 3.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── output columns: []
+            ├── read rows: 3
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 3.00

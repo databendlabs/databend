@@ -14,14 +14,13 @@
 
 mod builder_add_stream_column;
 mod builder_aggregate;
+mod builder_append;
 mod builder_append_table;
 mod builder_async_function;
 mod builder_column_mutation;
 mod builder_commit;
 mod builder_compact;
 mod builder_copy_into_location;
-mod builder_copy_into_table;
-mod builder_distributed_insert_select;
 mod builder_exchange;
 mod builder_fill_missing_columns;
 mod builder_filter;

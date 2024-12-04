@@ -323,12 +323,10 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::ConstantTableScan(_)
         | PhysicalPlan::ExpressionScan(_)
         | PhysicalPlan::CacheScan(_)
-        | PhysicalPlan::DistributedInsertSelect(_)
         | PhysicalPlan::ExchangeSource(_)
         | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::CopyIntoTable(_)
+        | PhysicalPlan::Append(_)
         | PhysicalPlan::CopyIntoLocation(_)
-        | PhysicalPlan::ReplaceAsyncSourcer(_)
         | PhysicalPlan::ReplaceDeduplicate(_)
         | PhysicalPlan::ReplaceInto(_)
         | PhysicalPlan::ColumnMutation(_)
@@ -348,6 +346,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::ChunkFillAndReorder(_)
         | PhysicalPlan::ChunkAppendData(_)
         | PhysicalPlan::ChunkMerge(_)
+        | PhysicalPlan::ValueScan(_)
         | PhysicalPlan::ChunkCommitInsert(_) => {}
     }
     Ok(())

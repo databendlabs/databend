@@ -13,12 +13,12 @@
 // limitations under the License.
 
 mod aggregate;
+mod append;
 mod async_function;
 mod cache_scan;
 mod call;
 mod constant_table_scan;
 mod copy_into_location;
-mod copy_into_table;
 mod cte_scan;
 mod data_mask;
 mod ddl;
@@ -52,15 +52,16 @@ mod sort;
 mod system;
 mod udf;
 mod union_all;
+mod value_scan;
 mod window;
 
 pub use aggregate::*;
+pub use append::*;
 pub use async_function::AsyncFunction;
 pub use cache_scan::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
 pub use copy_into_location::*;
-pub use copy_into_table::*;
 pub use cte_scan::CteScan;
 pub use data_mask::*;
 pub use ddl::*;
@@ -99,4 +100,5 @@ pub use sort::*;
 pub use system::*;
 pub use udf::*;
 pub use union_all::UnionAll;
+pub use value_scan::*;
 pub use window::*;

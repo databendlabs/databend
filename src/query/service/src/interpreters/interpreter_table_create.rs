@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
+use databend_common_sql::plans::create_append_plan_from_subquery;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -63,13 +64,11 @@ use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
-use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterFactory;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::Insert;
-use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
@@ -224,18 +223,21 @@ impl CreateTableInterpreter {
             TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
+        let table = self.ctx.build_table_by_table_info(&table_info, None)?;
 
-        let insert_plan = Insert {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-            schema: self.plan.schema.clone(),
-            overwrite: false,
-            source: InsertInputSource::SelectPlan(select_plan),
-            table_info: Some(table_info),
-        };
-
-        let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
+        let append_plan = create_append_plan_from_subquery(
+            &select_plan,
+            self.plan.catalog.clone(),
+            self.plan.database.clone(),
+            table,
+            Arc::new(self.plan.schema.clone().into()),
+            false,
+            self.ctx.clone(),
+            false,
+        )
+        .await?;
+        let mut pipeline = InterpreterFactory::get(self.ctx.clone(), &append_plan)
+            .await?
             .execute2()
             .await?;
 

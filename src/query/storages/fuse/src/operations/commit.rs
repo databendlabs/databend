@@ -42,7 +42,6 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -76,7 +75,7 @@ impl FuseTable {
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        prev_snapshot_id: Option<SnapshotId>,
+        forbid_occ_retry: bool,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
@@ -110,7 +109,7 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
-                prev_snapshot_id,
+                forbid_occ_retry,
                 deduplicated_label.clone(),
             )
         })?;

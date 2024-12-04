@@ -36,13 +36,13 @@ use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
+use crate::interpreters::interpreter_append::AppendInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
 use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
-use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
@@ -156,9 +156,23 @@ impl InterpreterFactory {
                 *graphical,
             )?)),
 
-            Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
+            Plan::Append {
+                s_expr,
+                metadata,
+                stage_table_info,
+                overwrite,
+                forbid_occ_retry,
+                append_type,
+                target_table_index,
+            } => Ok(Arc::new(AppendInterpreter::try_create(
                 ctx,
-                *copy_plan.clone(),
+                *s_expr.clone(),
+                metadata.clone(),
+                stage_table_info.clone(),
+                *overwrite,
+                *forbid_occ_retry,
+                append_type.clone(),
+                *target_table_index,
             )?)),
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
                 CopyIntoLocationInterpreter::try_create(ctx, copy_plan.clone())?,
@@ -380,8 +394,6 @@ impl InterpreterFactory {
                 ctx,
                 *desc_user.clone(),
             )?)),
-
-            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
             Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(

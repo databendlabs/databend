@@ -180,9 +180,6 @@ impl PipelineBuilder {
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
-            PhysicalPlan::DistributedInsertSelect(insert_select) => {
-                self.build_distributed_insert_select(insert_select)
-            }
             PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Udf(udf) => self.build_udf(udf),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
@@ -198,13 +195,10 @@ impl PipelineBuilder {
             }
 
             // Copy into.
-            PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
+            PhysicalPlan::Append(append) => self.build_append(append),
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
             // Replace.
-            PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => {
-                self.build_async_sourcer(async_sourcer)
-            }
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
 
@@ -259,6 +253,7 @@ impl PipelineBuilder {
             PhysicalPlan::ColumnMutation(column_mutation) => {
                 self.build_column_mutation(column_mutation)
             }
+            PhysicalPlan::ValueScan(value_scan) => self.build_value_scan(value_scan),
         }?;
 
         self.is_exchange_neighbor = is_exchange_neighbor;

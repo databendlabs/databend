@@ -105,7 +105,6 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
-                Plan::Insert(insert_plan) => insert_plan.explain(self.config.verbose).await?,
                 Plan::Replace(replace_plan) => replace_plan.explain(self.config.verbose).await?,
                 Plan::CreateTable(plan) => match &plan.as_select {
                     Some(box Plan::Query {
@@ -150,6 +149,17 @@ impl Interpreter for ExplainInterpreter {
                     )?;
                     let plan = interpreter.build_physical_plan(&mutation, None).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
+                }
+                Plan::Append {
+                    s_expr, metadata, ..
+                } => {
+                    let mut physical_plan_builder =
+                        PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                    let physical_plan = physical_plan_builder
+                        .build(s_expr, Default::default())
+                        .await?;
+                    self.explain_physical_plan(&physical_plan, metadata, &None)
+                        .await?
                 }
                 _ => self.explain_plan(&self.plan)?,
             },

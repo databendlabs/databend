@@ -18,14 +18,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::physical_plans::MutationSource;
+use databend_common_sql::executor::physical_plans::PhysicalAppend;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -179,21 +178,13 @@ impl PhysicalPlanReplacer for Fragmenter {
         })))
     }
 
-    //  TODO(Sky): remove redundant code
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        match &plan.source {
-            CopyIntoTableSource::Stage(_) => {
-                self.state = State::SelectLeaf;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
-            }
-            CopyIntoTableSource::Query(query_physical_plan) => {
-                let input = self.replace(query_physical_plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
-        }
+    fn replace_append(&mut self, plan: &PhysicalAppend) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Append(Box::new(PhysicalAppend {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {

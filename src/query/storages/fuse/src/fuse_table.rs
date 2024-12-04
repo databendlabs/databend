@@ -70,7 +70,6 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -786,7 +785,7 @@ impl Table for FuseTable {
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        prev_snapshot_id: Option<SnapshotId>,
+        forbid_occ_retry: bool,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         self.do_commit(
@@ -795,7 +794,7 @@ impl Table for FuseTable {
             copied_files,
             update_stream_meta,
             overwrite,
-            prev_snapshot_id,
+            forbid_occ_retry,
             deduplicated_label,
         )
     }
