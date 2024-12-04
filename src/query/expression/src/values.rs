@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
 use std::io::Write;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
@@ -23,11 +24,10 @@ use base64::prelude::*;
 use binary::BinaryColumnBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
@@ -99,12 +99,6 @@ use crate::with_number_type;
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: ValueType> {
     Scalar(T::Scalar),
-    Column(T::Column),
-}
-
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum ValueRef<'a, T: ValueType> {
-    Scalar(T::ScalarRef<'a>),
     Column(T::Column),
 }
 
@@ -219,66 +213,33 @@ pub enum ColumnBuilder {
     Geography(BinaryColumnBuilder),
 }
 
-impl<'a, T: ValueType> ValueRef<'a, T> {
-    pub fn to_owned(self) -> Value<T> {
-        match self {
-            ValueRef::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(scalar)),
-            ValueRef::Column(col) => Value::Column(col),
-        }
-    }
-
-    pub fn semantically_eq(&'a self, other: &'a Self) -> bool {
+impl<T: ValueType> Value<T> {
+    pub fn semantically_eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ValueRef::Scalar(s1), ValueRef::Scalar(s2)) => s1 == s2,
-            (ValueRef::Column(c1), ValueRef::Column(c2)) => c1 == c2,
-            (ValueRef::Scalar(s), ValueRef::Column(c))
-            | (ValueRef::Column(c), ValueRef::Scalar(s)) => {
-                T::iter_column(c).all(|scalar| scalar == *s)
+            (Value::Scalar(s1), Value::Scalar(s2)) => s1 == s2,
+            (Value::Column(c1), Value::Column(c2)) => c1 == c2,
+            (Value::Scalar(s), Value::Column(c)) | (Value::Column(c), Value::Scalar(s)) => {
+                let s = T::to_scalar_ref(s);
+                T::iter_column(c).all(|scalar| scalar == s)
             }
         }
     }
 
-    pub fn len(&'a self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
-            ValueRef::Scalar(_) => 1,
-            ValueRef::Column(col) => T::column_len(col),
+            Value::Scalar(_) => 1,
+            Value::Column(col) => T::column_len(col),
         }
     }
 
-    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+    pub fn memory_size(&self) -> usize {
         match self {
-            ValueRef::Scalar(scalar) => Some(scalar.clone()),
-            ValueRef::Column(col) => T::index_column(col, index),
+            Value::Scalar(scalar) => T::scalar_memory_size(&T::to_scalar_ref(scalar)),
+            Value::Column(c) => T::column_memory_size(c),
         }
     }
 
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
-        match self {
-            ValueRef::Scalar(scalar) => scalar.clone(),
-            ValueRef::Column(c) => T::index_column_unchecked(c, index),
-        }
-    }
-
-    pub fn memory_size(&'a self) -> usize {
-        match self {
-            ValueRef::Scalar(scalar) => T::scalar_memory_size(scalar),
-            ValueRef::Column(c) => T::column_memory_size(c),
-        }
-    }
-}
-
-impl<'a, T: ValueType> Value<T> {
-    pub fn as_ref(&'a self) -> ValueRef<'a, T> {
-        match self {
-            Value::Scalar(scalar) => ValueRef::Scalar(T::to_scalar_ref(scalar)),
-            Value::Column(col) => ValueRef::Column(col.clone()),
-        }
-    }
-
-    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+    pub fn index(&self, index: usize) -> Option<T::ScalarRef<'_>> {
         match self {
             Value::Scalar(scalar) => Some(T::to_scalar_ref(scalar)),
             Value::Column(col) => T::index_column(col, index),
@@ -288,7 +249,7 @@ impl<'a, T: ValueType> Value<T> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
+    pub unsafe fn index_unchecked(&self, index: usize) -> T::ScalarRef<'_> {
         match self {
             Value::Scalar(scalar) => T::to_scalar_ref(scalar),
             Value::Column(c) => T::index_column_unchecked(c, index),
@@ -326,7 +287,12 @@ impl Value<AnyType> {
     }
 
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
-        Some(self.as_ref().try_downcast::<T>()?.to_owned())
+        Some(match self {
+            Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
+                &scalar.as_ref(),
+            )?)),
+            Value::Column(col) => Value::Column(T::try_downcast_column(col)?),
+        })
     }
 
     pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {
@@ -335,20 +301,11 @@ impl Value<AnyType> {
             scalar => scalar,
         }
     }
-}
-
-impl<'a> ValueRef<'a, AnyType> {
-    pub fn try_downcast<T: ValueType>(&self) -> Option<ValueRef<'_, T>> {
-        Some(match self {
-            ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
-            ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
-        })
-    }
 
     pub fn domain(&self, data_type: &DataType) -> Domain {
         match self {
-            ValueRef::Scalar(scalar) => scalar.domain(data_type),
-            ValueRef::Column(col) => col.domain(),
+            Value::Scalar(scalar) => scalar.as_ref().domain(data_type),
+            Value::Column(col) => col.domain(),
         }
     }
 }
@@ -946,7 +903,7 @@ impl Column {
             Column::Decimal(col) => Some(ScalarRef::Decimal(col.index(index)?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::Binary(col) => Some(ScalarRef::Binary(col.index(index)?)),
-            Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
+            Column::String(col) => Some(ScalarRef::String(col.value(index))),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
@@ -1025,7 +982,9 @@ impl Column {
                 Column::Boolean(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Binary(col) => Column::Binary(col.slice(range)),
-            Column::String(col) => Column::String(col.slice(range)),
+            Column::String(col) => {
+                Column::String(col.clone().sliced(range.start, range.end - range.start))
+            }
             Column::Timestamp(col) => {
                 Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
             }
@@ -1070,8 +1029,8 @@ impl Column {
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
-                has_false: col.unset_bits() > 0,
-                has_true: col.len() - col.unset_bits() > 0,
+                has_false: col.null_count() > 0,
+                has_true: col.len() - col.null_count() > 0,
             }),
             Column::String(col) => {
                 let (min, max) = StringType::iter_column(col).minmax().into_option().unwrap();
@@ -1113,7 +1072,7 @@ impl Column {
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
-                    has_null: col.validity.unset_bits() > 0,
+                    has_null: col.validity.null_count() > 0,
                     value: Some(Box::new(inner_domain)),
                 })
             }
@@ -1171,11 +1130,11 @@ impl Column {
 
     pub fn check_valid(&self) -> Result<()> {
         match self {
-            Column::Binary(x) => x.check_valid(),
-            Column::Variant(x) => x.check_valid(),
-            Column::Geometry(x) => x.check_valid(),
-            Column::Geography(x) => x.check_valid(),
-            Column::Bitmap(x) => x.check_valid(),
+            Column::Binary(x) => Ok(x.check_valid()?),
+            Column::Variant(x) => Ok(x.check_valid()?),
+            Column::Geometry(x) => Ok(x.check_valid()?),
+            Column::Geography(x) => Ok(x.check_valid()?),
+            Column::Bitmap(x) => Ok(x.check_valid()?),
             Column::Map(x) => {
                 for y in x.iter() {
                     y.check_valid()?;
@@ -1446,7 +1405,7 @@ impl Column {
             | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col) => col.memory_size(),
-            Column::String(col) => col.len() * 8 + col.current_buffer_len(),
+            Column::String(col) => col.len() * 8 + col.total_bytes_len(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
@@ -1458,7 +1417,7 @@ impl Column {
         match self {
             Column::Null { .. } => (true, None),
             Column::Nullable(c) => {
-                if c.validity.unset_bits() == c.validity.len() {
+                if c.validity.null_count() == c.validity.len() {
                     (true, Some(&c.validity))
                 } else {
                     (false, Some(&c.validity))
@@ -2047,7 +2006,8 @@ impl ColumnBuilder {
                 reader.read_exact(&mut builder.row_buffer)?;
 
                 #[cfg(debug_assertions)]
-                string::CheckUTF8::check_utf8(&builder.row_buffer).unwrap();
+                databend_common_column::binview::CheckUTF8::check_utf8(&builder.row_buffer)
+                    .unwrap();
 
                 builder.commit_row();
             }
@@ -2144,7 +2104,7 @@ impl ColumnBuilder {
                     let bytes = &reader[step * row..];
 
                     #[cfg(debug_assertions)]
-                    string::CheckUTF8::check_utf8(&bytes).unwrap();
+                    databend_common_column::binview::CheckUTF8::check_utf8(&bytes).unwrap();
 
                     let s = unsafe { std::str::from_utf8_unchecked(bytes) };
                     builder.put_and_commit(s);

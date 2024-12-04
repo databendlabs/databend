@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
@@ -114,11 +115,18 @@ impl Binder {
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
+        case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
         let max_column_position = self.metadata.read().get_max_column_position();
         let table = table_ctx
-            .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
+            .create_stage_table(
+                stage_info,
+                files_info,
+                files_to_copy,
+                max_column_position,
+                case_sensitive,
+            )
             .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {
@@ -230,6 +238,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            virtual_column_context: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -404,12 +413,12 @@ impl Binder {
 
     pub(crate) fn bind_r_cte(
         &mut self,
+        span: Span,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        // Recursive cte's query must be a union(all)
         match &cte_info.query.body {
             SetExpr::SetOperation(set_expr) => {
                 if set_expr.op != SetOperator::Union {
@@ -436,9 +445,7 @@ impl Binder {
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
-            _ => Err(ErrorCode::SyntaxException(
-                "Recursive CTE must contain a UNION(ALL) query".to_string(),
-            )),
+            _ => self.bind_cte(span, bind_context, cte_name, alias, cte_info),
         }
     }
 
@@ -455,6 +462,8 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let columns = self.metadata.read().columns_by_table_index(table_index);
+        let scan_id = self.metadata.write().next_scan_id();
+        let mut base_column_scan_id = HashMap::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -484,6 +493,7 @@ impl Binder {
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
                     bind_context.add_column_binding(column_binding);
+                    base_column_scan_id.insert(*column_index, scan_id);
                 }
                 other => {
                     return Err(ErrorCode::Internal(format!(
@@ -494,6 +504,9 @@ impl Binder {
                 }
             }
         }
+        self.metadata
+            .write()
+            .add_base_column_scan_id(base_column_scan_id);
 
         Ok((
             SExpr::create_leaf(Arc::new(
@@ -503,6 +516,7 @@ impl Binder {
                     statistics: Arc::new(Statistics::default()),
                     change_type,
                     sample: sample.clone(),
+                    scan_id,
                     ..Default::default()
                 }
                 .into(),

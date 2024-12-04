@@ -63,7 +63,7 @@ pub async fn dml_build_update_stream_req(
         let table_version = inner_fuse.get_table_info().ident.seq;
         let mut options = stream.options().clone();
         options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-        if let Some(snapshot_loc) = inner_fuse.snapshot_loc().await? {
+        if let Some(snapshot_loc) = inner_fuse.snapshot_loc() {
             options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
         }
 
@@ -147,7 +147,7 @@ pub async fn query_build_update_stream_req(
         let table_version = inner_fuse.get_table_info().ident.seq;
         let mut options = stream.options().clone();
         options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-        if let Some(snapshot_loc) = inner_fuse.snapshot_loc().await? {
+        if let Some(snapshot_loc) = inner_fuse.snapshot_loc() {
             options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
         }
         let mut new_table_meta = stream_info.meta.clone();

@@ -37,7 +37,7 @@ impl Binder {
     pub fn bind_distinct(
         &self,
         span: Span,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         projections: &[ColumnBinding],
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,

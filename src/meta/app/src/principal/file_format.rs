@@ -18,6 +18,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+use databend_common_ast::ast::ColumnMatchMode;
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FileFormatOptions;
 use databend_common_ast::ast::FileFormatValue;
 use databend_common_exception::ErrorCode;
@@ -105,6 +107,26 @@ impl FileFormatParams {
             FileFormatParams::Parquet(_) => StageFileCompression::None,
             FileFormatParams::Orc(_) => StageFileCompression::None,
         }
+    }
+
+    pub fn check_copy_options(&self, options: &mut CopyIntoTableOptions) -> Result<()> {
+        if let Some(m) = &options.column_match_mode {
+            match self {
+                FileFormatParams::Parquet(_) => {
+                    if let ColumnMatchMode::Position = m {
+                        return Err(ErrorCode::BadArguments(
+                            "COLUMN_MATCH_MODE=POSITION not supported yet.",
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "COLUMN_MATCH_MODE can only apply to Parquet for now.",
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn need_field_default(&self) -> bool {

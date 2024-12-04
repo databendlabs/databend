@@ -15,8 +15,6 @@
 use std::collections::BTreeMap;
 
 use clap::Parser;
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_sled_store::init_sled_db;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use serde::Deserialize;
@@ -89,23 +87,12 @@ async fn upgrade_09() -> anyhow::Result<()> {
 
 /// It does not update any data but just print TableMeta in protobuf message format
 /// that are found in log or state machine.
-pub fn print_table_meta(config: &Config) -> anyhow::Result<()> {
-    let p = GenericKVProcessor::new(rewrite_kv::print_table_meta);
+pub fn print_table_meta(_config: &Config) -> anyhow::Result<()> {
+    let _p = GenericKVProcessor::new(rewrite_kv::print_table_meta);
 
-    let raft_config = &config.raft_config;
-
-    init_sled_db(raft_config.raft_dir.clone(), 64 * 1024 * 1024 * 1024);
-
-    for tree_iter_res in databend_common_meta_sled_store::iter::<Vec<u8>>() {
-        let (_tree_name, item_iter) = tree_iter_res?;
-
-        for item_res in item_iter {
-            let (k, v) = item_res?;
-            let v1_ent = RaftStoreEntry::deserialize(&k, &v)?;
-
-            p.process(v1_ent)?;
-        }
-    }
+    // TODO: load key values
+    // let v1_ent = RaftStoreEntry::deserialize(&k, &v)?;
+    // _p.process(v1_ent)?;
 
     Ok(())
 }

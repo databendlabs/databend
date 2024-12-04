@@ -100,7 +100,7 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                             let col = col.as_variant().unwrap();
                             let mut builder = BinaryColumnBuilder::with_capacity(
                                 col.len(),
-                                col.current_buffer_len(),
+                                col.total_bytes_len(),
                             );
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {

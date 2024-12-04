@@ -12,16 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Meta store backed with a local sled::Tree.
-//!
-//! `MetaEmbedded` talks the same API defined in `kvapi::KVApi`.
-//!
-//! `MetaEmbedded` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
-//! a embedded raft `StateMachine`.
-
-#![allow(clippy::uninlined_format_args)]
-
-mod kv_api_impl;
-mod meta_embedded;
-
-pub use meta_embedded::MetaEmbedded;
+pub use databend_common_meta_raft_store::mem_meta::MemMeta;
+pub use databend_common_meta_raft_store::mem_state_machine::MemStateMachine;

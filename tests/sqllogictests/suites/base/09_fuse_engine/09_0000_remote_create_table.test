@@ -36,7 +36,7 @@ CREATE TABLE t(c int) Engine = fuse snapshot_loc = 1
 statement error 1301
 CREATE TABLE t(c int) Engine = fuse SNAPSHOT_LOC = 1
 
-statement error 1065
+statement error 1081
 CREATE TABLE t(id Int null, arr VARIANT null) cluster by(json_path_query(arr, '$[*][1]'))
 
 statement error 1081

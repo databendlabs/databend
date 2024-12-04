@@ -15,16 +15,13 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::array::MutableBinaryViewArray;
-use databend_common_arrow::arrow::array::Utf8ViewArray;
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
-use databend_common_base::slice_ext::GetSaferUnchecked;
-use databend_common_exception::ErrorCode;
+use databend_common_column::binview::BinaryViewColumnBuilder;
+use databend_common_column::binview::BinaryViewColumnIter;
+use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_exception::Result;
 
-use super::binary::BinaryColumn;
-use super::binary::BinaryColumnBuilder;
 use crate::property::Domain;
+use crate::types::binary::BinaryColumn;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
@@ -114,11 +111,11 @@ impl ValueType for StringType {
 
     #[inline]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
+        col.value_unchecked(index)
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.slice(range)
+        col.clone().sliced(range.start, range.end - range.start)
     }
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
@@ -218,213 +215,20 @@ impl ArgType for StringType {
     }
 }
 
-#[derive(Clone)]
-pub struct StringColumn {
-    pub(crate) data: Utf8ViewArray,
-}
+pub type StringColumn = Utf8ViewColumn;
+pub type StringIterator<'a> = BinaryViewColumnIter<'a, str>;
 
-impl StringColumn {
-    pub fn new(data: Utf8ViewArray) -> Self {
-        Self { data }
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn current_buffer_len(&self) -> usize {
-        self.data.total_bytes_len()
-    }
-
-    pub fn memory_size(&self) -> usize {
-        self.data.total_buffer_len() + self.len() * 12
-    }
-
-    pub fn index(&self, index: usize) -> Option<&str> {
-        if index >= self.len() {
-            return None;
-        }
-
-        Some(unsafe { self.index_unchecked(index) })
-    }
-
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    #[inline]
-    pub unsafe fn index_unchecked(&self, index: usize) -> &str {
-        debug_assert!(index < self.data.len());
-
-        self.data.value_unchecked(index)
-    }
-
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    #[inline]
-    pub unsafe fn index_unchecked_bytes(&self, index: usize) -> &[u8] {
-        debug_assert!(index < self.data.len());
-
-        self.data.value_unchecked(index).as_bytes()
-    }
-
-    pub fn slice(&self, range: Range<usize>) -> Self {
-        let data = self
-            .data
-            .clone()
-            .sliced(range.start, range.end - range.start);
-        Self { data }
-    }
-
-    pub fn iter(&self) -> StringIterator {
-        StringIterator {
-            col: self,
-            index: 0,
-        }
-    }
-
-    pub fn into_inner(self) -> Utf8ViewArray {
-        self.data
-    }
-
-    pub fn try_from_binary(col: BinaryColumn) -> Result<Self> {
-        let builder = StringColumnBuilder::try_from_bin_column(col)?;
-        Ok(builder.build())
-    }
-
-    pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> Ordering {
-        let view_i = unsafe { col_i.data.views().as_slice().get_unchecked_release(i) };
-        let view_j = unsafe { col_j.data.views().as_slice().get_unchecked_release(j) };
-
-        if view_i.prefix == view_j.prefix {
-            unsafe {
-                let value_i = col_i.data.value_unchecked(i);
-                let value_j = col_j.data.value_unchecked(j);
-                value_i.cmp(value_j)
-            }
-        } else {
-            view_i
-                .prefix
-                .to_le_bytes()
-                .cmp(&view_j.prefix.to_le_bytes())
-        }
-    }
-
-    pub fn compare_str(col: &Self, i: usize, value: &str) -> Ordering {
-        let view = unsafe { col.data.views().as_slice().get_unchecked_release(i) };
-        let prefix = load_prefix(value.as_bytes());
-
-        if view.prefix == prefix {
-            let value_i = unsafe { col.data.value_unchecked(i) };
-            value_i.cmp(value)
-        } else {
-            view.prefix.to_le_bytes().as_slice().cmp(value.as_bytes())
-        }
-    }
-}
-
-// Loads (up to) the first 4 bytes of s as little-endian, padded with zeros.
-#[inline]
-fn load_prefix(s: &[u8]) -> u32 {
-    let start = &s[..s.len().min(4)];
-    let mut tmp = [0u8; 4];
-    tmp[..start.len()].copy_from_slice(start);
-    u32::from_le_bytes(tmp)
-}
-
-impl PartialEq for StringColumn {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl Eq for StringColumn {}
-
-impl PartialOrd for StringColumn {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for StringColumn {
-    fn cmp(&self, other: &Self) -> Ordering {
-        for i in 0..self.len().max(other.len()) {
-            match (self.data.views().get(i), other.data.views().get(i)) {
-                (Some(left), Some(right)) => {
-                    match left.prefix.to_le_bytes().cmp(&right.prefix.to_le_bytes()) {
-                        Ordering::Equal => unsafe {
-                            let left = self.data.value_unchecked(i);
-                            let right = other.data.value_unchecked(i);
-                            match left.cmp(right) {
-                                Ordering::Equal => continue,
-                                non_eq => return non_eq,
-                            }
-                        },
-                        non_eq => return non_eq,
-                    }
-                }
-                (Some(_), None) => return Ordering::Greater,
-                (None, Some(_)) => return Ordering::Less,
-                (None, None) => return Ordering::Equal,
-            }
-        }
-
-        Ordering::Equal
-    }
-}
-
-impl TryFrom<BinaryColumn> for StringColumn {
-    type Error = ErrorCode;
-
-    fn try_from(col: BinaryColumn) -> Result<StringColumn> {
-        StringColumn::try_from_binary(col)
-    }
-}
-
-impl From<StringColumn> for BinaryColumn {
-    fn from(col: StringColumn) -> BinaryColumn {
-        BinaryColumnBuilder::from_iter(col.iter().map(|x| x.as_bytes())).build()
-    }
-}
-
-pub struct StringIterator<'a> {
-    col: &'a StringColumn,
-    index: usize,
-}
-
-impl<'a> Iterator for StringIterator<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.col.len() {
-            return None;
-        }
-        let value = self.col.index(self.index)?;
-        self.index += 1;
-        Some(value)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.col.len() - self.index;
-        (remaining, Some(remaining))
-    }
-}
-
-unsafe impl<'a> TrustedLen for StringIterator<'a> {}
-
-unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
-
-type MutableUtf8ViewArray = MutableBinaryViewArray<str>;
+type Utf8ViewColumnBuilder = BinaryViewColumnBuilder<str>;
 
 #[derive(Debug, Clone)]
 pub struct StringColumnBuilder {
-    pub data: MutableUtf8ViewArray,
+    pub data: Utf8ViewColumnBuilder,
     pub row_buffer: Vec<u8>,
 }
 
 impl StringColumnBuilder {
     pub fn with_capacity(len: usize) -> Self {
-        let data = MutableUtf8ViewArray::with_capacity(len);
+        let data = Utf8ViewColumnBuilder::with_capacity(len);
         StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
@@ -432,7 +236,7 @@ impl StringColumnBuilder {
     }
 
     pub fn from_column(col: StringColumn) -> Self {
-        let data = col.data.make_mut();
+        let data = col.make_mut();
         StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
@@ -440,12 +244,7 @@ impl StringColumnBuilder {
     }
 
     pub fn try_from_bin_column(col: BinaryColumn) -> Result<Self> {
-        let mut data = MutableUtf8ViewArray::with_capacity(col.len());
-        col.data.as_slice().check_utf8()?;
-        for v in col.iter() {
-            data.push_value(unsafe { std::str::from_utf8_unchecked(v) });
-        }
-
+        let data = Utf8ViewColumnBuilder::try_from_bin_column(col)?;
         Ok(StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
@@ -453,8 +252,8 @@ impl StringColumnBuilder {
     }
 
     pub fn repeat(scalar: &str, n: usize) -> Self {
-        let mut data = MutableUtf8ViewArray::with_capacity(n);
-        data.extend_constant(n, Some(scalar));
+        let mut data = Utf8ViewColumnBuilder::with_capacity(n);
+        data.extend_constant(n, scalar);
         StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
@@ -462,8 +261,8 @@ impl StringColumnBuilder {
     }
 
     pub fn repeat_default(n: usize) -> Self {
-        let mut data = MutableUtf8ViewArray::with_capacity(n);
-        data.extend_constant(n, Some(""));
+        let mut data = Utf8ViewColumnBuilder::with_capacity(n);
+        data.extend_constant(n, "");
         StringColumnBuilder {
             data,
             row_buffer: Vec::new(),
@@ -494,7 +293,7 @@ impl StringColumnBuilder {
 
     #[inline]
     pub fn put_and_commit<V: AsRef<str>>(&mut self, item: V) {
-        self.data.push_value_ignore_validity(item);
+        self.data.push_value(item);
     }
 
     #[inline]
@@ -521,9 +320,7 @@ impl StringColumnBuilder {
     }
 
     pub fn build(self) -> StringColumn {
-        StringColumn {
-            data: self.data.into(),
-        }
+        self.data.into()
     }
 
     pub fn build_scalar(self) -> String {
@@ -540,7 +337,7 @@ impl StringColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: &str, n: usize) {
-        self.data.extend_constant(n, Some(item));
+        self.data.extend_constant(n, item);
     }
 
     pub fn pop(&mut self) -> Option<String> {
@@ -561,7 +358,7 @@ impl<'a> FromIterator<&'a str> for StringColumnBuilder {
 
 impl PartialEq for StringColumnBuilder {
     fn eq(&self, other: &Self) -> bool {
-        self.data.values_iter().eq(other.data.values_iter())
+        self.data.iter().eq(other.data.iter())
     }
 }
 
@@ -572,103 +369,4 @@ pub struct StringDomain {
     pub min: String,
     // max value is None for full domain
     pub max: Option<String>,
-}
-
-pub trait CheckUTF8 {
-    fn check_utf8(&self) -> Result<()>;
-}
-
-impl CheckUTF8 for &[u8] {
-    fn check_utf8(&self) -> Result<()> {
-        simdutf8::basic::from_utf8(self).map_err(|_| {
-            ErrorCode::InvalidUtf8String(format!(
-                "Encountered invalid utf8 data for string type, \
-                if you were reading column with string type from a table, \
-                it's recommended to alter the column type to `BINARY`.\n\
-                Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`\n\
-                Invalid utf8 data: `{}`",
-                hex::encode_upper(self)
-            ))
-        })?;
-        Ok(())
-    }
-}
-
-impl CheckUTF8 for Vec<u8> {
-    fn check_utf8(&self) -> Result<()> {
-        self.as_slice().check_utf8()
-    }
-}
-
-impl CheckUTF8 for BinaryColumn {
-    fn check_utf8(&self) -> Result<()> {
-        for bytes in self.iter() {
-            bytes.check_utf8()?;
-        }
-        Ok(())
-    }
-}
-
-impl CheckUTF8 for BinaryColumnBuilder {
-    fn check_utf8(&self) -> Result<()> {
-        check_utf8_column(&self.offsets, &self.data)
-    }
-}
-
-/// # Check if any slice of `values` between two consecutive pairs from `offsets` is invalid `utf8`
-fn check_utf8_column(offsets: &[u64], data: &[u8]) -> Result<()> {
-    let res: Option<()> = try {
-        if offsets.len() == 1 {
-            return Ok(());
-        }
-
-        if data.is_ascii() {
-            return Ok(());
-        }
-
-        simdutf8::basic::from_utf8(data).ok()?;
-
-        let last = if let Some(last) = offsets.last() {
-            if *last as usize == data.len() {
-                return Ok(());
-            } else {
-                *last as usize
-            }
-        } else {
-            // given `l = data.len()`, this branch is hit iff either:
-            // * `offsets = [0, l, l, ...]`, which was covered by `from_utf8(data)` above
-            // * `offsets = [0]`, which never happens because offsets.len() == 1 is short-circuited above
-            return Ok(());
-        };
-
-        // truncate to relevant offsets. Note: `=last` because last was computed skipping the first item
-        // following the example: starts = [0, 5]
-        let starts = unsafe { offsets.get_unchecked(..=last) };
-
-        let mut any_invalid = false;
-        for start in starts {
-            let start = *start as usize;
-
-            // Safety: `try_check_offsets_bounds` just checked for bounds
-            let b = *unsafe { data.get_unchecked(start) };
-
-            // A valid code-point iff it does not start with 0b10xxxxxx
-            // Bit-magic taken from `std::str::is_char_boundary`
-            if (b as i8) < -0x40 {
-                any_invalid = true
-            }
-        }
-        if any_invalid {
-            None?;
-        }
-    };
-    res.ok_or_else(|| {
-        ErrorCode::InvalidUtf8String(
-            "Encountered invalid utf8 data for string type, \
-                if you were reading column with string type from a table, \
-                it's recommended to alter the column type to `BINARY`.\n\
-                Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`"
-                .to_string(),
-        )
-    })
 }

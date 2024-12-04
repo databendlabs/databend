@@ -130,7 +130,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         for mn in all.iter() {
             mn.raft
                 .wait(timeout())
-                .voter_ids(btreeset! {0,2}, format!("node-2 is joined: {}", mn.sto.id))
+                .voter_ids(
+                    btreeset! {0,2},
+                    format!("node-2 is joined: {}", mn.raft_store.id),
+                )
                 .await?;
         }
     }
@@ -165,7 +168,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
             .wait(timeout())
             .voter_ids(
                 btreeset! {0,2,3},
-                format!("node-3 is joined: {}", mn.sto.id),
+                format!("node-3 is joined: {}", mn.raft_store.id),
             )
             .await?;
     }
@@ -198,7 +201,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     for mn in all.iter() {
         mn.raft
             .wait(timeout())
-            .voter_ids(btreeset! {0,2,3}, format!("node-{} membership", mn.sto.id))
+            .voter_ids(
+                btreeset! {0,2,3},
+                format!("node-{} membership", mn.raft_store.id),
+            )
             .await?;
     }
 
@@ -242,7 +248,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         for mn in all.iter() {
             mn.raft
                 .wait(timeout())
-                .voter_ids(btreeset! {0,1}, format!("node-1 is joined: {}", mn.sto.id))
+                .voter_ids(
+                    btreeset! {0,1},
+                    format!("node-1 is joined: {}", mn.raft_store.id),
+                )
                 .await?;
         }
     }
@@ -284,7 +293,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
             .wait(timeout())
             .voter_ids(
                 btreeset! {0,1,2},
-                format!("node-2 is joined: {}", mn.sto.id),
+                format!("node-2 is joined: {}", mn.raft_store.id),
             )
             .await?;
     }
@@ -310,11 +319,11 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     tc2.config.raft_config.single = false;
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config).await?;
-    // Initial log, leader blank log, add node-0.
+    let n1 = MetaNode::start(&tc0.config).await?;
+    // Initial membership log, leader blank log, add node-0 log.
     let mut log_index = 3;
 
-    let res = meta_node
+    let res = n1
         .join_cluster(
             &tc0.config.raft_config,
             tc0.config.grpc_api_advertise_address(),
@@ -322,8 +331,8 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         .await?;
     assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
-    let meta_node1 = MetaNode::start(&tc1.config).await?;
-    let res = meta_node1
+    let n1 = MetaNode::start(&tc1.config).await?;
+    let res = n1
         .join_cluster(
             &tc1.config.raft_config,
             tc1.config.grpc_api_advertise_address(),
@@ -333,8 +342,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     // Two membership logs, one add-node log;
     log_index += 3;
-    meta_node1
-        .raft
+    n1.raft
         .wait(timeout())
         .applied_index(Some(log_index), "node-1 join cluster")
         .await?;
@@ -344,6 +352,9 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         let n2 = MetaNode::start(&tc2.config).await?;
         n2.stop().await?;
     }
+
+    // Wait a second to ensure server quits completely.
+    sleep(Duration::from_secs(1)).await;
 
     info!("--- Allow to join node-2 with initialized store");
     {
@@ -359,8 +370,8 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         // Two membership logs, one add-node log;
         log_index += 3;
 
-        // Add this barrier to ensure all of the logs are applied before quit.
-        // Otherwise the next time node-2 starts it can not see the applied
+        // Add this barrier to ensure all the logs are applied before quit.
+        // Otherwise, the next time node-2 starts it can not see the applied
         // membership and believes it has not yet joined into a cluster.
         n2.raft
             .wait(timeout())
@@ -369,6 +380,9 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
         n2.stop().await?;
     }
+
+    // Wait a second to ensure server quits completely.
+    sleep(Duration::from_secs(1)).await;
 
     info!("--- Not allowed to join node-2 with store with membership");
     {
@@ -497,7 +511,10 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     for mn in all.iter() {
         mn.raft
             .wait(timeout())
-            .voter_ids(btreeset! {0,2}, format!("node-{} membership", mn.sto.id))
+            .voter_ids(
+                btreeset! {0,2},
+                format!("node-{} membership", mn.raft_store.id),
+            )
             .await?;
     }
 
@@ -605,8 +622,8 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // add node, update membership
     log_index += 2;
 
-    let sto0 = mn0.sto.clone();
-    let sto1 = mn1.sto.clone();
+    let sto0 = mn0.raft_store.clone();
+    let sto1 = mn1.raft_store.clone();
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
@@ -714,7 +731,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.sto.clone().read_vote().await?;
+        want_hs = leader.raft_store.clone().read_vote().await?;
 
         leader.stop().await?;
     }
@@ -741,27 +758,27 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             Some(log_index),
             format!(
                 "reopened: applied index at {} for node-{}",
-                log_index, leader.sto.id
+                log_index, leader.raft_store.id
             ),
         )
         .await?;
 
     info!("--- check hard state");
     {
-        let hs = leader.sto.clone().read_vote().await?;
+        let hs = leader.raft_store.clone().read_vote().await?;
         assert_eq!(want_hs, hs);
     }
 
     info!("--- check logs");
     {
-        let logs = leader.sto.clone().try_get_log_entries(..).await?;
+        let logs = leader.raft_store.clone().try_get_log_entries(..).await?;
         info!("logs: {:?}", logs);
         assert_eq!(log_index as usize + 1, logs.len());
     }
 
     info!("--- check state machine: nodes");
     {
-        let node = leader.sto.get_node(&0).await.unwrap();
+        let node = leader.raft_store.get_node(&0).await.unwrap();
         assert_eq!(
             tc.config.raft_config.raft_api_advertise_host_endpoint(),
             node.endpoint
@@ -816,7 +833,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
                 format!(
                     "check upsert-kv has applied index at {} for node-{}",
                     last_applied.next_index(),
-                    mn.sto.id
+                    mn.raft_store.id
                 ),
             )
             .await?;

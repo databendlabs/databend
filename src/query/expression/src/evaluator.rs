@@ -17,10 +17,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Not;
 
-use databend_common_arrow::arrow::bitmap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -34,6 +33,7 @@ use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::boolean;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
@@ -211,7 +211,6 @@ impl<'a> Evaluator<'a> {
                         })
                         .all_equal()
                 );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
 
                 let errors = if !child_suppress_error {
                     None
@@ -228,7 +227,7 @@ impl<'a> Evaluator<'a> {
                 };
 
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                let result = (eval)(&args, &mut ctx);
 
                 ctx.render_error(
                     *span,
@@ -379,7 +378,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => {
                     let has_valid = validity
-                        .map(|validity| validity.unset_bits() < validity.len())
+                        .map(|validity| validity.null_count() < validity.len())
                         .unwrap_or(true);
                     if has_valid {
                         Err(ErrorCode::BadArguments(format!(
@@ -397,9 +396,9 @@ impl<'a> Evaluator<'a> {
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
-                            (validity & (&col.validity)).unset_bits() > validity.unset_bits()
+                            (validity & (&col.validity)).null_count() > validity.null_count()
                         })
-                        .unwrap_or_else(|| col.validity.unset_bits() > 0);
+                        .unwrap_or_else(|| col.validity.null_count() > 0);
                     if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
@@ -465,7 +464,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -710,7 +709,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -858,7 +857,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    let validity = bitmap::and(&col.validity, &new_col.validity);
+                    let validity = boolean::and(&col.validity, &new_col.validity);
                     Ok(Value::Column(NullableColumn::new_column(
                         new_col.column,
                         validity,
@@ -1203,7 +1202,6 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.run(expr))
                     .collect::<Result<Vec<_>>>()?;
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.data_block.num_rows(),
@@ -1212,7 +1210,7 @@ impl<'a> Evaluator<'a> {
                     func_ctx: self.func_ctx,
                     suppress_error: false,
                 };
-                let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
+                let result = (eval)(&args, &mut ctx, max_nums_per_row);
                 ctx.render_error(
                     *span,
                     id.params(),
@@ -1701,10 +1699,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                let cols_ref = args
-                    .iter()
-                    .map(|(val, _)| Value::as_ref(val))
-                    .collect::<Vec<_>>();
+                let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
 
                 let errors = if !child_suppress_error {
                     None
@@ -1720,8 +1715,7 @@ impl<'a> Evaluator<'a> {
                     suppress_error: options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
+                let result = (eval)(&args, &mut ctx);
 
                 ctx.render_error(
                     *span,

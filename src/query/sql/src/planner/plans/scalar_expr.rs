@@ -25,8 +25,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -208,6 +210,20 @@ impl ScalarExpr {
         }
 
         impl<'a> Visitor<'a> for EvaluableVisitor {
+            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    self.evaluable = false;
+                } else {
+                    for expr in &func.arguments {
+                        self.visit(expr)?;
+                    }
+                }
+                Ok(())
+            }
             fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
                 self.evaluable = false;
                 Ok(())
@@ -801,8 +817,8 @@ pub enum AsyncFunctionArgument {
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct RedisSource {
-    // Redis source connection URL, like `tcp://127.0.0.1:6379`
-    pub connection_url: String,
+    pub host: String,
+    pub port: u16,
     pub username: Option<String>,
     pub password: Option<String>,
     pub db_index: Option<i64>,

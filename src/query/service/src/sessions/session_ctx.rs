@@ -297,7 +297,7 @@ impl SessionContext {
             index
         };
 
-        if idx < 0 || idx > (query_ids_len - 1) as i32 {
+        if query_ids_len < 1 || idx < 0 || idx > (query_ids_len - 1) as i32 {
             return "".to_string();
         }
 

@@ -23,7 +23,6 @@ use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::RaftRequest;
@@ -33,6 +32,7 @@ use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use log::debug;
 use tonic::codegen::BoxStream;
 use tonic::Request;
@@ -52,11 +52,7 @@ pub trait RequestFor: Clone + fmt::Debug {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcReq {
-    UpsertKV(UpsertKVReq),
-
-    GetKV(GetKVReq),
-    MGetKV(MGetKVReq),
-    ListKV(ListKVReq),
+    UpsertKV(UpsertKV),
 }
 
 impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
@@ -125,16 +121,6 @@ impl RequestFor for MetaGrpcReadReq {
     type Reply = BoxStream<StreamItem>;
 }
 
-impl From<MetaGrpcReadReq> for MetaGrpcReq {
-    fn from(v: MetaGrpcReadReq) -> Self {
-        match v {
-            MetaGrpcReadReq::GetKV(v) => MetaGrpcReq::GetKV(v),
-            MetaGrpcReadReq::MGetKV(v) => MetaGrpcReq::MGetKV(v),
-            MetaGrpcReadReq::ListKV(v) => MetaGrpcReq::ListKV(v),
-        }
-    }
-}
-
 impl From<MetaGrpcReadReq> for RaftRequest {
     fn from(v: MetaGrpcReadReq) -> Self {
         let raft_request = RaftRequest {
@@ -191,7 +177,7 @@ impl RequestFor for Streamed<ListKVReq> {
     type Reply = BoxStream<StreamItem>;
 }
 
-impl RequestFor for UpsertKVReq {
+impl RequestFor for UpsertKV {
     type Reply = UpsertKVReply;
 }
 

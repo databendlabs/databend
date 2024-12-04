@@ -29,6 +29,7 @@ use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
+use databend_common_expression::type_check::get_simple_cast_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -36,6 +37,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -71,6 +73,7 @@ use crate::DUMMY_TABLE_INDEX;
 pub struct TableScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    pub scan_id: usize,
     pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
@@ -263,6 +266,7 @@ impl PhysicalPlanBuilder {
             }
         }
         source.table_index = scan.table_index;
+        source.scan_id = scan.scan_id;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
@@ -283,6 +287,7 @@ impl PhysicalPlanBuilder {
 
         let mut plan = PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
+            scan_id: scan.scan_id,
             name_mapping,
             source: Box::new(source),
             table_index: Some(scan.table_index),
@@ -319,6 +324,7 @@ impl PhysicalPlanBuilder {
             .await?;
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
+            scan_id: DUMMY_TABLE_INDEX,
             name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
             source: Box::new(source),
             table_index: Some(DUMMY_TABLE_INDEX),
@@ -559,12 +565,20 @@ impl PhysicalPlanBuilder {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
                 source_column_ids.insert(virtual_column.source_column_id);
+                let cast_func_name =
+                    if virtual_column.data_type.remove_nullable() != TableDataType::Variant {
+                        let dest_type = DataType::from(&virtual_column.data_type.remove_nullable());
+                        get_simple_cast_function(true, &DataType::Variant, &dest_type)
+                    } else {
+                        None
+                    };
                 let virtual_column_field = VirtualColumnField {
                     source_column_id: virtual_column.source_column_id,
                     source_name: virtual_column.source_column_name.clone(),
                     column_id: virtual_column.column_id,
                     name: virtual_column.column_name.clone(),
                     key_paths: virtual_column.key_paths.clone(),
+                    cast_func_name,
                     data_type: Box::new(virtual_column.data_type.clone()),
                     is_created: virtual_column.is_created,
                 };

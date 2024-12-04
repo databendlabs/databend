@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::chunk::Chunk;
-use databend_common_arrow::native::read as nread;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_native::read as nread;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use log::debug;
 
@@ -142,7 +141,7 @@ impl AggIndexReader {
 
         for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
             let readers = data.remove(&index).unwrap();
-            let array_iter = self.reader.build_array_iter(column_node, readers)?;
+            let array_iter = self.reader.build_column_iter(column_node, readers)?;
             let arrays = array_iter.map(|a| Ok(a?)).collect::<Result<Vec<_>>>()?;
             all_columns_arrays.push(arrays);
         }
@@ -160,12 +159,11 @@ impl AggIndexReader {
         let mut blocks = Vec::with_capacity(page_num);
 
         for i in 0..page_num {
-            let mut arrays = Vec::with_capacity(all_columns_arrays.len());
-            for array in all_columns_arrays.iter() {
-                arrays.push(array[i].clone());
+            let mut columns = Vec::with_capacity(all_columns_arrays.len());
+            for cs in all_columns_arrays.iter() {
+                columns.push(cs[i].clone());
             }
-            let chunk = Chunk::new(arrays);
-            let block = DataBlock::from_arrow_chunk(&chunk, &self.reader.data_schema())?;
+            let block = DataBlock::new_from_columns(columns);
             blocks.push(block);
         }
         let block = DataBlock::concat(&blocks)?;

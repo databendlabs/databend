@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::MetaEmbedded;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::UpsertKV;
 use mockall::predicate::*;
 
 fn make_role_key(role: &str) -> String {
@@ -45,7 +45,7 @@ mod add {
             let v = serde_json::to_vec(&role_info)?;
             let kv_api = kv_api.clone();
             let _upsert_kv = kv_api
-                .upsert_kv(UpsertKVReq::new(
+                .upsert_kv(UpsertKV::new(
                     &role_key,
                     MatchSeq::Exact(0),
                     Operation::Update(v),
@@ -69,7 +69,7 @@ mod add {
             let v = serde_json::to_vec(&role_info)?;
             let kv_api = kv_api.clone();
             let _upsert_kv = kv_api
-                .upsert_kv(UpsertKVReq::new(
+                .upsert_kv(UpsertKV::new(
                     &role_key,
                     MatchSeq::Exact(0),
                     Operation::Update(v),
@@ -89,8 +89,8 @@ mod add {
 
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
-) -> databend_common_exception::Result<(Arc<MetaEmbedded>, RoleMgr)> {
-    let test_api = Arc::new(MetaEmbedded::new_temp().await?);
+) -> databend_common_exception::Result<(Arc<MemMeta>, RoleMgr)> {
+    let test_api = Arc::new(MemMeta::default());
     let tenant = Tenant::new_literal("admin");
     let mgr = RoleMgr::create(
         test_api.clone(),

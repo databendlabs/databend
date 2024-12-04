@@ -18,36 +18,32 @@ use std::sync::Arc;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_types::MetaStartupError;
 
-use crate::store::StoreInner;
+use crate::store::RaftStoreInner;
 
 /// A store that implements `RaftStorage` trait and provides full functions.
 ///
 /// It is designed to be cloneable in order to be shared by MetaNode and Raft.
 #[derive(Clone)]
 pub struct RaftStore {
-    pub(crate) inner: Arc<StoreInner>,
+    pub(crate) inner: Arc<RaftStoreInner>,
 }
 
 impl RaftStore {
-    pub fn new(sto: StoreInner) -> Self {
-        Self {
-            inner: Arc::new(sto),
-        }
-    }
-
     #[fastrace::trace]
     pub async fn open(config: &RaftConfig) -> Result<Self, MetaStartupError> {
-        let sto = StoreInner::open(config).await?;
-        Ok(Self::new(sto))
+        let inner = RaftStoreInner::open(config).await?;
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 
-    pub fn inner(&self) -> Arc<StoreInner> {
+    pub fn inner(&self) -> Arc<RaftStoreInner> {
         self.inner.clone()
     }
 }
 
 impl Deref for RaftStore {
-    type Target = StoreInner;
+    type Target = RaftStoreInner;
 
     fn deref(&self) -> &Self::Target {
         &self.inner

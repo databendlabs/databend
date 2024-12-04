@@ -78,7 +78,6 @@ cluster_name = "foo_cluster"
         assert_eq!(cfg.grpc_api_address, "127.0.0.1:10000");
         assert_eq!(cfg.grpc_tls_server_cert, "grpc server cert");
         assert_eq!(cfg.grpc_tls_server_key, "grpc server key");
-        assert_eq!(cfg.raft_config.config_id, "raft config id");
         assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
         assert_eq!(cfg.raft_config.raft_api_port, 11000);
         assert_eq!(cfg.raft_config.raft_dir, "raft dir");
@@ -90,7 +89,6 @@ cluster_name = "foo_cluster"
         assert!(!cfg.raft_config.single);
         assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
         assert_eq!(cfg.raft_config.id, 20);
-        assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");
         assert_eq!(cfg.raft_config.cluster_name, "foo_cluster");
     });
 

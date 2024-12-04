@@ -35,9 +35,6 @@ pub struct CreateStageStmt {
     pub location: Option<UriLocation>,
 
     pub file_format_options: FileFormatOptions,
-    pub on_error: String,
-    pub size_limit: usize,
-    pub validation_mode: String,
     pub comments: String,
 }
 
@@ -61,18 +58,6 @@ impl Display for CreateStageStmt {
             write!(f, " FILE_FORMAT = ({})", self.file_format_options)?;
         }
 
-        if !self.on_error.is_empty() {
-            write!(f, " ON_ERROR = '{}'", self.on_error)?;
-        }
-
-        if self.size_limit != 0 {
-            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
-        }
-
-        if !self.validation_mode.is_empty() {
-            write!(f, " VALIDATION_MODE = {}", self.validation_mode)?;
-        }
-
         if !self.comments.is_empty() {
             write!(f, " COMMENTS = '{}'", self.comments)?;
         }
@@ -87,6 +72,7 @@ pub enum SelectStageOption {
     Pattern(LiteralStringOrVariable),
     FileFormat(String),
     Connection(BTreeMap<String, String>),
+    CaseSensitive(bool),
 }
 
 impl SelectStageOptions {
@@ -98,6 +84,7 @@ impl SelectStageOptions {
                 SelectStageOption::Pattern(v) => options.pattern = Some(v),
                 SelectStageOption::FileFormat(v) => options.file_format = Some(v),
                 SelectStageOption::Connection(v) => options.connection = v,
+                SelectStageOption::CaseSensitive(v) => options.case_sensitive = Some(v),
             }
         }
         options
@@ -110,6 +97,7 @@ pub struct SelectStageOptions {
     pub pattern: Option<LiteralStringOrVariable>,
     pub file_format: Option<String>,
     pub connection: BTreeMap<String, String>,
+    pub case_sensitive: Option<bool>,
 }
 
 impl SelectStageOptions {
@@ -118,6 +106,7 @@ impl SelectStageOptions {
             && self.pattern.is_none()
             && self.file_format.is_none()
             && self.connection.is_empty()
+            && self.case_sensitive.is_none()
     }
 }
 
@@ -152,6 +141,10 @@ impl Display for SelectStageOptions {
 
         if let Some(pattern) = self.pattern.as_ref() {
             write!(f, " PATTERN => {},", pattern)?;
+        }
+
+        if let Some(case_sensitive) = self.case_sensitive {
+            write!(f, " CASE_SENSITIVE => {},", case_sensitive)?;
         }
 
         if !self.connection.is_empty() {

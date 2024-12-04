@@ -18,9 +18,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
@@ -278,7 +278,7 @@ impl HashJoinProbeState {
         // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
         // when all keys have matches. This allows us to achieve the same performance as before.
         probe_state.num_keys += if let Some(valids) = &valids {
-            (valids.len() - valids.unset_bits()) as u64
+            (valids.len() - valids.null_count()) as u64
         } else {
             input_num_rows as u64
         };

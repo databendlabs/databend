@@ -53,7 +53,7 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::TimePoint(time_point) => {
-                let Some(location) = self.snapshot_loc().await? else {
+                let Some(location) = self.snapshot_loc() else {
                     return Err(ErrorCode::TableHistoricalDataNotFound(
                         "Empty Table has no historical data",
                     ));
@@ -114,7 +114,7 @@ impl FuseTable {
         snapshot_id: &str,
         abort_checker: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
-        let Some(location) = self.snapshot_loc().await? else {
+        let Some(location) = self.snapshot_loc() else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "Empty Table has no historical data",
             ));
@@ -273,7 +273,7 @@ impl FuseTable {
             ));
         }
 
-        let Some(location) = self.snapshot_loc().await? else {
+        let Some(location) = self.snapshot_loc() else {
             return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
         };
 

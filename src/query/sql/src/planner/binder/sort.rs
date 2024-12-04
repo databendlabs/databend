@@ -148,6 +148,10 @@ impl Binder {
                             )
                             .map_err(|e| ErrorCode::SemanticError(e.message()))?;
 
+                        if let ScalarExpr::ConstantExpr(..) = rewrite_scalar {
+                            continue;
+                        }
+
                         let column_binding =
                             if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
                                 col.column.clone()

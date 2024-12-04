@@ -33,6 +33,7 @@ use prometheus_client::encoding::text::encode as prometheus_encode;
 pub mod server_metrics {
     use std::sync::LazyLock;
 
+    use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
     use databend_common_meta_types::raft_types::NodeId;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::family::Family;
@@ -53,6 +54,14 @@ pub mod server_metrics {
         leader_changes: Counter,
         applying_snapshot: Gauge,
         snapshot_key_count: Gauge,
+
+        raft_log_cache_items: Gauge,
+        raft_log_cache_used_size: Gauge,
+        raft_log_wal_open_chunk_size: Gauge,
+        raft_log_wal_offset: Gauge,
+        raft_log_wal_closed_chunk_count: Gauge,
+        raft_log_wal_closed_chunk_total_size: Gauge,
+
         raft_log_size: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
@@ -74,6 +83,12 @@ pub mod server_metrics {
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
                 snapshot_key_count: Gauge::default(),
+                raft_log_cache_items: Gauge::default(),
+                raft_log_cache_used_size: Gauge::default(),
+                raft_log_wal_open_chunk_size: Gauge::default(),
+                raft_log_wal_offset: Gauge::default(),
+                raft_log_wal_closed_chunk_count: Gauge::default(),
+                raft_log_wal_closed_chunk_total_size: Gauge::default(),
                 raft_log_size: Gauge::default(),
                 last_log_index: Gauge::default(),
                 last_seq: Gauge::default(),
@@ -113,6 +128,38 @@ pub mod server_metrics {
                 "number of keys in the last snapshot",
                 metrics.snapshot_key_count.clone(),
             );
+
+            registry.register(
+                key!("raft_log_cache_items"),
+                "number of items in raft log cache",
+                metrics.raft_log_cache_items.clone(),
+            );
+            registry.register(
+                key!("raft_log_cache_used_size"),
+                "size of used space in raft log cache",
+                metrics.raft_log_cache_used_size.clone(),
+            );
+            registry.register(
+                key!("raft_log_wal_open_chunk_size"),
+                "size of open chunk in raft log wal",
+                metrics.raft_log_wal_open_chunk_size.clone(),
+            );
+            registry.register(
+                key!("raft_log_wal_offset"),
+                "global offset of raft log WAL",
+                metrics.raft_log_wal_offset.clone(),
+            );
+            registry.register(
+                key!("raft_log_wal_closed_chunk_count"),
+                "number of closed chunks in raft log WAL",
+                metrics.raft_log_wal_closed_chunk_count.clone(),
+            );
+            registry.register(
+                key!("raft_log_wal_closed_chunk_total_size"),
+                "total size of closed chunks in raft log WAL",
+                metrics.raft_log_wal_closed_chunk_total_size.clone(),
+            );
+
             registry.register(
                 key!("raft_log_size"),
                 "the size in bytes of the on disk data of raft log",
@@ -180,6 +227,27 @@ pub mod server_metrics {
 
     pub fn set_snapshot_key_count(n: u64) {
         SERVER_METRICS.snapshot_key_count.set(n as i64);
+    }
+
+    pub fn set_raft_log_stat(st: RaftLogStat) {
+        SERVER_METRICS
+            .raft_log_cache_items
+            .set(st.payload_cache_item_count as i64);
+        SERVER_METRICS
+            .raft_log_cache_used_size
+            .set(st.payload_cache_size as i64);
+        SERVER_METRICS
+            .raft_log_wal_open_chunk_size
+            .set(st.open_chunk.size as i64);
+        SERVER_METRICS
+            .raft_log_wal_offset
+            .set(st.open_chunk.global_end as i64);
+        SERVER_METRICS
+            .raft_log_wal_closed_chunk_count
+            .set(st.closed_chunks.len() as i64);
+        SERVER_METRICS
+            .raft_log_wal_closed_chunk_total_size
+            .set(st.closed_chunks.iter().map(|v| v.size).sum::<u64>() as i64);
     }
 
     pub fn set_raft_log_size(raft_log_size: u64) {

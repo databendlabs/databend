@@ -313,7 +313,7 @@ impl Dataframe {
         )?;
         self.s_expr = self.binder.bind_distinct(
             None,
-            &self.bind_context,
+            &mut self.bind_context,
             &projections,
             &mut scalar_items,
             self.s_expr.clone(),

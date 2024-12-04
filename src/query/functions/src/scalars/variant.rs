@@ -19,10 +19,6 @@ use std::iter::once;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use chrono::Datelike;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::string_to_date;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -35,10 +31,12 @@ use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
@@ -63,7 +61,8 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
+use jiff::civil::date;
+use jiff::Unit;
 use jsonb::array_distinct;
 use jsonb::array_except;
 use jsonb::array_insert;
@@ -347,7 +346,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if idx < 0 || idx > i32::MAX.into() {
+                if idx < 0 || idx > i32::MAX as i64 {
                     output.push_null();
                 } else {
                     match get_by_index(val, idx as usize) {
@@ -415,7 +414,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if idx < 0 || idx > i32::MAX.into() {
+                if idx < 0 || idx > i32::MAX as i64 {
                     output.push_null();
                 } else {
                     match get_by_index(val, idx as usize) {
@@ -893,15 +892,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     _ => FunctionDomain::Domain(Domain::Undefined),
                 }),
                 eval: Box::new(|args, ctx| match &args[0] {
-                    ValueRef::Scalar(scalar) => match scalar {
-                        ScalarRef::Null => Value::Scalar(Scalar::Null),
+                    Value::Scalar(scalar) => match scalar {
+                        Scalar::Null => Value::Scalar(Scalar::Null),
                         _ => {
                             let mut buf = Vec::new();
-                            cast_scalar_to_variant(scalar.clone(), ctx.func_ctx.tz, &mut buf);
+                            cast_scalar_to_variant(
+                                scalar.as_ref(),
+                                &ctx.func_ctx.jiff_tz,
+                                &mut buf,
+                            );
                             Value::Scalar(Scalar::Variant(buf))
                         }
                     },
-                    ValueRef::Column(col) => {
+                    Value::Column(col) => {
                         let validity = match col {
                             Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
                             Column::Nullable(box ref nullable_column) => {
@@ -909,7 +912,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             _ => None,
                         };
-                        let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.jiff_tz);
                         if let Some(validity) = validity {
                             Value::Column(NullableColumn::new_column(
                                 Column::Variant(new_col),
@@ -937,21 +940,21 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |val, ctx| match val {
-            ValueRef::Scalar(scalar) => match scalar {
-                ScalarRef::Null => Value::Scalar(None),
+            Value::Scalar(scalar) => match scalar {
+                Scalar::Null => Value::Scalar(None),
                 _ => {
                     let mut buf = Vec::new();
-                    cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+                    cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.jiff_tz, &mut buf);
                     Value::Scalar(Some(buf))
                 }
             },
-            ValueRef::Column(col) => {
+            Value::Column(col) => {
                 let validity = match col {
                     Column::Null { len } => Bitmap::new_constant(false, len),
                     Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
                     _ => Bitmap::new_constant(true, col.len()),
                 };
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.jiff_tz);
                 Value::Column(NullableColumn::new(new_col, validity))
             }
         },
@@ -1042,12 +1045,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_date(
-                    val.as_bytes(),
-                    ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.enable_dst_hour_fix,
-                ) {
-                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+                        Ok(s) => output.push(s.get_days()),
+                        Err(e) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("cannot parse to type `DATE`. {}", e),
+                            );
+                            output.push(0);
+                        }
+                    },
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
@@ -1076,12 +1084,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_date(
-                    val.as_bytes(),
-                    ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.enable_dst_hour_fix,
-                ) {
-                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+                        Ok(s) => output.push(s.get_days()),
+                        Err(e) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("cannot parse to type `DATE`. {}", e),
+                            );
+                            output.push(0);
+                        }
+                    },
                     Err(_) => output.push_null(),
                 },
                 None => output.push_null(),
@@ -1101,12 +1114,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_timestamp(
-                    val.as_bytes(),
-                    ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.enable_dst_hour_fix,
-                ) {
-                    Ok(ts) => output.push(ts.timestamp_micros()),
+                Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
@@ -1136,12 +1145,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let val = as_str(val);
                 match val {
-                    Some(val) => match string_to_timestamp(
-                        val.as_bytes(),
-                        ctx.func_ctx.tz.tz,
-                        ctx.func_ctx.enable_dst_hour_fix,
-                    ) {
-                        Ok(ts) => output.push(ts.timestamp_micros()),
+                    Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                        Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                         Err(_) => {
                             output.push_null();
                         }
@@ -1747,7 +1752,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
     let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
@@ -1758,7 +1763,7 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
         for column in &columns {
             let v = unsafe { column.index_unchecked(idx) };
             let mut val = vec![];
-            cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+            cast_scalar_to_variant(v, &ctx.func_ctx.jiff_tz, &mut val);
             items.push(val);
         }
         if let Err(err) = build_array(items.iter().map(|b| &b[..]), &mut builder.data) {
@@ -1772,16 +1777,16 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
     }
 }
 
-fn json_object_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn json_object_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     json_object_impl_fn(args, ctx, false)
 }
 
-fn json_object_keep_null_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn json_object_keep_null_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     json_object_impl_fn(args, ctx, true)
 }
 
 fn json_object_impl_fn(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     keep_null: bool,
 ) -> Value<AnyType> {
@@ -1824,7 +1829,7 @@ fn json_object_impl_fn(
                 }
                 set.insert(key);
                 let mut val = vec![];
-                cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+                cast_scalar_to_variant(v, &ctx.func_ctx.jiff_tz, &mut val);
                 kvs.push((key, val));
             }
             if !has_err {
@@ -1844,20 +1849,20 @@ fn json_object_impl_fn(
 }
 
 fn prepare_args_columns(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     ctx: &EvalContext,
 ) -> (Vec<Column>, Option<usize>) {
     let len_opt = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let len = len_opt.unwrap_or(1);
     let mut columns = Vec::with_capacity(args.len());
     for (i, arg) in args.iter().enumerate() {
         let column = match arg {
-            ValueRef::Column(column) => column.clone(),
-            ValueRef::Scalar(s) => {
-                let column_builder = ColumnBuilder::repeat(s, len, &ctx.generics[i]);
+            Value::Column(column) => column.clone(),
+            Value::Scalar(s) => {
+                let column_builder = ColumnBuilder::repeat(&s.as_ref(), len, &ctx.generics[i]);
                 column_builder.build()
             }
         };
@@ -1866,13 +1871,13 @@ fn prepare_args_columns(
     (columns, len_opt)
 }
 
-fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn delete_by_keypath_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let scalar_keypath = match &args[1] {
-        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v.as_bytes())),
+        Value::Scalar(Scalar::String(v)) => Some(parse_key_paths(v.as_bytes())),
         _ => None,
     };
     let len_opt = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let len = len_opt.unwrap_or(1);
@@ -1882,8 +1887,8 @@ fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
 
     for idx in 0..len {
         let keypath = match &args[1] {
-            ValueRef::Scalar(_) => Cow::Borrowed(&scalar_keypath),
-            ValueRef::Column(col) => {
+            Value::Scalar(_) => Cow::Borrowed(&scalar_keypath),
+            Value::Column(col) => {
                 let scalar = unsafe { col.index_unchecked(idx) };
                 let path = match scalar {
                     ScalarRef::String(buf) => Some(parse_key_paths(buf.as_bytes())),
@@ -1896,8 +1901,8 @@ fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
             Some(result) => match result {
                 Ok(path) => {
                     let json_row = match &args[0] {
-                        ValueRef::Scalar(scalar) => scalar.clone(),
-                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                        Value::Scalar(scalar) => scalar.as_ref(),
+                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
                     };
                     match json_row {
                         ScalarRef::Variant(json) => {
@@ -1937,16 +1942,16 @@ fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
 }
 
 fn get_by_keypath_fn(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     string_res: bool,
 ) -> Value<AnyType> {
     let scalar_keypath = match &args[1] {
-        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v.as_bytes())),
+        Value::Scalar(Scalar::String(v)) => Some(parse_key_paths(v.as_bytes())),
         _ => None,
     };
     let len_opt = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let len = len_opt.unwrap_or(1);
@@ -1961,8 +1966,8 @@ fn get_by_keypath_fn(
 
     for idx in 0..len {
         let keypath = match &args[1] {
-            ValueRef::Scalar(_) => Cow::Borrowed(&scalar_keypath),
-            ValueRef::Column(col) => {
+            Value::Scalar(_) => Cow::Borrowed(&scalar_keypath),
+            Value::Column(col) => {
                 let scalar = unsafe { col.index_unchecked(idx) };
                 let path = match scalar {
                     ScalarRef::String(buf) => Some(parse_key_paths(buf.as_bytes())),
@@ -1976,8 +1981,8 @@ fn get_by_keypath_fn(
             Some(result) => match result {
                 Ok(path) => {
                     let json_row = match &args[0] {
-                        ValueRef::Scalar(scalar) => scalar.clone(),
-                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                        Value::Scalar(scalar) => scalar.as_ref(),
+                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
                     };
                     match json_row {
                         ScalarRef::Variant(json) => match get_by_keypath(json, path.paths.iter()) {
@@ -2027,7 +2032,7 @@ fn get_by_keypath_fn(
 }
 
 fn path_predicate_fn<'a, P>(
-    args: &'a [ValueRef<AnyType>],
+    args: &'a [Value<AnyType>],
     ctx: &'a mut EvalContext,
     predicate: P,
 ) -> Value<AnyType>
@@ -2035,7 +2040,7 @@ where
     P: Fn(&'a [u8], JsonPath<'a>) -> Result<bool, jsonb::Error>,
 {
     let scalar_jsonpath = match &args[1] {
-        ValueRef::Scalar(ScalarRef::String(v)) => {
+        Value::Scalar(Scalar::String(v)) => {
             let res = parse_json_path(v.as_bytes()).map_err(|_| format!("Invalid JSON Path '{v}'"));
             Some(res)
         }
@@ -2043,7 +2048,7 @@ where
     };
 
     let len_opt = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let len = len_opt.unwrap_or(1);
@@ -2053,8 +2058,8 @@ where
 
     for idx in 0..len {
         let jsonpath = match &args[1] {
-            ValueRef::Scalar(_) => scalar_jsonpath.clone(),
-            ValueRef::Column(col) => {
+            Value::Scalar(_) => scalar_jsonpath.clone(),
+            Value::Column(col) => {
                 let scalar = unsafe { col.index_unchecked(idx) };
                 match scalar {
                     ScalarRef::String(buf) => {
@@ -2070,8 +2075,8 @@ where
             Some(result) => match result {
                 Ok(path) => {
                     let json_row = match &args[0] {
-                        ValueRef::Scalar(scalar) => scalar.clone(),
-                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                        Value::Scalar(scalar) => scalar.as_ref(),
+                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
                     };
                     match json_row {
                         ScalarRef::Variant(json) => match predicate(json, path) {
@@ -2119,12 +2124,12 @@ where
 }
 
 fn json_object_insert_fn(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     is_nullable: bool,
 ) -> Value<AnyType> {
     let len_opt = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let len = len_opt.unwrap_or(1);
@@ -2132,8 +2137,8 @@ fn json_object_insert_fn(
     let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
     for idx in 0..len {
         let value = match &args[0] {
-            ValueRef::Scalar(scalar) => scalar.clone(),
-            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+            Value::Scalar(scalar) => scalar.as_ref(),
+            Value::Column(col) => unsafe { col.index_unchecked(idx) },
         };
         if value == ScalarRef::Null {
             builder.commit_row();
@@ -2148,12 +2153,12 @@ fn json_object_insert_fn(
             continue;
         }
         let new_key = match &args[1] {
-            ValueRef::Scalar(scalar) => scalar.clone(),
-            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+            Value::Scalar(scalar) => scalar.as_ref(),
+            Value::Column(col) => unsafe { col.index_unchecked(idx) },
         };
         let new_val = match &args[2] {
-            ValueRef::Scalar(scalar) => scalar.clone(),
-            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+            Value::Scalar(scalar) => scalar.as_ref(),
+            Value::Column(col) => unsafe { col.index_unchecked(idx) },
         };
         if new_key == ScalarRef::Null || new_val == ScalarRef::Null {
             builder.put(value);
@@ -2163,8 +2168,8 @@ fn json_object_insert_fn(
         }
         let update_flag = if args.len() == 4 {
             let v = match &args[3] {
-                ValueRef::Scalar(scalar) => scalar.clone(),
-                ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                Value::Scalar(scalar) => scalar.as_ref(),
+                Value::Column(col) => unsafe { col.index_unchecked(idx) },
             };
             match v {
                 ScalarRef::Boolean(v) => v,
@@ -2181,7 +2186,7 @@ fn json_object_insert_fn(
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
-                cast_scalar_to_variant(new_val.clone(), ctx.func_ctx.tz, &mut new_val_buf);
+                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.jiff_tz, &mut new_val_buf);
                 jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
             }
         };
@@ -2216,13 +2221,13 @@ fn json_object_insert_fn(
 }
 
 fn json_object_pick_or_delete_fn(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     is_pick: bool,
     is_nullable: bool,
 ) -> Value<AnyType> {
     let len_opt = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let len = len_opt.unwrap_or(1);
@@ -2231,8 +2236,8 @@ fn json_object_pick_or_delete_fn(
     let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
     for idx in 0..len {
         let value = match &args[0] {
-            ValueRef::Scalar(scalar) => scalar.clone(),
-            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+            Value::Scalar(scalar) => scalar.as_ref(),
+            Value::Column(col) => unsafe { col.index_unchecked(idx) },
         };
         if value == ScalarRef::Null {
             builder.commit_row();
@@ -2249,8 +2254,8 @@ fn json_object_pick_or_delete_fn(
         keys.clear();
         for arg in args.iter().skip(1) {
             let key = match &arg {
-                ValueRef::Scalar(scalar) => scalar.clone(),
-                ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                Value::Scalar(scalar) => scalar.as_ref(),
+                Value::Column(col) => unsafe { col.index_unchecked(idx) },
             };
             if key == ScalarRef::Null {
                 continue;

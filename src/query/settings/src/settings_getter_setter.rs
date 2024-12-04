@@ -363,6 +363,10 @@ impl Settings {
         Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
     }
 
+    pub fn get_enable_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_materialized_cte")? != 0)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
@@ -502,6 +506,10 @@ impl Settings {
 
     pub fn get_enable_table_lock(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
+    }
+
+    pub fn set_enable_table_lock(&self, value: u64) -> Result<()> {
+        self.try_set_u64("enable_table_lock", value)
     }
 
     pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
@@ -808,6 +816,10 @@ impl Settings {
 
     pub fn set_short_sql_max_length(&self, val: u64) -> Result<()> {
         self.try_set_u64("short_sql_max_length", val)
+    }
+
+    pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
 
     pub fn get_query_max_failures(&self) -> Result<u64> {

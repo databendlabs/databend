@@ -108,6 +108,7 @@ impl SubqueryRewriter {
                 Scan {
                     table_index,
                     columns: scan_columns,
+                    scan_id: metadata.next_scan_id(),
                     ..Default::default()
                 }
                 .into(),

@@ -18,8 +18,8 @@ use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::bitmap::Bitmap;
 use ethnum::i256;
 use ethnum::U256;
 

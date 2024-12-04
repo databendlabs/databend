@@ -150,10 +150,9 @@ where
     }
 
     fn calc_partition_point(&self) -> Partition {
-        let mut candidate = Candidate::new(&self.rows, EndDomain {
-            min: self.min_task,
-            max: self.max_task,
-        });
+        let mut candidate =
+            Candidate::new(&self.rows, EndDomain::new(self.min_task, self.max_task));
+
         candidate.init();
 
         // if candidate.is_small_task() {
@@ -223,11 +222,15 @@ impl<R: Rows> List for Option<R> {
     }
 
     fn cmp_value<'a>(&'a self, i: usize, target: &R::Item<'a>) -> Ordering {
-        self.as_ref().unwrap().row(i).cmp(target)
+        let rows = self.as_ref().unwrap();
+        assert!(i < rows.len(), "len {}, index {}", rows.len(), i);
+        rows.row(i).cmp(target)
     }
 
     fn index(&self, i: usize) -> R::Item<'_> {
-        self.as_ref().unwrap().row(i)
+        let rows = self.as_ref().unwrap();
+        assert!(i < rows.len(), "len {}, index {}", rows.len(), i);
+        rows.row(i)
     }
 }
 

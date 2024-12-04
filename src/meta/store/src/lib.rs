@@ -20,16 +20,16 @@ use std::task::Poll;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use log::info;
 use tokio_stream::Stream;
 
@@ -44,7 +44,7 @@ pub struct MetaStoreProvider {
 /// MetaStore is impl with either a local embedded meta store, or a grpc-client of metasrv
 #[derive(Clone)]
 pub enum MetaStore {
-    L(Arc<MetaEmbedded>),
+    L(Arc<MemMeta>),
     R(Arc<ClientHandle>),
 }
 
@@ -85,7 +85,7 @@ impl MetaStore {
 impl kvapi::KVApi for MetaStore {
     type Error = MetaError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,
             MetaStore::R(x) => x.upsert_kv(act).await,
@@ -127,8 +127,8 @@ impl MetaStoreProvider {
             );
 
             // NOTE: This can only be used for test: data will be removed when program quit.
-            let meta_store = MetaEmbedded::get_meta().await?;
-            Ok(MetaStore::L(meta_store))
+            let meta_store = MemMeta::default();
+            Ok(MetaStore::L(Arc::new(meta_store)))
         } else {
             info!(conf :? =(&self.rpc_conf); "use remote meta");
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;

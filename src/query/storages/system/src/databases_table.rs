@@ -117,7 +117,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let mut owners: Vec<Option<String>> = vec![];
         let mut dropped_on: Vec<Option<i64>> = vec![];
 
-        let visibility_checker = ctx.get_visibility_checker().await?;
+        let visibility_checker = ctx.get_visibility_checker(false).await?;
         let catalog_dbs = visibility_checker.get_visibility_database();
         // None means has global level privileges
         if let Some(catalog_dbs) = catalog_dbs {

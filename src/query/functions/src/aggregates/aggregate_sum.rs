@@ -14,12 +14,12 @@
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
@@ -89,7 +89,7 @@ where
     TSum: Number + std::ops::AddAssign,
 {
     match validity {
-        Some(v) if v.unset_bits() > 0 => {
+        Some(v) if v.null_count() > 0 => {
             let mut sum = TSum::default();
             inner.iter().zip(v.iter()).for_each(|(t, b)| {
                 if b {
@@ -159,18 +159,20 @@ pub struct DecimalSumState<const OVERFLOW: bool, T>
 where
     T: ValueType,
     T::Scalar: Decimal,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
 {
-    pub value: T::Scalar,
+    pub value: <T::Scalar as Decimal>::U64Array,
 }
 
 impl<const OVERFLOW: bool, T> Default for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal + std::ops::AddAssign,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self {
-            value: T::Scalar::zero(),
+            value: <T::Scalar as Decimal>::U64Array::default(),
         }
     }
 }
@@ -178,15 +180,18 @@ where
 impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal + std::ops::AddAssign,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
 {
     fn add(
         &mut self,
         other: T::ScalarRef<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        self.value += T::to_owned_scalar(other);
-        if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
+        let mut value = T::Scalar::from_u64_array(self.value);
+        value += T::to_owned_scalar(other);
+
+        if OVERFLOW && (value > T::Scalar::MAX || value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 self.value,
@@ -194,11 +199,57 @@ where
                 T::Scalar::MAX,
             )));
         }
+        self.value = value.to_u64_array();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        validity: Option<&Bitmap>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        if !OVERFLOW {
+            let mut sum = T::Scalar::from_u64_array(self.value);
+            let col = T::upcast_column(other);
+            let buffer = DecimalType::<T::Scalar>::try_downcast_column(&col).unwrap();
+            match validity {
+                Some(validity) if validity.null_count() > 0 => {
+                    buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
+                        if b {
+                            sum += *t;
+                        }
+                    });
+                }
+                _ => {
+                    buffer.iter().for_each(|t| {
+                        sum += *t;
+                    });
+                }
+            }
+            self.value = sum.to_u64_array();
+        } else {
+            match validity {
+                Some(validity) => {
+                    for (data, valid) in T::iter_column(&other).zip(validity.iter()) {
+                        if valid {
+                            self.add(data, function_data)?;
+                        }
+                    }
+                }
+                None => {
+                    for value in T::iter_column(&other) {
+                        self.add(value, function_data)?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.add(T::to_scalar_ref(&rhs.value), None)
+        let v = T::Scalar::from_u64_array(rhs.value);
+        self.add(T::to_scalar_ref(&v), None)
     }
 
     fn merge_result(
@@ -206,7 +257,8 @@ where
         builder: &mut T::ColumnBuilder,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        T::push_item(builder, T::to_scalar_ref(&self.value));
+        let v = T::Scalar::from_u64_array(self.value);
+        T::push_item(builder, T::to_scalar_ref(&v));
         Ok(())
     }
 }

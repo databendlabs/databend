@@ -17,7 +17,6 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
@@ -33,6 +32,7 @@ use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
@@ -78,6 +78,7 @@ impl NestedValues {
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
                 ],
                 timezone: options_ext.timezone,
+                jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
@@ -244,10 +245,7 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(
-            &self.common_settings().timezone,
-            self.common_settings().enable_dst_hour_fix,
-        )?;
+        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
@@ -264,11 +262,7 @@ impl NestedValues {
         let mut ts = if !buf.contains(&b'-') {
             buffer_readr.read_num_text_exact()?
         } else {
-            let t = buffer_readr.read_timestamp_text(
-                &self.common_settings().timezone,
-                false,
-                self.common_settings.enable_dst_hour_fix,
-            )?;
+            let t = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
             match t {
                 DateTimeResType::Datetime(t) => {
                     if !buffer_readr.eof() {
@@ -280,7 +274,7 @@ impl NestedValues {
                         );
                         return Err(ErrorCode::BadBytes(msg));
                     }
-                    t.timestamp_micros()
+                    t.timestamp().as_microsecond()
                 }
                 _ => unreachable!(),
             }

@@ -21,7 +21,7 @@ use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
 use fastrace::prelude::*;
 
-pub fn embedded_meta_test_harness<F, Fut>(test: F)
+pub fn mem_meta_test_harness<F, Fut>(test: F)
 where
     F: FnOnce() -> Fut + 'static,
     Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
@@ -43,9 +43,6 @@ where
 fn setup_test() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
-        databend_common_meta_sled_store::init_temp_sled_db(t);
-
         let mut config = Config::new_testing();
         config.file.prefix_filter = "".to_string();
 

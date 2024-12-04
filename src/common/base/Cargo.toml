@@ -26,6 +26,8 @@ databend-common-exception = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 borsh = { workspace = true }
+bytemuck = { workspace = true }
+bytes = { workspace = true }
 bytesize = { workspace = true }
 chrono = { workspace = true }
 ctrlc = { workspace = true }

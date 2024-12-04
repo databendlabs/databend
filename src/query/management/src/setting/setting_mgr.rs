@@ -21,13 +21,13 @@ use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 
 use crate::setting::SettingApi;
 
@@ -67,9 +67,7 @@ impl SettingApi for SettingMgr {
         let seq = MatchSeq::GE(0);
         let val = Operation::Update(serde_json::to_vec(&setting)?);
         let key = self.setting_key(&setting.name);
-        let upsert = self
-            .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
+        let upsert = self.kv_api.upsert_kv(UpsertKV::new(&key, seq, val, None));
 
         let (_prev, curr) = upsert.await?.unpack();
         let res_seq = curr.seq();
@@ -115,7 +113,7 @@ impl SettingApi for SettingMgr {
         let key = self.setting_key(name);
         let _res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
+            .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
             .await?;
 
         Ok(())

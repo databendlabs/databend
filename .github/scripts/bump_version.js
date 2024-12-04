@@ -32,9 +32,10 @@ module.exports = async ({ github, context, core }) => {
       core.setFailed("Stable release must be triggered with a nightly tag");
     }
   } else {
+    core.setOutput("sha", context.sha);
     if (TAG) {
       core.setOutput("tag", TAG);
-      core.info(`Release create manually with tag ${TAG}`);
+      core.info(`Release create manually with tag ${TAG} (${context.sha})`);
     } else {
       let releases = await github.rest.repos.listReleases({
         owner: context.repo.owner,
@@ -52,7 +53,6 @@ module.exports = async ({ github, context, core }) => {
       let patch = (parseInt(result[3]) + 1).toString();
       let next_tag = `v${major}.${minor}.${patch}-nightly`;
       core.setOutput("tag", next_tag);
-      core.setOutput("sha", context.sha);
       core.info(`Nightly release ${next_tag} from ${tag} (${context.sha})`);
     }
   }

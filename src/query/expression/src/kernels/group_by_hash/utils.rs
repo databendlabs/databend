@@ -40,6 +40,8 @@ pub fn serialize_group_columns(
         }
         builder.commit_row();
     }
+    // For nullable column it will only serialize valid row data
+    debug_assert!(builder.data.len() <= serialize_size);
     builder.build()
 }
 

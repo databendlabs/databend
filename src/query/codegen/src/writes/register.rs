@@ -43,7 +43,6 @@ pub fn codegen_register() {
             use crate::types::nullable::NullableDomain;
             use crate::types::*;
             use crate::values::Value;
-            use crate::values::ValueRef;
         "
     )
     .unwrap();
@@ -104,7 +103,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -205,7 +204,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -310,7 +309,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -363,11 +362,15 @@ pub fn codegen_register() {
             .join("");
         let arg_output_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let func_args = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("arg{n}, "))
+            .join("");
+        let to_scalar_refs = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("I{n}::to_scalar_ref(&arg{n}), "))
             .join("");
         let args_tuple = (0..n_args)
             .map(|n| n + 1)
@@ -375,7 +378,7 @@ pub fn codegen_register() {
             .join(", ");
         let arg_scalar = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n})"))
+            .map(|n| format!("Value::Scalar(arg{n})"))
             .join(", ");
         let match_arms = (1..(1 << n_args))
             .map(|idx| {
@@ -385,9 +388,9 @@ pub fn codegen_register() {
                 let arm_pat = (0..n_args)
                     .map(|n| {
                         if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
+                            format!("Value::Column(arg{})", n + 1)
                         } else {
-                            format!("ValueRef::Scalar(arg{})", n + 1)
+                            format!("Value::Scalar(arg{})", n + 1)
                         }
                     })
                     .join(", ");
@@ -411,7 +414,7 @@ pub fn codegen_register() {
                         if columns.contains(&n) {
                             format!("arg{}, ", n + 1)
                         } else {
-                            format!("arg{}.clone(), ", n + 1)
+                            format!("I{}::to_scalar_ref(&arg{}), ", n + 1, n + 1)
                         }
                     })
                     .join("");
@@ -434,7 +437,7 @@ pub fn codegen_register() {
                     func: impl Fn({arg_input_closure_sig} &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
                 ) -> impl Fn({arg_output_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync {{
                     move |{func_args} ctx| match ({args_tuple}) {{
-                        ({arg_scalar}) => Value::Scalar(func({func_args} ctx)),
+                        ({arg_scalar}) => Value::Scalar(func({to_scalar_refs} ctx)),
                         {match_arms}
                     }}
                 }}
@@ -455,11 +458,15 @@ pub fn codegen_register() {
             .join("");
         let arg_output_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let func_args = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("arg{n}, "))
+            .join("");
+        let to_scalar_refs = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("I{n}::to_scalar_ref(&arg{n}), "))
             .join("");
         let args_tuple = (0..n_args)
             .map(|n| n + 1)
@@ -467,7 +474,7 @@ pub fn codegen_register() {
             .join(", ");
         let arg_scalar = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n})"))
+            .map(|n| format!("Value::Scalar(arg{n})"))
             .join(", ");
         let match_arms = (1..(1 << n_args))
             .map(|idx| {
@@ -477,9 +484,9 @@ pub fn codegen_register() {
                 let arm_pat = (0..n_args)
                     .map(|n| {
                         if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
+                            format!("Value::Column(arg{})", n + 1)
                         } else {
-                            format!("ValueRef::Scalar(arg{})", n + 1)
+                            format!("Value::Scalar(arg{})", n + 1)
                         }
                     })
                     .join(", ");
@@ -503,7 +510,7 @@ pub fn codegen_register() {
                         if columns.contains(&n) {
                             format!("arg{}, ", n + 1)
                         } else {
-                            format!("arg{}.clone(), ", n + 1)
+                            format!("I{}::to_scalar_ref(&arg{}), ", n + 1, n + 1)
                         }
                     })
                     .join("");
@@ -532,7 +539,7 @@ pub fn codegen_register() {
                         ({arg_scalar}) => {{
                             let generics = &(ctx.generics.to_owned());
                             let mut builder = O::create_builder(1, generics);
-                            func({func_args} &mut builder, ctx);
+                            func({to_scalar_refs} &mut builder, ctx);
                             Value::Scalar(O::build_scalar(builder))
                         }}
                         {match_arms}
@@ -551,11 +558,11 @@ pub fn codegen_register() {
             .join("");
         let arg_input_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_output_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, NullableType<I{n}>>, "))
+            .map(|n| format!("Value<NullableType<I{n}>>, "))
             .join("");
         let closure_args = (0..n_args)
             .map(|n| n + 1)
@@ -567,22 +574,16 @@ pub fn codegen_register() {
             .join(", ");
         let arg_scalar = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(Some(arg{n}))"))
+            .map(|n| format!("Value::Scalar(Some(arg{n}))"))
             .join(", ");
         let scalar_func_args = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n}), "))
+            .map(|n| format!("Value::Scalar(arg{n}), "))
             .join("");
         let scalar_nones_pats = (0..n_args)
             .map(|n| {
                 let pat = (0..n_args)
-                    .map(|nth| {
-                        if nth == n {
-                            "ValueRef::Scalar(None)"
-                        } else {
-                            "_"
-                        }
-                    })
+                    .map(|nth| if nth == n { "Value::Scalar(None)" } else { "_" })
                     .join(",");
                 format!("({pat})")
             })
@@ -596,9 +597,9 @@ pub fn codegen_register() {
                 let arm_pat = (0..n_args)
                     .map(|n| {
                         if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
+                            format!("Value::Column(arg{})", n + 1)
                         } else {
-                            format!("ValueRef::Scalar(Some(arg{}))", n + 1)
+                            format!("Value::Scalar(Some(arg{}))", n + 1)
                         }
                     })
                     .join(", ");
@@ -606,15 +607,15 @@ pub fn codegen_register() {
                     .iter()
                     .map(|n| format!("arg{}.validity", n + 1))
                     .reduce(|acc, item| {
-                        format!("databend_common_arrow::arrow::bitmap::and(&{acc}, &{item})")
+                        format!("databend_common_column::bitmap::and(&{acc}, &{item})")
                     })
                     .unwrap();
                 let func_arg = (0..n_args)
                     .map(|n| {
                         if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{}.column), ", n + 1)
+                            format!("Value::Column(arg{}.column), ", n + 1)
                         } else {
-                            format!("ValueRef::Scalar(arg{}), ", n + 1)
+                            format!("Value::Scalar(arg{}), ", n + 1)
                         }
                     })
                     .join("");
@@ -659,11 +660,11 @@ pub fn codegen_register() {
             .join("");
         let arg_input_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_output_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, NullableType<I{n}>>, "))
+            .map(|n| format!("Value<NullableType<I{n}>>, "))
             .join("");
         let closure_args = (0..n_args)
             .map(|n| n + 1)
@@ -675,22 +676,16 @@ pub fn codegen_register() {
             .join(", ");
         let arg_scalar = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(Some(arg{n}))"))
+            .map(|n| format!("Value::Scalar(Some(arg{n}))"))
             .join(", ");
         let scalar_func_args = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n}), "))
+            .map(|n| format!("Value::Scalar(arg{n}), "))
             .join("");
         let scalar_nones_pats = (0..n_args)
             .map(|n| {
                 let pat = (0..n_args)
-                    .map(|nth| {
-                        if nth == n {
-                            "ValueRef::Scalar(None)"
-                        } else {
-                            "_"
-                        }
-                    })
+                    .map(|nth| if nth == n { "Value::Scalar(None)" } else { "_" })
                     .join(",");
                 format!("({pat})")
             })
@@ -704,9 +699,9 @@ pub fn codegen_register() {
                 let arm_pat = (0..n_args)
                     .map(|n| {
                         if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
+                            format!("Value::Column(arg{})", n + 1)
                         } else {
-                            format!("ValueRef::Scalar(Some(arg{}))", n + 1)
+                            format!("Value::Scalar(Some(arg{}))", n + 1)
                         }
                     })
                     .join(", ");
@@ -714,15 +709,15 @@ pub fn codegen_register() {
                     .iter()
                     .map(|n| format!("arg{}.validity", n + 1))
                     .reduce(|acc, item| {
-                        format!("databend_common_arrow::arrow::bitmap::and(&{acc}, &{item})")
+                        format!("databend_common_column::bitmap::and(&{acc}, &{item})")
                     })
                     .unwrap();
                 let func_arg = (0..n_args)
                     .map(|n| {
                         if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{}.column), ", n + 1)
+                            format!("Value::Column(arg{}.column), ", n + 1)
                         } else {
-                            format!("ValueRef::Scalar(arg{}), ", n + 1)
+                            format!("Value::Scalar(arg{}), ", n + 1)
                         }
                     })
                     .join("");
@@ -733,7 +728,7 @@ pub fn codegen_register() {
                         let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let nullable_column = func({func_arg} ctx).into_column().unwrap();
-                        let combine_validity = databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+                        let combine_validity = databend_common_column::bitmap::and(&validity, &nullable_column.validity);
                         Value::Column(NullableColumn::new(nullable_column.column, combine_validity))
                     }}"
                 )
@@ -807,7 +802,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let let_args = (0..n_args)
             .map(|n| n + 1)
@@ -822,7 +817,7 @@ pub fn codegen_register() {
             "
                 fn erase_function_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
                     func: impl for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O>,
-                ) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {{
+                ) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {{
                     move |args, ctx| {{
                         {let_args}
                         Value::upcast(func({func_args} ctx))

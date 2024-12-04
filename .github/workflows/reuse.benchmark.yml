@@ -44,7 +44,7 @@ env:
 jobs:
   local:
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 8c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:

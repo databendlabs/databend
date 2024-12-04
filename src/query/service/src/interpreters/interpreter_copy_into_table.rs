@@ -137,6 +137,7 @@ impl CopyIntoTableInterpreter {
             (
                 CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
                     plan_id: 0,
+                    scan_id: 0,
                     name_mapping,
                     stat_info: None,
                     table_index: None,
@@ -154,7 +155,6 @@ impl CopyIntoTableInterpreter {
             required_source_schema: plan.required_source_schema.clone(),
             stage_table_info: plan.stage_table_info.clone(),
             table_info: to_table.get_table_info().clone(),
-            force: plan.force,
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
             project_columns,
@@ -183,8 +183,7 @@ impl CopyIntoTableInterpreter {
         let return_all = !self
             .plan
             .stage_table_info
-            .stage_info
-            .copy_options
+            .copy_into_table_options
             .return_failed_only;
         let cs = self.ctx.get_copy_status();
 
@@ -248,9 +247,8 @@ impl CopyIntoTableInterpreter {
             let copied_files_meta_req = PipelineBuilder::build_upsert_copied_files_to_meta_req(
                 ctx.clone(),
                 to_table.as_ref(),
-                &plan.stage_table_info.stage_info,
                 &files_to_copy,
-                plan.force,
+                &plan.stage_table_info.copy_into_table_options,
             )?;
 
             to_table.commit_insertion(
@@ -281,7 +279,7 @@ impl CopyIntoTableInterpreter {
             PipelineBuilder::set_purge_files_on_finished(
                 ctx.clone(),
                 files_to_be_deleted,
-                plan.stage_table_info.stage_info.copy_options.purge,
+                &plan.stage_table_info.copy_into_table_options,
                 plan.stage_table_info.stage_info.clone(),
                 main_pipeline,
             )?;
@@ -299,7 +297,7 @@ impl CopyIntoTableInterpreter {
         // unfortunately, hooking the on_finished callback of a "blank" pipeline,
         // e.g. `PipelineBuildResult::create` leads to runtime error (during pipeline execution).
 
-        if self.plan.stage_table_info.stage_info.copy_options.purge
+        if self.plan.stage_table_info.copy_into_table_options.purge
             && !self
                 .plan
                 .stage_table_info

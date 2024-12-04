@@ -78,43 +78,50 @@ async fn do_hook_compact(
     }
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
-        let compaction_limits = match compact_target.mutation_kind {
-            MutationKind::Insert => {
-                let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
-                info!("table {} hint number of blocks need to be compacted {}", compact_target.table, compaction_num_block_hint);
-                if compaction_num_block_hint == 0 {
-                    return Ok(());
-                }
-                CompactionLimits {
-                    segment_limit: None,
-                    block_limit: Some(compaction_num_block_hint as usize),
-                }
-            }
-            _ => {
-                let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
-                CompactionLimits {
-                    segment_limit: Some(auto_compaction_segments_limit as usize),
-                    block_limit: None,
-                }
-            }
-        };
-
-        let op_name = &trace_ctx.operation_name;
-        metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
-
-        let compact_start_at = Instant::now();
         if info.res.is_ok() {
+            let op_name = &trace_ctx.operation_name;
+            metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
             info!("execute {op_name} finished successfully. running table optimization job.");
+
+            let compact_start_at = Instant::now();
+            let compaction_limits = match compact_target.mutation_kind {
+                MutationKind::Insert => {
+                    let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
+                    info!("table {} hint number of blocks need to be compacted {}", compact_target.table, compaction_num_block_hint);
+                    if compaction_num_block_hint == 0 {
+                        return Ok(());
+                    }
+                    CompactionLimits {
+                        segment_limit: None,
+                        block_limit: Some(compaction_num_block_hint as usize),
+                    }
+                }
+                _ => {
+                    let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
+                    CompactionLimits {
+                        segment_limit: Some(auto_compaction_segments_limit as usize),
+                        block_limit: None,
+                    }
+                }
+            };
+
+            // keep the original progress value
+            let progress = ctx.get_write_progress();
+            let progress_value = progress.as_ref().get_values();
+
             match GlobalIORuntime::instance().block_on({
                 compact_table(ctx, compact_target, compaction_limits, lock_opt)
             }) {
                 Ok(_) => {
                     info!("execute {op_name} finished successfully. table optimization job finished.");
                 }
-                Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e) }
+                Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e); }
             }
+
+            // reset the progress value
+            progress.set(&progress_value);
+            metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
         }
-        metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
 
         Ok(())
     });
@@ -139,11 +146,6 @@ async fn compact_table(
         )
         .await?;
     let settings = ctx.get_settings();
-    // keep the original progress value
-    let progress_value = ctx.get_write_progress_value();
-
-    let do_recluster = !table.cluster_keys(ctx.clone()).is_empty();
-    let do_compact = compaction_limits.block_limit.is_some() || !do_recluster;
 
     // evict the table from cache
     ctx.evict_table_from_cache(
@@ -152,7 +154,8 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
-    if do_compact {
+    {
+        // do compact.
         let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
@@ -186,24 +189,25 @@ async fn compact_table(
         }
     }
 
-    if do_recluster {
-        let recluster = RelOperator::Recluster(Recluster {
-            catalog: compact_target.catalog,
-            database: compact_target.database,
-            table: compact_target.table,
-            filters: None,
-            limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-        });
-        let s_expr = SExpr::create_leaf(Arc::new(recluster));
-        let recluster_interpreter =
-            ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-        // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-        // we do not need to use `PipelineCompleteExecutor` to execute it.
-        let build_res = recluster_interpreter.execute2().await?;
-        assert!(build_res.main_pipeline.is_empty());
+    {
+        // do recluster.
+        if !table.cluster_keys(ctx.clone()).is_empty() {
+            let recluster = RelOperator::Recluster(Recluster {
+                catalog: compact_target.catalog,
+                database: compact_target.database,
+                table: compact_target.table,
+                filters: None,
+                limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
+            });
+            let s_expr = SExpr::create_leaf(Arc::new(recluster));
+            let recluster_interpreter =
+                ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
+            // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+            // we do not need to use `PipelineCompleteExecutor` to execute it.
+            let build_res = recluster_interpreter.execute2().await?;
+            assert!(build_res.main_pipeline.is_empty());
+        }
     }
 
-    // reset the progress value
-    ctx.get_write_progress().set(&progress_value);
     Ok(())
 }

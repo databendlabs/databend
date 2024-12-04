@@ -29,6 +29,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_sql::binder::MutationType;
@@ -57,33 +58,6 @@ enum ObjectId {
     Database(u64),
     Table(u64, u64),
 }
-
-// some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
-// rewritten to the queries on the system tables, we need to skip the privilege check on
-// these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
-    "catalogs",
-    "columns",
-    "databases",
-    "databases_with_history",
-    "dictionaries",
-    "tables",
-    "views",
-    "tables_with_history",
-    "views_with_history",
-    "password_policies",
-    "streams",
-    "streams_terse",
-    "virtual_columns",
-    "users",
-    "roles",
-    "stages",
-    "one",
-    "processes",
-    "user_functions",
-    "functions",
-    "indexes",
-];
 
 // table functions that need `Super` privilege
 const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["fuse_amend"];
@@ -1208,6 +1182,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
+            | Plan::UseCatalog(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)

@@ -108,16 +108,6 @@ impl From<std::num::TryFromIntError> for ErrorCode {
     }
 }
 
-impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::arrow::error::Error) -> Self {
-        use databend_common_arrow::arrow::error::Error;
-        match error {
-            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
-            v => ErrorCode::from_std_error(v, false),
-        }
-    }
-}
-
 impl From<arrow_schema::ArrowError> for ErrorCode {
     fn from(error: arrow_schema::ArrowError) -> Self {
         match error {
@@ -423,5 +413,11 @@ impl From<ErrorCode> for tonic::Status {
 impl From<sqlx::Error> for ErrorCode {
     fn from(error: sqlx::Error) -> Self {
         ErrorCode::DictionarySourceError(format!("Dictionary Sqlx Error, cause: {}", error))
+    }
+}
+
+impl From<redis::RedisError> for ErrorCode {
+    fn from(error: redis::RedisError) -> Self {
+        ErrorCode::DictionarySourceError(format!("Dictionary Redis Error, cause: {}", error))
     }
 }

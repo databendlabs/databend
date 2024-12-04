@@ -39,7 +39,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::operations::acquire_task_permit;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -80,7 +79,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             .iter()
             .map(|e| (e.name(), e.clone()))
             .collect::<Vec<_>>();
-        let visibility_checker = ctx.get_visibility_checker().await?;
+        let visibility_checker = ctx.get_visibility_checker(false).await?;
         let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];
@@ -250,13 +249,11 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                         let fuse_table =
                                             FuseTable::try_from_table(source.as_ref()).unwrap();
                                         if let Some(location) = stream_table.snapshot_loc() {
-                                            reason = SnapshotsIO::read_snapshot(
-                                                location,
-                                                fuse_table.get_operator(),
-                                            )
-                                            .await
-                                            .err()
-                                            .map_or("".to_string(), |e| e.display_text());
+                                            reason = fuse_table
+                                                .changes_read_offset_snapshot(&location)
+                                                .await
+                                                .err()
+                                                .map_or("".to_string(), |e| e.display_text());
                                         }
                                     }
                                     Err(e) => {

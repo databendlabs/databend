@@ -200,6 +200,10 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session_ctx.set_current_catalog(catalog_name)
+    }
+
     pub fn get_current_tenant(&self) -> Tenant {
         self.session_ctx.get_current_tenant()
     }
@@ -310,8 +314,13 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        self.privilege_mgr().get_visibility_checker().await
+    pub async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr()
+            .get_visibility_checker(ignore_ownership)
+            .await
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {

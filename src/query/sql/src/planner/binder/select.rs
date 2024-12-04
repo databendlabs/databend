@@ -33,7 +33,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::bind_table_reference::JoinConditions;
-use crate::binder::project_set::SetReturningRewriter;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
@@ -50,7 +49,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
-use crate::plans::VisitorMut;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Visibility;
@@ -86,14 +84,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
-        let (mut scalar, _) = scalar_binder.bind(expr)?;
-
-        // rewrite Set-returning functions as columns.
-        if !bind_context.srf_info.srfs.is_empty() {
-            let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-            srf_rewriter.visit(&mut scalar)?;
-        }
-
+        let (scalar, _) = scalar_binder.bind(expr)?;
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
@@ -296,10 +287,11 @@ impl Binder {
         );
 
         if distinct {
+            let columns = new_bind_context.all_column_bindings().to_vec();
             new_expr = self.bind_distinct(
                 left_span,
-                &new_bind_context,
-                new_bind_context.all_column_bindings(),
+                &mut new_bind_context,
+                &columns,
                 &mut HashMap::new(),
                 new_expr,
             )?;
@@ -359,10 +351,11 @@ impl Binder {
         right_expr: SExpr,
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
+        let columns = left_context.all_column_bindings().to_vec();
         let left_expr = self.bind_distinct(
             left_span,
-            &left_context,
-            left_context.all_column_bindings(),
+            &mut left_context,
+            &columns,
             &mut HashMap::new(),
             left_expr,
         )?;

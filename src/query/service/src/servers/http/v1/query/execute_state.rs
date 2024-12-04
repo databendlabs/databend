@@ -146,6 +146,7 @@ pub struct Executor {
 // may store these new session state, and pass it to the next http query request.
 #[derive(Debug, Clone)]
 pub struct ExecutorSessionState {
+    pub current_catalog: String,
     pub current_database: String,
     pub current_role: Option<String>,
     pub secondary_roles: Option<Vec<String>>,
@@ -158,6 +159,7 @@ pub struct ExecutorSessionState {
 impl ExecutorSessionState {
     pub fn new(session: Arc<Session>) -> Self {
         Self {
+            current_catalog: session.get_current_catalog(),
             current_database: session.get_current_database(),
             current_role: session.get_current_role().map(|r| r.name),
             secondary_roles: session.get_secondary_roles(),
