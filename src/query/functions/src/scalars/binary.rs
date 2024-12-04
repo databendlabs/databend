@@ -40,7 +40,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_hex", &["hex"]);
@@ -68,8 +67,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
-            ValueRef::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
-            ValueRef::Column(col) => Value::Column(col.into()),
+            Value::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
+            Value::Column(col) => Value::Column(col.into()),
         },
     );
 
@@ -77,8 +76,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
-            ValueRef::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
-            ValueRef::Column(col) => {
+            Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
+            Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
                 Value::Column(NullableColumn::new(col.into(), validity))
             }
@@ -188,7 +187,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {
+fn eval_binary_to_string(val: Value<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {
     vectorize_binary_to_string(
         |col| col.total_bytes_len(),
         |val, output, ctx| {
@@ -202,7 +201,7 @@ fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Va
     )(val, ctx)
 }
 
-fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
+fn eval_unhex(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
     vectorize_string_to_binary(
         |col| col.total_bytes_len() / 2,
         |val, output, ctx| {
@@ -217,7 +216,7 @@ fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryT
     )(val, ctx)
 }
 
-fn eval_from_base64(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
+fn eval_from_base64(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
     vectorize_string_to_binary(
         |col| col.total_bytes_len() * 4 / 3 + col.len() * 4,
         |val, output, ctx| {
@@ -237,14 +236,14 @@ fn eval_from_base64(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<B
 pub fn vectorize_binary_to_string(
     _estimate_bytes: impl Fn(&BinaryColumn) -> usize + Copy,
     func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
-) -> impl Fn(ValueRef<BinaryType>, &mut EvalContext) -> Value<StringType> + Copy {
+) -> impl Fn(Value<BinaryType>, &mut EvalContext) -> Value<StringType> + Copy {
     move |arg1, ctx| match arg1 {
-        ValueRef::Scalar(val) => {
+        Value::Scalar(val) => {
             let mut builder = StringColumnBuilder::with_capacity(1);
-            func(val, &mut builder, ctx);
+            func(&val, &mut builder, ctx);
             Value::Scalar(builder.build_scalar())
         }
-        ValueRef::Column(col) => {
+        Value::Column(col) => {
             let mut builder = StringColumnBuilder::with_capacity(col.len());
             for val in col.iter() {
                 func(val, &mut builder, ctx);
@@ -259,14 +258,14 @@ pub fn vectorize_binary_to_string(
 pub fn vectorize_string_to_binary(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
     func: impl Fn(&str, &mut BinaryColumnBuilder, &mut EvalContext) + Copy,
-) -> impl Fn(ValueRef<StringType>, &mut EvalContext) -> Value<BinaryType> + Copy {
+) -> impl Fn(Value<StringType>, &mut EvalContext) -> Value<BinaryType> + Copy {
     move |arg1, ctx| match arg1 {
-        ValueRef::Scalar(val) => {
+        Value::Scalar(val) => {
             let mut builder = BinaryColumnBuilder::with_capacity(1, 0);
-            func(val, &mut builder, ctx);
+            func(&val, &mut builder, ctx);
             Value::Scalar(builder.build_scalar())
         }
-        ValueRef::Column(col) => {
+        Value::Column(col) => {
             let data_capacity = estimate_bytes(&col);
             let mut builder = BinaryColumnBuilder::with_capacity(col.len(), data_capacity);
             for val in col.iter() {
@@ -278,14 +277,14 @@ pub fn vectorize_string_to_binary(
     }
 }
 
-fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+fn char_fn(args: &[Value<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
         .collect::<Vec<_>>();
 
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let input_rows = len.unwrap_or(1);

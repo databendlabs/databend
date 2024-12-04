@@ -27,7 +27,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use ethnum::i256;
 
 pub fn register_decimal_math(registry: &mut FunctionRegistry) {
@@ -144,7 +143,7 @@ enum RoundMode {
 }
 
 fn decimal_round_positive<T>(
-    value: ValueRef<DecimalType<T>>,
+    value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
@@ -164,7 +163,7 @@ where
 }
 
 fn decimal_round_negative<T>(
-    value: ValueRef<DecimalType<T>>,
+    value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
@@ -194,7 +193,7 @@ where
 
 // if round mode is ceil, truncate should add one value
 fn decimal_truncate_positive<T>(
-    value: ValueRef<DecimalType<T>>,
+    value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
@@ -207,7 +206,7 @@ where
 }
 
 fn decimal_truncate_negative<T>(
-    value: ValueRef<DecimalType<T>>,
+    value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
@@ -230,7 +229,7 @@ where
 }
 
 fn decimal_floor<T>(
-    value: ValueRef<DecimalType<T>>,
+    value: Value<DecimalType<T>>,
     source_scale: i64,
     ctx: &mut EvalContext,
 ) -> Value<DecimalType<T>>
@@ -256,7 +255,7 @@ where
 }
 
 fn decimal_ceil<T>(
-    value: ValueRef<DecimalType<T>>,
+    value: Value<DecimalType<T>>,
     source_scale: i64,
     ctx: &mut EvalContext,
 ) -> Value<DecimalType<T>>
@@ -281,7 +280,7 @@ where
 }
 
 fn decimal_rounds(
-    arg: &ValueRef<AnyType>,
+    arg: &Value<AnyType>,
     ctx: &mut EvalContext,
     from_type: DataType,
     dest_type: DecimalDataType,
@@ -324,7 +323,7 @@ fn decimal_rounds(
 }
 
 fn decimal_abs(
-    arg: &ValueRef<AnyType>,
+    arg: &Value<AnyType>,
     ctx: &mut EvalContext,
     data_type: &DecimalDataType,
 ) -> Value<AnyType> {

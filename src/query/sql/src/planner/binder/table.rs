@@ -115,11 +115,18 @@ impl Binder {
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
+        case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
         let max_column_position = self.metadata.read().get_max_column_position();
         let table = table_ctx
-            .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
+            .create_stage_table(
+                stage_info,
+                files_info,
+                files_to_copy,
+                max_column_position,
+                case_sensitive,
+            )
             .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {
@@ -231,6 +238,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            virtual_column_context: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -405,12 +413,12 @@ impl Binder {
 
     pub(crate) fn bind_r_cte(
         &mut self,
+        span: Span,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        // Recursive cte's query must be a union(all)
         match &cte_info.query.body {
             SetExpr::SetOperation(set_expr) => {
                 if set_expr.op != SetOperator::Union {
@@ -437,9 +445,7 @@ impl Binder {
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
-            _ => Err(ErrorCode::SyntaxException(
-                "Recursive CTE must contain a UNION(ALL) query".to_string(),
-            )),
+            _ => self.bind_cte(span, bind_context, cte_name, alias, cte_info),
         }
     }
 

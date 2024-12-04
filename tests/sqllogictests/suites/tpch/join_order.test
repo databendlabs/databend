@@ -532,8 +532,8 @@ group by
 order by
     value desc limit 100;
 ----
-RangeJoin: INNER
-├── Left
+HashJoin: INNER
+├── Build
 │   └── HashJoin: INNER
 │       ├── Build
 │       │   └── HashJoin: INNER
@@ -543,7 +543,7 @@ RangeJoin: INNER
 │       │           └── Scan: default.tpch_test.supplier (#4) (read rows: 1000)
 │       └── Probe
 │           └── Scan: default.tpch_test.partsupp (#3) (read rows: 80000)
-└── Right
+└── Probe
     └── HashJoin: INNER
         ├── Build
         │   └── HashJoin: INNER
@@ -1104,10 +1104,10 @@ order by
 ----
 HashJoin: RIGHT ANTI
 ├── Build
-│   └── RangeJoin: INNER
-│       ├── Left
+│   └── HashJoin: INNER
+│       ├── Build
 │       │   └── Scan: default.tpch_test.customer (#1) (read rows: 15000)
-│       └── Right
+│       └── Probe
 │           └── Scan: default.tpch_test.customer (#0) (read rows: 15000)
 └── Probe
     └── Scan: default.tpch_test.orders (#2) (read rows: 150000)

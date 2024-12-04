@@ -28,6 +28,7 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
+use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::ewkb_to_geo;
@@ -53,6 +54,7 @@ use geo::EuclideanLength;
 use geo::Geometry;
 use geo::HasDimensions;
 use geo::HaversineDistance;
+use geo::Intersects;
 use geo::Line;
 use geo::LineString;
 use geo::MultiLineString;
@@ -63,6 +65,7 @@ use geo::Rect;
 use geo::ToDegrees;
 use geo::ToRadians;
 use geo::Triangle;
+use geo::Within;
 use geohash::decode_bbox;
 use geohash::encode;
 use geozero::geojson::GeoJson;
@@ -255,29 +258,144 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!(
-                                    "Incompatible SRID: {} and {}",
-                                    l_srid.unwrap_or_default(),
-                                    r_srid.unwrap_or_default()
-                                ),
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
                             return;
                         }
-                        if matches!(l_geo, Geometry::GeometryCollection(_))
-                            || matches!(r_geo, Geometry::GeometryCollection(_))
-                        {
-                            ctx.set_error(
-                                builder.len(),
-                                "A GEOMETRY object that is a GeometryCollection".to_string(),
-                            );
+                        let is_contains = l_geo.contains(&r_geo);
+                        builder.push(is_contains);
+                    }
+                    (Err(e), _) | (_, Err(e)) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+        "st_intersects",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, BooleanType>(
+            |l_ewkb, r_ewkb, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push(false);
+                        return;
+                    }
+                }
+
+                match (
+                    ewkb_to_geo(&mut Ewkb(l_ewkb)),
+                    ewkb_to_geo(&mut Ewkb(r_ewkb)),
+                ) {
+                    (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.push(false);
-                        } else {
-                            builder.push(l_geo.contains(&r_geo));
+                            return;
                         }
+                        let is_intersects = l_geo.intersects(&r_geo);
+                        builder.push(is_intersects);
+                    }
+                    (Err(e), _) | (_, Err(e)) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+        "st_disjoint",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, BooleanType>(
+            |l_ewkb, r_ewkb, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push(false);
+                        return;
+                    }
+                }
+
+                match (
+                    ewkb_to_geo(&mut Ewkb(l_ewkb)),
+                    ewkb_to_geo(&mut Ewkb(r_ewkb)),
+                ) {
+                    (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
+                            builder.push(false);
+                            return;
+                        }
+                        let is_disjoint = !l_geo.intersects(&r_geo);
+                        builder.push(is_disjoint);
+                    }
+                    (Err(e), _) | (_, Err(e)) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+        "st_within",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, BooleanType>(
+            |l_ewkb, r_ewkb, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push(false);
+                        return;
+                    }
+                }
+
+                match (
+                    ewkb_to_geo(&mut Ewkb(l_ewkb)),
+                    ewkb_to_geo(&mut Ewkb(r_ewkb)),
+                ) {
+                    (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
+                            builder.push(false);
+                            return;
+                        }
+                        let is_within = l_geo.is_within(&r_geo);
+                        builder.push(is_within);
+                    }
+                    (Err(e), _) | (_, Err(e)) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+        "st_equals",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, BooleanType>(
+            |l_ewkb, r_ewkb, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push(false);
+                        return;
+                    }
+                }
+
+                match (
+                    ewkb_to_geo(&mut Ewkb(l_ewkb)),
+                    ewkb_to_geo(&mut Ewkb(r_ewkb)),
+                ) {
+                    (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
+                            builder.push(false);
+                            return;
+                        }
+                        let is_equal = l_geo.is_within(&r_geo) && r_geo.is_within(&l_geo);
+                        builder.push(is_equal);
                     }
                     (Err(e), _) | (_, Err(e)) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -306,32 +424,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ewkb_to_geo(&mut Ewkb(r_ewkb)),
                     ) {
                         (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                            if !l_srid.eq(&r_srid) {
-                                ctx.set_error(
-                                    builder.len(),
-                                    format!(
-                                        "Incompatible SRID: {} and {}",
-                                        l_srid.unwrap_or_default(),
-                                        r_srid.unwrap_or_default()
-                                    ),
-                                );
+                            if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                                 builder.push(F64::from(0_f64));
                                 return;
                             }
-
-                            let distance = match l_geo {
-                                Geometry::Point(l) => l.euclidean_distance(&r_geo),
-                                Geometry::Line(l) => l.euclidean_distance(&r_geo),
-                                Geometry::LineString(l) => l.euclidean_distance(&r_geo),
-                                Geometry::Polygon(l) => l.euclidean_distance(&r_geo),
-                                Geometry::MultiPoint(l) => l.euclidean_distance(&r_geo),
-                                Geometry::MultiLineString(l) => l.euclidean_distance(&r_geo),
-                                Geometry::MultiPolygon(l) => l.euclidean_distance(&r_geo),
-                                Geometry::GeometryCollection(l) => l.euclidean_distance(&r_geo),
-                                Geometry::Rect(l) => l.euclidean_distance(&r_geo),
-                                Geometry::Triangle(l) => l.euclidean_distance(&r_geo),
-                            };
-
+                            let distance = l_geo.euclidean_distance(&r_geo);
                             let distance =
                                 (distance * 1_000_000_000_f64).round() / 1_000_000_000_f64;
                             builder.push(distance.into());
@@ -656,11 +753,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 match (ewkb_to_geo(&mut Ewkb(l_ewkb)), ewkb_to_geo(&mut Ewkb(r_ewkb))) {
                     (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
-                        if !l_srid.eq(&r_srid) {
-                            ctx.set_error(
-                                builder.len(),
-                                format!("Incompatible SRID: {} and {}", l_srid.unwrap_or_default(), r_srid.unwrap_or_default())
-                            );
+                        if !check_incompatible_srid(l_srid, r_srid, builder.len(), ctx) {
                             builder.commit_row();
                             return;
                         }
@@ -1885,5 +1978,26 @@ fn round_geometry_coordinates(geom: Geometry<f64>) -> Geometry<f64> {
             coord!(x: round_coordinate(triangle.1.x), y: round_coordinate(triangle.1.y)),
             coord!(x: round_coordinate(triangle.2.x), y: round_coordinate(triangle.2.y)),
         )),
+    }
+}
+
+fn check_incompatible_srid(
+    l_srid: Option<i32>,
+    r_srid: Option<i32>,
+    len: usize,
+    ctx: &mut EvalContext,
+) -> bool {
+    if !l_srid.eq(&r_srid) {
+        ctx.set_error(
+            len,
+            format!(
+                "Incompatible SRID: {} and {}",
+                l_srid.unwrap_or_default(),
+                r_srid.unwrap_or_default()
+            ),
+        );
+        false
+    } else {
+        true
     }
 }

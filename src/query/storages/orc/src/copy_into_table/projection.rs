@@ -55,6 +55,7 @@ impl ProjectionFactory {
                 &self.null_as,
                 &self.default_values,
                 location,
+                false,
             )?
             .0;
             self.projections.insert(schema.clone(), v.clone());

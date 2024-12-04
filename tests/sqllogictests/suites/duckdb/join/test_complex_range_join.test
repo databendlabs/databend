@@ -452,9 +452,9 @@ ORDER BY 1, 2;
 4 8
 5 9
 
-# Multi-predicate merge joins with many matches
+# Multi-predicate range joins with many matches
 # (similar to test/sql/join/inner/test_unequal_join_duplicates.test
-# but with a merge join with multiple predicates)
+# but with a range join with multiple predicates)
 statement ok
 drop table if exists many_bounds;
 

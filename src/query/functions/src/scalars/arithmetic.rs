@@ -21,7 +21,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_expression::serialize::read_decimal_with_size;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::DecimalDomain;
 use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -38,7 +37,6 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
@@ -49,7 +47,6 @@ use databend_common_expression::types::F32;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::values::Value;
-use databend_common_expression::values::ValueRef;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -867,7 +864,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
 }
 
 fn unary_minus_decimal(
-    args: &[ValueRef<AnyType>],
+    args: &[Value<AnyType>],
     arg_type: DataType,
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {
@@ -969,29 +966,28 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                         "to_string",
                         |_, _| FunctionDomain::Full,
                         |from, _| match from {
-                            ValueRef::Scalar(s) => Value::Scalar(s.to_string()),
-                            ValueRef::Column(from) => {
+                            Value::Scalar(s) => Value::Scalar(s.to_string()),
+                            Value::Column(from) => {
                                 let options = NUM_TYPE::lexical_options();
                                 const FORMAT: u128 = lexical_core::format::STANDARD;
-
                                 type Native = <NUM_TYPE as Number>::Native;
-
                                 let mut builder = StringColumnBuilder::with_capacity(from.len());
 
                                 unsafe {
+                                    builder.row_buffer.resize(
+                                        <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
+                                        0,
+                                    );
                                     for x in from.iter() {
-                                        builder.row_buffer.resize(
-                                            <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
-                                            0,
-                                        );
                                         let len = lexical_core::write_with_options::<_, FORMAT>(
                                             Native::from(*x),
-                                            &mut builder.row_buffer,
+                                            &mut builder.row_buffer[0..],
                                             &options,
                                         )
                                         .len();
-                                        builder.row_buffer.truncate(len);
-                                        builder.commit_row();
+                                        builder.data.push_value(std::str::from_utf8_unchecked(
+                                            &builder.row_buffer[0..len],
+                                        ));
                                     }
                                 }
                                 Value::Column(builder.build())
@@ -1002,33 +998,31 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                     "try_to_string",
                     |_, _| FunctionDomain::Full,
                     |from, _| match from {
-                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string())),
-                        ValueRef::Column(from) => {
+                        Value::Scalar(s) => Value::Scalar(Some(s.to_string())),
+                        Value::Column(from) => {
                             let options = NUM_TYPE::lexical_options();
                             const FORMAT: u128 = lexical_core::format::STANDARD;
-                            let mut builder =
-                                BinaryColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                            let values = &mut builder.data;
-
                             type Native = <NUM_TYPE as Number>::Native;
-                            let mut offset: usize = 0;
+                            let mut builder = StringColumnBuilder::with_capacity(from.len());
+
                             unsafe {
+                                builder.row_buffer.resize(
+                                    <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
+                                    0,
+                                );
                                 for x in from.iter() {
-                                    values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    let bytes = &mut values[offset..];
                                     let len = lexical_core::write_with_options::<_, FORMAT>(
                                         Native::from(*x),
-                                        bytes,
+                                        &mut builder.row_buffer[0..],
                                         &options,
                                     )
                                     .len();
-                                    offset += len;
-                                    builder.offsets.push(offset as u64);
+                                    builder.data.push_value(std::str::from_utf8_unchecked(
+                                        &builder.row_buffer[0..len],
+                                    ));
                                 }
-                                values.set_len(offset);
                             }
-                            let result = StringColumn::try_from(builder.build()).unwrap();
+                            let result = builder.build();
                             Value::Column(NullableColumn::new(
                                 result,
                                 Bitmap::new_constant(true, from.len()),

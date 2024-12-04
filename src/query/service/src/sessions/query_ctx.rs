@@ -236,6 +236,14 @@ impl QueryContext {
     }
 
     #[async_backtrace::framed]
+    pub async fn set_current_catalog(&self, new_catalog_name: String) -> Result<()> {
+        let _catalog = self.get_catalog(&new_catalog_name).await?;
+        self.shared.set_current_catalog(new_catalog_name);
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
         let catalog = self
@@ -1330,6 +1338,7 @@ impl TableContext for QueryContext {
         files_info: StageFilesInfo,
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
+        case_sensitive: bool,
     ) -> Result<Arc<dyn Table>> {
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
@@ -1354,6 +1363,7 @@ impl TableContext for QueryContext {
                     files_to_copy,
                     self.get_settings(),
                     self.get_query_kind(),
+                    case_sensitive,
                 )
                 .await
             }
