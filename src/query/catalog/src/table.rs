@@ -39,7 +39,7 @@ use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::{ChangeType, ClusterType, OPT_KEY_CLUSTER_TYPE};
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
@@ -119,6 +119,12 @@ pub trait Table: Sync + Send {
 
     fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         vec![]
+    }
+
+    fn cluster_type(&self) -> Option<ClusterType> {
+        self.options()
+            .get(OPT_KEY_CLUSTER_TYPE)
+            .and_then(|s| s.parse::<ClusterType>().ok())
     }
 
     fn change_tracking_enabled(&self) -> bool {

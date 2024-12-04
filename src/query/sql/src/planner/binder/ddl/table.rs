@@ -16,13 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
+use databend_common_ast::ast::{AddColumnOption as AstAddColumnOption, Expr};
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
-use databend_common_ast::ast::ClusterType;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -85,7 +85,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
-use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::{is_reserved_opt_key, ClusterType};
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -1081,6 +1081,41 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_recluster_table(
+        &mut self,
+        bind_context: &mut BindContext,
+        catalog: String,
+        database: String,
+        table: String,
+        limit: Option<usize>,
+        selection: &Option<Expr>,
+    ) -> Result<SExpr> {
+        let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
+        match tbl.cluster_type() {
+            Some(ClusterType::Linear) => {
+                let recluster = RelOperator::Recluster(Recluster {
+                    catalog,
+                    database,
+                    table,
+                    limit: limit.map(|v| v as usize),
+                    selection: selection.clone(),
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+            },
+            Some(ClusterType::Hilbert) => {
+                
+            },
+            None => {
+                return Err(ErrorCode::UnclusteredTable(format!(
+                    "Unclustered table '{}.{}'",
+                    database, table,
+                )));
+            }
+        }
+        todo!()
+    }
+
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_rename_table(
         &mut self,
         stmt: &RenameTableStmt,
@@ -1629,7 +1664,7 @@ impl Binder {
         } = cluster_opt;
 
         let expr_len = cluster_exprs.len();
-        if matches!(cluster_type, ClusterType::Hilbert) {
+        if matches!(cluster_type, AstClusterType::Hilbert) {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
 

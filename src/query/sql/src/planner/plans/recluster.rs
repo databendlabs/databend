@@ -12,25 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use educe::Educe;
+use databend_common_ast::ast::Expr;
 use databend_common_catalog::plan::Filters;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Educe)]
+#[educe(Eq, Hash)]
 pub struct Recluster {
     pub catalog: String,
     pub database: String,
     pub table: String,
 
     pub limit: Option<usize>,
-    pub filters: Option<Filters>,
-}
-
-impl std::hash::Hash for Recluster {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.table.hash(state);
-    }
+    #[educe(Eq(ignore), Hash(ignore))]
+    pub selection: Option<Expr>,
 }
 
 impl Operator for Recluster {
