@@ -224,7 +224,6 @@ impl PushDownInfo {
                 if !TopK::support_type(data_type) {
                     return None;
                 }
-
                 let leaf_fields = schema.leaf_fields();
                 leaf_fields
                     .iter()
