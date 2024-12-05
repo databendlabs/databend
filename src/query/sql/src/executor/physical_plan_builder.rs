@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
@@ -30,8 +28,6 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::RelOperator;
-use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct PhysicalPlanBuilder {
@@ -39,10 +35,6 @@ pub struct PhysicalPlanBuilder {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) func_ctx: FunctionContext,
     pub(crate) dry_run: bool,
-    // Record cte_idx and the cte's output columns
-    pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
-    // The used column offsets of each materialized cte.
-    pub(crate) cet_used_column_offsets: HashMap<IndexType, HashSet<usize>>,
     // DataMutation info, used to build MergeInto physical plan
     pub(crate) mutation_build_info: Option<MutationBuildInfo>,
 }
@@ -55,8 +47,6 @@ impl PhysicalPlanBuilder {
             ctx,
             func_ctx,
             dry_run,
-            cte_output_columns: Default::default(),
-            cet_used_column_offsets: Default::default(),
             mutation_build_info: None,
         }
     }
@@ -114,10 +104,6 @@ impl PhysicalPlanBuilder {
             RelOperator::ProjectSet(project_set) => {
                 self.build_project_set(s_expr, project_set, required, stat_info)
                     .await
-            }
-            RelOperator::CteScan(cte_scan) => self.build_cte_scan(cte_scan, required).await,
-            RelOperator::MaterializedCte(cte) => {
-                self.build_materialized_cte(s_expr, cte, required).await
             }
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await

@@ -822,11 +822,16 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
 
+<<<<<<< HEAD
     pub fn get_query_max_failures(&self) -> Result<u64> {
         self.try_get_u64("query_max_failures")
     }
 
     pub fn set_query_max_failures(&self, val: u64) -> Result<()> {
         self.try_set_u64("query_max_failures", val)
+=======
+    pub fn get_persist_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("persist_materialized_cte")? != 0)
+>>>>>>> main
     }
 }
