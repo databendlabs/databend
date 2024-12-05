@@ -74,14 +74,13 @@ impl BinaryColumn {
 
     pub fn index(&self, index: usize) -> Option<&[u8]> {
         if index + 1 < self.offsets.len() {
-            Some(&self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)])
+            Some(&self.value(index))
         } else {
             None
         }
     }
 
     pub fn value(&self, index: usize) -> &[u8] {
-        assert!(index + 1 < self.offsets.len());
         &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }
 
@@ -92,7 +91,13 @@ impl BinaryColumn {
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
         let start = *self.offsets.get_unchecked(index) as usize;
         let end = *self.offsets.get_unchecked(index + 1) as usize;
-        self.data.get_unchecked(start..end)
+        // here we use checked slice to avoid UB
+        // Less  regressed perfs:
+        // bench_kernels/binary_sum_len_unchecked/20
+        //                     time:   [45.234 µs 45.278 µs 45.312 µs]
+        //                     change: [+1.4430% +1.5796% +1.7344%] (p = 0.00 < 0.05)
+        //                     Performance has regressed.
+        &self.data[start..end]
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
