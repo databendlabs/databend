@@ -12,23 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The client watch a key range and get notified when the key range changes.
-
-mod command;
-mod desc;
-mod id;
-mod stream;
-mod stream_sender;
-mod subscriber;
-mod subscriber_handle;
-
-use std::collections::Bound;
-
-pub use desc::WatchDesc;
-pub use id::WatcherId;
-pub(crate) use stream::WatchStream;
-pub(crate) use stream_sender::StreamSender;
-pub(crate) use subscriber::EventSubscriber;
-pub(crate) use subscriber_handle::SubscriberHandle;
-
-pub(crate) type KeyRange = (Bound<String>, Bound<String>);
+pub type WatcherId = i64;

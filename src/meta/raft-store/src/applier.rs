@@ -119,9 +119,9 @@ where SM: StateMachineApi + 'static
         };
 
         // Send queued change events to subscriber
-        if let Some(subscriber) = self.sm.get_subscriber() {
+        if let Some(sender) = self.sm.event_sender() {
             for event in self.changes.drain(..) {
-                subscriber.kv_changed(event);
+                sender.send(event);
             }
         }
 
