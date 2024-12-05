@@ -478,51 +478,47 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        let order_by = scan
-            .order_by
-            .clone()
-            .map(|items| {
-                items
-                    .into_iter()
-                    .map(|item| {
-                        let metadata = self.metadata.read();
-                        let column = metadata.column(item.index);
-                        let (name, data_type) = match column {
-                            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                column_name,
-                                data_type,
-                                ..
-                            }) => (column_name.clone(), DataType::from(data_type)),
-                            ColumnEntry::DerivedColumn(DerivedColumn {
-                                alias, data_type, ..
-                            }) => (alias.clone(), data_type.clone()),
-                            ColumnEntry::InternalColumn(TableInternalColumn {
-                                internal_column,
-                                ..
-                            }) => (
-                                internal_column.column_name().to_owned(),
-                                internal_column.data_type(),
-                            ),
-                            ColumnEntry::VirtualColumn(VirtualColumn {
-                                column_name,
-                                data_type,
-                                ..
-                            }) => (column_name.clone(), DataType::from(data_type)),
-                        };
-
-                        // sort item is already a column
-                        let scalar = RemoteExpr::ColumnRef {
-                            span: None,
-                            id: name.clone(),
+        let order_by = scan.order_by.clone().map(|items| {
+            items
+                .into_iter()
+                .filter_map(|item| {
+                    let metadata = self.metadata.read();
+                    let column = metadata.column(item.index);
+                    let (name, data_type) = match column {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn {
+                            column_name,
                             data_type,
-                            display_name: name,
-                        };
+                            ..
+                        }) => (column_name.clone(), DataType::from(data_type)),
+                        ColumnEntry::InternalColumn(TableInternalColumn {
+                            internal_column,
+                            ..
+                        }) => (
+                            internal_column.column_name().to_owned(),
+                            internal_column.data_type(),
+                        ),
+                        ColumnEntry::VirtualColumn(VirtualColumn {
+                            column_name,
+                            data_type,
+                            ..
+                        }) => (column_name.clone(), DataType::from(data_type)),
+                        ColumnEntry::DerivedColumn(_) => {
+                            return None;
+                        }
+                    };
 
-                        Ok((scalar, item.asc, item.nulls_first))
-                    })
-                    .collect::<Result<Vec<_>>>()
-            })
-            .transpose()?;
+                    // sort item is already a column
+                    let scalar = RemoteExpr::ColumnRef {
+                        span: None,
+                        id: name.clone(),
+                        data_type,
+                        display_name: name,
+                    };
+
+                    Some((scalar, item.asc, item.nulls_first))
+                })
+                .collect::<Vec<_>>()
+        });
 
         let virtual_column = self.build_virtual_column(&scan.columns);
 

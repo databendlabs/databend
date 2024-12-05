@@ -224,21 +224,17 @@ impl PushDownInfo {
                 if !TopK::support_type(data_type) {
                     return None;
                 }
-
                 let leaf_fields = schema.leaf_fields();
-                let (leaf_id, f) = leaf_fields
+                leaf_fields
                     .iter()
                     .enumerate()
                     .find(|&(_, p)| p.name() == id)
-                    .unwrap();
-
-                let top_k = TopK {
-                    limit: self.limit.unwrap(),
-                    field: f.clone(),
-                    asc: order.1,
-                    leaf_id,
-                };
-                Some(top_k)
+                    .map(|(leaf_id, f)| TopK {
+                        limit: self.limit.unwrap(),
+                        field: f.clone(),
+                        asc: order.1,
+                        leaf_id,
+                    })
             } else {
                 None
             }
