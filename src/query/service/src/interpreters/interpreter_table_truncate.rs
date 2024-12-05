@@ -98,7 +98,7 @@ impl Interpreter for TruncateTableInterpreter {
             let settings = self.ctx.get_settings();
             let flight_params = FlightParams {
                 timeout: settings.get_flight_client_timeout()?,
-                retry_times: settings.get_max_flight_retry_times()?,
+                retry_times: settings.get_flight_max_retry_times()?,
                 retry_interval: settings.get_flight_retry_interval()?,
             };
             cluster

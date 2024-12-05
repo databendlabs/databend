@@ -958,17 +958,17 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("max_flight_connection_retry_times", DefaultSettingValue {
+                ("flight_connection_max_retry_times", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "The maximum retry count for cluster flight. Disable if 0.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=30)),
+                    range: Some(SettingRange::Numeric(0..=10)),
                 }),
                 ("flight_connection_retry_interval", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "The retry interval of cluster flight is in seconds.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=900)),
+                    range: Some(SettingRange::Numeric(0..=30)),
                 }),
             ]);
 

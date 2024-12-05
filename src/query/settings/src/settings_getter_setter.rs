@@ -826,11 +826,11 @@ impl Settings {
         Ok(self.try_get_u64("persist_materialized_cte")? != 0)
     }
 
-    pub fn get_flight_retry_interval(&self) -> Result<u64> {
-        self.try_get_u64("flight_connection_retry_interval")
+    pub fn get_flight_max_retry_times(&self) -> Result<u64> {
+        self.try_get_u64("flight_connection_max_retry_times")
     }
 
-    pub fn get_max_flight_retry_times(&self) -> Result<u64> {
-        self.try_get_u64("max_flight_connection_retry_times")
+    pub fn get_flight_retry_interval(&self) -> Result<u64> {
+        self.try_get_u64("flight_connection_retry_interval")
     }
 }
