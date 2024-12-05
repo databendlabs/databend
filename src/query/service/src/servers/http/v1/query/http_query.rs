@@ -531,12 +531,10 @@ impl HttpQuery {
         let tenant = session.get_current_tenant();
         let user_name = session.get_current_user()?.name;
 
-        let has_temp_table_before_run = if let Some(cid) = session.get_client_session_id() {
+        if let Some(cid) = session.get_client_session_id() {
             ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
-            true
-        } else {
-            false
         };
+        let has_temp_table_before_run = !session.temp_tbl_mgr().lock().is_empty();
         http_query_runtime_instance.runtime().try_spawn(
             async move {
                 let state = state_clone.clone();
@@ -671,7 +669,7 @@ impl HttpQuery {
                     let mut guard = self.has_temp_table_after_run.lock();
                     match *guard {
                         None => {
-                            let not_empty = !session_state.temp_tbl_mgr.lock().is_empty().0;
+                            let not_empty = !session_state.temp_tbl_mgr.lock().is_empty();
                             *guard = Some(not_empty);
                             ClientSessionManager::instance().on_query_finish(
                                 cid,
