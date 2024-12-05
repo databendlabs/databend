@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::{AddColumnOption as AstAddColumnOption, Expr};
+use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
@@ -82,10 +82,13 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
-use databend_storages_common_table_meta::table::{is_reserved_opt_key, ClusterType};
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -145,6 +148,7 @@ use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
+use crate::NameResolutionContext;
 use crate::Planner;
 use crate::SelectBuilder;
 
@@ -1044,6 +1048,7 @@ impl Binder {
                     table,
                     filters,
                     limit: limit.map(|v| v as usize),
+                    cluster_type: ClusterType::Linear,
                 });
                 let s_expr = SExpr::create_leaf(Arc::new(recluster));
                 Ok(Plan::ReclusterTable {
@@ -1083,33 +1088,48 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_recluster_table(
         &mut self,
-        bind_context: &mut BindContext,
         catalog: String,
         database: String,
         table: String,
         limit: Option<usize>,
-        selection: &Option<Expr>,
+        filters: Option<Filters>,
     ) -> Result<SExpr> {
         let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
-        match tbl.cluster_type() {
-            Some(ClusterType::Linear) => {
+        let Some(cluster_type) = tbl.cluster_type() else {
+            return Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table '{}.{}'",
+                database, table,
+            )));
+        };
+        match cluster_type {
+            ClusterType::Linear => {
                 let recluster = RelOperator::Recluster(Recluster {
                     catalog,
                     database,
                     table,
-                    limit: limit.map(|v| v as usize),
-                    selection: selection.clone(),
+                    limit,
+                    filters,
+                    cluster_type: ClusterType::Linear,
                 });
-                let s_expr = SExpr::create_leaf(Arc::new(recluster));
-            },
-            Some(ClusterType::Hilbert) => {
-                
-            },
-            None => {
-                return Err(ErrorCode::UnclusteredTable(format!(
-                    "Unclustered table '{}.{}'",
-                    database, table,
-                )));
+                let _ = SExpr::create_leaf(Arc::new(recluster));
+            }
+            ClusterType::Hilbert => {
+                let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+                let cluster_keys_len = ast_exprs.len();
+                let settings = Settings::create(Tenant::new_literal("dummy"));
+                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                let _ = ast_exprs.into_iter().fold(
+                    Vec::with_capacity(cluster_keys_len),
+                    |mut acc, mut ast| {
+                        let mut normalizer = IdentifierNormalizer {
+                            ctx: &name_resolution_ctx,
+                        };
+                        ast.drive_mut(&mut normalizer);
+                        acc.push(format!("{:#}", &ast));
+                        acc
+                    },
+                );
+                todo!()
             }
         }
         todo!()

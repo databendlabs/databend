@@ -4700,7 +4700,6 @@ dependencies = [
 name = "databend-enterprise-hilbert-clustering"
 version = "0.1.0"
 dependencies = [
- "async-backtrace",
  "async-trait",
  "databend-common-base",
 ]

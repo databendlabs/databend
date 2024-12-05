@@ -117,10 +117,20 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let tokens = tokenize_sql(sql)?;
+    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    parse_ast_exprs(ctx, table_meta, ast_exprs)
+}
+
+fn parse_ast_exprs(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    ast_exprs: Vec<AExpr>,
+) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -130,8 +140,6 @@ pub fn parse_exprs(
         false,
     )?;
 
-    let tokens = tokenize_sql(sql)?;
-    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
@@ -388,41 +396,11 @@ pub fn parse_lambda_expr(
 pub fn parse_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
-    cluster_key_str: &str,
+    ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = Settings::create(Tenant::new_literal("dummy"));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        true,
-    )?;
-
-    let tokens = tokenize_sql(cluster_key_str)?;
-    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    // unwrap tuple.
-    if ast_exprs.len() == 1 {
-        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
-            ast_exprs = exprs.clone();
-        }
-    } else {
-        // Defensive check:
-        // `ast_exprs` should always contain one element which can be one of the following:
-        // 1. A tuple of composite cluster keys
-        // 2. A single cluster key
-        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
-    }
-
-    let mut exprs = Vec::with_capacity(ast_exprs.len());
-    for ast in ast_exprs {
-        let (scalar, _) = *type_checker.resolve(&ast)?;
-        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
-
+    let exprs = parse_ast_exprs(ctx, table_meta, ast_exprs)?;
+    let mut res = Vec::with_capacity(exprs.len());
+    for expr in exprs {
         let inner_type = expr.data_type().remove_nullable();
         let mut should_wrapper = false;
         if inner_type == DataType::String {
@@ -457,40 +435,16 @@ pub fn parse_cluster_keys(
         } else {
             expr
         };
-        exprs.push(expr);
+        res.push(expr);
     }
-    Ok(exprs)
+    Ok(res)
 }
 
 pub fn parse_hilbert_cluster_key(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
-    cluster_key_str: &str,
+    ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = Settings::create(Tenant::new_literal("dummy"));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        true,
-    )?;
-
-    let tokens = tokenize_sql(cluster_key_str)?;
-    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    // unwrap tuple.
-    if ast_exprs.len() == 1 {
-        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
-            ast_exprs = exprs.clone();
-        }
-    } else {
-        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
-    }
-
     let expr_len = ast_exprs.len();
     if !(2..=5).contains(&expr_len) {
         return Err(ErrorCode::InvalidClusterKeys(
@@ -500,14 +454,11 @@ pub fn parse_hilbert_cluster_key(
 
     let mut max_size = 0;
     let mut byte_sizes = Vec::with_capacity(expr_len);
-    let mut exprs = Vec::with_capacity(expr_len);
-    for ast in ast_exprs {
-        let (scalar, _) = *type_checker.resolve(&ast)?;
-        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+    let mut exprs = parse_ast_exprs(ctx, table_meta, ast_exprs)?;
+    for expr in &exprs {
         let byte_size = hilbert_byte_size(expr.data_type())?;
         max_size = max_size.max(byte_size);
         byte_sizes.push(byte_size);
-        exprs.push(expr);
     }
 
     let max_size = max_size.min(8);

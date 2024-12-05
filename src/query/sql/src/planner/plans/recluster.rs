@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use educe::Educe;
-use databend_common_ast::ast::Expr;
 use databend_common_catalog::plan::Filters;
+use databend_storages_common_table_meta::table::ClusterType;
+use educe::Educe;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -28,7 +28,9 @@ pub struct Recluster {
 
     pub limit: Option<usize>,
     #[educe(Eq(ignore), Hash(ignore))]
-    pub selection: Option<Expr>,
+    pub filters: Option<Filters>,
+    #[educe(Hash(ignore))]
+    pub cluster_type: ClusterType,
 }
 
 impl Operator for Recluster {
