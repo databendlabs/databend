@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::mem;
 use std::sync::Arc;
 
 use borsh::BorshDeserialize;
@@ -166,19 +167,20 @@ where
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
         let tz = TimeZone::UTC;
-        let mut kvs = Vec::with_capacity(self.kvs.len());
-        for (key, value) in &self.kvs {
-            let v = V::upcast_scalar(value.clone());
+        let mut values = Vec::with_capacity(self.kvs.len());
+        let kvs = mem::take(&mut self.kvs);
+        for (key, value) in kvs.into_iter() {
+            let v = V::upcast_scalar(value);
             // NULL values are omitted from the output.
             if v == Scalar::Null {
                 continue;
             }
             let mut val = vec![];
             cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
-            kvs.push((key, val));
+            values.push((key, val));
         }
         let mut data = vec![];
-        jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut data).unwrap();
+        jsonb::build_object(values.iter().map(|(k, v)| (k, &v[..])), &mut data).unwrap();
 
         let object_value = Scalar::Variant(data);
         builder.push(object_value.as_ref());

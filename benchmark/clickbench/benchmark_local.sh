@@ -55,8 +55,9 @@ echo "Waiting on databend-query 10 seconds..."
 
 # Connect to databend-query
 
-export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
+export BENDSQL_DSN="databend://root:@localhost:8000?sslmode=disable"
 echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql
+export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
 
 # Create table
 if [[ -f "${BENCHMARK_DATASET}/create_local.sql" ]]; then

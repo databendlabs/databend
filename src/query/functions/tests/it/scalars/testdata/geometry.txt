@@ -1370,3 +1370,93 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))
+raw expr       : ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))
+checked expr   : st_area<Geometry>(to_geometry<String>("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))"))
+optimized expr : 1_f64
+output type    : Float64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 4, 4 4, 4 0, 0 0), (1 1, 1 2, 2 2, 2 1, 1 1))'))
+raw expr       : ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 4, 4 4, 4 0, 0 0), (1 1, 1 2, 2 2, 2 1, 1 1))'))
+checked expr   : st_area<Geometry>(to_geometry<String>("POLYGON((0 0, 0 4, 4 4, 4 0, 0 0), (1 1, 1 2, 2 2, 2 1, 1 1))"))
+optimized expr : 15_f64
+output type    : Float64
+output domain  : {15..=15}
+output         : 15
+
+
+ast            : ST_AREA(TO_GEOMETRY('MULTIPOLYGON(((0 0, 0 2, 2 2, 2 0, 0 0)), ((3 0, 3 2, 5 2, 5 0, 3 0)))'))
+raw expr       : ST_AREA(TO_GEOMETRY('MULTIPOLYGON(((0 0, 0 2, 2 2, 2 0, 0 0)), ((3 0, 3 2, 5 2, 5 0, 3 0)))'))
+checked expr   : st_area<Geometry>(to_geometry<String>("MULTIPOLYGON(((0 0, 0 2, 2 2, 2 0, 0 0)), ((3 0, 3 2, 5 2, 5 0, 3 0)))"))
+optimized expr : 8_f64
+output type    : Float64
+output domain  : {8..=8}
+output         : 8
+
+
+ast            : ST_AREA(TO_GEOMETRY('POINT(0 0)'))
+raw expr       : ST_AREA(TO_GEOMETRY('POINT(0 0)'))
+checked expr   : st_area<Geometry>(to_geometry<String>("POINT(0 0)"))
+optimized expr : 0_f64
+output type    : Float64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : ST_AREA(TO_GEOMETRY('LINESTRING(0 0, 1 1, 2 2)'))
+raw expr       : ST_AREA(TO_GEOMETRY('LINESTRING(0 0, 1 1, 2 2)'))
+checked expr   : st_area<Geometry>(to_geometry<String>("LINESTRING(0 0, 1 1, 2 2)"))
+optimized expr : 0_f64
+output type    : Float64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : ST_CONVEXHULL(TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_CONVEXHULL(TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_convexhull<Geometry>(to_geometry<String>("POINT(1 1)"))
+optimized expr : "POLYGON((1 1,1 1))"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POLYGON((1 1,1 1))'
+
+
+ast            : ST_CONVEXHULL(TO_GEOMETRY('MULTIPOINT((1 1), (0 0), (2 2), (1 2), (2 1))'))
+raw expr       : ST_CONVEXHULL(TO_GEOMETRY('MULTIPOINT((1 1), (0 0), (2 2), (1 2), (2 1))'))
+checked expr   : st_convexhull<Geometry>(to_geometry<String>("MULTIPOINT((1 1), (0 0), (2 2), (1 2), (2 1))"))
+optimized expr : "POLYGON((2 1,2 2,1 2,0 0,2 1))"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POLYGON((2 1,2 2,1 2,0 0,2 1))'
+
+
+ast            : ST_CONVEXHULL(TO_GEOMETRY('LINESTRING(0 0, 1 1, 0 2, 2 1)'))
+raw expr       : ST_CONVEXHULL(TO_GEOMETRY('LINESTRING(0 0, 1 1, 0 2, 2 1)'))
+checked expr   : st_convexhull<Geometry>(to_geometry<String>("LINESTRING(0 0, 1 1, 0 2, 2 1)"))
+optimized expr : "POLYGON((2 1,0 2,0 0,2 1))"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POLYGON((2 1,0 2,0 0,2 1))'
+
+
+ast            : ST_CONVEXHULL(TO_GEOMETRY('POLYGON((0 0, 0 2, 1 1, 2 2, 2 0, 0 0))'))
+raw expr       : ST_CONVEXHULL(TO_GEOMETRY('POLYGON((0 0, 0 2, 1 1, 2 2, 2 0, 0 0))'))
+checked expr   : st_convexhull<Geometry>(to_geometry<String>("POLYGON((0 0, 0 2, 1 1, 2 2, 2 0, 0 0))"))
+optimized expr : "POLYGON((2 0,2 2,0 2,0 0,2 0))"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POLYGON((2 0,2 2,0 2,0 0,2 0))'
+
+
+ast            : ST_CONVEXHULL(TO_GEOMETRY('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1, 2 2), POLYGON((3 0, 3 3, 6 3, 6 0, 3 0)))'))
+raw expr       : ST_CONVEXHULL(TO_GEOMETRY('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1, 2 2), POLYGON((3 0, 3 3, 6 3, 6 0, 3 0)))'))
+checked expr   : st_convexhull<Geometry>(to_geometry<String>("GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1, 2 2), POLYGON((3 0, 3 3, 6 3, 6 0, 3 0)))"))
+optimized expr : "POLYGON((6 0,6 3,3 3,0 0,6 0))"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POLYGON((6 0,6 3,3 3,0 0,6 0))'
+
+

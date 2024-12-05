@@ -52,7 +52,7 @@ esac
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
 
-export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443"
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443?login=disable"
 
 echo "Creating warehouse..."
 echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
