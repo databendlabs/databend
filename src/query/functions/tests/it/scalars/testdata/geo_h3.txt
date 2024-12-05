@@ -29,9 +29,8 @@ error:
 ast            : h3_to_geo(644325524701193974)
 raw expr       : h3_to_geo(644325524701193974)
 checked expr   : h3_to_geo<UInt64>(644325524701193974_u64)
-optimized expr : (37.7950661683_f64, 55.7129024314_f64)
 output type    : Tuple(Float64, Float64)
-output domain  : ({37.7950661683..=37.7950661683}, {55.7129024314..=55.7129024314})
+output domain  : ({-inf..=NaN}, {-inf..=NaN})
 output         : (37.7950661683, 55.7129024314)
 
 
@@ -88,9 +87,8 @@ error:
 ast            : h3_to_geo_boundary(644325524701193974)
 raw expr       : h3_to_geo_boundary(644325524701193974)
 checked expr   : h3_to_geo_boundary<UInt64>(644325524701193974_u64)
-optimized expr : [(37.7950581117, 55.7129002253), (37.7950650699, 55.7128971348), (37.7950731265, 55.7128993409), (37.7950742248, 55.7129046375), (37.7950672666, 55.712907728), (37.79505921, 55.7129055219)]
 output type    : Array(Tuple(Float64, Float64))
-output domain  : [({37.7950581117..=37.7950742248}, {55.7128971348..=55.712907728})]
+output domain  : [({-inf..=NaN}, {-inf..=NaN})]
 output         : [(37.7950581117, 55.7129002253), (37.7950650699, 55.7128971348), (37.7950731265, 55.7128993409), (37.7950742248, 55.7129046375), (37.7950672666, 55.712907728), (37.79505921, 55.7129055219)]
 
 
@@ -164,36 +162,36 @@ candidate functions:
 ast            : h3_k_ring(644325524701193974, 0)
 raw expr       : h3_k_ring(644325524701193974, 0)
 checked expr   : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, to_uint32<UInt8>(0_u8))
-optimized expr : [644325524701193974]
+optimized expr : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, 0_u32)
 output type    : Array(UInt64)
-output domain  : [{644325524701193974..=644325524701193974}]
+output domain  : [{0..=18446744073709551615}]
 output         : [644325524701193974]
 
 
 ast            : h3_k_ring(644325524701193974, 1)
 raw expr       : h3_k_ring(644325524701193974, 1)
 checked expr   : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, to_uint32<UInt8>(1_u8))
-optimized expr : [644325524701193974, 644325524701193899, 644325524701193869, 644325524701193970, 644325524701193968, 644325524701193972, 644325524701193897]
+optimized expr : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, 1_u32)
 output type    : Array(UInt64)
-output domain  : [{644325524701193869..=644325524701193974}]
+output domain  : [{0..=18446744073709551615}]
 output         : [644325524701193974, 644325524701193899, 644325524701193869, 644325524701193970, 644325524701193968, 644325524701193972, 644325524701193897]
 
 
 ast            : h3_k_ring(644325524701193974, 2)
 raw expr       : h3_k_ring(644325524701193974, 2)
 checked expr   : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, to_uint32<UInt8>(2_u8))
-optimized expr : [644325524701193974, 644325524701193899, 644325524701193869, 644325524701193970, 644325524701193968, 644325524701193972, 644325524701193897, 644325524701193896, 644325524701193898, 644325524701193868, 644325524701193864, 644325524701193865, 644325524701193940, 644325524701193971, 644325524701193969, 644325524701193973, 644325524701193755, 644325524701193754, 644325524701193901]
+optimized expr : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, 2_u32)
 output type    : Array(UInt64)
-output domain  : [{644325524701193754..=644325524701193974}]
+output domain  : [{0..=18446744073709551615}]
 output         : [644325524701193974, 644325524701193899, 644325524701193869, 644325524701193970, 644325524701193968, 644325524701193972, 644325524701193897, 644325524701193896, 644325524701193898, 644325524701193868, 644325524701193864, 644325524701193865, 644325524701193940, 644325524701193971, 644325524701193969, 644325524701193973, 644325524701193755, 644325524701193754, 644325524701193901]
 
 
 ast            : h3_k_ring(644325524701193974, 3)
 raw expr       : h3_k_ring(644325524701193974, 3)
 checked expr   : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, to_uint32<UInt8>(3_u8))
-optimized expr : [644325524701193974, 644325524701193899, 644325524701193869, 644325524701193970, 644325524701193968, 644325524701193972, 644325524701193897, 644325524701193896, 644325524701193898, 644325524701193868, 644325524701193864, 644325524701193865, 644325524701193940, 644325524701193971, 644325524701193969, 644325524701193973, 644325524701193755, 644325524701193754, 644325524701193901, 644325524701193900, 644325524701193902, 644325524701193861, 644325524701193857, 644325524701193870, 644325524701193866, 644325524701193867, 644325524701193942, 644325524701193936, 644325524701193941, 644325524701193926, 644325524701193924, 644325524701193954, 644325524701193958, 644325524701193753, 644325524701193752, 644325524701193758, 644325524701193747]
+optimized expr : h3_k_ring<UInt64, UInt32>(644325524701193974_u64, 3_u32)
 output type    : Array(UInt64)
-output domain  : [{644325524701193747..=644325524701193974}]
+output domain  : [{0..=18446744073709551615}]
 output         : [644325524701193974, 644325524701193899, 644325524701193869, 644325524701193970, 644325524701193968, 644325524701193972, 644325524701193897, 644325524701193896, 644325524701193898, 644325524701193868, 644325524701193864, 644325524701193865, 644325524701193940, 644325524701193971, 644325524701193969, 644325524701193973, 644325524701193755, 644325524701193754, 644325524701193901, 644325524701193900, 644325524701193902, 644325524701193861, 644325524701193857, 644325524701193870, 644325524701193866, 644325524701193867, 644325524701193942, 644325524701193936, 644325524701193941, 644325524701193926, 644325524701193924, 644325524701193954, 644325524701193958, 644325524701193753, 644325524701193752, 644325524701193758, 644325524701193747]
 
 
@@ -224,18 +222,17 @@ evaluation (internal):
 ast            : h3_is_valid(0)
 raw expr       : h3_is_valid(0)
 checked expr   : h3_is_valid<UInt64>(to_uint64<UInt8>(0_u8))
-optimized expr : false
+optimized expr : h3_is_valid<UInt64>(0_u64)
 output type    : Boolean
-output domain  : {FALSE}
+output domain  : {FALSE, TRUE}
 output         : false
 
 
 ast            : h3_is_valid(644325524701193974)
 raw expr       : h3_is_valid(644325524701193974)
 checked expr   : h3_is_valid<UInt64>(644325524701193974_u64)
-optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -274,9 +271,8 @@ error:
 ast            : h3_get_resolution(644325524701193974)
 raw expr       : h3_get_resolution(644325524701193974)
 checked expr   : h3_get_resolution<UInt64>(644325524701193974_u64)
-optimized expr : 15_u8
 output type    : UInt8
-output domain  : {15..=15}
+output domain  : {0..=255}
 output         : 15
 
 
@@ -306,27 +302,24 @@ evaluation (internal):
 ast            : h3_edge_length_m(0)
 raw expr       : h3_edge_length_m(0)
 checked expr   : h3_edge_length_m<UInt8>(0_u8)
-optimized expr : 1281256.010741364_f64
 output type    : Float64
-output domain  : {1281256.010741364..=1281256.010741364}
+output domain  : {-inf..=NaN}
 output         : 1281256.010741364
 
 
 ast            : h3_edge_length_m(1)
 raw expr       : h3_edge_length_m(1)
 checked expr   : h3_edge_length_m<UInt8>(1_u8)
-optimized expr : 483056.839071111_f64
 output type    : Float64
-output domain  : {483056.839071111..=483056.839071111}
+output domain  : {-inf..=NaN}
 output         : 483056.839071111
 
 
 ast            : h3_edge_length_m(15)
 raw expr       : h3_edge_length_m(15)
 checked expr   : h3_edge_length_m<UInt8>(15_u8)
-optimized expr : 0.5841686296_f64
 output type    : Float64
-output domain  : {0.5841686296..=0.5841686296}
+output domain  : {-inf..=NaN}
 output         : 0.5841686296
 
 
@@ -364,27 +357,24 @@ evaluation (internal):
 ast            : h3_edge_length_km(0)
 raw expr       : h3_edge_length_km(0)
 checked expr   : h3_edge_length_km<UInt8>(0_u8)
-optimized expr : 1281.2560107413_f64
 output type    : Float64
-output domain  : {1281.2560107413..=1281.2560107413}
+output domain  : {-inf..=NaN}
 output         : 1281.2560107413
 
 
 ast            : h3_edge_length_km(1)
 raw expr       : h3_edge_length_km(1)
 checked expr   : h3_edge_length_km<UInt8>(1_u8)
-optimized expr : 483.0568390711_f64
 output type    : Float64
-output domain  : {483.0568390711..=483.0568390711}
+output domain  : {-inf..=NaN}
 output         : 483.0568390711
 
 
 ast            : h3_edge_length_km(15)
 raw expr       : h3_edge_length_km(15)
 checked expr   : h3_edge_length_km<UInt8>(15_u8)
-optimized expr : 0.0005841686_f64
 output type    : Float64
-output domain  : {0.0005841686..=0.0005841686}
+output domain  : {-inf..=NaN}
 output         : 0.0005841686
 
 
@@ -430,9 +420,8 @@ error:
 ast            : h3_get_base_cell(644325524701193974)
 raw expr       : h3_get_base_cell(644325524701193974)
 checked expr   : h3_get_base_cell<UInt64>(644325524701193974_u64)
-optimized expr : 8_u8
 output type    : UInt8
-output domain  : {8..=8}
+output domain  : {0..=255}
 output         : 8
 
 
@@ -462,27 +451,24 @@ evaluation (internal):
 ast            : h3_hex_area_m2(0)
 raw expr       : h3_hex_area_m2(0)
 checked expr   : h3_hex_area_m2<UInt8>(0_u8)
-optimized expr : 4357449416078.39_f64
 output type    : Float64
-output domain  : {4357449416078.39..=4357449416078.39}
+output domain  : {-inf..=NaN}
 output         : 4357449416078.39
 
 
 ast            : h3_hex_area_m2(1)
 raw expr       : h3_hex_area_m2(1)
 checked expr   : h3_hex_area_m2<UInt8>(1_u8)
-optimized expr : 609788441794.134_f64
 output type    : Float64
-output domain  : {609788441794.134..=609788441794.134}
+output domain  : {-inf..=NaN}
 output         : 609788441794.134
 
 
 ast            : h3_hex_area_m2(15)
 raw expr       : h3_hex_area_m2(15)
 checked expr   : h3_hex_area_m2<UInt8>(15_u8)
-optimized expr : 0.8953115907_f64
 output type    : Float64
-output domain  : {0.8953115907..=0.8953115907}
+output domain  : {-inf..=NaN}
 output         : 0.8953115907
 
 
@@ -520,27 +506,24 @@ evaluation (internal):
 ast            : h3_hex_area_km2(0)
 raw expr       : h3_hex_area_km2(0)
 checked expr   : h3_hex_area_km2<UInt8>(0_u8)
-optimized expr : 4357449.416078383_f64
 output type    : Float64
-output domain  : {4357449.416078383..=4357449.416078383}
+output domain  : {-inf..=NaN}
 output         : 4357449.416078383
 
 
 ast            : h3_hex_area_km2(1)
 raw expr       : h3_hex_area_km2(1)
 checked expr   : h3_hex_area_km2<UInt8>(1_u8)
-optimized expr : 609788.441794133_f64
 output type    : Float64
-output domain  : {609788.441794133..=609788.441794133}
+output domain  : {-inf..=NaN}
 output         : 609788.441794133
 
 
 ast            : h3_hex_area_km2(15)
 raw expr       : h3_hex_area_km2(15)
 checked expr   : h3_hex_area_km2<UInt8>(15_u8)
-optimized expr : 0.0000008953_f64
 output type    : Float64
-output domain  : {0.0000008953..=0.0000008953}
+output domain  : {-inf..=NaN}
 output         : 0.0000008953
 
 
@@ -586,18 +569,16 @@ error:
 ast            : h3_indexes_are_neighbors(644325524701193974, 644325524701193897)
 raw expr       : h3_indexes_are_neighbors(644325524701193974, 644325524701193897)
 checked expr   : h3_indexes_are_neighbors<UInt64, UInt64>(644325524701193974_u64, 644325524701193897_u64)
-optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
 ast            : h3_indexes_are_neighbors(644325524701193974, 644325529094369568)
 raw expr       : h3_indexes_are_neighbors(644325524701193974, 644325529094369568)
 checked expr   : h3_indexes_are_neighbors<UInt64, UInt64>(644325524701193974_u64, 644325529094369568_u64)
-optimized expr : false
 output type    : Boolean
-output domain  : {FALSE}
+output domain  : {FALSE, TRUE}
 output         : false
 
 
@@ -636,9 +617,8 @@ error:
 ast            : h3_to_children(644325524701193897, 15)
 raw expr       : h3_to_children(644325524701193897, 15)
 checked expr   : h3_to_children<UInt64, UInt8>(644325524701193897_u64, 15_u8)
-optimized expr : [644325524701193897]
 output type    : Array(UInt64)
-output domain  : [{644325524701193897..=644325524701193897}]
+output domain  : [{0..=18446744073709551615}]
 output         : [644325524701193897]
 
 
@@ -693,18 +673,16 @@ error:
 ast            : h3_to_parent(635318325446452991, 14)
 raw expr       : h3_to_parent(635318325446452991, 14)
 checked expr   : h3_to_parent<UInt64, UInt8>(635318325446452991_u64, 14_u8)
-optimized expr : 0_u64
 output type    : UInt64
-output domain  : {0..=0}
+output domain  : {0..=18446744073709551615}
 output         : 0
 
 
 ast            : h3_to_parent(635318325446452991, 12)
 raw expr       : h3_to_parent(635318325446452991, 12)
 checked expr   : h3_to_parent<UInt64, UInt8>(635318325446452991_u64, 12_u8)
-optimized expr : 630814725819082751_u64
 output type    : UInt64
-output domain  : {630814725819082751..=630814725819082751}
+output domain  : {0..=18446744073709551615}
 output         : 630814725819082751
 
 
@@ -743,9 +721,8 @@ error:
 ast            : h3_to_string(635318325446452991)
 raw expr       : h3_to_string(635318325446452991)
 checked expr   : h3_to_string<UInt64>(635318325446452991_u64)
-optimized expr : "8d11aa6a38826ff"
 output type    : String
-output domain  : {"8d11aa6a38826ff"..="8d11aa6a38826ff"}
+output domain  : {""..}
 output         : '8d11aa6a38826ff'
 
 
@@ -828,9 +805,8 @@ error:
 ast            : h3_is_res_class_iii(635318325446452991)
 raw expr       : h3_is_res_class_iii(635318325446452991)
 checked expr   : h3_is_res_class_iii<UInt64>(635318325446452991_u64)
-optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -867,9 +843,8 @@ error:
 ast            : h3_is_pentagon(599119489002373119)
 raw expr       : h3_is_pentagon(599119489002373119)
 checked expr   : h3_is_pentagon<UInt64>(599119489002373119_u64)
-optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -906,9 +881,8 @@ error:
 ast            : h3_get_faces(599119489002373119)
 raw expr       : h3_get_faces(599119489002373119)
 checked expr   : h3_get_faces<UInt64>(599119489002373119_u64)
-optimized expr : [0, 1, 2, 3, 4]
 output type    : Array(UInt8)
-output domain  : [{0..=4}]
+output domain  : [{0..=255}]
 output         : [0, 1, 2, 3, 4]
 
 
@@ -945,9 +919,8 @@ error:
 ast            : h3_cell_area_m2(599119489002373119)
 raw expr       : h3_cell_area_m2(599119489002373119)
 checked expr   : h3_cell_area_m2<UInt64>(599119489002373119_u64)
-optimized expr : 127785582.6081088_f64
 output type    : Float64
-output domain  : {127785582.6081088..=127785582.6081088}
+output domain  : {-inf..=NaN}
 output         : 127785582.6081088
 
 
@@ -984,9 +957,8 @@ error:
 ast            : h3_cell_area_rads2(599119489002373119)
 raw expr       : h3_cell_area_rads2(599119489002373119)
 checked expr   : h3_cell_area_rads2<UInt64>(599119489002373119_u64)
-optimized expr : 0.0000031482_f64
 output type    : Float64
-output domain  : {0.0000031482..=0.0000031482}
+output domain  : {-inf..=NaN}
 output         : 0.0000031482
 
 
@@ -1031,9 +1003,8 @@ error:
 ast            : h3_to_center_child(599119489002373119, 15)
 raw expr       : h3_to_center_child(599119489002373119, 15)
 checked expr   : h3_to_center_child<UInt64, UInt8>(599119489002373119_u64, 15_u8)
-optimized expr : 644155484202336256_u64
 output type    : UInt64
-output domain  : {644155484202336256..=644155484202336256}
+output domain  : {0..=18446744073709551615}
 output         : 644155484202336256
 
 
@@ -1078,9 +1049,8 @@ error:
 ast            : h3_exact_edge_length_m(1319695429381652479)
 raw expr       : h3_exact_edge_length_m(1319695429381652479)
 checked expr   : h3_exact_edge_length_m<UInt64>(1319695429381652479_u64)
-optimized expr : 8267.3268326467_f64
 output type    : Float64
-output domain  : {8267.3268326467..=8267.3268326467}
+output domain  : {-inf..=NaN}
 output         : 8267.3268326467
 
 
@@ -1124,9 +1094,8 @@ error:
 ast            : h3_exact_edge_length_km(1319695429381652479)
 raw expr       : h3_exact_edge_length_km(1319695429381652479)
 checked expr   : h3_exact_edge_length_km<UInt64>(1319695429381652479_u64)
-optimized expr : 8.2673268326_f64
 output type    : Float64
-output domain  : {8.2673268326..=8.2673268326}
+output domain  : {-inf..=NaN}
 output         : 8.2673268326
 
 
@@ -1170,9 +1139,8 @@ error:
 ast            : h3_exact_edge_length_rads(1319695429381652479)
 raw expr       : h3_exact_edge_length_rads(1319695429381652479)
 checked expr   : h3_exact_edge_length_rads<UInt64>(1319695429381652479_u64)
-optimized expr : 0.0012976483_f64
 output type    : Float64
-output domain  : {0.0012976483..=0.0012976483}
+output domain  : {-inf..=NaN}
 output         : 0.0012976483
 
 
@@ -1200,9 +1168,8 @@ evaluation (internal):
 ast            : h3_num_hexagons(0)
 raw expr       : h3_num_hexagons(0)
 checked expr   : h3_num_hexagons<UInt8>(0_u8)
-optimized expr : 122_u64
 output type    : UInt64
-output domain  : {122..=122}
+output domain  : {0..=18446744073709551615}
 output         : 122
 
 
@@ -1217,9 +1184,8 @@ error:
 ast            : h3_num_hexagons(10)
 raw expr       : h3_num_hexagons(10)
 checked expr   : h3_num_hexagons<UInt8>(10_u8)
-optimized expr : 33897029882_u64
 output type    : UInt64
-output domain  : {33897029882..=33897029882}
+output domain  : {0..=18446744073709551615}
 output         : 33897029882
 
 
@@ -1263,9 +1229,8 @@ error:
 ast            : h3_line(599119489002373119, 599119491149856767)
 raw expr       : h3_line(599119489002373119, 599119491149856767)
 checked expr   : h3_line<UInt64, UInt64>(599119489002373119_u64, 599119491149856767_u64)
-optimized expr : [599119489002373119, 599119491149856767]
 output type    : Array(UInt64)
-output domain  : [{599119489002373119..=599119491149856767}]
+output domain  : [{0..=18446744073709551615}]
 output         : [599119489002373119, 599119491149856767]
 
 
@@ -1311,9 +1276,8 @@ error:
 ast            : h3_distance(599119489002373119, 599119491149856767)
 raw expr       : h3_distance(599119489002373119, 599119491149856767)
 checked expr   : h3_distance<UInt64, UInt64>(599119489002373119_u64, 599119491149856767_u64)
-optimized expr : 1_i32
 output type    : Int32
-output domain  : {1..=1}
+output domain  : {-2147483648..=2147483647}
 output         : 1
 
 
@@ -1351,9 +1315,9 @@ error:
 ast            : h3_hex_ring(599686042433355775, 0)
 raw expr       : h3_hex_ring(599686042433355775, 0)
 checked expr   : h3_hex_ring<UInt64, UInt32>(599686042433355775_u64, to_uint32<UInt8>(0_u8))
-optimized expr : [599686042433355775]
+optimized expr : h3_hex_ring<UInt64, UInt32>(599686042433355775_u64, 0_u32)
 output type    : Array(UInt64)
-output domain  : [{599686042433355775..=599686042433355775}]
+output domain  : [{0..=18446744073709551615}]
 output         : [599686042433355775]
 
 
@@ -1368,9 +1332,9 @@ error:
 ast            : h3_hex_ring(599686042433355775, 2)
 raw expr       : h3_hex_ring(599686042433355775, 2)
 checked expr   : h3_hex_ring<UInt64, UInt32>(599686042433355775_u64, to_uint32<UInt8>(2_u8))
-optimized expr : [599686018811035647, 599686034917163007, 599686029548453887, 599686032769679359, 599686198125920255, 599686040285872127, 599686041359613951, 599686039212130303, 599686023106002943, 599686027400970239, 599686013442326527, 599686012368584703]
+optimized expr : h3_hex_ring<UInt64, UInt32>(599686042433355775_u64, 2_u32)
 output type    : Array(UInt64)
-output domain  : [{599686012368584703..=599686198125920255}]
+output domain  : [{0..=18446744073709551615}]
 output         : [599686018811035647, 599686034917163007, 599686029548453887, 599686032769679359, 599686198125920255, 599686040285872127, 599686041359613951, 599686039212130303, 599686023106002943, 599686027400970239, 599686013442326527, 599686012368584703]
 
 
@@ -1401,9 +1365,8 @@ error:
 ast            : h3_get_unidirectional_edge(644325524701193897, 644325524701193754)
 raw expr       : h3_get_unidirectional_edge(644325524701193897, 644325524701193754)
 checked expr   : h3_get_unidirectional_edge<UInt64, UInt64>(644325524701193897_u64, 644325524701193754_u64)
-optimized expr : 1581074247194257065_u64
 output type    : UInt64
-output domain  : {1581074247194257065..=1581074247194257065}
+output domain  : {0..=18446744073709551615}
 output         : 1581074247194257065
 
 
@@ -1433,18 +1396,17 @@ evaluation (internal):
 ast            : h3_unidirectional_edge_is_valid(0)
 raw expr       : h3_unidirectional_edge_is_valid(0)
 checked expr   : h3_unidirectional_edge_is_valid<UInt64>(to_uint64<UInt8>(0_u8))
-optimized expr : false
+optimized expr : h3_unidirectional_edge_is_valid<UInt64>(0_u64)
 output type    : Boolean
-output domain  : {FALSE}
+output domain  : {FALSE, TRUE}
 output         : false
 
 
 ast            : h3_unidirectional_edge_is_valid(1248204388774707199)
 raw expr       : h3_unidirectional_edge_is_valid(1248204388774707199)
 checked expr   : h3_unidirectional_edge_is_valid<UInt64>(1248204388774707199_u64)
-optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -1480,9 +1442,8 @@ error:
 ast            : h3_get_origin_index_from_unidirectional_edge(1248204388774707199)
 raw expr       : h3_get_origin_index_from_unidirectional_edge(1248204388774707199)
 checked expr   : h3_get_origin_index_from_unidirectional_edge<UInt64>(1248204388774707199_u64)
-optimized expr : 599686042433355775_u64
 output type    : UInt64
-output domain  : {599686042433355775..=599686042433355775}
+output domain  : {0..=18446744073709551615}
 output         : 599686042433355775
 
 
@@ -1518,9 +1479,8 @@ error:
 ast            : h3_get_destination_index_from_unidirectional_edge(1248204388774707199)
 raw expr       : h3_get_destination_index_from_unidirectional_edge(1248204388774707199)
 checked expr   : h3_get_destination_index_from_unidirectional_edge<UInt64>(1248204388774707199_u64)
-optimized expr : 599686043507097599_u64
 output type    : UInt64
-output domain  : {599686043507097599..=599686043507097599}
+output domain  : {0..=18446744073709551615}
 output         : 599686043507097599
 
 
@@ -1556,9 +1516,8 @@ error:
 ast            : h3_get_indexes_from_unidirectional_edge(1248204388774707199)
 raw expr       : h3_get_indexes_from_unidirectional_edge(1248204388774707199)
 checked expr   : h3_get_indexes_from_unidirectional_edge<UInt64>(1248204388774707199_u64)
-optimized expr : (599686042433355775_u64, 599686043507097599_u64)
 output type    : Tuple(UInt64, UInt64)
-output domain  : ({599686042433355775..=599686042433355775}, {599686043507097599..=599686043507097599})
+output domain  : ({0..=18446744073709551615}, {0..=18446744073709551615})
 output         : (599686042433355775, 599686043507097599)
 
 
@@ -1594,9 +1553,8 @@ error:
 ast            : h3_get_unidirectional_edges_from_hexagon(644325524701193754)
 raw expr       : h3_get_unidirectional_edges_from_hexagon(644325524701193754)
 checked expr   : h3_get_unidirectional_edges_from_hexagon<UInt64>(644325524701193754_u64)
-optimized expr : [1292843871042545178, 1364901465080473114, 1436959059118401050, 1509016653156328986, 1581074247194256922, 1653131841232184858]
 output type    : Array(UInt64)
-output domain  : [{1292843871042545178..=1653131841232184858}]
+output domain  : [{0..=18446744073709551615}]
 output         : [1292843871042545178, 1364901465080473114, 1436959059118401050, 1509016653156328986, 1581074247194256922, 1653131841232184858]
 
 
@@ -1632,9 +1590,8 @@ error:
 ast            : h3_get_unidirectional_edge_boundary(1248204388774707199)
 raw expr       : h3_get_unidirectional_edge_boundary(1248204388774707199)
 checked expr   : h3_get_unidirectional_edge_boundary<UInt64>(1248204388774707199_u64)
-optimized expr : [(37.4201286776, -122.0377349642), (37.3375560843, -122.090428929)]
 output type    : Array(Tuple(Float64, Float64))
-output domain  : [({37.3375560843..=37.4201286776}, {-122.090428929..=-122.0377349642})]
+output domain  : [({-inf..=NaN}, {-inf..=NaN})]
 output         : [(37.4201286776, -122.0377349642), (37.3375560843, -122.090428929)]
 
 
@@ -1662,18 +1619,16 @@ evaluation (internal):
 ast            : h3_edge_angle(0)
 raw expr       : h3_edge_angle(0)
 checked expr   : h3_edge_angle<UInt8>(0_u8)
-optimized expr : 11.5225991443_f64
 output type    : Float64
-output domain  : {11.5225991443..=11.5225991443}
+output domain  : {-inf..=NaN}
 output         : 11.5225991443
 
 
 ast            : h3_edge_angle(10)
 raw expr       : h3_edge_angle(10)
 checked expr   : h3_edge_angle<UInt8>(10_u8)
-optimized expr : 0.0006822586_f64
 output type    : Float64
-output domain  : {0.0006822586..=0.0006822586}
+output domain  : {-inf..=NaN}
 output         : 0.0006822586
 
 

@@ -9,30 +9,18 @@ error:
 ast            : const_false AND CAST('1000' AS UINT32) = 1000
 raw expr       : and(const_false::Boolean, eq(CAST('1000' AS UInt32), 1000))
 checked expr   : and<Boolean, Boolean>(const_false, eq<UInt32, UInt32>(to_uint32<String>("1000"), 1000_u32))
-optimized expr : false
-evaluation:
-+--------+-------------+---------+
-|        | const_false | Output  |
-+--------+-------------+---------+
-| Type   | Boolean     | Boolean |
-| Domain | {FALSE}     | {FALSE} |
-| Row 0  | false       | false   |
-+--------+-------------+---------+
-evaluation (internal):
-+-------------+-----------------------+
-| Column      | Data                  |
-+-------------+-----------------------+
-| const_false | Boolean([0b_______0]) |
-| Output      | Boolean([0b_______0]) |
-+-------------+-----------------------+
+optimized expr : and<Boolean, Boolean>(false, eq<UInt32, UInt32>(to_uint32<String>("1000"), 1000_u32))
+output type    : Boolean
+output domain  : Unknown
+output         : false
 
 
 ast            : false AND CAST(str AS UINT32) = 1000
 raw expr       : and(false, eq(CAST(str::String AS UInt32), 1000))
 checked expr   : and<Boolean, Boolean>(false, eq<UInt32, UInt32>(to_uint32<String>(str), 1000_u32))
-optimized expr : false
+optimized expr : and<Boolean, Boolean>(false, eq<UInt32, UInt32>(to_uint32<String>("1000"), 1000_u32))
 output type    : Boolean
-output domain  : {FALSE}
+output domain  : Unknown
 output         : false
 
 

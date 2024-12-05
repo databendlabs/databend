@@ -191,30 +191,12 @@ evaluation (internal):
 +-----------+------------------------+
 
 
-ast            : if(cond_a, 1 / expr_a, expr_else)
-raw expr       : if(cond_a::Boolean, divide(1, expr_a::Int64 NULL), expr_else::Int64)
-checked expr   : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(CAST(1_u8 AS UInt8 NULL), expr_a), CAST(expr_else AS Float64 NULL))
-optimized expr : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(1_u8, expr_a), CAST(expr_else AS Float64 NULL))
-evaluation:
-+--------+---------------+------------------+-----------+--------------+
-|        | cond_a        | expr_a           | expr_else | Output       |
-+--------+---------------+------------------+-----------+--------------+
-| Type   | Boolean       | Int64 NULL       | Int64     | Float64 NULL |
-| Domain | {FALSE, TRUE} | {0..=4} ∪ {NULL} | {9..=12}  | Unknown      |
-| Row 0  | true          | 1                | 9         | 1            |
-| Row 1  | true          | NULL             | 10        | NULL         |
-| Row 2  | false         | 0                | 11        | 11           |
-| Row 3  | false         | 4                | 12        | 12           |
-+--------+---------------+------------------+-----------+--------------+
-evaluation (internal):
-+-----------+----------------------------------------------------------------------------+
-| Column    | Data                                                                       |
-+-----------+----------------------------------------------------------------------------+
-| cond_a    | Boolean([0b____0011])                                                      |
-| expr_a    | NullableColumn { column: Int64([1, 0, 0, 4]), validity: [0b____1101] }     |
-| expr_else | Int64([9, 10, 11, 12])                                                     |
-| Output    | NullableColumn { column: Float64([1, 0, 11, 12]), validity: [0b____1101] } |
-+-----------+----------------------------------------------------------------------------+
+error: 
+  --> SQL:1:14
+  |
+1 | if(cond_a, 1 / expr_a, expr_else)
+  |              ^ divided by zero while evaluating function `divide(1, NULL)` in expr `CAST(1 AS UInt8 NULL) / expr_a`, during run expr: `if(CAST(cond_a AS Boolean NULL), CAST(1 AS UInt8 NULL) / expr_a, CAST(expr_else AS Float64 NULL))`
+
 
 
 error: 

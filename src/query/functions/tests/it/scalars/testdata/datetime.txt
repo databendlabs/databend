@@ -117,9 +117,9 @@ evaluation (internal):
 ast            : to_date(-354286)
 raw expr       : to_date(minus(354286))
 checked expr   : to_date<Int64>(minus<UInt32>(354286_u32))
-optimized expr : -354285
+optimized expr : to_date<Int64>(-354286_i64)
 output type    : Date
-output domain  : {-354285..=-354285}
+output domain  : Unknown
 output         : '1000-01-01'
 
 
@@ -180,9 +180,9 @@ output         : '9999-12-31'
 ast            : to_date(2932897)
 raw expr       : to_date(2932897)
 checked expr   : to_date<Int64>(to_int64<UInt32>(2932897_u32))
-optimized expr : -354285
+optimized expr : to_date<Int64>(2932897_i64)
 output type    : Date
-output domain  : {-354285..=-354285}
+output domain  : Unknown
 output         : '1000-01-01'
 
 
@@ -221,27 +221,27 @@ error:
 ast            : add_years(to_date(0), 100)
 raw expr       : add_years(to_date(0), 100)
 checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 36525
+optimized expr : add_years<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {36525..=36525}
+output domain  : Unknown
 output         : '2070-01-01'
 
 
 ast            : add_months(to_date(0), 100)
 raw expr       : add_months(to_date(0), 100)
 checked expr   : add_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 3042
+optimized expr : add_months<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {3042..=3042}
+output domain  : Unknown
 output         : '1978-05-01'
 
 
 ast            : add_days(to_date(0), 100)
 raw expr       : add_days(to_date(0), 100)
 checked expr   : add_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 100
+optimized expr : add_days<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {100..=100}
+output domain  : Unknown
 output         : '1970-04-11'
 
 
@@ -266,36 +266,36 @@ output         : '1000-01-01'
 ast            : subtract_years(to_date(0), 100)
 raw expr       : subtract_years(to_date(0), 100)
 checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -36524
+optimized expr : subtract_years<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-36524..=-36524}
+output domain  : Unknown
 output         : '1870-01-01'
 
 
 ast            : subtract_quarters(to_date(0), 100)
 raw expr       : subtract_quarters(to_date(0), 100)
 checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -9131
+optimized expr : subtract_quarters<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-9131..=-9131}
+output domain  : Unknown
 output         : '1945-01-01'
 
 
 ast            : subtract_months(to_date(0), 100)
 raw expr       : subtract_months(to_date(0), 100)
 checked expr   : subtract_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -3044
+optimized expr : subtract_months<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-3044..=-3044}
+output domain  : Unknown
 output         : '1961-09-01'
 
 
 ast            : subtract_days(to_date(0), 100)
 raw expr       : subtract_days(to_date(0), 100)
 checked expr   : subtract_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -100
+optimized expr : subtract_days<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-100..=-100}
+output domain  : Unknown
 output         : '1969-09-23'
 
 
@@ -512,63 +512,63 @@ error:
 ast            : add_years(to_timestamp(0), 100)
 raw expr       : add_years(to_timestamp(0), 100)
 checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 3155760000000000
+optimized expr : add_years<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {3155760000000000..=3155760000000000}
+output domain  : Unknown
 output         : '2070-01-01 00:00:00.000000'
 
 
 ast            : add_quarters(to_timestamp(0), 100)
 raw expr       : add_quarters(to_timestamp(0), 100)
 checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 788918400000000
+optimized expr : add_quarters<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {788918400000000..=788918400000000}
+output domain  : Unknown
 output         : '1995-01-01 00:00:00.000000'
 
 
 ast            : add_months(to_timestamp(0), 100)
 raw expr       : add_months(to_timestamp(0), 100)
 checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 262828800000000
+optimized expr : add_months<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {262828800000000..=262828800000000}
+output domain  : Unknown
 output         : '1978-05-01 00:00:00.000000'
 
 
 ast            : add_days(to_timestamp(0), 100)
 raw expr       : add_days(to_timestamp(0), 100)
 checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 8640000000000
+optimized expr : add_days<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {8640000000000..=8640000000000}
+output domain  : Unknown
 output         : '1970-04-11 00:00:00.000000'
 
 
 ast            : add_hours(to_timestamp(0), 100)
 raw expr       : add_hours(to_timestamp(0), 100)
 checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 360000000000
+optimized expr : add_hours<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {360000000000..=360000000000}
+output domain  : Unknown
 output         : '1970-01-05 04:00:00.000000'
 
 
 ast            : add_minutes(to_timestamp(0), 100)
 raw expr       : add_minutes(to_timestamp(0), 100)
 checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 6000000000
+optimized expr : add_minutes<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {6000000000..=6000000000}
+output domain  : Unknown
 output         : '1970-01-01 01:40:00.000000'
 
 
 ast            : add_seconds(to_timestamp(0), 100)
 raw expr       : add_seconds(to_timestamp(0), 100)
 checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 100000000
+optimized expr : add_seconds<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {100000000..=100000000}
+output domain  : Unknown
 output         : '1970-01-01 00:01:40.000000'
 
 
@@ -593,63 +593,63 @@ output         : '1000-01-01 00:00:00.000000'
 ast            : subtract_years(to_timestamp(0), 100)
 raw expr       : subtract_years(to_timestamp(0), 100)
 checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -3155673600000000
+optimized expr : subtract_years<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-3155673600000000..=-3155673600000000}
+output domain  : Unknown
 output         : '1870-01-01 00:00:00.000000'
 
 
 ast            : subtract_quarters(to_timestamp(0), 100)
 raw expr       : subtract_quarters(to_timestamp(0), 100)
 checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -788918400000000
+optimized expr : subtract_quarters<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-788918400000000..=-788918400000000}
+output domain  : Unknown
 output         : '1945-01-01 00:00:00.000000'
 
 
 ast            : subtract_months(to_timestamp(0), 100)
 raw expr       : subtract_months(to_timestamp(0), 100)
 checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -263001600000000
+optimized expr : subtract_months<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-263001600000000..=-263001600000000}
+output domain  : Unknown
 output         : '1961-09-01 00:00:00.000000'
 
 
 ast            : subtract_days(to_timestamp(0), 100)
 raw expr       : subtract_days(to_timestamp(0), 100)
 checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -8640000000000
+optimized expr : subtract_days<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-8640000000000..=-8640000000000}
+output domain  : Unknown
 output         : '1969-09-23 00:00:00.000000'
 
 
 ast            : subtract_hours(to_timestamp(0), 100)
 raw expr       : subtract_hours(to_timestamp(0), 100)
 checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -360000000000
+optimized expr : subtract_hours<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-360000000000..=-360000000000}
+output domain  : Unknown
 output         : '1969-12-27 20:00:00.000000'
 
 
 ast            : subtract_minutes(to_timestamp(0), 100)
 raw expr       : subtract_minutes(to_timestamp(0), 100)
 checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -6000000000
+optimized expr : subtract_minutes<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-6000000000..=-6000000000}
+output domain  : Unknown
 output         : '1969-12-31 22:20:00.000000'
 
 
 ast            : subtract_seconds(to_timestamp(0), 100)
 raw expr       : subtract_seconds(to_timestamp(0), 100)
 checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -100000000
+optimized expr : subtract_seconds<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-100000000..=-100000000}
+output domain  : Unknown
 output         : '1969-12-31 23:58:20.000000'
 
 
@@ -1004,72 +1004,72 @@ error:
 ast            : date_add(year, 100, to_date(0))
 raw expr       : add_years(to_date(0), 100)
 checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 36525
+optimized expr : add_years<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {36525..=36525}
+output domain  : Unknown
 output         : '2070-01-01'
 
 
 ast            : date_add(quarter, 100, to_date(0))
 raw expr       : add_quarters(to_date(0), 100)
 checked expr   : add_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 9131
+optimized expr : add_quarters<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {9131..=9131}
+output domain  : Unknown
 output         : '1995-01-01'
 
 
 ast            : date_add(month, 100, to_date(0))
 raw expr       : add_months(to_date(0), 100)
 checked expr   : add_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 3042
+optimized expr : add_months<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {3042..=3042}
+output domain  : Unknown
 output         : '1978-05-01'
 
 
 ast            : date_add(day, 100, to_date(0))
 raw expr       : add_days(to_date(0), 100)
 checked expr   : add_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 100
+optimized expr : add_days<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {100..=100}
+output domain  : Unknown
 output         : '1970-04-11'
 
 
 ast            : date_sub(year, 100, to_date(0))
 raw expr       : subtract_years(to_date(0), 100)
 checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -36524
+optimized expr : subtract_years<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-36524..=-36524}
+output domain  : Unknown
 output         : '1870-01-01'
 
 
 ast            : date_sub(quarter, 100, to_date(0))
 raw expr       : subtract_quarters(to_date(0), 100)
 checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -9131
+optimized expr : subtract_quarters<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-9131..=-9131}
+output domain  : Unknown
 output         : '1945-01-01'
 
 
 ast            : date_sub(month, 100, to_date(0))
 raw expr       : subtract_months(to_date(0), 100)
 checked expr   : subtract_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -3044
+optimized expr : subtract_months<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-3044..=-3044}
+output domain  : Unknown
 output         : '1961-09-01'
 
 
 ast            : date_sub(day, 100, to_date(0))
 raw expr       : subtract_days(to_date(0), 100)
 checked expr   : subtract_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -100
+optimized expr : subtract_days<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-100..=-100}
+output domain  : Unknown
 output         : '1969-09-23'
 
 
@@ -1268,126 +1268,126 @@ error:
 ast            : date_add(year, 100, to_timestamp(0))
 raw expr       : add_years(to_timestamp(0), 100)
 checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 3155760000000000
+optimized expr : add_years<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {3155760000000000..=3155760000000000}
+output domain  : Unknown
 output         : '2070-01-01 00:00:00.000000'
 
 
 ast            : date_add(quarter, 100, to_timestamp(0))
 raw expr       : add_quarters(to_timestamp(0), 100)
 checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 788918400000000
+optimized expr : add_quarters<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {788918400000000..=788918400000000}
+output domain  : Unknown
 output         : '1995-01-01 00:00:00.000000'
 
 
 ast            : date_add(month, 100, to_timestamp(0))
 raw expr       : add_months(to_timestamp(0), 100)
 checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 262828800000000
+optimized expr : add_months<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {262828800000000..=262828800000000}
+output domain  : Unknown
 output         : '1978-05-01 00:00:00.000000'
 
 
 ast            : date_add(day, 100, to_timestamp(0))
 raw expr       : add_days(to_timestamp(0), 100)
 checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 8640000000000
+optimized expr : add_days<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {8640000000000..=8640000000000}
+output domain  : Unknown
 output         : '1970-04-11 00:00:00.000000'
 
 
 ast            : date_add(hour, 100, to_timestamp(0))
 raw expr       : add_hours(to_timestamp(0), 100)
 checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 360000000000
+optimized expr : add_hours<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {360000000000..=360000000000}
+output domain  : Unknown
 output         : '1970-01-05 04:00:00.000000'
 
 
 ast            : date_add(minute, 100, to_timestamp(0))
 raw expr       : add_minutes(to_timestamp(0), 100)
 checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 6000000000
+optimized expr : add_minutes<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {6000000000..=6000000000}
+output domain  : Unknown
 output         : '1970-01-01 01:40:00.000000'
 
 
 ast            : date_add(second, 100, to_timestamp(0))
 raw expr       : add_seconds(to_timestamp(0), 100)
 checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 100000000
+optimized expr : add_seconds<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {100000000..=100000000}
+output domain  : Unknown
 output         : '1970-01-01 00:01:40.000000'
 
 
 ast            : date_sub(year, 100, to_timestamp(0))
 raw expr       : subtract_years(to_timestamp(0), 100)
 checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -3155673600000000
+optimized expr : subtract_years<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-3155673600000000..=-3155673600000000}
+output domain  : Unknown
 output         : '1870-01-01 00:00:00.000000'
 
 
 ast            : date_sub(quarter, 100, to_timestamp(0))
 raw expr       : subtract_quarters(to_timestamp(0), 100)
 checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -788918400000000
+optimized expr : subtract_quarters<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-788918400000000..=-788918400000000}
+output domain  : Unknown
 output         : '1945-01-01 00:00:00.000000'
 
 
 ast            : date_sub(month, 100, to_timestamp(0))
 raw expr       : subtract_months(to_timestamp(0), 100)
 checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -263001600000000
+optimized expr : subtract_months<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-263001600000000..=-263001600000000}
+output domain  : Unknown
 output         : '1961-09-01 00:00:00.000000'
 
 
 ast            : date_sub(day, 100, to_timestamp(0))
 raw expr       : subtract_days(to_timestamp(0), 100)
 checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -8640000000000
+optimized expr : subtract_days<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-8640000000000..=-8640000000000}
+output domain  : Unknown
 output         : '1969-09-23 00:00:00.000000'
 
 
 ast            : date_sub(hour, 100, to_timestamp(0))
 raw expr       : subtract_hours(to_timestamp(0), 100)
 checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -360000000000
+optimized expr : subtract_hours<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-360000000000..=-360000000000}
+output domain  : Unknown
 output         : '1969-12-27 20:00:00.000000'
 
 
 ast            : date_sub(minute, 100, to_timestamp(0))
 raw expr       : subtract_minutes(to_timestamp(0), 100)
 checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -6000000000
+optimized expr : subtract_minutes<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-6000000000..=-6000000000}
+output domain  : Unknown
 output         : '1969-12-31 22:20:00.000000'
 
 
 ast            : date_sub(second, 100, to_timestamp(0))
 raw expr       : subtract_seconds(to_timestamp(0), 100)
 checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -100000000
+optimized expr : subtract_seconds<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-100000000..=-100000000}
+output domain  : Unknown
 output         : '1969-12-31 23:58:20.000000'
 
 
@@ -1724,72 +1724,72 @@ error:
 ast            : to_date(0) + interval 100 year
 raw expr       : add_years(to_date(0), 100)
 checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 36525
+optimized expr : add_years<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {36525..=36525}
+output domain  : Unknown
 output         : '2070-01-01'
 
 
 ast            : to_date(0) + interval 100 quarter
 raw expr       : add_quarters(to_date(0), 100)
 checked expr   : add_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 9131
+optimized expr : add_quarters<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {9131..=9131}
+output domain  : Unknown
 output         : '1995-01-01'
 
 
 ast            : to_date(0) + interval 100 month
 raw expr       : add_months(to_date(0), 100)
 checked expr   : add_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 3042
+optimized expr : add_months<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {3042..=3042}
+output domain  : Unknown
 output         : '1978-05-01'
 
 
 ast            : to_date(0) + interval 100 day
 raw expr       : add_days(to_date(0), 100)
 checked expr   : add_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 100
+optimized expr : add_days<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {100..=100}
+output domain  : Unknown
 output         : '1970-04-11'
 
 
 ast            : to_date(0) - interval 100 year
 raw expr       : subtract_years(to_date(0), 100)
 checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -36524
+optimized expr : subtract_years<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-36524..=-36524}
+output domain  : Unknown
 output         : '1870-01-01'
 
 
 ast            : to_date(0) - interval 100 quarter
 raw expr       : subtract_quarters(to_date(0), 100)
 checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -9131
+optimized expr : subtract_quarters<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-9131..=-9131}
+output domain  : Unknown
 output         : '1945-01-01'
 
 
 ast            : to_date(0) - interval 100 month
 raw expr       : subtract_months(to_date(0), 100)
 checked expr   : subtract_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -3044
+optimized expr : subtract_months<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-3044..=-3044}
+output domain  : Unknown
 output         : '1961-09-01'
 
 
 ast            : to_date(0) - interval 100 day
 raw expr       : subtract_days(to_date(0), 100)
 checked expr   : subtract_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -100
+optimized expr : subtract_days<Date, Int64>(0, 100_i64)
 output type    : Date
-output domain  : {-100..=-100}
+output domain  : Unknown
 output         : '1969-09-23'
 
 
@@ -1988,126 +1988,126 @@ error:
 ast            : to_timestamp(0) + interval 100 year
 raw expr       : add_years(to_timestamp(0), 100)
 checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 3155760000000000
+optimized expr : add_years<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {3155760000000000..=3155760000000000}
+output domain  : Unknown
 output         : '2070-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 quarter
 raw expr       : add_quarters(to_timestamp(0), 100)
 checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 788918400000000
+optimized expr : add_quarters<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {788918400000000..=788918400000000}
+output domain  : Unknown
 output         : '1995-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 month
 raw expr       : add_months(to_timestamp(0), 100)
 checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 262828800000000
+optimized expr : add_months<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {262828800000000..=262828800000000}
+output domain  : Unknown
 output         : '1978-05-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 day
 raw expr       : add_days(to_timestamp(0), 100)
 checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 8640000000000
+optimized expr : add_days<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {8640000000000..=8640000000000}
+output domain  : Unknown
 output         : '1970-04-11 00:00:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 hour
 raw expr       : add_hours(to_timestamp(0), 100)
 checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 360000000000
+optimized expr : add_hours<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {360000000000..=360000000000}
+output domain  : Unknown
 output         : '1970-01-05 04:00:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 minute
 raw expr       : add_minutes(to_timestamp(0), 100)
 checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 6000000000
+optimized expr : add_minutes<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {6000000000..=6000000000}
+output domain  : Unknown
 output         : '1970-01-01 01:40:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 second
 raw expr       : add_seconds(to_timestamp(0), 100)
 checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : 100000000
+optimized expr : add_seconds<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {100000000..=100000000}
+output domain  : Unknown
 output         : '1970-01-01 00:01:40.000000'
 
 
 ast            : to_timestamp(0) - interval 100 year
 raw expr       : subtract_years(to_timestamp(0), 100)
 checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -3155673600000000
+optimized expr : subtract_years<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-3155673600000000..=-3155673600000000}
+output domain  : Unknown
 output         : '1870-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) - interval 100 quarter
 raw expr       : subtract_quarters(to_timestamp(0), 100)
 checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -788918400000000
+optimized expr : subtract_quarters<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-788918400000000..=-788918400000000}
+output domain  : Unknown
 output         : '1945-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) - interval 100 month
 raw expr       : subtract_months(to_timestamp(0), 100)
 checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -263001600000000
+optimized expr : subtract_months<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-263001600000000..=-263001600000000}
+output domain  : Unknown
 output         : '1961-09-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) - interval 100 day
 raw expr       : subtract_days(to_timestamp(0), 100)
 checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -8640000000000
+optimized expr : subtract_days<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-8640000000000..=-8640000000000}
+output domain  : Unknown
 output         : '1969-09-23 00:00:00.000000'
 
 
 ast            : to_timestamp(0) - interval 100 hour
 raw expr       : subtract_hours(to_timestamp(0), 100)
 checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -360000000000
+optimized expr : subtract_hours<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-360000000000..=-360000000000}
+output domain  : Unknown
 output         : '1969-12-27 20:00:00.000000'
 
 
 ast            : to_timestamp(0) - interval 100 minute
 raw expr       : subtract_minutes(to_timestamp(0), 100)
 checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -6000000000
+optimized expr : subtract_minutes<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-6000000000..=-6000000000}
+output domain  : Unknown
 output         : '1969-12-31 22:20:00.000000'
 
 
 ast            : to_timestamp(0) - interval 100 second
 raw expr       : subtract_seconds(to_timestamp(0), 100)
 checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
-optimized expr : -100000000
+optimized expr : subtract_seconds<Timestamp, Int64>(0, 100_i64)
 output type    : Timestamp
-output domain  : {-100000000..=-100000000}
+output domain  : Unknown
 output         : '1969-12-31 23:58:20.000000'
 
 
@@ -2436,90 +2436,90 @@ evaluation (internal):
 ast            : to_yyyymm(to_date(18875))
 raw expr       : to_yyyymm(to_date(18875))
 checked expr   : to_yyyymm<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 202109_u32
+optimized expr : to_yyyymm<Date>(18875)
 output type    : UInt32
-output domain  : {202109..=202109}
+output domain  : {0..=4294967295}
 output         : 202109
 
 
 ast            : to_yyyymmdd(to_date(18875))
 raw expr       : to_yyyymmdd(to_date(18875))
 checked expr   : to_yyyymmdd<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 20210905_u32
+optimized expr : to_yyyymmdd<Date>(18875)
 output type    : UInt32
-output domain  : {20210905..=20210905}
+output domain  : {0..=4294967295}
 output         : 20210905
 
 
 ast            : to_yyyymmddhhmmss(to_date(18875))
 raw expr       : to_yyyymmddhhmmss(to_date(18875))
 checked expr   : to_yyyymmddhhmmss<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 20210905000000_u64
+optimized expr : to_yyyymmddhhmmss<Date>(18875)
 output type    : UInt64
-output domain  : {20210905000000..=20210905000000}
+output domain  : {0..=18446744073709551615}
 output         : 20210905000000
 
 
 ast            : to_year(to_date(18875))
 raw expr       : to_year(to_date(18875))
 checked expr   : to_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 2021_u16
+optimized expr : to_year<Date>(18875)
 output type    : UInt16
-output domain  : {2021..=2021}
+output domain  : {0..=65535}
 output         : 2021
 
 
 ast            : to_quarter(to_date(18875))
 raw expr       : to_quarter(to_date(18875))
 checked expr   : to_quarter<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 3_u8
+optimized expr : to_quarter<Date>(18875)
 output type    : UInt8
-output domain  : {3..=3}
+output domain  : {0..=255}
 output         : 3
 
 
 ast            : to_month(to_date(18875))
 raw expr       : to_month(to_date(18875))
 checked expr   : to_month<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 9_u8
+optimized expr : to_month<Date>(18875)
 output type    : UInt8
-output domain  : {9..=9}
+output domain  : {0..=255}
 output         : 9
 
 
 ast            : to_day_of_year(to_date(18875))
 raw expr       : to_day_of_year(to_date(18875))
 checked expr   : to_day_of_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 248_u16
+optimized expr : to_day_of_year<Date>(18875)
 output type    : UInt16
-output domain  : {248..=248}
+output domain  : {0..=65535}
 output         : 248
 
 
 ast            : to_day_of_month(to_date(18875))
 raw expr       : to_day_of_month(to_date(18875))
 checked expr   : to_day_of_month<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 5_u8
+optimized expr : to_day_of_month<Date>(18875)
 output type    : UInt8
-output domain  : {5..=5}
+output domain  : {0..=255}
 output         : 5
 
 
 ast            : to_day_of_week(to_date(18875))
 raw expr       : to_day_of_week(to_date(18875))
 checked expr   : to_day_of_week<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 7_u8
+optimized expr : to_day_of_week<Date>(18875)
 output type    : UInt8
-output domain  : {7..=7}
+output domain  : {0..=255}
 output         : 7
 
 
 ast            : to_week_of_year(to_date(18875))
 raw expr       : to_week_of_year(to_date(18875))
 checked expr   : to_week_of_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
-optimized expr : 35_u32
+optimized expr : to_week_of_year<Date>(18875)
 output type    : UInt32
-output domain  : {35..=35}
+output domain  : {0..=4294967295}
 output         : 35
 
 
@@ -3518,216 +3518,198 @@ output         : '2021-09-12'
 ast            : date_diff(year, to_date(0), to_date(10000))
 raw expr       : diff_years(to_date(10000), to_date(0))
 checked expr   : diff_years<Date, Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)), to_date<Int64>(to_int64<UInt8>(0_u8)))
-optimized expr : 27_i64
+optimized expr : diff_years<Date, Date>(10000, 0)
 output type    : Int64
-output domain  : {27..=27}
+output domain  : Unknown
 output         : 27
 
 
 ast            : date_diff(year, to_date(10000), to_date(0))
 raw expr       : diff_years(to_date(0), to_date(10000))
 checked expr   : diff_years<Date, Date>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_date<Int64>(to_int64<UInt16>(10000_u16)))
-optimized expr : -27_i64
+optimized expr : diff_years<Date, Date>(0, 10000)
 output type    : Int64
-output domain  : {-27..=-27}
+output domain  : Unknown
 output         : -27
 
 
 ast            : date_diff(year, to_date('2000-01-01'), to_date('2024-12-31'))
 raw expr       : diff_years(to_date('2024-12-31'), to_date('2000-01-01'))
 checked expr   : diff_years<Date, Date>(to_date<String>("2024-12-31"), to_date<String>("2000-01-01"))
-optimized expr : 24_i64
 output type    : Int64
-output domain  : {24..=24}
+output domain  : Unknown
 output         : 24
 
 
 ast            : date_diff(year, to_date('2023-12-31'), to_date('2024-01-01'))
 raw expr       : diff_years(to_date('2024-01-01'), to_date('2023-12-31'))
 checked expr   : diff_years<Date, Date>(to_date<String>("2024-01-01"), to_date<String>("2023-12-31"))
-optimized expr : 1_i64
 output type    : Int64
-output domain  : {1..=1}
+output domain  : Unknown
 output         : 1
 
 
 ast            : date_diff(year, to_date('2024-01-01'), to_date('2023-12-31'))
 raw expr       : diff_years(to_date('2023-12-31'), to_date('2024-01-01'))
 checked expr   : diff_years<Date, Date>(to_date<String>("2023-12-31"), to_date<String>("2024-01-01"))
-optimized expr : -1_i64
 output type    : Int64
-output domain  : {-1..=-1}
+output domain  : Unknown
 output         : -1
 
 
 ast            : date_diff(year, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_years(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_years<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 2_i64
 output type    : Int64
-output domain  : {2..=2}
+output domain  : Unknown
 output         : 2
 
 
 ast            : date_diff(year, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_years(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_years<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -1_i64
 output type    : Int64
-output domain  : {-1..=-1}
+output domain  : Unknown
 output         : -1
 
 
 ast            : date_diff(month, to_date(0), to_date(10000))
 raw expr       : diff_months(to_date(10000), to_date(0))
 checked expr   : diff_months<Date, Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)), to_date<Int64>(to_int64<UInt8>(0_u8)))
-optimized expr : 328_i64
+optimized expr : diff_months<Date, Date>(10000, 0)
 output type    : Int64
-output domain  : {328..=328}
+output domain  : Unknown
 output         : 328
 
 
 ast            : date_diff(month, to_date(10000), to_date(0))
 raw expr       : diff_months(to_date(0), to_date(10000))
 checked expr   : diff_months<Date, Date>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_date<Int64>(to_int64<UInt16>(10000_u16)))
-optimized expr : -328_i64
+optimized expr : diff_months<Date, Date>(0, 10000)
 output type    : Int64
-output domain  : {-328..=-328}
+output domain  : Unknown
 output         : -328
 
 
 ast            : date_diff(month, to_date('2000-01-01'), to_date('2024-12-31'))
 raw expr       : diff_months(to_date('2024-12-31'), to_date('2000-01-01'))
 checked expr   : diff_months<Date, Date>(to_date<String>("2024-12-31"), to_date<String>("2000-01-01"))
-optimized expr : 299_i64
 output type    : Int64
-output domain  : {299..=299}
+output domain  : Unknown
 output         : 299
 
 
 ast            : date_diff(month, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_months(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_months<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 16_i64
 output type    : Int64
-output domain  : {16..=16}
+output domain  : Unknown
 output         : 16
 
 
 ast            : date_diff(month, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_months(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_months<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -12_i64
 output type    : Int64
-output domain  : {-12..=-12}
+output domain  : Unknown
 output         : -12
 
 
 ast            : date_diff(day, to_date(0), to_date(10000))
 raw expr       : diff_days(to_date(10000), to_date(0))
 checked expr   : diff_days<Date, Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)), to_date<Int64>(to_int64<UInt8>(0_u8)))
-optimized expr : 10000_i64
+optimized expr : diff_days<Date, Date>(10000, 0)
 output type    : Int64
-output domain  : {10000..=10000}
+output domain  : Unknown
 output         : 10000
 
 
 ast            : date_diff(day, to_date(10000), to_date(0))
 raw expr       : diff_days(to_date(0), to_date(10000))
 checked expr   : diff_days<Date, Date>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_date<Int64>(to_int64<UInt16>(10000_u16)))
-optimized expr : -10000_i64
+optimized expr : diff_days<Date, Date>(0, 10000)
 output type    : Int64
-output domain  : {-10000..=-10000}
+output domain  : Unknown
 output         : -10000
 
 
 ast            : date_diff(day, to_date('2000-01-01'), to_date('2024-12-31'))
 raw expr       : diff_days(to_date('2024-12-31'), to_date('2000-01-01'))
 checked expr   : diff_days<Date, Date>(to_date<String>("2024-12-31"), to_date<String>("2000-01-01"))
-optimized expr : 9131_i64
 output type    : Int64
-output domain  : {9131..=9131}
+output domain  : Unknown
 output         : 9131
 
 
 ast            : date_diff(day, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_days(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_days<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 501_i64
 output type    : Int64
-output domain  : {501..=501}
+output domain  : Unknown
 output         : 501
 
 
 ast            : date_diff(day, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_days(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_days<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -366_i64
 output type    : Int64
-output domain  : {-366..=-366}
+output domain  : Unknown
 output         : -366
 
 
 ast            : date_diff(hour, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_hours(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_hours<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 12036_i64
 output type    : Int64
-output domain  : {12036..=12036}
+output domain  : Unknown
 output         : 12036
 
 
 ast            : date_diff(hour, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_hours(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_hours<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -8784_i64
 output type    : Int64
-output domain  : {-8784..=-8784}
+output domain  : Unknown
 output         : -8784
 
 
 ast            : date_diff(minute, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_minutes(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_minutes<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 722123_i64
 output type    : Int64
-output domain  : {722123..=722123}
+output domain  : Unknown
 output         : 722123
 
 
 ast            : date_diff(minute, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_minutes(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_minutes<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -527040_i64
 output type    : Int64
-output domain  : {-527040..=-527040}
+output domain  : Unknown
 output         : -527040
 
 
 ast            : date_diff(second, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_seconds(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_seconds<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 43327397_i64
 output type    : Int64
-output domain  : {43327397..=43327397}
+output domain  : Unknown
 output         : 43327397
 
 
 ast            : date_diff(second, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_seconds(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_seconds<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -31622400_i64
 output type    : Int64
-output domain  : {-31622400..=-31622400}
+output domain  : Unknown
 output         : -31622400
 
 
 ast            : date_diff(second, to_timestamp('2020-02-29 23:59:59'), to_timestamp('2019-02-28 23:59:59'))
 raw expr       : diff_seconds(to_timestamp('2019-02-28 23:59:59'), to_timestamp('2020-02-29 23:59:59'))
 checked expr   : diff_seconds<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59"), to_timestamp<String>("2020-02-29 23:59:59"))
-optimized expr : -31622400_i64
 output type    : Int64
-output domain  : {-31622400..=-31622400}
+output domain  : Unknown
 output         : -31622400
 
 

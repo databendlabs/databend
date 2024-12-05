@@ -22,14 +22,17 @@ use crate::EvalContext;
 pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
 ) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
-    move |arg1, ctx| {
-        let generics = ctx.generics.to_vec();
-        let iter = (0..ctx.num_rows).map(|index| {
-            let arg1 = unsafe { arg1.index_unchecked(index) };
-            func(arg1, ctx)
-        });
-        let col = O::column_from_iter(iter, &generics);
-        Value::Column(col)
+    move |arg1, ctx| match arg1 {
+        Value::Scalar(arg1) => {
+            let result = func(I1::to_scalar_ref(&arg1), ctx);
+            Value::Scalar(result)
+        }
+        Value::Column(arg1) => {
+            let generics = ctx.generics.to_vec();
+            let iter = I1::iter_column(&arg1).map(|arg1| func(arg1, ctx));
+            let col = O::column_from_iter(iter, &generics);
+            Value::Column(col)
+        }
     }
 }
 
@@ -39,15 +42,37 @@ pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     + Send
     + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
-    move |arg1, arg2, ctx| {
-        let generics = ctx.generics.to_vec();
-        let iter = (0..ctx.num_rows).map(|index| {
-            let arg1 = unsafe { arg1.index_unchecked(index) };
-            let arg2 = unsafe { arg2.index_unchecked(index) };
-            func(arg1, arg2, ctx)
-        });
-        let col = O::column_from_iter(iter, &generics);
-        Value::Column(col)
+    move |arg1, arg2, ctx| match (arg1, arg2) {
+        (Value::Scalar(arg1), Value::Scalar(arg2)) => {
+            let result = func(I1::to_scalar_ref(&arg1), I2::to_scalar_ref(&arg2), ctx);
+            Value::Scalar(result)
+        }
+        (Value::Scalar(arg1), Value::Column(arg2)) => {
+            let generics = ctx.generics.to_vec();
+            let iter = I2::iter_column(&arg2).map(|arg2| {
+                let arg1 = I1::to_scalar_ref(&arg1);
+                func(arg1, arg2, ctx)
+            });
+            let col = O::column_from_iter(iter, &generics);
+            Value::Column(col)
+        }
+        (Value::Column(arg1), Value::Scalar(arg2)) => {
+            let generics = ctx.generics.to_vec();
+            let iter = I1::iter_column(&arg1).map(|arg1| {
+                let arg2 = I2::to_scalar_ref(&arg2);
+                func(arg1, arg2, ctx)
+            });
+            let col = O::column_from_iter(iter, &generics);
+            Value::Column(col)
+        }
+        (Value::Column(arg1), Value::Column(arg2)) => {
+            let generics = ctx.generics.to_vec();
+            let iter = I1::iter_column(&arg1)
+                .zip(I2::iter_column(&arg2))
+                .map(|(arg1, arg2)| func(arg1, arg2, ctx));
+            let col = O::column_from_iter(iter, &generics);
+            Value::Column(col)
+        }
     }
 }
 
