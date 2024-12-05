@@ -54,7 +54,7 @@ enum State {
     Pass,
     /// This state means the processor will spill incoming blocks except the last block.
     Spill,
-
+    /// This state means the processor is restoring spilled blocks.
     Restore,
     /// Finish the process.
     Finish,
@@ -64,15 +64,18 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
     output_order_col: bool,
     limit: Option<usize>,
+    spiller: Arc<Spiller>,
 
     input_data: Vec<DataBlock>,
     output_data: VecDeque<DataBlock>,
-
     state: State,
-    spiller: Arc<Spiller>,
+
     simpler: Option<FixedRateSimpler<StdRng>>,
+    /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
+    /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
     bounds: Vec<Column>,
 
     batch_rows: usize,
@@ -83,8 +86,6 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     current: Vec<BoundBlockStream<A::Rows>>,
 
     output_merger: Option<Merger<A, BoundBlockStream<A::Rows>>>,
-
-    sort_desc: Arc<Vec<SortColumnDescription>>,
 }
 
 #[inline(always)]
@@ -132,7 +133,7 @@ where
                     return Ok(Event::NeedConsume);
                 }
                 State::Spill | State::Restore => {
-                    // todo
+                    // may should pull upstream?
                     self.input.set_not_need_data();
                     return Ok(Event::NeedConsume);
                 }
@@ -195,7 +196,6 @@ where
                     Some(None) => unreachable!(),
                     None => {
                         // If we get a memory block at initial state, it means we will never spill data.
-                        // debug_assert!(self.spiller.columns_layout.is_empty());
                         self.output_block(block);
                         self.state = State::Pass;
                         Ok(Event::NeedConsume)
@@ -237,10 +237,10 @@ where
                         .extend(self.input_data.drain(..).map(|data| {
                             BoundBlockStream::<A::Rows> {
                                 sort_desc: self.sort_desc.clone(),
-                                blocks: vec![Block {
-                                    readded: 0,
+                                blocks: vec![SpillableBlock {
+                                    processed: 0,
                                     location: None,
-                                    size: data.memory_size(),
+                                    rows: data.num_rows(),
                                     domain: get_domain(data.get_last_column()),
                                     data: Some(data),
                                 }]
@@ -294,6 +294,7 @@ where
             input,
             output,
             schema,
+            sort_desc,
             output_order_col,
             limit,
             input_data: Vec::new(),
@@ -307,11 +308,9 @@ where
             subsequent: Vec::new(),
             current: Vec::new(),
             output_merger: None,
-            sort_desc,
         }
     }
 
-    #[inline(always)]
     fn output_block(&self, mut block: DataBlock) {
         if !self.output_order_col {
             block.pop_columns(1);
@@ -328,14 +327,14 @@ where
 
         let blocks = if self.input_data.len() == 1 {
             let data = self.input_data.pop().unwrap();
-            vec![self.new_block(data).await?].into()
+            vec![self.new_spillable_block(data).await?].into()
         } else {
             let streams = self
                 .input_data
                 .drain(..)
-                .map(|b| SortRowsStream(Some(b)))
+                .map(DataBlockStream::new)
                 .collect();
-            let mut merger = Merger::<A, SortRowsStream>::create(
+            let mut merger = Merger::<A, _>::create(
                 self.schema.clone(),
                 streams,
                 self.sort_desc.clone(),
@@ -345,7 +344,8 @@ where
 
             let mut spilled = VecDeque::new();
             while let Some(block) = merger.next_block()? {
-                spilled.push_back(self.new_block(block).await?);
+                // TODO: We should use lazy spill, which will help reduce io.
+                spilled.push_back(self.new_spillable_block(block).await?);
             }
             debug_assert!(merger.is_finished());
             spilled
@@ -366,35 +366,34 @@ where
         }
 
         if self.output_merger.is_some() {
-            if self.restore_output().await? {
+            if self.restore_and_output().await? {
                 self.state = State::Finish;
             }
             return Ok(());
         }
 
         while self.current.is_empty() {
-            self.choice_list();
+            self.choice_streams_by_bound();
         }
 
         if self.current.len() > self.num_merge {
-            self.merge().await
+            self.merge_current().await
         } else {
-            if self.restore_output().await? {
+            if self.restore_and_output().await? {
                 self.state = State::Finish;
             }
             Ok(())
         }
     }
 
-    async fn merge(&mut self) -> Result<()> {
+    async fn merge_current(&mut self) -> Result<()> {
         let bound = self.current[0].bound.clone();
-        self.current.sort_by_key(|s| std::cmp::Reverse(s.len()));
         let streams = self
             .current
             .drain(self.current.len() - self.num_merge..)
             .collect();
 
-        let mut merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
+        let mut merger = Merger::<A, _>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
@@ -404,11 +403,11 @@ where
 
         let mut spilled = VecDeque::new();
         while let Some(data) = merger.async_next_block().await? {
-            spilled.push_back(self.new_block(data).await?);
+            spilled.push_back(self.new_spillable_block(data).await?);
         }
         debug_assert!(merger.is_finished());
 
-        self.current.push(BoundBlockStream::<A::Rows> {
+        self.current.insert(0, BoundBlockStream::<A::Rows> {
             sort_desc: self.sort_desc.clone(),
             blocks: spilled,
             bound,
@@ -420,7 +419,7 @@ where
         Ok(())
     }
 
-    async fn restore_output(&mut self) -> Result<bool> {
+    async fn restore_and_output(&mut self) -> Result<bool> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -437,7 +436,7 @@ where
                     return Ok(self.subsequent.is_empty());
                 }
 
-                let merger = Merger::<A, BoundBlockStream<A::Rows>>::create(
+                let merger = Merger::<A, _>::create(
                     self.schema.clone(),
                     mem::take(&mut self.current),
                     self.sort_desc.clone(),
@@ -461,7 +460,7 @@ where
         Ok(self.subsequent.is_empty())
     }
 
-    fn choice_list(&mut self) {
+    fn choice_streams_by_bound(&mut self) {
         debug_assert!(self.current.is_empty());
         debug_assert!(!self.subsequent.is_empty());
         let Some(bound) = self.next_bound() else {
@@ -472,7 +471,6 @@ where
             return;
         };
 
-        let bound = A::Rows::from_column(&bound, &self.sort_desc).unwrap();
         (self.current, self.subsequent) = self
             .subsequent
             .drain(..)
@@ -483,45 +481,41 @@ where
             .partition(|s| s.should_include_first());
     }
 
-    // fn subsequent_memory(&self) -> usize {
-    //     self.subsequent.iter().map(|s| s.memory_used()).sum()
-    // }
-
     fn input_full(&self) -> bool {
         let rows = self.input_data.iter().map(|b| b.num_rows()).sum::<usize>();
         rows >= self.num_merge * self.batch_rows
     }
 
-    async fn new_block(&mut self, block: DataBlock) -> Result<Block> {
-        let size = block.memory_size();
+    async fn new_spillable_block(&mut self, block: DataBlock) -> Result<SpillableBlock> {
+        let rows = block.num_rows();
         let domain = get_domain(block.get_last_column());
         let location = self.spiller.spill_unmanage(vec![block]).await?;
-        Ok(Block {
+        Ok(SpillableBlock {
             data: None,
-            size,
+            rows,
             domain,
             location: Some(location),
-            readded: 0,
+            processed: 0,
         })
     }
 
-    fn next_bound(&mut self) -> Option<Column> {
+    fn next_bound(&mut self) -> Option<A::Rows> {
         let bounds = self.bounds.last_mut()?;
-        match bounds.len() {
+        let bound = match bounds.len() {
             0 => unreachable!(),
-            1 => Some(self.bounds.pop().unwrap()),
+            1 => self.bounds.pop().unwrap(),
             _ => {
-                let bound = bounds.slice(0..1);
+                let bound = bounds.slice(0..1).maybe_gc();
                 *bounds = bounds.slice(1..bounds.len());
-                Some(bound)
+                bound
             }
-        }
+        };
+        Some(A::Rows::from_column(&bound, &self.sort_desc).unwrap())
     }
 
     fn determine_bounds(&mut self) -> Result<()> {
         let mut simpler = self.simpler.take().unwrap();
         simpler.compact_blocks(true);
-        //
         let simpled_rows = simpler.dense_blocks;
 
         match simpled_rows.len() {
@@ -543,7 +537,7 @@ where
                 let streams = simpled_rows
                     .into_iter()
                     .map(|block| {
-                        SortRowsStream(Some(
+                        DataBlockStream::new(
                             DataBlock::sort(
                                 &block,
                                 &[SortColumnDescription {
@@ -554,19 +548,14 @@ where
                                 None,
                             )
                             .unwrap(),
-                        ))
+                        )
                     })
                     .collect::<Vec<_>>();
 
                 let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
                 let sort_desc = Arc::new(vec![self.sort_desc[0].clone()]);
-                let mut merger = Merger::<A, SortRowsStream>::create(
-                    schema,
-                    streams,
-                    sort_desc,
-                    self.batch_rows,
-                    None,
-                );
+                let mut merger =
+                    Merger::<A, _>::create(schema, streams, sort_desc, self.batch_rows, None);
 
                 let mut blocks = Vec::new();
                 while let Some(block) = merger.next_block()? {
@@ -586,22 +575,16 @@ where
     }
 }
 
-struct Block {
+#[derive(Debug)]
+struct SpillableBlock {
     data: Option<DataBlock>,
-    size: usize,
+    rows: usize,
     location: Option<(Location, Layout)>,
     domain: Column,
-    readded: usize,
+    processed: usize,
 }
 
-impl Block {
-    // fn memory_size(&self) -> usize {
-    //     match self.data {
-    //         BlockData::Memory(b) => b.memory_size(),
-    //         BlockData::Spilled(_) => 0,
-    //     }
-    // }
-
+impl SpillableBlock {
     fn slice(&mut self, pos: usize) -> DataBlock {
         let data = self.data.as_ref().unwrap();
 
@@ -609,9 +592,9 @@ impl Block {
         let right = data.slice(pos..data.num_rows());
 
         self.domain = get_domain(right.get_last_column());
-        self.size = right.memory_size();
+        self.rows = right.num_rows();
         self.data = Some(right);
-        self.readded += pos;
+        self.processed += pos;
         left
     }
 
@@ -620,9 +603,10 @@ impl Block {
     }
 }
 
+/// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
 struct BoundBlockStream<R: Rows + Send> {
     sort_desc: Arc<Vec<SortColumnDescription>>,
-    blocks: VecDeque<Block>,
+    blocks: VecDeque<SpillableBlock>,
     bound: Option<R>,
     spiller: Arc<Spiller>,
 }
@@ -648,7 +632,7 @@ impl<R: Rows + Send> BoundBlockStream<R> {
         };
 
         match &self.bound {
-            Some(bound) => block.domain::<R>(&self.sort_desc).first() < bound.row(0),
+            Some(bound) => block.domain::<R>(&self.sort_desc).first() <= bound.row(0),
             None => true,
         }
     }
@@ -657,20 +641,12 @@ impl<R: Rows + Send> BoundBlockStream<R> {
         match &self.bound {
             Some(bound) => {
                 let block = self.blocks.front_mut().unwrap();
-
                 let data = block.data.as_ref().unwrap();
                 let rows = R::from_column(data.get_last_column(), &self.sort_desc).unwrap();
-
-                // todo binary_search
+                debug_assert!(rows.len() > 0);
+                debug_assert!(bound.len() == 1);
                 let bound = bound.row(0);
-
-                // let mut domain = rows.domain();
-                // let target = rows.row(i);
-                // while !domain.done() {
-                //     domain = rows.search(&target, domain);
-                // }
-
-                match (0..rows.len()).position(|i| rows.row(i) >= bound) {
+                match partition_point(&rows, &bound) {
                     Some(pos) => block.slice(pos),
                     None => {
                         let mut block = self.blocks.pop_front().unwrap();
@@ -693,24 +669,14 @@ impl<R: Rows + Send> BoundBlockStream<R> {
                 .spiller
                 .read_unmanage_spilled_file(&location.0, &location.1)
                 .await?;
-            block.data = Some(if block.readded != 0 {
-                data.slice(block.readded..data.num_columns())
+            block.data = Some(if block.processed != 0 {
+                data.slice(block.processed..data.num_columns())
             } else {
                 data
             });
         }
         Ok(())
     }
-
-    // fn need_restore(&self) -> bool {
-    //     self.blocks.front().map_or(false, |b| b.data.is_none())
-    // }
-
-    // fn memory_used(&self) -> usize {
-    //     self.blocks
-    //         .front()
-    //         .map_or(0, |b| if b.data.is_some() { b.size } else { 0 })
-    // }
 
     fn len(&self) -> usize {
         self.blocks.len()
@@ -721,38 +687,42 @@ impl<R: Rows + Send> BoundBlockStream<R> {
     }
 }
 
-// fn partition_point<R: Row>(&'a self, mut f: F) -> usize {
-//     let mut size = self.len();
-//     let mut left = 0;
-//     let mut right = size;
-//     while left < right {
-//         let mid = left + size / 2;
+/// partition_point find the first element that is greater than bound
+fn partition_point<'a, R: Rows>(list: &'a R, bound: &R::Item<'a>) -> Option<usize> {
+    if *bound >= list.last() {
+        return None;
+    }
 
-//         let cmp = f(unsafe { self.get_unchecked(mid) });
+    let mut size = list.len();
+    let mut left = 0;
+    let mut right = size;
+    while left < right {
+        let mid = left + size / 2;
+        if list.row(mid) <= *bound {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+        size = right - left;
+    }
+    Some(left)
+}
 
-//         left = if cmp == Less { mid + 1 } else { left };
-//         right = if cmp == Greater { mid } else { right };
-//         if cmp == Equal {
-//             unsafe { hint::assert_unchecked(mid < self.len()) };
-//             return Ok(mid);
-//         }
+struct DataBlockStream(Option<DataBlock>);
 
-//         size = right - left;
-//     }
-
-//     unsafe { hint::assert_unchecked(left <= self.len()) };
-//     Err(left)
-// }
-
-struct SortRowsStream(Option<DataBlock>);
-
-impl SortedStream for SortRowsStream {
+impl SortedStream for DataBlockStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         let data = self.0.take().map(|b| {
             let col = b.get_last_column().clone();
             (b, col)
         });
         Ok((data, false))
+    }
+}
+
+impl DataBlockStream {
+    fn new(data: DataBlock) -> Self {
+        Self(Some(data))
     }
 }
 
@@ -899,14 +869,14 @@ mod tests {
             let col = convert_rows(schema.clone(), &sort_desc, data.clone()).unwrap();
             data.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
             let domain = get_domain(data.get_last_column());
-            let size = data.memory_size();
+            let rows = data.num_rows();
 
-            Block {
+            SpillableBlock {
                 data: Some(data),
                 domain,
-                size,
+                rows,
                 location: None,
-                readded: 0,
+                processed: 0,
             }
         })
         .collect::<VecDeque<_>>();
@@ -920,11 +890,9 @@ mod tests {
 
         let (got, _) = stream.async_next().await?;
 
-        // println!("{got:?}");
-
         match want {
-            Some(col) => assert_eq!(got.unwrap().1, col),
-            None => assert!(got.is_none()),
+            Some(col) => assert_eq!(col, got.unwrap().1),
+            None => assert!(got.is_none(), "{:?}", &got),
         }
 
         Ok(())
@@ -956,16 +924,25 @@ mod tests {
                 sort_desc.clone(),
                 Int32Type::from_data(vec![5]),
                 4,
-                Some(Int32Type::from_data(vec![3])),
+                Some(Int32Type::from_data(vec![3, 5])),
             )
             .await?;
 
             run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
                 spiller.clone(),
                 sort_desc.clone(),
-                Int32Type::from_data(vec![3]),
+                Int32Type::from_data(vec![2]),
                 4,
                 None,
+            )
+            .await?;
+
+            run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Int32Type::from_data(vec![8]),
+                4,
+                Some(Int32Type::from_data(vec![3, 5, 7, 7])),
             )
             .await?;
         }
@@ -982,7 +959,7 @@ mod tests {
                 sort_desc.clone(),
                 StringType::from_data(vec!["f"]),
                 4,
-                Some(StringType::from_data(vec!["w", "h", "g"])),
+                Some(StringType::from_data(vec!["w", "h", "g", "f"])),
             )
             .await?;
         }

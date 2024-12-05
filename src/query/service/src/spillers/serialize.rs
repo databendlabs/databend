@@ -39,7 +39,7 @@ use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
 use parquet::format::FileMetaData;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Layout {
     ArrowIpc(Box<[usize]>),
     Parquet,
