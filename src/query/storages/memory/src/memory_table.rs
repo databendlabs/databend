@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,6 +51,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -263,6 +265,25 @@ impl Table for MemoryTable {
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         self.truncate();
         Ok(())
+    }
+
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
+        _change_type: Option<ChangeType>,
+    ) -> Result<Option<TableStatistics>> {
+        let blocks = self.blocks.read();
+        let num_rows = blocks.iter().map(|b| b.num_rows() as u64).sum();
+        let data_bytes = blocks.iter().map(|b| b.memory_size() as u64).sum();
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            data_size: Some(data_bytes),
+            data_size_compressed: Some(data_bytes),
+            index_size: None,
+            number_of_blocks: None,
+            number_of_segments: None,
+        }))
     }
 }
 

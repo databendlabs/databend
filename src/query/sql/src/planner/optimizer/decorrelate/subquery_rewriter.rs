@@ -174,13 +174,11 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(input)))
             }
 
-            RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
-                Ok(SExpr::create_binary(
-                    Arc::new(s_expr.plan().clone()),
-                    Arc::new(self.rewrite(s_expr.child(0)?)?),
-                    Arc::new(self.rewrite(s_expr.child(1)?)?),
-                ))
-            }
+            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+                Arc::new(s_expr.plan().clone()),
+                Arc::new(self.rewrite(s_expr.child(0)?)?),
+                Arc::new(self.rewrite(s_expr.child(1)?)?),
+            )),
 
             RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
                 Ok(SExpr::create_unary(
@@ -191,7 +189,6 @@ impl SubqueryRewriter {
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
-            | RelOperator::CteScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
