@@ -71,12 +71,14 @@ until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Run
     sleep 10
 done
 
-export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/${BENCHMARK_DATABASE}?warehouse=${CLOUD_WAREHOUSE}"
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443?warehouse=${CLOUD_WAREHOUSE}"
 
 if [[ "${BENCHMARK_DATASET}" == "load" ]]; then
     echo "Creating database..."
     echo "CREATE DATABASE ${BENCHMARK_DATABASE};" | bendsql --database default
 fi
+
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/${BENCHMARK_DATABASE}?warehouse=${CLOUD_WAREHOUSE}"
 
 echo "Checking session settings..."
 bendsql --query="select * from system.settings where value != default;" -o table
