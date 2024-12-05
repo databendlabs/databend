@@ -64,6 +64,8 @@ fn test_geometry() {
     test_st_disjoint(file);
     test_st_within(file);
     test_st_equals(file);
+    test_st_area(file);
+    test_st_convexhull(file);
 }
 
 fn test_haversine(file: &mut impl Write) {
@@ -757,6 +759,54 @@ fn test_st_equals(file: &mut impl Write) {
     run_ast(
         file,
         "ST_EQUALS(TO_GEOMETRY('POINT(10 10)'), TO_GEOMETRY('LINESTRING(10 10, 10 10)'))",
+        &[],
+    );
+}
+
+fn test_st_area(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 4, 4 4, 4 0, 0 0), (1 1, 1 2, 2 2, 2 1, 1 1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_AREA(TO_GEOMETRY('MULTIPOLYGON(((0 0, 0 2, 2 2, 2 0, 0 0)), ((3 0, 3 2, 5 2, 5 0, 3 0)))'))",
+        &[],
+    );
+    run_ast(file, "ST_AREA(TO_GEOMETRY('POINT(0 0)'))", &[]);
+    run_ast(
+        file,
+        "ST_AREA(TO_GEOMETRY('LINESTRING(0 0, 1 1, 2 2)'))",
+        &[],
+    );
+}
+
+fn test_st_convexhull(file: &mut impl Write) {
+    run_ast(file, "ST_CONVEXHULL(TO_GEOMETRY('POINT(1 1)'))", &[]);
+    run_ast(
+        file,
+        "ST_CONVEXHULL(TO_GEOMETRY('MULTIPOINT((1 1), (0 0), (2 2), (1 2), (2 1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CONVEXHULL(TO_GEOMETRY('LINESTRING(0 0, 1 1, 0 2, 2 1)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CONVEXHULL(TO_GEOMETRY('POLYGON((0 0, 0 2, 1 1, 2 2, 2 0, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CONVEXHULL(TO_GEOMETRY('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1, 2 2), POLYGON((3 0, 3 3, 6 3, 6 0, 3 0)))'))",
         &[],
     );
 }

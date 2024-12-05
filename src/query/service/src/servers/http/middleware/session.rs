@@ -397,9 +397,11 @@ impl<E> HTTPSessionEndpoint<E> {
             }
         }
 
-        let ts = unix_ts().as_secs().to_string();
-        req.cookie()
-            .add(Cookie::new_with_str(COOKIE_LAST_ACCESS_TIME, ts));
+        if cookie_enabled {
+            let ts = unix_ts().as_secs().to_string();
+            req.cookie()
+                .add(Cookie::new_with_str(COOKIE_LAST_ACCESS_TIME, ts));
+        }
 
         let session = session_manager.register_session(session)?;
 

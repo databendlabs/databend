@@ -48,14 +48,11 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
     let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
-    if matches!(
-        right_rel_expr
-            .derive_cardinality()?
-            .statistics
-            .precise_cardinality,
-        Some(1)
-    ) {
-        // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of MERGE JOIN.
+    let right_stat_info = right_rel_expr.derive_cardinality()?;
+    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
+        || right_stat_info.cardinality == 1.0
+    {
+        // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
         return Ok(PhysicalJoinType::Hash);
     }
 

@@ -55,7 +55,6 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
-use parking_lot::RwLock;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -63,10 +62,8 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
@@ -156,56 +153,6 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_cte_scan(
-        &mut self,
-        cte_info: &CteInfo,
-        mut bind_context: BindContext,
-    ) -> Result<(SExpr, BindContext)> {
-        let blocks = Arc::new(RwLock::new(vec![]));
-        let cte_distinct_number = 1 + self
-            .ctx
-            .get_materialized_ctes()
-            .read()
-            .iter()
-            .filter(|((idx, _), _)| idx == &cte_info.cte_idx)
-            .count();
-        self.ctx
-            .set_materialized_cte((cte_info.cte_idx, cte_distinct_number), blocks)?;
-        // Get the fields in the cte
-        let mut fields = vec![];
-        let mut offsets = vec![];
-        let mut materialized_indexes = vec![];
-        for (idx, column) in bind_context.columns.iter_mut().enumerate() {
-            let materialized_index = column.index;
-            materialized_indexes.push(materialized_index);
-            column.index = self.metadata.write().add_derived_column(
-                column.column_name.clone(),
-                *column.data_type.clone(),
-                None,
-            );
-            bind_context
-                .cte_context
-                .m_cte_materialized_indexes
-                .insert(column.index, materialized_index);
-            fields.push(DataField::new(
-                column.index.to_string().as_str(),
-                *column.data_type.clone(),
-            ));
-            offsets.push(idx);
-        }
-        let cte_scan = SExpr::create_leaf(Arc::new(
-            CteScan {
-                cte_idx: (cte_info.cte_idx, cte_distinct_number),
-                fields,
-                materialized_indexes,
-                offsets,
-                stat: Arc::new(StatInfo::default()),
-            }
-            .into(),
-        ));
-        Ok((cte_scan, bind_context))
-    }
-
     pub(crate) fn bind_cte(
         &mut self,
         span: Span,
@@ -280,53 +227,6 @@ impl Binder {
             res_bind_context.columns[index].column_name = column_name.clone();
         }
         Ok((s_expr, res_bind_context))
-    }
-
-    // Bind materialized cte
-    pub(crate) fn bind_m_cte(
-        &mut self,
-        bind_context: &mut BindContext,
-        cte_info: &CteInfo,
-        table_name: &String,
-        alias: &Option<TableAlias>,
-        span: &Span,
-    ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = if !bind_context.cte_context.has_bound(cte_info.cte_idx) {
-            let (cte_s_expr, mut cte_bind_ctx) =
-                self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
-            cte_bind_ctx
-                .cte_context
-                .cte_map
-                .entry(table_name.clone())
-                .and_modify(|cte_info| {
-                    cte_info.columns = cte_bind_ctx.columns.clone();
-                });
-            cte_bind_ctx
-                .cte_context
-                .set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
-            cte_bind_ctx
-        } else {
-            let mut bound_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
-            // Resolve the alias name for the bound cte.
-            let alias_table_name = alias
-                .as_ref()
-                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
-                .unwrap_or_else(|| table_name.to_string());
-            for column in cte_info.columns.iter() {
-                let mut column = column.clone();
-                column.database_name = None;
-                column.table_name = Some(alias_table_name.clone());
-                bound_ctx.columns.push(column);
-            }
-            bound_ctx
-        };
-        let cte_info = new_bind_context
-            .cte_context
-            .cte_map
-            .get(table_name)
-            .unwrap()
-            .clone();
-        self.bind_cte_scan(&cte_info, new_bind_context)
     }
 
     pub(crate) fn bind_r_cte_scan(

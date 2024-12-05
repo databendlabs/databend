@@ -72,6 +72,9 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "cume_dist",
 ];
 
+pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
+    ["first_value", "first", "last_value", "last", "nth_value"];
+
 pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 16] = [
     "array_transform",
     "array_apply",

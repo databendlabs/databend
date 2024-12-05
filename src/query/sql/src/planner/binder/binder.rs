@@ -75,6 +75,7 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowRolesPlan;
+use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 use crate::BindContext;
@@ -178,8 +179,6 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
-                // Wrap `LogicalMaterializedCte` to `s_expr`
-                s_expr = bind_context.cte_context.wrap_m_cte(s_expr);
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
@@ -255,6 +254,12 @@ impl<'a> Binder {
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
             Statement::CreateCatalog(stmt) => self.bind_create_catalog(stmt).await?,
             Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
+            Statement::UseCatalog {catalog} => {
+                let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+                Plan::UseCatalog(Box::new(UseCatalogPlan {
+                    catalog,
+                }))
+            }
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,

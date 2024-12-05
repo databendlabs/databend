@@ -19,19 +19,14 @@ use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::Sinker;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::MaterializedCte;
 use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::ColumnBinding;
-use databend_common_sql::IndexType;
 
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
-use crate::pipelines::processors::transforms::MaterializedCteSink;
-use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinDesc;
@@ -77,8 +72,6 @@ impl PipelineBuilder {
             right_side_context,
             self.main_pipeline.get_scopes(),
         );
-        right_side_builder.cte_state = self.cte_state.clone();
-        right_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         right_side_builder.hash_join_states = self.hash_join_states.clone();
 
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
@@ -148,8 +141,6 @@ impl PipelineBuilder {
             build_side_context,
             self.main_pipeline.get_scopes(),
         );
-        build_side_builder.cte_state = self.cte_state.clone();
-        build_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         build_side_builder.hash_join_states = self.hash_join_states.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
@@ -222,68 +213,6 @@ impl PipelineBuilder {
             self.merge_into_probe_data_fields = Some(projected_probe_fields);
         }
 
-        Ok(())
-    }
-
-    pub(crate) fn build_materialized_cte(
-        &mut self,
-        materialized_cte: &MaterializedCte,
-    ) -> Result<()> {
-        self.cte_scan_offsets.insert(
-            materialized_cte.cte_idx,
-            materialized_cte.cte_scan_offset.clone(),
-        );
-        self.expand_materialized_side_pipeline(
-            &materialized_cte.right,
-            materialized_cte.cte_idx,
-            &materialized_cte.materialized_output_columns,
-        )?;
-        self.build_pipeline(&materialized_cte.left)
-    }
-
-    fn expand_materialized_side_pipeline(
-        &mut self,
-        materialized_side: &PhysicalPlan,
-        cte_idx: IndexType,
-        materialized_output_columns: &[ColumnBinding],
-    ) -> Result<()> {
-        let materialized_side_ctx = QueryContext::create_from(self.ctx.clone());
-        let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
-        self.cte_state.insert(cte_idx, state.clone());
-        let mut materialized_side_builder = PipelineBuilder::create(
-            self.func_ctx.clone(),
-            self.settings.clone(),
-            materialized_side_ctx,
-            self.main_pipeline.get_scopes(),
-        );
-        materialized_side_builder.cte_state = self.cte_state.clone();
-        materialized_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
-        materialized_side_builder.hash_join_states = self.hash_join_states.clone();
-        let mut materialized_side_pipeline =
-            materialized_side_builder.finalize(materialized_side)?;
-        assert!(materialized_side_pipeline
-            .main_pipeline
-            .is_pulling_pipeline()?);
-
-        PipelineBuilder::build_result_projection(
-            &self.func_ctx,
-            materialized_side.output_schema()?,
-            materialized_output_columns,
-            &mut materialized_side_pipeline.main_pipeline,
-            false,
-        )?;
-
-        materialized_side_pipeline.main_pipeline.add_sink(|input| {
-            let transform = Sinker::<MaterializedCteSink>::create(
-                input,
-                MaterializedCteSink::create(self.ctx.clone(), cte_idx, state.clone())?,
-            );
-            Ok(ProcessorPtr::create(transform))
-        })?;
-        self.pipelines
-            .push(materialized_side_pipeline.main_pipeline.finalize());
-        self.pipelines
-            .extend(materialized_side_pipeline.sources_pipelines);
         Ok(())
     }
 }

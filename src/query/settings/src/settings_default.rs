@@ -952,6 +952,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("persist_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0), // 0 for in-memory, 1 for disk
+                    desc: "Decides if materialized CTEs should be persisted to disk.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
