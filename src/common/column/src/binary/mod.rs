@@ -74,7 +74,7 @@ impl BinaryColumn {
 
     pub fn index(&self, index: usize) -> Option<&[u8]> {
         if index + 1 < self.offsets.len() {
-            Some(&self.value(index))
+            Some(self.value(index))
         } else {
             None
         }
