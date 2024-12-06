@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -824,6 +826,23 @@ pub struct RedisSource {
     pub db_index: Option<i64>,
 }
 
+impl Display for RedisSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "redis://")?;
+        if let Some(username) = &self.username {
+            write!(f, "{}:", username)?
+        }
+        if let Some(password) = &self.password {
+            write!(f, "{}@", password)?;
+        }
+        write!(f, "{}:{}", self.host, self.port)?;
+        if let Some(db_index) = &self.db_index {
+            write!(f, "/{}", db_index)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SqlSource {
@@ -834,7 +853,7 @@ pub struct SqlSource {
     pub value_field: String,
 }
 
-#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Educe, EnumAsInner, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub enum DictionarySource {
     Mysql(SqlSource),
