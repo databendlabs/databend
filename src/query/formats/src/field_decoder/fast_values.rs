@@ -22,6 +22,7 @@ use std::sync::LazyLock;
 
 use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 use databend_common_exception::ErrorCode;
@@ -502,7 +503,7 @@ impl FastFieldDecoderValues {
 
     fn read_interval<R: AsRef<[u8]>>(
         &self,
-        column: &mut BinaryColumnBuilder,
+        column: &mut FixedSizeBinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {

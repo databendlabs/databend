@@ -14,6 +14,7 @@
 
 use bumpalo::Bump;
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use ethnum::i256;
@@ -29,6 +30,7 @@ use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::IntervalType;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
 use crate::types::StringColumn;
@@ -111,11 +113,17 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
         }
-        Column::Interval(v)
-        | Column::Binary(v)
-        | Column::Bitmap(v)
-        | Column::Variant(v)
-        | Column::Geometry(v) => {
+        Column::Interval(v) => {
+            for index in select_vector.iter().take(rows).copied() {
+                let data = arena.alloc_slice_copy(v.index_unchecked(index));
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
+                store(
+                    &(data.as_ptr() as u64),
+                    address[index].add(offset + 4) as *mut u8,
+                );
+            }
+        }
+        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
                 store(&(data.len() as u32), address[index].add(offset) as *mut u8);
@@ -321,11 +329,7 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Interval(v)
-        | Column::Bitmap(v)
-        | Column::Binary(v)
-        | Column::Variant(v)
-        | Column::Geometry(v) => row_match_binary_column(
+        Column::Interval(v) => row_match_fixed_size_binary_column(
             v,
             validity,
             address,
@@ -337,6 +341,20 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
+        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
+            row_match_binary_column(
+                v,
+                validity,
+                address,
+                select_vector,
+                temp_vector,
+                count,
+                validity_offset,
+                col_offset,
+                no_match,
+                no_match_count,
+            )
+        }
         Column::Nullable(_) => unreachable!("nullable is unwrapped"),
         other => row_match_generic_column(
             other,
@@ -408,6 +426,87 @@ unsafe fn row_match_binary_column(
             let len = read::<u32>(len_address as _) as usize;
 
             let value = BinaryType::index_column_unchecked(col, idx);
+            if len != value.len() {
+                equal = false;
+            } else {
+                let data_address = read::<u64>(address as _) as usize as *const u8;
+                let scalar = std::slice::from_raw_parts(data_address, len);
+
+                equal = databend_common_hashtable::fast_memcmp(scalar, value);
+            }
+
+            if equal {
+                temp_vector[match_count] = idx;
+                match_count += 1;
+            } else {
+                no_match[*no_match_count] = idx;
+                *no_match_count += 1;
+            }
+        }
+    }
+
+    select_vector.clone_from_slice(temp_vector);
+
+    *count = match_count;
+}
+
+unsafe fn row_match_fixed_size_binary_column(
+    col: &FixedSizeBinaryColumn,
+    validity: Option<&Bitmap>,
+    address: &[*const u8],
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
+    count: &mut usize,
+    validity_offset: usize,
+    col_offset: usize,
+    no_match: &mut SelectVector,
+    no_match_count: &mut usize,
+) {
+    let mut match_count = 0;
+    let mut equal: bool;
+
+    if let Some(validity) = validity {
+        let is_all_set = validity.null_count() == 0;
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
+            let validity_address = address[idx].add(validity_offset);
+            let is_set2 = read::<u8>(validity_address as _) != 0;
+            let is_set = is_all_set || validity.get_bit_unchecked(idx);
+
+            if is_set && is_set2 {
+                let len_address = address[idx].add(col_offset);
+                let address = address[idx].add(col_offset + 4);
+                let len = read::<u32>(len_address as _) as usize;
+
+                let value = IntervalType::index_column_unchecked(col, idx);
+                if len != value.len() {
+                    equal = false;
+                } else {
+                    let data_address = read::<u64>(address as _) as usize as *const u8;
+                    let scalar = std::slice::from_raw_parts(data_address, len);
+                    equal = databend_common_hashtable::fast_memcmp(scalar, value);
+                }
+            } else {
+                equal = is_set == is_set2;
+            }
+
+            if equal {
+                temp_vector[match_count] = idx;
+                match_count += 1;
+            } else {
+                no_match[*no_match_count] = idx;
+                *no_match_count += 1;
+            }
+        }
+    } else {
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
+            let len_address = address[idx].add(col_offset);
+            let address = address[idx].add(col_offset + 4);
+
+            let len = read::<u32>(len_address as _) as usize;
+
+            let value = IntervalType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {

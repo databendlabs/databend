@@ -14,6 +14,7 @@
 
 use chrono_tz::Tz;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 use databend_common_expression::types::array::ArrayColumn;
@@ -305,7 +306,7 @@ impl FieldEncoderValues {
 
     fn write_interval(
         &self,
-        column: &BinaryColumn,
+        column: &FixedSizeBinaryColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,

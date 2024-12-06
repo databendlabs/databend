@@ -55,16 +55,12 @@ fn register_string_to_interval(registry: &mut FunctionRegistry) {
                 Ok(interval) => {
                     let i = months_days_micros(interval.months, interval.days, interval.micros);
                     output.put_slice(i.to_le_bytes().as_slice());
-                    output.commit_row();
                 }
                 Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("cannot parse to type `INTERVAL`. {}", e),
-                    );
-                    output.commit_row();
+                    ctx.set_error(0, format!("cannot parse to type `INTERVAL`. {}", e));
                 }
             }
+            output.commit_row();
         })(val, ctx)
     }
 }

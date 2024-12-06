@@ -193,7 +193,7 @@ impl From<&TableField> for Field {
                     EXTENSION_KEY.to_string(),
                     ARROW_EXT_TYPE_INTERVAL.to_string(),
                 );
-                ArrowDataType::LargeBinary
+                ArrowDataType::FixedSizeBinary(16)
             }
         };
 
@@ -334,11 +334,11 @@ impl From<&Column> for ArrayData {
                 unsafe { builder.build_unchecked() }
             }
 
+            Column::Interval(col) => col.clone().into(),
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col)
-            | Column::Interval(col)
             | Column::Geography(GeographyColumn(col)) => col.clone().into(),
         }
     }

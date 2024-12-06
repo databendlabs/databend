@@ -17,6 +17,7 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 use databend_common_exception::ErrorCode;
@@ -258,7 +259,7 @@ impl NestedValues {
 
     fn read_interval<R: AsRef<[u8]>>(
         &self,
-        column: &mut BinaryColumnBuilder,
+        column: &mut FixedSizeBinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();

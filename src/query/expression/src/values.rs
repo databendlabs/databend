@@ -28,6 +28,8 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
@@ -168,7 +170,7 @@ pub enum Column {
     Tuple(Vec<Column>),
     Variant(BinaryColumn),
     Geometry(BinaryColumn),
-    Interval(BinaryColumn),
+    Interval(FixedSizeBinaryColumn),
     Geography(GeographyColumn),
 }
 
@@ -184,7 +186,6 @@ pub enum ColumnVec {
     String(Vec<StringColumn>),
     Timestamp(Vec<Buffer<i64>>),
     Date(Vec<Buffer<i32>>),
-    Interval(Vec<BinaryColumn>),
     Array(Vec<ArrayColumn<AnyType>>),
     Map(Vec<ArrayColumn<KvPair<AnyType, AnyType>>>),
     Bitmap(Vec<BinaryColumn>),
@@ -193,6 +194,7 @@ pub enum ColumnVec {
     Variant(Vec<BinaryColumn>),
     Geometry(Vec<BinaryColumn>),
     Geography(Vec<GeographyColumn>),
+    Interval(Vec<FixedSizeBinaryColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -207,7 +209,6 @@ pub enum ColumnBuilder {
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
-    Interval(BinaryColumnBuilder),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
     Bitmap(BinaryColumnBuilder),
@@ -216,6 +217,7 @@ pub enum ColumnBuilder {
     Variant(BinaryColumnBuilder),
     Geometry(BinaryColumnBuilder),
     Geography(BinaryColumnBuilder),
+    Interval(FixedSizeBinaryColumnBuilder),
 }
 
 impl<T: ValueType> Value<T> {
@@ -1424,11 +1426,11 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Boolean(c) => c.len(),
+            Column::Interval(col) => col.memory_size(),
             // 8 * len + size of bytes
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)
-            | Column::Interval(col)
             | Column::Geometry(col) => col.memory_size(),
             Column::String(col) => col.len() * 8 + col.total_bytes_len(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
@@ -1537,7 +1539,9 @@ impl ColumnBuilder {
                     .collect(),
             ),
             Column::Variant(col) => ColumnBuilder::Variant(BinaryColumnBuilder::from_column(col)),
-            Column::Interval(col) => ColumnBuilder::Interval(BinaryColumnBuilder::from_column(col)),
+            Column::Interval(col) => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::from_column(col))
+            }
             Column::Geometry(col) => ColumnBuilder::Geometry(BinaryColumnBuilder::from_column(col)),
             Column::Geography(col) => {
                 ColumnBuilder::Geography(GeographyType::column_to_builder(col))
@@ -1599,7 +1603,9 @@ impl ColumnBuilder {
             }
             ScalarRef::Variant(s) => ColumnBuilder::Variant(BinaryColumnBuilder::repeat(s, n)),
             ScalarRef::Geometry(s) => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat(s, n)),
-            ScalarRef::Interval(s) => ColumnBuilder::Interval(BinaryColumnBuilder::repeat(s, n)),
+            ScalarRef::Interval(s) => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::repeat(s, n))
+            }
             ScalarRef::Geography(s) => {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat(s.0, n))
             }
@@ -1663,7 +1669,7 @@ impl ColumnBuilder {
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::Geometry(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Interval(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Interval(col) => col.data.len(),
             ColumnBuilder::Geography(builder) => builder.memory_size(),
         }
     }
@@ -1778,8 +1784,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Geometry(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Interval => {
-                let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Interval(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::with_capacity(capacity, 16))
             }
             DataType::Geography => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
@@ -1823,7 +1828,9 @@ impl ColumnBuilder {
             DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
             DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
-            DataType::Interval => ColumnBuilder::Interval(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Interval => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::repeat_default(len, 16))
+            }
             DataType::Geography => {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat_default(len))
             }
@@ -1964,7 +1971,7 @@ impl ColumnBuilder {
                 GeometryType::push_item_repeat(builder, value, n);
             }
             (ColumnBuilder::Interval(builder), ScalarRef::Interval(value)) => {
-                GeometryType::push_item_repeat(builder, value, n);
+                IntervalType::push_item_repeat(builder, value, n);
             }
             (ColumnBuilder::Geography(builder), ScalarRef::Geography(value)) => {
                 GeographyType::push_item_repeat(builder, *value, n);
@@ -1999,7 +2006,7 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::Geometry(builder) => builder.commit_row(),
-            ColumnBuilder::Interval(builder) => builder.commit_row(),
+            ColumnBuilder::Interval(builder) => builder.push_default(),
             ColumnBuilder::Geography(builder) => builder.commit_row(),
         }
     }
@@ -2025,10 +2032,15 @@ impl ColumnBuilder {
                 let v: bool = reader.read_scalar()?;
                 builder.push(v);
             }
+            ColumnBuilder::Interval(builder) => {
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
+                let last = builder.len();
+                reader.read_exact(&mut builder.data[last..last + offset])?;
+            }
             ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder)
-            | ColumnBuilder::Interval(builder)
             | ColumnBuilder::Geometry(builder) => {
                 let offset = reader.read_scalar::<u64>()? as usize;
                 builder.data.resize(offset + builder.data.len(), 0);
@@ -2131,10 +2143,16 @@ impl ColumnBuilder {
                     builder.push(v);
                 }
             }
+            ColumnBuilder::Interval(builder) => {
+                for row in 0..rows {
+                    let reader = &reader[step * row..];
+                    builder.put_slice(reader);
+                    builder.commit_row();
+                }
+            }
             ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder)
-            | ColumnBuilder::Interval(builder)
             | ColumnBuilder::Geometry(builder)
             | ColumnBuilder::Geography(builder) => {
                 for row in 0..rows {
