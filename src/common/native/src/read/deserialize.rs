@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::types::months_days_ns;
 use databend_common_expression::types::DateType;
-use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
@@ -148,14 +146,6 @@ where
         TableDataType::Date => {
             init.push(InitNested::Primitive(is_nullable));
             DynIter::new(IntegerNestedIter::<_, DateType, i32>::new(
-                readers.pop().unwrap(),
-                data_type.clone(),
-                init,
-            ))
-        }
-        TableDataType::Interval => {
-            init.push(InitNested::Primitive(is_nullable));
-            DynIter::new(IntegerNestedIter::<_, IntervalType, months_days_ns>::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
                 init,

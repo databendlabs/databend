@@ -17,7 +17,6 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
-use databend_common_column::types::months_days_ns;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -44,7 +43,7 @@ pub enum LegacyScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
-    Interval(months_days_ns),
+    Interval(Vec<u8>),
     Boolean(bool),
     String(Vec<u8>),
     Array(LegacyColumn),
@@ -65,7 +64,6 @@ pub enum LegacyColumn {
     String(LegacyBinaryColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
-    Interval(Buffer<months_days_ns>),
     Array(Box<LegacyArrayColumn>),
     Map(Box<LegacyArrayColumn>),
     Bitmap(LegacyBinaryColumn),
@@ -143,7 +141,6 @@ impl From<LegacyColumn> for Column {
             }
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),
-            LegacyColumn::Interval(buf) => Column::Interval(buf),
             LegacyColumn::Array(arr_col) => Column::Array(Box::new(ArrayColumn::<AnyType> {
                 values: arr_col.values.into(),
                 offsets: arr_col.offsets,
@@ -177,9 +174,11 @@ impl From<Scalar> for LegacyScalar {
             Scalar::Decimal(dec_scalar) => LegacyScalar::Decimal(dec_scalar),
             Scalar::Timestamp(ts) => LegacyScalar::Timestamp(ts),
             Scalar::Date(date) => LegacyScalar::Date(date),
-            Scalar::Interval(interval) => LegacyScalar::Interval(interval),
             Scalar::Boolean(b) => LegacyScalar::Boolean(b),
-            Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) => unreachable!(),
+            Scalar::Binary(_)
+            | Scalar::Geometry(_)
+            | Scalar::Geography(_)
+            | Scalar::Interval(_) => unreachable!(),
             Scalar::String(string) => LegacyScalar::String(string.as_bytes().to_vec()),
             Scalar::Array(column) => LegacyScalar::Array(column.into()),
             Scalar::Map(column) => LegacyScalar::Map(column.into()),
@@ -199,13 +198,15 @@ impl From<Column> for LegacyColumn {
             Column::Number(num_col) => LegacyColumn::Number(num_col),
             Column::Decimal(dec_col) => LegacyColumn::Decimal(dec_col),
             Column::Boolean(bmp) => LegacyColumn::Boolean(bmp),
-            Column::Binary(_) | Column::Geometry(_) | Column::Geography(_) => unreachable!(),
+            Column::Interval(_)
+            | Column::Binary(_)
+            | Column::Geometry(_)
+            | Column::Geography(_) => unreachable!(),
             Column::String(str_col) => {
                 LegacyColumn::String(LegacyBinaryColumn::from(BinaryColumn::from(str_col)))
             }
             Column::Timestamp(buf) => LegacyColumn::Timestamp(buf),
             Column::Date(buf) => LegacyColumn::Date(buf),
-            Column::Interval(buf) => LegacyColumn::Interval(buf),
             Column::Array(arr_col) => LegacyColumn::Array(Box::new(LegacyArrayColumn {
                 values: arr_col.values.into(),
                 offsets: arr_col.offsets,

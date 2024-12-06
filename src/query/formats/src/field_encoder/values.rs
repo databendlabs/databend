@@ -14,7 +14,8 @@
 
 use chrono_tz::Tz;
 use databend_common_base::base::OrderedFloat;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
@@ -161,7 +162,6 @@ impl FieldEncoderValues {
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
             Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
-
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
@@ -280,23 +280,6 @@ impl FieldEncoderValues {
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
-    fn write_interval(
-        &self,
-        column: &Buffer<months_days_ns>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        in_nested: bool,
-    ) {
-        let v = unsafe { column.get_unchecked(row_index) };
-        let s = interval_to_string(Interval {
-            months: v.0,
-            days: v.1,
-            nanos: v.2,
-        })
-        .to_string();
-        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
-    }
-
     fn write_timestamp(
         &self,
         column: &Buffer<i64>,
@@ -318,6 +301,29 @@ impl FieldEncoderValues {
     ) {
         let bitmap_result = "<bitmap binary>".as_bytes();
         self.write_string_inner(bitmap_result, out_buf, in_nested);
+    }
+
+    fn write_interval(
+        &self,
+        column: &BinaryColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.index_unchecked(row_index) };
+
+        let interval: [u8; 16] = v
+            .to_vec()
+            .try_into()
+            .expect("Interval should have 16 elements");
+        let v = months_days_micros::from_le_bytes(interval);
+        let s = interval_to_string(Interval {
+            months: v.0,
+            days: v.1,
+            micros: v.2,
+        })
+        .to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
     fn write_variant(

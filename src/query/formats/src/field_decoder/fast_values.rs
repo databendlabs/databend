@@ -22,7 +22,8 @@ use std::sync::LazyLock;
 
 use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -280,26 +281,6 @@ impl FastFieldDecoderValues {
         Ok(())
     }
 
-    fn read_interval<R: AsRef<[u8]>>(
-        &self,
-        column: &mut Vec<months_days_ns>,
-        reader: &mut Cursor<R>,
-        positions: &mut VecDeque<usize>,
-    ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        let res =
-            std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
-                format!(
-                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
-                    buf
-                )
-            })?;
-        let i = Interval::from_string(res)?;
-        column.push(months_days_ns(i.months, i.days, i.nanos));
-        Ok(())
-    }
-
     fn read_date<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<i32>,
@@ -515,6 +496,31 @@ impl FastFieldDecoderValues {
         self.read_string_inner(reader, &mut buf, positions)?;
         let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_interval<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let res =
+            std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
+                format!(
+                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
+                    buf
+                )
+            })?;
+        let i = Interval::from_string(res)?;
+        column.put_slice(
+            months_days_micros(i.months, i.days, i.micros)
+                .to_le_bytes()
+                .as_bytes(),
+        );
         column.commit_row();
         Ok(())
     }

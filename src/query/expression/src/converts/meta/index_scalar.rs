@@ -15,7 +15,6 @@
 // DO NOT EDIT.
 // This crate keeps some Index codes for compatibility, it's locked by bincode of meta's v3 version
 
-use databend_common_column::types::months_days_ns;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
@@ -33,7 +32,7 @@ pub enum IndexScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
-    Interval(months_days_ns),
+    Interval(Vec<u8>),
     Boolean(bool),
     // For compat reason, we keep this attribute which treat string/binary into string
     #[serde(alias = "String", alias = "Binary")]
@@ -80,7 +79,6 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Decimal(dec_scalar) => IndexScalar::Decimal(dec_scalar),
             Scalar::Timestamp(ts) => IndexScalar::Timestamp(ts),
             Scalar::Date(date) => IndexScalar::Date(date),
-            Scalar::Interval(interval) => IndexScalar::Interval(interval),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
             Scalar::Binary(s) => IndexScalar::BinaryV2(s),
@@ -97,6 +95,7 @@ impl TryFrom<Scalar> for IndexScalar {
             | Scalar::Bitmap(_)
             | Scalar::Geometry(_)
             | Scalar::Geography(_)
+            | Scalar::Interval(_)
             | Scalar::EmptyArray
             | Scalar::EmptyMap => return Err(ErrorCode::Unimplemented("Unsupported scalar type")),
         })
