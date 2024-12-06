@@ -58,7 +58,7 @@ impl BytesReader {
         //
         // - is the multiple of read_batch_size.
         // - is larger or equal to default_io_size.
-        let io_size = default_io_size.div_ceil(read_batch_size);
+        let io_size = default_io_size.div_ceil(read_batch_size) * read_batch_size;
 
         Ok(Self {
             table_ctx,

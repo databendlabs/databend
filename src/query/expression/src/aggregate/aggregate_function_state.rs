@@ -115,16 +115,14 @@ pub fn get_layout_offsets(
     offsets: &mut Vec<usize>,
 ) -> Result<Layout> {
     let mut max_align = 0;
-    let mut total_size = 0;
+    let mut total_size: usize = 0;
 
     for func in funcs {
         let layout = func.state_layout();
         let align = layout.align();
 
-        total_size = (total_size + align - 1).div_ceil(align);
-
+        total_size = total_size.div_ceil(align) * align;
         offsets.push(total_size);
-
         max_align = max_align.max(align);
         total_size += layout.size();
     }
