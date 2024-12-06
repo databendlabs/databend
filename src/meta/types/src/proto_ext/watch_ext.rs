@@ -12,10 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::servers::flight::v1::packets::QueryFragment;
+use crate::protobuf as pb;
+use crate::protobuf::WatchResponse;
+use crate::Change;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QueryFragments {
-    pub query_id: String,
-    pub fragments: Vec<QueryFragment>,
+impl WatchResponse {
+    pub fn new(change: &Change<Vec<u8>, String>) -> Option<Self> {
+        let ev = pb::Event {
+            key: change.ident.clone()?,
+            prev: change.prev.clone().map(pb::SeqV::from),
+            current: change.result.clone().map(pb::SeqV::from),
+        };
+
+        Some(WatchResponse { event: Some(ev) })
+    }
 }

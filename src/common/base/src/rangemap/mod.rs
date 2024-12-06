@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod range_map;
-mod range_map_key;
 mod range_merger;
 
-pub use range_map::RangeMap;
-pub use range_map_key::RangeMapKey;
 pub use range_merger::RangeMerger;

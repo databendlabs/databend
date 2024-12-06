@@ -40,6 +40,7 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::raft_types::CommittedLeaderId;
 use databend_common_meta_types::raft_types::ForwardToLeader;
 use databend_common_meta_types::raft_types::InitializeError;
@@ -63,7 +64,6 @@ use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
 use fastrace::func_name;
 use fastrace::prelude::*;
-use futures::channel::oneshot;
 use itertools::Itertools;
 use log::debug;
 use log::error;
@@ -74,6 +74,8 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
+use tokio::sync::mpsc;
+use tonic::Status;
 
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -92,11 +94,9 @@ use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
 use crate::version::METASRV_COMMIT_VERSION;
-use crate::watcher::DispatcherSender;
-use crate::watcher::EventDispatcher;
-use crate::watcher::EventDispatcherHandle;
-use crate::watcher::Watcher;
-use crate::watcher::WatcherSender;
+use crate::watcher::EventSubscriber;
+use crate::watcher::StreamSender;
+use crate::watcher::SubscriberHandle;
 
 pub type LogStore = RaftStore;
 pub type SMStore = RaftStore;
@@ -107,7 +107,7 @@ pub type MetaRaft = Raft<TypeConfig>;
 /// MetaNode is the container of metadata related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub raft_store: RaftStore,
-    pub dispatcher_handle: EventDispatcherHandle,
+    pub subscriber_handle: SubscriberHandle,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -159,15 +159,15 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let dispatcher_tx = EventDispatcher::spawn();
+        let handle = EventSubscriber::spawn();
 
         sto.get_state_machine()
             .await
-            .set_subscriber(Box::new(DispatcherSender(dispatcher_tx.clone())));
+            .set_event_sender(Box::new(handle.clone()));
 
         let meta_node = Arc::new(MetaNode {
             raft_store: sto.clone(),
-            dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
+            subscriber_handle: handle,
             raft: raft.clone(),
             running_tx: tx,
             running_rx: rx,
@@ -1147,19 +1147,15 @@ impl MetaNode {
     pub(crate) async fn add_watcher(
         &self,
         request: WatchRequest,
-        tx: WatcherSender,
-    ) -> Result<Watcher, &'static str> {
-        let (resp_tx, resp_rx) = oneshot::channel();
+        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+    ) -> Result<Arc<StreamSender>, Status> {
+        let stream_sender = self
+            .subscriber_handle
+            .request_blocking(|d: &mut EventSubscriber| d.add_watcher(request, tx))
+            .await
+            .map_err(|_e| Status::internal("EventSubscriber closed"))?
+            .map_err(Status::invalid_argument)?;
 
-        self.dispatcher_handle.request(|d: &mut EventDispatcher| {
-            let add_res = d.add_watcher(request, tx);
-            let _ = resp_tx.send(add_res);
-        });
-
-        let recv_res = resp_rx.await;
-        match recv_res {
-            Ok(add_res) => add_res,
-            Err(_e) => Err("dispatcher closed"),
-        }
+        Ok(stream_sender)
     }
 }
