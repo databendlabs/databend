@@ -56,7 +56,7 @@ itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parquet = { workspace = true }
+parquet = { workspace = true, features = ["experimental"] }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

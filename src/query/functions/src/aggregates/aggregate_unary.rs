@@ -44,6 +44,29 @@ where
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
 
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        validity: Option<&Bitmap>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        match validity {
+            Some(validity) => {
+                for (data, valid) in T::iter_column(&other).zip(validity.iter()) {
+                    if valid {
+                        self.add(data, function_data)?;
+                    }
+                }
+            }
+            None => {
+                for value in T::iter_column(&other) {
+                    self.add(value, function_data)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn merge(&mut self, rhs: &Self) -> Result<()>;
 
     fn merge_result(
@@ -194,24 +217,9 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
-        let column_iter = T::iter_column(&column);
         let state: &mut S = place.get::<S>();
-        match validity {
-            Some(bitmap) => {
-                for (value, is_valid) in column_iter.zip(bitmap.iter()) {
-                    if is_valid {
-                        state.add(value, self.function_data.as_deref())?;
-                    }
-                }
-            }
-            None => {
-                for value in column_iter {
-                    state.add(value, self.function_data.as_deref())?;
-                }
-            }
-        }
 
-        Ok(())
+        state.add_batch(column, validity, self.function_data.as_deref())
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {

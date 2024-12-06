@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
@@ -38,6 +39,7 @@ use super::aggregate_scalar_state::TYPE_MIN;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
+use crate::aggregates::aggregate_min_max_any_decimal::MinMaxAnyDecimalState;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::with_compare_mapped_type;
@@ -87,6 +89,36 @@ where
             }
             None => {
                 self.value = Some(T::to_owned_scalar(other));
+            }
+        }
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        validity: Option<&Bitmap>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let column_len = T::column_len(&other);
+        if column_len == 0 {
+            return Ok(());
+        }
+
+        let column_iter = T::iter_column(&other);
+        if let Some(validity) = validity {
+            if validity.unset_bits() == column_len {
+                return Ok(());
+            }
+            for (data, valid) in column_iter.zip(validity.iter()) {
+                if valid {
+                    let _ = self.add(data, function_data);
+                }
+            }
+        } else {
+            let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
+            if let Some(v) = v {
+                let _ = self.add(v, function_data);
             }
         }
         Ok(())
@@ -164,7 +196,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     };
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
-                        MinMaxAnyState<DecimalType<i128>, CMP>,
+                        MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
                         DecimalType<i128>,
                         DecimalType<i128>,
                     >::try_create_unary(
@@ -178,7 +210,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     };
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
-                        MinMaxAnyState<DecimalType<i256>, CMP>,
+                        MinMaxAnyDecimalState<DecimalType<i256>, CMP>,
                         DecimalType<i256>,
                         DecimalType<i256>,
                     >::try_create_unary(

@@ -272,6 +272,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             columns_chunks,
             &part.compression,
             &part.location,
+            None,
         )
     }
 }
