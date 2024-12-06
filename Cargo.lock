@@ -4887,6 +4887,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
+ "span-map",
  "temp-env",
  "tempfile",
  "test-harness",
@@ -13369,6 +13370,12 @@ dependencies = [
  "robust",
  "smallvec",
 ]
+
+[[package]]
+name = "span-map"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9374d7f3fc7a34774575f8ebf4f55d7c19ccd09e77e7bd40d33064fe728e3926"
 
 [[package]]
 name = "spdx"

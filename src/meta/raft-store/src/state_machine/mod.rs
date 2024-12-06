@@ -17,7 +17,6 @@ pub use expire::ExpireKey;
 pub use expire::ExpireValue;
 pub use log_meta::LogMetaKey;
 pub use log_meta::LogMetaValue;
-pub use sm::StateMachineSubscriber;
 pub use snapshot_id::MetaSnapshotId;
 pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;
@@ -25,7 +24,6 @@ pub use state_machine_meta::StateMachineMetaValue;
 pub mod client_last_resp;
 mod expire;
 pub mod log_meta;
-pub mod sm;
 mod snapshot_id;
 pub mod state_machine_meta;
 

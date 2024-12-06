@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The client watch a key range and get notified when the key range changes.
+use crate::protobuf as pb;
+use crate::protobuf::WatchResponse;
+use crate::Change;
 
-mod command;
-mod desc;
-mod id;
-mod stream;
-mod stream_sender;
-mod subscriber;
-mod subscriber_handle;
+impl WatchResponse {
+    pub fn new(change: &Change<Vec<u8>, String>) -> Option<Self> {
+        let ev = pb::Event {
+            key: change.ident.clone()?,
+            prev: change.prev.clone().map(pb::SeqV::from),
+            current: change.result.clone().map(pb::SeqV::from),
+        };
 
-use std::collections::Bound;
-
-pub use desc::WatchDesc;
-pub use id::WatcherId;
-pub(crate) use stream::WatchStream;
-pub(crate) use stream_sender::StreamSender;
-pub(crate) use subscriber::EventSubscriber;
-pub(crate) use subscriber_handle::SubscriberHandle;
-
-pub(crate) type KeyRange = (Bound<String>, Bound<String>);
+        Some(WatchResponse { event: Some(ev) })
+    }
+}
