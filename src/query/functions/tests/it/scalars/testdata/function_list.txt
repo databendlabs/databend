@@ -3625,6 +3625,8 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_area(Geometry) :: Float64
+1 st_area(Geometry NULL) :: Float64 NULL
 0 st_asewkb(Geometry) :: Binary
 1 st_asewkb(Geometry NULL) :: Binary NULL
 0 st_asewkt(Geometry) :: String
@@ -3637,12 +3639,18 @@ Functions overloads:
 1 st_aswkt(Geometry NULL) :: String NULL
 0 st_contains(Geometry, Geometry) :: Boolean
 1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_convexhull(Geometry) :: Geometry
+1 st_convexhull(Geometry NULL) :: Geometry NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
+0 st_disjoint(Geometry, Geometry) :: Boolean
+1 st_disjoint(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_distance(Geometry, Geometry) :: Float64
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry NULL
 1 st_endpoint(Geometry NULL) :: Geometry NULL
+0 st_equals(Geometry, Geometry) :: Boolean
+1 st_equals(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_geographyfromewkt(String) :: Geography
 1 st_geographyfromewkt(String NULL) :: Geography NULL
 0 st_geohash(Geometry) :: String
@@ -3665,6 +3673,8 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
+0 st_intersects(Geometry, Geometry) :: Boolean
+1 st_intersects(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_length(Geometry) :: Float64
 1 st_length(Geometry NULL) :: Float64 NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
@@ -3689,6 +3699,8 @@ Functions overloads:
 1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
 2 st_transform(Geometry, Int32, Int32) :: Geometry
 3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
+0 st_within(Geometry, Geometry) :: Boolean
+1 st_within(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_x(Geometry) :: Float64
 1 st_x(Geometry NULL) :: Float64 NULL
 0 st_xmax(Geometry) :: Float64 NULL

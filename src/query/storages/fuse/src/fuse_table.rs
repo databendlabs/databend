@@ -20,10 +20,11 @@ use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Duration;
 use chrono::TimeDelta;
-use databend_common_base::base::tokio;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -82,8 +83,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::info;
@@ -133,9 +134,6 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
-
-    // A table instance level cache of snapshot_location, if this table is attaching to someone else.
-    attached_table_location: tokio::sync::OnceCell<String>,
 }
 
 impl FuseTable {
@@ -172,7 +170,7 @@ impl FuseTable {
         }
     }
 
-    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
+    pub fn do_create(mut table_info: TableInfo) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
@@ -183,14 +181,18 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
-
+                        let operator = init_operator(&sp)?;
                         let table_type = if Self::is_table_attached(table_meta_options) {
+                            Self::tweak_attach_table_snapshot_location(
+                                &mut table_info,
+                                &operator,
+                                &storage_prefix,
+                            )?;
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
                         };
 
-                        let operator = init_operator(&sp)?;
                         (operator, table_type)
                     }
                     // Normal table.
@@ -242,7 +244,6 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
-            attached_table_location: Default::default(),
         }))
     }
 
@@ -338,8 +339,8 @@ impl FuseTable {
         &self,
         reader: TableSnapshotReader,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc().await? {
-            let ver = self.snapshot_format_version(Some(loc.clone())).await?;
+        if let Some(loc) = self.snapshot_loc() {
+            let ver = self.snapshot_format_version(Some(loc.clone()))?;
             let params = LoadParams {
                 location: loc,
                 len_hint: None,
@@ -353,11 +354,11 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
+    pub fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
         let location_opt = if location_opt.is_some() {
             location_opt
         } else {
-            self.snapshot_loc().await?
+            self.snapshot_loc()
         };
         // If no snapshot location here, indicates that there are no data of this table yet
         // in this case, we just return the current snapshot version
@@ -366,41 +367,13 @@ impl FuseTable {
         }))
     }
 
-    #[async_backtrace::framed]
-    pub async fn snapshot_loc(&self) -> Result<Option<String>> {
-        match self.table_info.db_type {
-            DatabaseType::NormalDB => {
-                let options = self.table_info.options();
-
-                if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
-                    // If the table is attaching to someone else,
-                    // parse the snapshot location from the hint file.
-                    //
-                    // The snapshot location is allowed
-                    // to be fetched from the table level instance cache.
-                    let snapshot_location = self
-                        .attached_table_location
-                        .get_or_try_init(|| async {
-                            let hint =
-                                format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                            let hint_content = self.operator.read(&hint).await?.to_vec();
-                            let snapshot_full_path = String::from_utf8(hint_content)?;
-                            let operator_info = self.operator.info();
-                            Ok::<_, ErrorCode>(
-                                snapshot_full_path[operator_info.root().len()..].to_string(),
-                            )
-                        })
-                        .await?;
-                    Ok(Some(snapshot_location.to_owned()))
-                } else {
-                    Ok(options
-                        .get(OPT_KEY_SNAPSHOT_LOCATION)
-                        // for backward compatibility, we check the legacy table option
-                        .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                        .cloned())
-                }
-            }
-        }
+    pub fn snapshot_loc(&self) -> Option<String> {
+        let options = self.table_info.options();
+        options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            // for backward compatibility, we check the legacy table option
+            .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+            .cloned()
     }
 
     pub fn get_operator(&self) -> Operator {
@@ -487,6 +460,86 @@ impl FuseTable {
     pub fn get_storage_prefix(&self) -> &str {
         self.meta_location_generator.prefix()
     }
+
+    fn load_snapshot_location_from_hint(
+        operator: &Operator,
+        storage_prefix: &str,
+    ) -> Result<Option<String>> {
+        GlobalIORuntime::instance().block_on(async {
+            let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+            let begin_load_hint = Instant::now();
+            let maybe_hint_content = operator.read(&hint_file_path).await;
+            info!(
+                "loaded last snapshot hint file [{}], time used {:?}",
+                hint_file_path,
+                begin_load_hint.elapsed()
+            );
+
+            match maybe_hint_content {
+                Ok(buf) => {
+                    let hint_content = buf.to_vec();
+                    let snapshot_full_path = String::from_utf8(hint_content)?;
+                    let operator_info = operator.info();
+                    Ok::<_, ErrorCode>(Some(
+                        snapshot_full_path[operator_info.root().len()..].to_string(),
+                    ))
+                }
+                Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
+                    // Table be attached has not last snapshot hint file, treat it as empty table
+                    Ok(None)
+                }
+                Err(e) => Err(e.into()),
+            }
+        })
+    }
+
+    fn tweak_attach_table_snapshot_location(
+        table_info: &mut TableInfo,
+        operator: &Operator,
+        storage_prefix: &str,
+    ) -> Result<()> {
+        let table_meta_options = &table_info.meta.options;
+
+        if table_meta_options.contains_key(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG) {
+            // If table_info options contains key OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG,
+            // it means that this table info has been tweaked according to the rules of
+            // resolving snapshot location from the hint file, it should not be tweaked again.
+            return Ok(());
+        }
+
+        let location = Self::load_snapshot_location_from_hint(operator, storage_prefix)?;
+
+        info!(
+            "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
+            location, table_info.desc, table_info.ident
+        );
+
+        // Adjust snapshot location to the values extracted from the last snapshot hint
+        match location {
+            None => {
+                table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+            }
+            Some(location) => {
+                table_info
+                    .options_mut()
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+            }
+        }
+
+        // Mark the snapshot as fixed, indicating it doesn't need to be reloaded from the hint.
+        // NOTE:
+        // - Attached tables do not commit `table_info` to the meta server,
+        //   except when the table is created by a DDL statement for the first time.
+        // - As a result, the key `OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG` is transient
+        //   and will NOT appear when this table is resolved within another query context
+        //   for the first time.
+
+        table_info.options_mut().insert(
+            OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG.to_string(),
+            "does not matter".to_string(),
+        );
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -512,6 +565,10 @@ impl Table for FuseTable {
     }
 
     fn support_column_projection(&self) -> bool {
+        true
+    }
+
+    fn support_distributed_insert(&self) -> bool {
         true
     }
 
@@ -601,7 +658,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
+        let prev_version = self.snapshot_format_version(None)?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let prev_statistics_location = prev
@@ -655,7 +712,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
+        let prev_version = self.snapshot_format_version(None)?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()

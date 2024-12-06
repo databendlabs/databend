@@ -335,6 +335,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable materialized common table expression.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
@@ -949,6 +955,12 @@ impl DefaultSettings {
                 ("enable_distributed_pruning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed index pruning, as it is very necessary and should remain enabled in the vast majority of cases.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("persist_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0), // 0 for in-memory, 1 for disk
+                    desc: "Decides if materialized CTEs should be persisted to disk.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

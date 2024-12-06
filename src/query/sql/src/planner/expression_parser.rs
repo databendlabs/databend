@@ -257,6 +257,12 @@ pub fn parse_default_expr_to_string(
     )?;
 
     let (mut scalar, data_type) = *type_checker.resolve(ast)?;
+    if !scalar.evaluable() {
+        return Err(ErrorCode::SemanticError(format!(
+            "default value expression `{:#}` is invalid",
+            ast
+        )));
+    }
     let schema_data_type = DataType::from(field.data_type());
     if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
@@ -314,6 +320,12 @@ pub fn parse_computed_expr_to_string(
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
+    if !scalar.evaluable() {
+        return Err(ErrorCode::SemanticError(format!(
+            "computed column expression `{:#}` is invalid",
+            ast
+        )));
+    }
     if data_type != DataType::from(field.data_type()) {
         return Err(ErrorCode::SemanticError(format!(
             "expected computed column expression have type {}, but `{}` has type {}.",

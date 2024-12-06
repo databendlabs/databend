@@ -1,4 +1,5 @@
 <h1 align="center">Databend: The Next-Gen Cloud [Data+AI] Analytics</h1>
+<h2 align="center">Zero Disk Architecture</h2>
 
 <div align="center">
 
@@ -26,6 +27,10 @@
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
+
+<a href="https://gurubase.io/g/databend">
+<img src="https://img.shields.io/badge/Gurubase-Ask%20Databend%20Guru-006BFF" alt="Gurubase" />
+</a>
 
 </div>
 </div>

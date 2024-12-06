@@ -47,6 +47,7 @@ impl Plan {
             Plan::ShowCreateCatalog(_) => Ok("ShowCreateCatalog".to_string()),
             Plan::CreateCatalog(_) => Ok("CreateCatalog".to_string()),
             Plan::DropCatalog(_) => Ok("DropCatalog".to_string()),
+            Plan::UseCatalog(_) => Ok("UseCatalog".to_string()),
 
             // Databases
             Plan::ShowCreateDatabase(_) => Ok("ShowCreateDatabase".to_string()),

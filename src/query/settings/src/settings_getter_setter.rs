@@ -363,6 +363,10 @@ impl Settings {
         Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
     }
 
+    pub fn get_enable_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_materialized_cte")? != 0)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
@@ -820,5 +824,9 @@ impl Settings {
 
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
+    }
+
+    pub fn get_persist_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("persist_materialized_cte")? != 0)
     }
 }

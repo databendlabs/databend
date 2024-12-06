@@ -15,6 +15,7 @@
 use std::alloc::Layout;
 use std::fmt;
 use std::marker::PhantomData;
+use std::mem;
 use std::sync::Arc;
 
 use borsh::BorshDeserialize;
@@ -101,8 +102,9 @@ where
         match inner_type.remove_nullable() {
             DataType::Decimal(decimal_type) => {
                 let size = decimal_type.size();
-                for value in &self.values {
-                    let val = T::upcast_scalar(value.clone());
+                let values = mem::take(&mut self.values);
+                for value in values.into_iter() {
+                    let val = T::upcast_scalar(value);
                     let decimal_val = val.as_decimal().unwrap();
                     let new_val = match decimal_val {
                         DecimalScalar::Decimal128(v, _) => {
@@ -116,8 +118,9 @@ where
                 }
             }
             _ => {
-                for value in &self.values {
-                    let val = T::upcast_scalar(value.clone());
+                let values = mem::take(&mut self.values);
+                for value in values.into_iter() {
+                    let val = T::upcast_scalar(value);
                     inner_builder.push(val.as_ref());
                 }
             }

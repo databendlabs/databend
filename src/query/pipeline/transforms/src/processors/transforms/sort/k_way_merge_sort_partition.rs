@@ -150,10 +150,9 @@ where
     }
 
     fn calc_partition_point(&self) -> Partition {
-        let mut candidate = Candidate::new(&self.rows, EndDomain {
-            min: self.min_task,
-            max: self.max_task,
-        });
+        let mut candidate =
+            Candidate::new(&self.rows, EndDomain::new(self.min_task, self.max_task));
+
         candidate.init();
 
         // if candidate.is_small_task() {

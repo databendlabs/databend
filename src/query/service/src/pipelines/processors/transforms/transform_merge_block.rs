@@ -256,7 +256,7 @@ fn check_type(
     if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
         let origin_column = block.get_by_offset(index).clone();
         let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
-        let value = origin_column.value.as_ref();
+        let value = origin_column.value;
         for idx in 0..block.num_rows() {
             let scalar = value.index(idx).unwrap();
             builder.push(scalar);

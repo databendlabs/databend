@@ -86,7 +86,6 @@ pub async fn dynamic_sample(
         }
         RelOperator::Scan(_)
         | RelOperator::DummyTableScan(_)
-        | RelOperator::CteScan(_)
         | RelOperator::ConstantTableScan(_)
         | RelOperator::CacheScan(_)
         | RelOperator::ExpressionScan(_)
@@ -134,14 +133,6 @@ pub async fn dynamic_sample(
                     .clone();
             let project_set = ProjectSet::try_from(s_expr.plan().clone())?;
             project_set.derive_project_set_stats(&mut child_stat_info)
-        }
-        RelOperator::MaterializedCte(_) => {
-            let right_stat_info =
-                dynamic_sample(ctx, metadata, s_expr.child(1)?, sample_executor).await?;
-            Ok(Arc::new(StatInfo {
-                cardinality: right_stat_info.cardinality,
-                statistics: right_stat_info.statistics.clone(),
-            }))
         }
 
         RelOperator::EvalScalar(_)
