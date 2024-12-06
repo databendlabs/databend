@@ -33,6 +33,7 @@ use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::select_row_type;
+use databend_common_pipeline_transforms::processors::sort::utils::has_order_field;
 use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
@@ -64,7 +65,7 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_row_offset: usize,
     output_order_col: bool,
     limit: Option<usize>,
     spiller: Arc<Spiller>,
@@ -178,7 +179,7 @@ where
 
                         self.simpler = Some(
                             FixedRateSimpler::new(
-                                vec![self.schema.fields().len() - 1],
+                                vec![self.sort_row_offset],
                                 self.batch_rows,
                                 self.batch_rows * self.num_merge,
                                 self.batch_rows,
@@ -234,21 +235,15 @@ where
 
                     self.state = State::Restore;
                     self.subsequent
-                        .extend(self.input_data.drain(..).map(|data| {
-                            BoundBlockStream::<A::Rows> {
-                                sort_desc: self.sort_desc.clone(),
-                                blocks: vec![SpillableBlock {
-                                    processed: 0,
-                                    location: None,
-                                    rows: data.num_rows(),
-                                    domain: get_domain(data.get_last_column()),
-                                    data: Some(data),
-                                }]
-                                .into(),
+                        .extend(self.input_data.drain(..).map(
+                            |data| BoundBlockStream::<A::Rows> {
+                                sort_row_offset: self.sort_row_offset,
+                                blocks:
+                                    vec![SpillableBlock::new(data, self.sort_row_offset)].into(),
                                 bound: None,
                                 spiller: self.spiller.clone(),
-                            }
-                        }));
+                            },
+                        ));
 
                     Ok(Event::Async)
                 }
@@ -281,20 +276,20 @@ where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
 {
-    pub fn create(
+    pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
         limit: Option<usize>,
         spiller: Spiller,
+        sort_row_offset: usize,
         output_order_col: bool,
     ) -> Self {
         Self {
             input,
             output,
             schema,
-            sort_desc,
+            sort_row_offset,
             output_order_col,
             limit,
             input_data: Vec::new(),
@@ -332,15 +327,10 @@ where
             let streams = self
                 .input_data
                 .drain(..)
-                .map(DataBlockStream::new)
+                .map(|data| DataBlockStream::new(data, self.sort_row_offset))
                 .collect();
-            let mut merger = Merger::<A, _>::create(
-                self.schema.clone(),
-                streams,
-                self.sort_desc.clone(),
-                self.batch_rows,
-                self.limit,
-            );
+            let mut merger =
+                Merger::<A, _>::create(self.schema.clone(), streams, self.batch_rows, self.limit);
 
             let mut spilled = VecDeque::new();
             while let Some(block) = merger.next_block()? {
@@ -352,9 +342,9 @@ where
         };
 
         self.subsequent.push(BoundBlockStream::<A::Rows> {
-            sort_desc: self.sort_desc.clone(),
             blocks,
             bound: None,
+            sort_row_offset: self.sort_row_offset,
             spiller: self.spiller.clone(),
         });
         Ok(())
@@ -393,13 +383,8 @@ where
             .drain(self.current.len() - self.num_merge..)
             .collect();
 
-        let mut merger = Merger::<A, _>::create(
-            self.schema.clone(),
-            streams,
-            self.sort_desc.clone(),
-            self.batch_rows,
-            None,
-        );
+        let mut merger =
+            Merger::<A, _>::create(self.schema.clone(), streams, self.batch_rows, None);
 
         let mut spilled = VecDeque::new();
         while let Some(data) = merger.async_next_block().await? {
@@ -408,9 +393,9 @@ where
         debug_assert!(merger.is_finished());
 
         self.current.insert(0, BoundBlockStream::<A::Rows> {
-            sort_desc: self.sort_desc.clone(),
             blocks: spilled,
             bound,
+            sort_row_offset: self.sort_row_offset,
             spiller: self.spiller.clone(),
         });
 
@@ -439,7 +424,6 @@ where
                 let merger = Merger::<A, _>::create(
                     self.schema.clone(),
                     mem::take(&mut self.current),
-                    self.sort_desc.clone(),
                     self.batch_rows,
                     None,
                 );
@@ -486,17 +470,10 @@ where
         rows >= self.num_merge * self.batch_rows
     }
 
-    async fn new_spillable_block(&mut self, block: DataBlock) -> Result<SpillableBlock> {
-        let rows = block.num_rows();
-        let domain = get_domain(block.get_last_column());
-        let location = self.spiller.spill_unmanage(vec![block]).await?;
-        Ok(SpillableBlock {
-            data: None,
-            rows,
-            domain,
-            location: Some(location),
-            processed: 0,
-        })
+    async fn new_spillable_block(&mut self, data: DataBlock) -> Result<SpillableBlock> {
+        let mut block = SpillableBlock::new(data, self.sort_row_offset);
+        block.spill(&self.spiller).await?;
+        Ok(block)
     }
 
     fn next_bound(&mut self) -> Option<A::Rows> {
@@ -510,7 +487,7 @@ where
                 bound
             }
         };
-        Some(A::Rows::from_column(&bound, &self.sort_desc).unwrap())
+        Some(A::Rows::from_column(&bound).unwrap())
     }
 
     fn determine_bounds(&mut self) -> Result<()> {
@@ -536,26 +513,23 @@ where
             _ => {
                 let streams = simpled_rows
                     .into_iter()
-                    .map(|block| {
-                        DataBlockStream::new(
-                            DataBlock::sort(
-                                &block,
-                                &[SortColumnDescription {
-                                    offset: 0,
-                                    asc: A::Rows::IS_ASC_COLUMN,
-                                    nulls_first: false,
-                                }],
-                                None,
-                            )
-                            .unwrap(),
+                    .map(|data| {
+                        let data = DataBlock::sort(
+                            &data,
+                            &[SortColumnDescription {
+                                offset: 0,
+                                asc: A::Rows::IS_ASC_COLUMN,
+                                nulls_first: false,
+                            }],
+                            None,
                         )
+                        .unwrap();
+                        DataBlockStream::new(data, 0)
                     })
                     .collect::<Vec<_>>();
 
                 let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
-                let sort_desc = Arc::new(vec![self.sort_desc[0].clone()]);
-                let mut merger =
-                    Merger::<A, _>::create(schema, streams, sort_desc, self.batch_rows, None);
+                let mut merger = Merger::<A, _>::create(schema, streams, self.batch_rows, None);
 
                 let mut blocks = Vec::new();
                 while let Some(block) = merger.next_block()? {
@@ -585,39 +559,62 @@ struct SpillableBlock {
 }
 
 impl SpillableBlock {
-    fn slice(&mut self, pos: usize) -> DataBlock {
+    fn new(data: DataBlock, sort_row_offset: usize) -> Self {
+        Self {
+            location: None,
+            processed: 0,
+            rows: data.num_rows(),
+            domain: get_domain(sort_column(&data, sort_row_offset)),
+            data: Some(data),
+        }
+    }
+
+    fn slice(&mut self, pos: usize, sort_row_offset: usize) -> DataBlock {
         let data = self.data.as_ref().unwrap();
 
         let left = data.slice(0..pos);
         let right = data.slice(pos..data.num_rows());
 
-        self.domain = get_domain(right.get_last_column());
+        self.domain = get_domain(sort_column(&right, sort_row_offset));
         self.rows = right.num_rows();
         self.data = Some(right);
         self.processed += pos;
         left
     }
 
-    fn domain<R: Rows>(&self, sort_desc: &[SortColumnDescription]) -> R {
-        R::from_column(&self.domain, sort_desc).unwrap()
+    fn domain<R: Rows>(&self) -> R {
+        R::from_column(&self.domain).unwrap()
+    }
+
+    async fn spill(&mut self, spiller: &Spiller) -> Result<()> {
+        let data = self.data.take().unwrap();
+        let location = spiller.spill_unmanage(vec![data]).await?;
+        self.location = Some(location);
+        Ok(())
     }
 }
 
+fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
+    data.get_by_offset(sort_row_offset)
+        .value
+        .as_column()
+        .unwrap()
+}
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
-struct BoundBlockStream<R: Rows + Send> {
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+struct BoundBlockStream<R: Rows> {
     blocks: VecDeque<SpillableBlock>,
     bound: Option<R>,
+    sort_row_offset: usize,
     spiller: Arc<Spiller>,
 }
 
 #[async_trait::async_trait]
-impl<R: Rows + Send> SortedStream for BoundBlockStream<R> {
+impl<R: Rows> SortedStream for BoundBlockStream<R> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
             let data = self.pop_front_data();
-            let col = data.get_last_column().clone();
+            let col = sort_column(&data, self.sort_row_offset).clone();
             Ok((Some((data, col)), false))
         } else {
             Ok((None, false))
@@ -625,14 +622,14 @@ impl<R: Rows + Send> SortedStream for BoundBlockStream<R> {
     }
 }
 
-impl<R: Rows + Send> BoundBlockStream<R> {
+impl<R: Rows> BoundBlockStream<R> {
     fn should_include_first(&self) -> bool {
         let Some(block) = self.blocks.front() else {
             return false;
         };
 
         match &self.bound {
-            Some(bound) => block.domain::<R>(&self.sort_desc).first() <= bound.row(0),
+            Some(bound) => block.domain::<R>().first() <= bound.row(0),
             None => true,
         }
     }
@@ -642,12 +639,12 @@ impl<R: Rows + Send> BoundBlockStream<R> {
             Some(bound) => {
                 let block = self.blocks.front_mut().unwrap();
                 let data = block.data.as_ref().unwrap();
-                let rows = R::from_column(data.get_last_column(), &self.sort_desc).unwrap();
+                let rows = R::from_column(data.get_last_column()).unwrap();
                 debug_assert!(rows.len() > 0);
                 debug_assert!(bound.len() == 1);
                 let bound = bound.row(0);
                 match partition_point(&rows, &bound) {
-                    Some(pos) => block.slice(pos),
+                    Some(pos) => block.slice(pos, self.sort_row_offset),
                     None => {
                         let mut block = self.blocks.pop_front().unwrap();
                         block.data.take().unwrap()
@@ -708,21 +705,18 @@ fn partition_point<'a, R: Rows>(list: &'a R, bound: &R::Item<'a>) -> Option<usiz
     Some(left)
 }
 
-struct DataBlockStream(Option<DataBlock>);
+struct DataBlockStream(Option<(DataBlock, Column)>);
 
 impl SortedStream for DataBlockStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        let data = self.0.take().map(|b| {
-            let col = b.get_last_column().clone();
-            (b, col)
-        });
-        Ok((data, false))
+        Ok((self.0.take(), false))
     }
 }
 
 impl DataBlockStream {
-    fn new(data: DataBlock) -> Self {
-        Self(Some(data))
+    fn new(data: DataBlock, sort_row_offset: usize) -> Self {
+        let col = sort_column(&data, sort_row_offset).clone();
+        Self(Some((data, col)))
     }
 }
 
@@ -751,6 +745,7 @@ pub fn create_transform_stream_sort_spill(
     output_order_col: bool,
     enable_loser_tree: bool,
 ) -> Box<dyn Processor> {
+    debug_assert!(has_order_field(&schema));
     let mut builder = Builder {
         schema,
         sort_desc,
@@ -788,25 +783,26 @@ impl RowsTypeVisitor for Builder {
         &self.sort_desc
     }
 
-    fn visit_type<R: Rows + Send + 'static>(&mut self) {
+    fn visit_type<R: Rows + 'static>(&mut self) {
+        let sort_row_offset = self.schema.fields().len() - 1;
         let processor: Box<dyn Processor> = if self.enable_loser_tree {
-            Box::new(TransformStreamSortSpill::<LoserTreeSort<R>>::create(
+            Box::new(TransformStreamSortSpill::<LoserTreeSort<R>>::new(
                 self.input.clone(),
                 self.output.clone(),
                 self.schema.clone(),
-                self.sort_desc.clone(),
                 self.limit,
                 self.spiller.take().unwrap(),
+                sort_row_offset,
                 self.output_order_col,
             ))
         } else {
-            Box::new(TransformStreamSortSpill::<HeapSort<R>>::create(
+            Box::new(TransformStreamSortSpill::<HeapSort<R>>::new(
                 self.input.clone(),
                 self.output.clone(),
                 self.schema.clone(),
-                self.sort_desc.clone(),
                 self.limit,
                 self.spiller.take().unwrap(),
+                sort_row_offset,
                 self.output_order_col,
             ))
         };
@@ -849,7 +845,7 @@ mod tests {
         (schema, block)
     }
 
-    async fn run_bound_block_stream<R: Rows + Send>(
+    async fn run_bound_block_stream<R: Rows>(
         spiller: Arc<Spiller>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         bound: Column,
@@ -858,7 +854,8 @@ mod tests {
     ) -> Result<()> {
         let (schema, block) = test_data();
         let block = DataBlock::sort(&block, &sort_desc, None)?;
-        let bound = Some(R::from_column(&bound, &sort_desc)?);
+        let bound = Some(R::from_column(&bound)?);
+        let sort_row_offset = schema.fields().len();
 
         let blocks = vec![
             block.slice(0..block_part),
@@ -868,23 +865,14 @@ mod tests {
         .map(|mut data| {
             let col = convert_rows(schema.clone(), &sort_desc, data.clone()).unwrap();
             data.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
-            let domain = get_domain(data.get_last_column());
-            let rows = data.num_rows();
-
-            SpillableBlock {
-                data: Some(data),
-                domain,
-                rows,
-                location: None,
-                processed: 0,
-            }
+            SpillableBlock::new(data, sort_row_offset)
         })
         .collect::<VecDeque<_>>();
 
         let mut stream = BoundBlockStream::<R> {
-            sort_desc: sort_desc.clone(),
             blocks,
             bound,
+            sort_row_offset,
             spiller: spiller.clone(),
         };
 

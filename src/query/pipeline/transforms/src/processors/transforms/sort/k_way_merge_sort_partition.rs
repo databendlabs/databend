@@ -14,13 +14,11 @@
 
 use std::cmp::Ordering;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 
 use super::list_domain::Candidate;
 use super::list_domain::EndDomain;
@@ -35,7 +33,6 @@ where
     S: SortedStream,
 {
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
     pending_streams: VecDeque<usize>,
 
@@ -61,7 +58,6 @@ where
     pub fn new(
         schema: DataSchemaRef,
         streams: Vec<S>,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
@@ -91,7 +87,6 @@ where
 
         Self {
             schema,
-            sort_desc,
             unsorted_streams: streams,
             pending_streams,
             buffer,
@@ -126,7 +121,7 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                self.rows[i] = Some(R::from_column(&col, &self.sort_desc)?);
+                self.rows[i] = Some(R::from_column(&col)?);
                 self.buffer[i] = block;
             }
         }

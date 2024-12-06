@@ -130,5 +130,5 @@ pub trait RowsTypeVisitor {
 
     fn sort_desc(&self) -> &[SortColumnDescription];
 
-    fn visit_type<R: Rows + Send + 'static>(&mut self);
+    fn visit_type<R: Rows + 'static>(&mut self);
 }

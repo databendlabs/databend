@@ -53,7 +53,7 @@ impl Rows for BinaryColumn {
         Column::Binary(self.clone())
     }
 
-    fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
+    fn try_from_column(col: &Column) -> Option<Self> {
         col.as_binary().cloned()
     }
 
