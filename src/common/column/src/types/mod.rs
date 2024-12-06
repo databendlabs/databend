@@ -114,6 +114,6 @@ mod private {
     impl Sealed for OrderedFloat<f32> {}
     impl Sealed for OrderedFloat<f64> {}
     impl Sealed for super::days_ms {}
-    impl Sealed for super::months_days_ns {}
+    impl Sealed for super::months_days_micros {}
     impl Sealed for View {}
 }

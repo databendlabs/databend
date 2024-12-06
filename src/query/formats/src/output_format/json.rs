@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::DataBlock;
@@ -100,14 +102,6 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             let dt = DateConverter::to_date(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap()
         }
-        ScalarRef::Interval(v) => {
-            let i = Interval {
-                months: v.0,
-                days: v.1,
-                nanos: v.2,
-            };
-            serde_json::to_value(i.to_string()).unwrap()
-        }
         ScalarRef::Timestamp(v) => {
             let dt = DateConverter::to_timestamp(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()
@@ -160,6 +154,19 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         ScalarRef::Geometry(x) => {
             let geom = Ewkb(x).to_json().expect("failed to convert ewkb to json");
             jsonb::from_slice(geom.as_bytes()).unwrap().into()
+        }
+        ScalarRef::Interval(v) => {
+            let interval: [u8; 16] = v
+                .to_vec()
+                .try_into()
+                .expect("Interval should have 16 elements");
+            let v = months_days_micros::from_le_bytes(interval);
+            let i = Interval {
+                months: v.0,
+                days: v.1,
+                micros: v.2,
+            };
+            serde_json::to_value(i.to_string()).unwrap()
         }
         ScalarRef::Geography(x) => {
             let geom = Ewkb(x.0).to_json().expect("failed to convert ewkb to json");

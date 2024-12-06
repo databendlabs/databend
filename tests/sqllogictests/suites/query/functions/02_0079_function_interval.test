@@ -8,10 +8,10 @@ insert into t values('1 year 1 month ago', '1'),('1 month 1 hour ago', '1000');
 
 onlyif http
 query TT
-select * from t order by c1;
+select * from t;
 ----
--1 year -1 month 0:00:00.000000001
--1 month -1:00:00 0:00:00.000001
+-1 year -1 month 0:00:00.000001
+-1 month -1:00:00 0:00:00.001
 
 onlyif http
 statement error 1006

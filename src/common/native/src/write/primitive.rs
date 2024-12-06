@@ -17,7 +17,7 @@ use std::io::Write;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 use databend_common_column::types::PrimitiveType;
 use databend_common_expression::types::F32;
@@ -89,7 +89,7 @@ pub(crate) fn write_primitive<T: NativeType, W: Write>(
         PrimitiveType::Float16 => unimplemented!(),
         PrimitiveType::DaysMs => unimplemented!(),
         PrimitiveType::MonthDayNano => {
-            let array: &Buffer<months_days_ns> = unsafe { std::mem::transmute(col) };
+            let array: &Buffer<months_days_micros> = unsafe { std::mem::transmute(col) };
             compress_integer(array, validity, write_options, scratch)?;
         }
         PrimitiveType::UInt128 => unimplemented!(),

@@ -16,7 +16,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 
 use databend_common_column::types::i256;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 
 pub trait IntegerType: NativeType + PartialOrd + Hash + Eq {
@@ -53,7 +53,7 @@ impl IntegerType for i256 {
 }
 
 // pub struct months_days_ns(pub i32, pub i32, pub i64);
-impl IntegerType for months_days_ns {
+impl IntegerType for months_days_micros {
     fn compare_i64(&self, i: i64) -> Ordering {
         self.2.cmp(&i)
     }

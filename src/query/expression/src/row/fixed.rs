@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 use ethnum::i256;
 
@@ -100,7 +100,7 @@ impl FixedLengthEncoding for F64 {
     }
 }
 
-impl FixedLengthEncoding for months_days_ns {
+impl FixedLengthEncoding for months_days_micros {
     type Encoded = [u8; 16];
 
     fn encode(self) -> [u8; 16] {

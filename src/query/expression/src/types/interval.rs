@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::fmt::Display;
 use std::ops::Range;
 
-use databend_common_column::buffer::Buffer;
-use databend_common_column::types::months_days_ns;
 use databend_common_io::Interval;
 
-use super::number::SimpleDomain;
 use crate::property::Domain;
+use crate::types::binary::BinaryColumnBuilder;
+use crate::types::binary::BinaryColumnIter;
 use crate::types::ArgType;
+use crate::types::BinaryColumn;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -37,42 +35,40 @@ use crate::ScalarRef;
 pub struct IntervalType;
 
 impl ValueType for IntervalType {
-    type Scalar = months_days_ns;
-    type ScalarRef<'a> = months_days_ns;
-    type Column = Buffer<months_days_ns>;
-    type Domain = SimpleDomain<months_days_ns>;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, months_days_ns>>;
-    type ColumnBuilder = Vec<months_days_ns>;
+    type Scalar = Vec<u8>;
+    type ScalarRef<'a> = &'a [u8];
+    type Column = BinaryColumn;
+    type Domain = ();
+    type ColumnIterator<'a> = BinaryColumnIter<'a>;
+    type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: months_days_ns) -> months_days_ns {
+    fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
         long
     }
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
+        scalar.to_vec()
     }
 
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
+        scalar
     }
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
-        match scalar {
-            ScalarRef::Interval(scalar) => Some(*scalar),
-            _ => None,
-        }
+        scalar.as_interval().cloned()
     }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        match col {
-            Column::Interval(column) => Some(column.clone()),
-            _ => None,
-        }
+        col.as_interval().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<months_days_ns>> {
-        domain.as_interval().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        if domain.is_undefined() {
+            Some(())
+        } else {
+            None
+        }
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -104,8 +100,8 @@ impl ValueType for IntervalType {
         Column::Interval(col)
     }
 
-    fn upcast_domain(domain: SimpleDomain<months_days_ns>) -> Domain {
-        Domain::Interval(domain)
+    fn upcast_domain(_domain: Self::Domain) -> Domain {
+        Domain::Undefined
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -113,96 +109,61 @@ impl ValueType for IntervalType {
     }
 
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).cloned()
+        col.index(index)
     }
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
-
-        *col.get_unchecked(index)
+        col.index_unchecked(index)
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
+        col.slice(range)
     }
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().cloned()
+        col.iter()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        buffer_into_mut(col)
+        BinaryColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::Scalar) {
-        builder.push(item);
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.put_slice(item);
+        builder.commit_row();
     }
 
     fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.resize(builder.len() + n, item);
+        builder.push_repeat(item, n);
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(Self::Scalar::default());
+        builder.commit_row();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        builder.extend_from_slice(other);
+    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
+        builder.append_column(other_builder)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.into()
+        builder.build()
     }
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(builder.len(), 1);
-        builder[0]
+        builder.build_scalar()
     }
 
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        if lhs.0 != rhs.0 {
-            lhs.0.cmp(&rhs.0)
-        } else if lhs.1 != rhs.1 {
-            lhs.1.cmp(&rhs.1)
-        } else {
-            lhs.2.cmp(&rhs.2)
-        }
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        scalar.len()
     }
 
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left > right
-    }
-
-    #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
-    }
-
-    #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left <= right
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
     }
 }
 
@@ -211,30 +172,10 @@ impl ArgType for IntervalType {
         DataType::Interval
     }
 
-    fn full_domain() -> Self::Domain {
-        SimpleDomain {
-            min: months_days_ns(-12 * 200, -365 * 200, -7200000000000000000),
-            max: months_days_ns(12 * 200, 365 * 200, 7200000000000000000),
-        }
-    }
+    fn full_domain() -> Self::Domain {}
 
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
+    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
+        BinaryColumnBuilder::with_capacity(capacity, 0)
     }
 }
 

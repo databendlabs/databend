@@ -299,10 +299,6 @@ impl Column {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
-            Column::Interval(_) => {
-                let builder = IntervalType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<IntervalType>(columns, builder, indices)
-            }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
@@ -403,6 +399,10 @@ impl Column {
             Column::Geography(_) => {
                 let builder = GeographyType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<GeographyType>(columns, builder, indices)
+            }
+            Column::Interval(_) => {
+                let builder = IntervalType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<IntervalType>(columns, builder, indices)
             }
         }
     }
@@ -694,14 +694,6 @@ impl Column {
                 .unwrap();
                 Column::Date(d)
             }
-            ColumnVec::Interval(columns) => {
-                let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let i =
-                    <IntervalType>::upcast_column(<IntervalType>::column_from_vec(builder, &[]))
-                        .into_interval()
-                        .unwrap();
-                Column::Interval(i)
-            }
             ColumnVec::Array(columns) => {
                 let data_type = data_type.as_array().unwrap();
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -776,6 +768,9 @@ impl Column {
             }
             ColumnVec::Geometry(columns) => {
                 GeometryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+            }
+            ColumnVec::Interval(columns) => {
+                IntervalType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
             }
             ColumnVec::Geography(columns) => {
                 let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();

@@ -20,6 +20,8 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
@@ -129,10 +131,15 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Interval(i) => {
+                let interval: [u8; 16] = i
+                    .to_vec()
+                    .try_into()
+                    .expect("Interval should have 16 elements");
+                let i = months_days_micros::from_le_bytes(interval);
                 let interval = Interval {
                     months: i.0,
                     days: i.1,
-                    nanos: i.2,
+                    micros: i.2,
                 };
                 write!(f, "{interval:?}")
             }
@@ -234,15 +241,22 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
-            ScalarRef::Interval(interval) => write!(
-                f,
-                "{}",
-                interval_to_string(Interval {
-                    days: interval.1,
-                    nanos: interval.2,
-                    months: interval.0
-                })
-            ),
+            ScalarRef::Interval(interval) => {
+                let interval: [u8; 16] = interval
+                    .to_vec()
+                    .try_into()
+                    .expect("Interval should have 16 elements");
+                let i = months_days_micros::from_le_bytes(interval);
+                write!(
+                    f,
+                    "{}",
+                    interval_to_string(Interval {
+                        months: i.0,
+                        days: i.1,
+                        micros: i.2,
+                    })
+                )
+            }
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;

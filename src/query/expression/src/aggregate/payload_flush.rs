@@ -251,6 +251,7 @@ impl Payload {
             DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),
             DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
             DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
+            DataType::Interval => Column::Interval(self.flush_binary_column(col_offset, state)),
             DataType::Nullable(_) => unreachable!(),
             other => self.flush_generic_column(&other, col_offset, state),
         };
