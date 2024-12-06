@@ -16,9 +16,7 @@ use std::collections::BTreeSet;
 use std::collections::Bound;
 use std::sync::Arc;
 
-use databend_common_meta_types::protobuf;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
-use databend_common_meta_types::protobuf::Event;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::Change;
@@ -80,16 +78,19 @@ impl EventSubscriber {
 
     /// Dispatch a kv change event to interested watchers.
     async fn dispatch(&mut self, change: Change<Vec<u8>, String>) {
-        let k = change.ident.as_ref().unwrap();
-        let senders = self.watchers.get(k);
+        let Some(key) = change.ident.clone() else {
+            warn!("EventSubscriber: change event without key; ignore it");
+            return;
+        };
 
-        let current = change.result;
-        let prev = change.prev;
+        let is_delete = change.result.is_none();
 
-        let is_delete = current.is_none();
+        let resp = WatchResponse::new(&change).unwrap();
+        let resp_size = resp.encoded_len() as u64;
+
         let mut removed = vec![];
 
-        for sender in senders {
+        for sender in self.watchers.get(&key) {
             let interested = sender.desc.interested;
 
             match interested {
@@ -106,24 +107,14 @@ impl EventSubscriber {
                 }
             }
 
-            let watcher_id = sender.desc.watcher_id;
-
-            let resp = WatchResponse {
-                event: Some(Event {
-                    key: k.to_string(),
-                    current: current.clone().map(protobuf::SeqV::from),
-                    prev: prev.clone().map(protobuf::SeqV::from),
-                }),
-            };
-
-            network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
-
-            if let Err(_err) = sender.send(resp).await {
+            if let Err(_err) = sender.send(resp.clone()).await {
                 warn!(
                     "EventSubscriber: fail to send to watcher {}; close this stream",
-                    watcher_id
+                    sender.desc.watcher_id
                 );
                 removed.push(sender.clone());
+            } else {
+                network_metrics::incr_sent_bytes(resp_size);
             };
         }
 
@@ -135,13 +126,13 @@ impl EventSubscriber {
     #[fastrace::trace]
     pub fn add_watcher(
         &mut self,
-        create: WatchRequest,
+        req: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
     ) -> Result<Arc<StreamSender>, &'static str> {
-        info!("EventSubscriber::add_watcher: {:?}", create);
+        info!("EventSubscriber::add_watcher: {:?}", req);
 
-        let interested = create.filter_type();
-        let desc = self.new_watch_desc(create.key, create.key_end, interested)?;
+        let interested = req.filter_type();
+        let desc = self.new_watch_desc(req.key, req.key_end, interested)?;
 
         let stream_sender = Arc::new(StreamSender::new(desc, tx));
 
@@ -182,6 +173,7 @@ impl EventSubscriber {
         key_end: &Option<String>,
     ) -> Result<KeyRange, &'static str> {
         let left = Bound::Included(key.clone());
+
         match key_end {
             Some(key_end) => {
                 if &key >= key_end {
