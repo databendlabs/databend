@@ -16,7 +16,6 @@ use std::io::Write;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
-use databend_common_column::types::months_days_ns;
 use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NumberColumn;
@@ -68,12 +67,10 @@ pub fn write<W: Write>(
         Column::Date(column) => {
             write_primitive::<i32, W>(w, &column, validity, write_options, scratch)
         }
-        Column::Interval(column) => {
-            write_primitive::<months_days_ns, W>(w, &column, validity, write_options, scratch)
-        }
         Column::Binary(b)
         | Column::Bitmap(b)
         | Column::Variant(b)
+        | Column::Interval(b)
         | Column::Geography(GeographyColumn(b))
         | Column::Geometry(b) => write_binary::<W>(w, &b, validity, write_options, scratch),
 

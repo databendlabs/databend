@@ -1324,6 +1324,7 @@ impl TableDataType {
                 | TableDataType::Variant
                 | TableDataType::Geometry
                 | TableDataType::Geography
+                | TableDataType::Interval
         )
     }
 }
