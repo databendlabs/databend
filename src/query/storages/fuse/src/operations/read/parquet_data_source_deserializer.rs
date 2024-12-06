@@ -128,8 +128,6 @@ impl DeserializeDataTransform {
             base_block_ids: plan.base_block_ids.clone(),
             cached_runtime_filter: None,
             need_reserve_block_info,
-            need_wait_runtime_filter,
-            runtime_filter_ready: None,
             uncompressed_buffer: UncompressedBuffer::new(uncompressed_buffer_size),
         })))
     }

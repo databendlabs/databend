@@ -35,9 +35,9 @@ use databend_storages_common_table_meta::meta::Compression;
 
 mod adapter;
 mod arrow_parquet;
-mod deserialize;
 mod buffer;
 mod bytes_serialized_reader;
+mod deserialize;
 
 pub use adapter::RowGroupImplBuilder;
 pub use buffer::UncompressedBuffer;
