@@ -3243,6 +3243,7 @@ dependencies = [
  "geozero",
  "gimli 0.31.1",
  "http 1.1.0",
+ "hyper 1.4.1",
  "libc",
  "object",
  "once_cell",
