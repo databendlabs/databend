@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_exception::Result;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use ethnum::i256;
@@ -251,7 +253,9 @@ impl Payload {
             DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),
             DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
             DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
-            DataType::Interval => Column::Interval(self.flush_binary_column(col_offset, state)),
+            DataType::Interval => {
+                Column::Interval(self.flush_fixed_size_binary_column(col_offset, state, 16))
+            }
             DataType::Nullable(_) => unreachable!(),
             other => self.flush_generic_column(&other, col_offset, state),
         };
@@ -316,6 +320,29 @@ impl Payload {
             }
         }
         binary_builder.build()
+    }
+
+    fn flush_fixed_size_binary_column(
+        &self,
+        col_offset: usize,
+        state: &mut PayloadFlushState,
+        value_length: usize,
+    ) -> FixedSizeBinaryColumn {
+        let len = state.probe_state.row_count;
+        let mut fixed_size_binary_builder =
+            FixedSizeBinaryColumnBuilder::with_capacity(len, value_length);
+
+        unsafe {
+            for idx in 0..len {
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
+                let scalar = std::slice::from_raw_parts(data_address, str_len);
+                fixed_size_binary_builder.put_slice(scalar);
+                fixed_size_binary_builder.commit_row();
+            }
+        }
+        fixed_size_binary_builder.build()
     }
 
     fn flush_string_column(

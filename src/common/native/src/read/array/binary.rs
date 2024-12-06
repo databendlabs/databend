@@ -146,7 +146,6 @@ fn binary_column_to_column(
         TableDataType::Variant => Column::Variant(column),
         TableDataType::Geometry => Column::Geometry(column),
         TableDataType::Geography => Column::Geography(GeographyColumn(column)),
-        TableDataType::Interval => Column::Interval(column),
         _ => unreachable!(),
     };
     if data_type.is_nullable() {

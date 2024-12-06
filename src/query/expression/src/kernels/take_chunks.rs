@@ -17,6 +17,8 @@ use std::sync::Arc;
 use binary::BinaryColumnBuilder;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 use string::StringColumnBuilder;
@@ -769,9 +771,9 @@ impl Column {
             ColumnVec::Geometry(columns) => {
                 GeometryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
             }
-            ColumnVec::Interval(columns) => {
-                IntervalType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
-            }
+            ColumnVec::Interval(columns) => IntervalType::upcast_column(
+                Self::take_block_vec_fixed_size_binary_types(columns, indices, 16),
+            ),
             ColumnVec::Geography(columns) => {
                 let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
                 GeographyType::upcast_column(GeographyColumn(Self::take_block_vec_binary_types(
@@ -794,6 +796,23 @@ impl Column {
     // TODO: reuse the buffer by `SELECTIVITY_THRESHOLD`
     pub fn take_block_vec_binary_types(col: &[BinaryColumn], indices: &[RowPtr]) -> BinaryColumn {
         let mut builder = BinaryColumnBuilder::with_capacity(indices.len(), 0);
+        for row_ptr in indices {
+            unsafe {
+                builder.put_slice(
+                    col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize),
+                );
+                builder.commit_row();
+            }
+        }
+        builder.build()
+    }
+
+    pub fn take_block_vec_fixed_size_binary_types(
+        col: &[FixedSizeBinaryColumn],
+        indices: &[RowPtr],
+        value_length: usize,
+    ) -> FixedSizeBinaryColumn {
+        let mut builder = FixedSizeBinaryColumnBuilder::with_capacity(indices.len(), value_length);
         for row_ptr in indices {
             unsafe {
                 builder.put_slice(

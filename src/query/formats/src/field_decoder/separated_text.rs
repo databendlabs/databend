@@ -16,6 +16,7 @@ use std::any::Any;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 use databend_common_exception::ErrorCode;
@@ -264,7 +265,7 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
-    fn read_interval(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_interval(&self, column: &mut FixedSizeBinaryColumnBuilder, data: &[u8]) -> Result<()> {
         let res = std::str::from_utf8(data).map_err_to_code(ErrorCode::BadBytes, || {
             format!(
                 "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",

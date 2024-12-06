@@ -67,10 +67,12 @@ pub fn write<W: Write>(
         Column::Date(column) => {
             write_primitive::<i32, W>(w, &column, validity, write_options, scratch)
         }
+        Column::Interval(_i) => {
+            todo!()
+        }
         Column::Binary(b)
         | Column::Bitmap(b)
         | Column::Variant(b)
-        | Column::Interval(b)
         | Column::Geography(GeographyColumn(b))
         | Column::Geometry(b) => write_binary::<W>(w, &b, validity, write_options, scratch),
 

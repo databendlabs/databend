@@ -15,13 +15,13 @@
 use std::fmt::Display;
 use std::ops::Range;
 
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnIter;
 use databend_common_io::Interval;
 
 use crate::property::Domain;
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::binary::BinaryColumnIter;
 use crate::types::ArgType;
-use crate::types::BinaryColumn;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
@@ -37,10 +37,10 @@ pub struct IntervalType;
 impl ValueType for IntervalType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
-    type Column = BinaryColumn;
+    type Column = FixedSizeBinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = BinaryColumnIter<'a>;
-    type ColumnBuilder = BinaryColumnBuilder;
+    type ColumnIterator<'a> = FixedSizeBinaryColumnIter<'a>;
+    type ColumnBuilder = FixedSizeBinaryColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
@@ -126,7 +126,7 @@ impl ValueType for IntervalType {
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        BinaryColumnBuilder::from_column(col)
+        FixedSizeBinaryColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -143,6 +143,7 @@ impl ValueType for IntervalType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.push_default();
         builder.commit_row();
     }
 
@@ -175,7 +176,7 @@ impl ArgType for IntervalType {
     fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        BinaryColumnBuilder::with_capacity(capacity, 0)
+        FixedSizeBinaryColumnBuilder::with_capacity(capacity, 16)
     }
 }
 
