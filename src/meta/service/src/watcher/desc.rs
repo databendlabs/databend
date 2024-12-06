@@ -30,7 +30,7 @@ pub struct WatchDesc {
 }
 
 impl WatchDesc {
-    pub fn new(id: WatcherId, interested: FilterType, key_range: KeyRange) -> Self {
+    pub(crate) fn new(id: WatcherId, interested: FilterType, key_range: KeyRange) -> Self {
         Self {
             watcher_id: id,
             interested,

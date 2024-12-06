@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Extend protobuf generated code with some useful methods.
+use crate::protobuf as pb;
+use crate::protobuf::WatchResponse;
+use crate::Change;
 
-mod raft_types_ext;
-mod seq_v_ext;
-mod snapshot_chunk_request_ext;
-mod stream_item_ext;
-mod transfer_leader_request_ext;
-mod txn_ext;
-mod watch_ext;
+impl WatchResponse {
+    pub fn new(change: &Change<Vec<u8>, String>) -> Option<Self> {
+        let ev = pb::Event {
+            key: change.ident.clone()?,
+            prev: change.prev.clone().map(pb::SeqV::from),
+            current: change.result.clone().map(pb::SeqV::from),
+        };
+
+        Some(WatchResponse { event: Some(ev) })
+    }
+}
