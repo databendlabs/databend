@@ -30,7 +30,7 @@ pub type Cursor<R> = RawCursor<R, ItemCursorOrder>;
 
 pub trait SortAlgorithm: Send {
     const SHOULD_PEEK_TOP2: bool;
-    type Rows: Rows + Send;
+    type Rows: Rows;
     type PeekMut<'b>: Deref<Target = Reverse<Cursor<Self::Rows>>> + DerefMut
     where Self: 'b;
     fn with_capacity(capacity: usize) -> Self;
@@ -60,7 +60,7 @@ pub trait SortAlgorithm: Send {
 
 pub type HeapSort<R> = BinaryHeap<Reverse<Cursor<R>>>;
 
-impl<R: Rows + Send> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
+impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     const SHOULD_PEEK_TOP2: bool = true;
     type Rows = R;
     type PeekMut<'a> = binary_heap::PeekMut<'a, Reverse<Cursor<R>>> where R:'a;
@@ -127,7 +127,7 @@ impl<R: Rows> fmt::Debug for LoserTreeSort<R> {
     }
 }
 
-impl<R: Rows + Send> SortAlgorithm for LoserTreeSort<R> {
+impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
     const SHOULD_PEEK_TOP2: bool = false;
     type Rows = R;
     type PeekMut<'a> = LoserTreePeekMut<'a,Self::Rows>  where Self: 'a;

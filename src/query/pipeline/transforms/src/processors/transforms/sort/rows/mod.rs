@@ -14,6 +14,7 @@
 
 mod common;
 mod simple;
+mod utils;
 
 use std::fmt::Debug;
 
@@ -27,6 +28,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 pub use simple::*;
+pub use utils::*;
 
 /// Convert columns to rows.
 pub trait RowConverter<T: Rows>
@@ -41,8 +43,9 @@ where Self: Sized
 
 /// Rows can be compared.
 pub trait Rows
-where Self: Sized + Clone + Debug
+where Self: Sized + Clone + Debug + Send
 {
+    const IS_ASC_COLUMN: bool;
     type Item<'a>: Ord + Debug
     where Self: 'a;
     type Type: ArgType;
@@ -51,8 +54,8 @@ where Self: Sized + Clone + Debug
     fn row(&self, index: usize) -> Self::Item<'_>;
     fn to_column(&self) -> Column;
 
-    fn from_column(col: &Column, desc: &[SortColumnDescription]) -> Result<Self> {
-        Self::try_from_column(col, desc).ok_or_else(|| {
+    fn from_column(col: &Column) -> Result<Self> {
+        Self::try_from_column(col).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
                 "Order column type mismatched. Expected {} but got {}",
                 Self::data_type(),
@@ -61,7 +64,7 @@ where Self: Sized + Clone + Debug
         })
     }
 
-    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self>;
+    fn try_from_column(col: &Column) -> Option<Self>;
 
     fn data_type() -> DataType {
         Self::Type::data_type()
