@@ -71,7 +71,7 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     spiller: Arc<Spiller>,
 
     input_data: Vec<DataBlock>,
-    output_data: VecDeque<DataBlock>,
+    output_data: Option<DataBlock>,
     state: State,
 
     sampler: Option<FixedRateSampler<StdRng>>,
@@ -141,10 +141,10 @@ where
             }
         }
 
-        if !self.output_data.is_empty() {
+        if self.output_data.is_some() {
             match self.state {
                 State::Pass | State::Restore | State::Finish => {
-                    let block = self.output_data.pop_front().unwrap();
+                    let block = self.output_data.take().unwrap();
                     self.output_block(block);
                     return Ok(Event::NeedConsume);
                 }
@@ -206,7 +206,7 @@ where
                 }
                 State::Spill => {
                     self.input_data.push(block);
-                    if self.input_rows() > self.max_rows() {
+                    if self.input_rows() + self.subsequent_memory_rows() > self.max_rows() {
                         Ok(Event::Async)
                     } else {
                         self.input.set_need_data();
@@ -241,10 +241,18 @@ where
     async fn async_process(&mut self) -> Result<()> {
         match &self.state {
             State::Spill => {
-                self.sort_input_data()?;
-                // TODO: We should use lazy spill, which will help reduce io.
-                self.subsequent.last_mut().unwrap().spill(0).await?;
-                if self.input.is_finished() {
+                let input = self.input_rows();
+                let subsequent = self.subsequent_memory_rows();
+                let max = self.max_rows();
+
+                if subsequent > 0 && subsequent + input > max {
+                    self.spill_subsequent_last(subsequent + input - max).await?;
+                }
+                let finished = self.input.is_finished();
+                if input > max || finished && input > 0 {
+                    self.sort_input_data()?;
+                }
+                if finished {
                     self.state = State::Restore;
                 }
             }
@@ -280,7 +288,7 @@ where
             output_order_col,
             limit,
             input_data: Vec::new(),
-            output_data: VecDeque::new(),
+            output_data: None,
             state: State::Init,
             spiller: Arc::new(spiller),
             sampler: None,
@@ -332,6 +340,25 @@ where
         Ok(())
     }
 
+    async fn spill_subsequent_last(&mut self, target_rows: usize) -> Result<()> {
+        let Some(s) = self.subsequent.last_mut() else {
+            return Ok(());
+        };
+
+        let mut released = 0;
+        for b in s.blocks.iter_mut().rev() {
+            if b.data.is_some() {
+                b.spill(&self.spiller).await?;
+                released += b.rows;
+            }
+            if released >= target_rows {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn on_restore(&mut self) -> Result<()> {
         if self.sampler.is_some() {
             self.determine_bounds()?;
@@ -359,6 +386,15 @@ where
     }
 
     async fn merge_current(&mut self) -> Result<()> {
+        self.spill_subsequent_all().await?;
+        for (i, s) in self.current.iter_mut().rev().enumerate() {
+            if i < self.num_merge {
+                s.spill(1).await?;
+            } else {
+                s.spill(0).await?;
+            }
+        }
+
         let bound = self.current[0].bound.clone();
         let streams = self
             .current
@@ -380,7 +416,6 @@ where
         self.current.insert(0, stream);
         self.subsequent
             .extend(merger.streams().into_iter().filter(|s| !s.is_empty()));
-        self.spill_subsequent_all().await?;
         Ok(())
     }
 
@@ -392,15 +427,21 @@ where
                 if self.current.len() == 1 {
                     let mut s = self.current.pop().unwrap();
                     s.restore_first().await?;
-                    self.output_data.push_back(s.pop_front_data());
+                    self.output_data = Some(s.pop_front_data());
 
                     if !s.is_empty() {
-                        self.subsequent.push(s);
+                        if s.should_include_first() {
+                            self.current.push(s);
+                        } else {
+                            self.subsequent.push(s);
+                        }
                         return Ok(false);
                     }
 
                     return Ok(self.subsequent.is_empty());
                 }
+
+                self.spill_sort().await?;
 
                 let streams = mem::take(&mut self.current);
                 let merger =
@@ -410,7 +451,7 @@ where
         };
 
         if let Some(data) = merger.async_next_block().await? {
-            self.output_block(data);
+            self.output_data = Some(data);
             return Ok(false);
         }
         debug_assert!(merger.is_finished());
@@ -418,8 +459,54 @@ where
         let streams = self.output_merger.take().unwrap().streams();
         self.subsequent
             .extend(streams.into_iter().filter(|s| !s.is_empty()));
-        self.spill_subsequent_all().await?;
         Ok(self.subsequent.is_empty())
+    }
+
+    async fn spill_sort(&mut self) -> Result<()> {
+        let need = self
+            .current
+            .iter()
+            .map(|s| if s.blocks[0].data.is_none() { 1 } else { 0 })
+            .sum::<usize>()
+            * self.batch_rows;
+
+        if need + self.subsequent_memory_rows() + self.current_memory_rows() < self.max_rows() {
+            return Ok(());
+        }
+
+        let mut unspilled = self
+            .current
+            .iter_mut()
+            .chain(self.subsequent.iter_mut())
+            .flat_map(|s| s.blocks.iter_mut())
+            .filter(|s| s.data.is_some())
+            .collect::<Vec<_>>();
+
+        unspilled.sort_by(|s1, s2| {
+            let r1 = s1.domain::<A::Rows>();
+            let r2 = s2.domain::<A::Rows>();
+            let cmp = r1.first().cmp(&r2.first());
+            cmp
+        });
+
+        let mut released = 0;
+        while let Some(block) = unspilled.pop() {
+            if released >= need {
+                break;
+            }
+
+            block.spill(&self.spiller).await?;
+            released += block.rows;
+        }
+
+        Ok(())
+    }
+
+    async fn spill_subsequent_all(&mut self) -> Result<()> {
+        for s in &mut self.subsequent {
+            s.spill(0).await?;
+        }
+        Ok(())
     }
 
     fn choice_streams_by_bound(&mut self) {
@@ -441,10 +528,26 @@ where
                 s
             })
             .partition(|s| s.should_include_first());
+
+        self.current.sort_by_key(|s| s.blocks[0].data.is_some());
     }
 
     fn input_rows(&self) -> usize {
         self.input_data.iter().map(|b| b.num_rows()).sum::<usize>()
+    }
+
+    fn subsequent_memory_rows(&self) -> usize {
+        self.subsequent
+            .iter()
+            .map(|s| s.in_memory_rows())
+            .sum::<usize>()
+    }
+
+    fn current_memory_rows(&self) -> usize {
+        self.current
+            .iter()
+            .map(|s| s.in_memory_rows())
+            .sum::<usize>()
     }
 
     fn max_rows(&self) -> usize {
@@ -534,13 +637,6 @@ where
             }
         };
 
-        Ok(())
-    }
-
-    async fn spill_subsequent_all(&mut self) -> Result<()> {
-        for s in &mut self.subsequent {
-            s.spill(0).await?;
-        }
         Ok(())
     }
 }
@@ -687,6 +783,13 @@ impl<R: Rows> BoundBlockStream<R> {
 
     fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    fn in_memory_rows(&self) -> usize {
+        self.blocks
+            .iter()
+            .map(|b| if b.data.is_some() { b.rows } else { 0 })
+            .sum()
     }
 
     async fn spill(&mut self, skip: usize) -> Result<()> {
