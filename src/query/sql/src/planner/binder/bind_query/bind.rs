@@ -186,6 +186,7 @@ impl Binder {
         } else {
             Engine::Memory
         };
+
         let database = self.ctx.get_current_database();
         let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
         if self
