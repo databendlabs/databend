@@ -148,7 +148,8 @@ where
         let mut candidate =
             Candidate::new(&self.rows, EndDomain::new(self.min_task, self.max_task));
 
-        candidate.init();
+        let ok = candidate.init();
+        assert!(ok, "empty candidate");
 
         // if candidate.is_small_task() {
         // todo: Consider loading multiple blocks at the same time so that we can avoid cutting out too small a task
