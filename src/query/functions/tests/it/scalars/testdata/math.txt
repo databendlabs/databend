@@ -564,9 +564,8 @@ evaluation (internal):
 ast            : factorial(5)
 raw expr       : factorial(5)
 checked expr   : factorial<UInt8>(5_u8)
-optimized expr : 120_i64
 output type    : Int64
-output domain  : {120..=120}
+output domain  : Unknown
 output         : 120
 
 

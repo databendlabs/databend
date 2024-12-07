@@ -10,18 +10,18 @@ output         : {}
 ast            : map([1,2], ['a','b'])
 raw expr       : map(array(1, 2), array('a', 'b'))
 checked expr   : map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b"))
-optimized expr : {1_u8:"a", 2_u8:"b"}
+optimized expr : map<T0=UInt8, T1=String><Array(T0), Array(T1)>([1, 2], ['a', 'b'])
 output type    : Map(UInt8, String)
-output domain  : {[{1..=2}], [{"a"..="b"}]}
+output domain  : Unknown
 output         : {1:'a', 2:'b'}
 
 
 ast            : map(['k1','k2','k3'], ['v1','v2','v3'])
 raw expr       : map(array('k1', 'k2', 'k3'), array('v1', 'v2', 'v3'))
 checked expr   : map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3"))
-optimized expr : {"k1":"v1", "k2":"v2", "k3":"v3"}
+optimized expr : map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2', 'k3'], ['v1', 'v2', 'v3'])
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k3"}], [{"v1"..="v3"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k2':'v2', 'k3':'v3'}
 
 
@@ -118,36 +118,36 @@ output         : NULL
 ast            : map([1,2],['a','b'])[1]
 raw expr       : get(map(array(1, 2), array('a', 'b')), 1)
 checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 1_u8)
-optimized expr : "a"
+optimized expr : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>([1, 2], ['a', 'b']) AS Map(UInt8, String NULL)), 1_u8)
 output type    : String NULL
-output domain  : {"a"..="a"}
+output domain  : Unknown
 output         : 'a'
 
 
 ast            : map([1,2],['a','b'])[10]
 raw expr       : get(map(array(1, 2), array('a', 'b')), 10)
 checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 10_u8)
-optimized expr : NULL
+optimized expr : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>([1, 2], ['a', 'b']) AS Map(UInt8, String NULL)), 10_u8)
 output type    : String NULL
-output domain  : {NULL}
+output domain  : Unknown
 output         : NULL
 
 
 ast            : map(['a','b'],[1,2])['a']
 raw expr       : get(map(array('a', 'b'), array(1, 2)), 'a')
 checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "a")
-optimized expr : 1_u8
+optimized expr : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b'], [1, 2]) AS Map(String, UInt8 NULL)), "a")
 output type    : UInt8 NULL
-output domain  : {1..=1}
+output domain  : Unknown
 output         : 1
 
 
 ast            : map(['a','b'],[1,2])['x']
 raw expr       : get(map(array('a', 'b'), array(1, 2)), 'x')
 checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "x")
-optimized expr : NULL
+optimized expr : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b'], [1, 2]) AS Map(String, UInt8 NULL)), "x")
 output type    : UInt8 NULL
-output domain  : {NULL}
+output domain  : Unknown
 output         : NULL
 
 
@@ -163,27 +163,27 @@ output         : NULL
 ast            : {1:NULL}[1]
 raw expr       : get(map(array(1), array(NULL)), 1)
 checked expr   : get<T0=UInt8><Map(T0, NULL) NULL, T0 NULL>(CAST(map<T0=UInt8, T1=NULL><Array(T0), Array(T1)>(array<T0=UInt8><T0>(1_u8), array<T0=NULL><T0>(NULL)) AS Map(UInt8, NULL) NULL), CAST(1_u8 AS UInt8 NULL))
-optimized expr : NULL
+optimized expr : get<T0=UInt8><Map(T0, NULL) NULL, T0 NULL>(CAST(map<T0=UInt8, T1=NULL><Array(T0), Array(T1)>([1], [NULL]) AS Map(UInt8, NULL) NULL), 1_u8)
 output type    : NULL
-output domain  : {NULL}
+output domain  : Unknown
 output         : NULL
 
 
 ast            : {'k1':'v1','k2':'v2'}['k1']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k1')
 checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k1")
-optimized expr : "v1"
+optimized expr : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', 'v2']) AS Map(String, String NULL)), "k1")
 output type    : String NULL
-output domain  : {"v1"..="v1"}
+output domain  : Unknown
 output         : 'v1'
 
 
 ast            : {'k1':'v1','k2':'v2'}['k3']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k3')
 checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k3")
-optimized expr : NULL
+optimized expr : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', 'v2']) AS Map(String, String NULL)), "k3")
 output type    : String NULL
-output domain  : {NULL}
+output domain  : Unknown
 output         : NULL
 
 
@@ -224,27 +224,27 @@ output         : []
 ast            : map_keys({'a':1,'b':2,'c':3})
 raw expr       : map_keys(map(array('a', 'b', 'c'), array(1, 2, 3)))
 checked expr   : map_keys<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)))
-optimized expr : ['a', 'b', 'c']
+optimized expr : map_keys<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]))
 output type    : Array(String)
-output domain  : [{"a"..="c"}]
+output domain  : Unknown
 output         : ['a', 'b', 'c']
 
 
 ast            : map_keys({1:'a',2:'b',3:'c'})
 raw expr       : map_keys(map(array(1, 2, 3), array('a', 'b', 'c')))
 checked expr   : map_keys<T0=UInt8, T1=String><Map(T0, T1)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), array<T0=String><T0, T0, T0>("a", "b", "c")))
-optimized expr : [1, 2, 3]
+optimized expr : map_keys<T0=UInt8, T1=String><Map(T0, T1)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>([1, 2, 3], ['a', 'b', 'c']))
 output type    : Array(UInt8)
-output domain  : [{1..=3}]
+output domain  : Unknown
 output         : [1, 2, 3]
 
 
 ast            : map_keys({'a':NULL,'b':2,'c':NULL})
 raw expr       : map_keys(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
 checked expr   : map_keys<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
-optimized expr : ['a', 'b', 'c']
+optimized expr : map_keys<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(['a', 'b', 'c'], [NULL, 2, NULL]))
 output type    : Array(String)
-output domain  : [{"a"..="c"}]
+output domain  : Unknown
 output         : ['a', 'b', 'c']
 
 
@@ -296,27 +296,27 @@ output         : []
 ast            : map_values({'a':1,'b':2,'c':3})
 raw expr       : map_values(map(array('a', 'b', 'c'), array(1, 2, 3)))
 checked expr   : map_values<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)))
-optimized expr : [1, 2, 3]
+optimized expr : map_values<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]))
 output type    : Array(UInt8)
-output domain  : [{1..=3}]
+output domain  : Unknown
 output         : [1, 2, 3]
 
 
 ast            : map_values({1:'a',2:'b',3:'c'})
 raw expr       : map_values(map(array(1, 2, 3), array('a', 'b', 'c')))
 checked expr   : map_values<T0=UInt8, T1=String><Map(T0, T1)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), array<T0=String><T0, T0, T0>("a", "b", "c")))
-optimized expr : ['a', 'b', 'c']
+optimized expr : map_values<T0=UInt8, T1=String><Map(T0, T1)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>([1, 2, 3], ['a', 'b', 'c']))
 output type    : Array(String)
-output domain  : [{"a"..="c"}]
+output domain  : Unknown
 output         : ['a', 'b', 'c']
 
 
 ast            : map_values({'a':NULL,'b':2,'c':NULL})
 raw expr       : map_values(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
 checked expr   : map_values<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
-optimized expr : [NULL, 2, NULL]
+optimized expr : map_values<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(['a', 'b', 'c'], [NULL, 2, NULL]))
 output type    : Array(UInt8 NULL)
-output domain  : [{0..=2} ∪ {NULL}]
+output domain  : Unknown
 output         : [NULL, 2, NULL]
 
 
@@ -359,18 +359,18 @@ output         : 0
 ast            : map_size({'a':1,'b':2,'c':3})
 raw expr       : map_size(map(array('a', 'b', 'c'), array(1, 2, 3)))
 checked expr   : map_size<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)))
-optimized expr : 3_u64
+optimized expr : map_size<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]))
 output type    : UInt64
-output domain  : {3..=3}
+output domain  : Unknown
 output         : 3
 
 
 ast            : map_size({'a':NULL,'b':2,'c':NULL})
 raw expr       : map_size(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
 checked expr   : map_size<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
-optimized expr : 3_u64
+optimized expr : map_size<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(['a', 'b', 'c'], [NULL, 2, NULL]))
 output type    : UInt64
-output domain  : {3..=3}
+output domain  : Unknown
 output         : 3
 
 
@@ -413,18 +413,18 @@ output         : {}
 ast            : map_cat({}, {'k1': 'v1'})
 raw expr       : map_cat(map(array(), array()), map(array('k1'), array('v1')))
 checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")))
-optimized expr : {"k1":"v1"}
+optimized expr : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>({}, map<T0=String, T1=String><Array(T0), Array(T1)>(['k1'], ['v1']))
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
+output domain  : Unknown
 output         : {'k1':'v1'}
 
 
 ast            : map_cat({'k1': 'v1'}, {})
 raw expr       : map_cat(map(array('k1'), array('v1')), map(array(), array()))
 checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)))
-optimized expr : {"k1":"v1"}
+optimized expr : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1'], ['v1']), {})
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
+output domain  : Unknown
 output         : {'k1':'v1'}
 
 
@@ -458,9 +458,9 @@ evaluation (internal):
 ast            : map_cat({'k1':'v1','k2':'v2'}, {'k1':'abc'})
 raw expr       : map_cat(map(array('k1', 'k2'), array('v1', 'v2')), map(array('k1'), array('abc')))
 checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("abc")))
-optimized expr : {"k1":"abc", "k2":"v2"}
+optimized expr : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', 'v2']), map<T0=String, T1=String><Array(T0), Array(T1)>(['k1'], ['abc']))
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k2"}], [{"abc"..="v2"}]}
+output domain  : Unknown
 output         : {'k1':'abc', 'k2':'v2'}
 
 
@@ -494,45 +494,45 @@ evaluation (internal):
 ast            : map_cat({'k1': 'v1', 'k2': 'v2'}, {'k3': 'v3'})
 raw expr       : map_cat(map(array('k1', 'k2'), array('v1', 'v2')), map(array('k3'), array('v3')))
 checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k3"), array<T0=String><T0>("v3")))
-optimized expr : {"k1":"v1", "k2":"v2", "k3":"v3"}
+optimized expr : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', 'v2']), map<T0=String, T1=String><Array(T0), Array(T1)>(['k3'], ['v3']))
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k3"}], [{"v1"..="v3"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k2':'v2', 'k3':'v3'}
 
 
 ast            : map_cat({'k1': 'v1'}, {'k2': 'v2', 'k3': 'v3'})
 raw expr       : map_cat(map(array('k1'), array('v1')), map(array('k2', 'k3'), array('v2', 'v3')))
 checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=String><T0, T0>("v2", "v3")))
-optimized expr : {"k1":"v1", "k2":"v2", "k3":"v3"}
+optimized expr : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1'], ['v1']), map<T0=String, T1=String><Array(T0), Array(T1)>(['k2', 'k3'], ['v2', 'v3']))
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k3"}], [{"v1"..="v3"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k2':'v2', 'k3':'v3'}
 
 
 ast            : map_cat({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})
 raw expr       : map_cat(map(array('k1', 'k2'), array('v1', NULL)), map(array('k2', 'k3'), array('v2', NULL)))
 checked expr   : map_cat<T0=String, T1=String NULL><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String NULL><T0, T0>(CAST("v1" AS String NULL), CAST(NULL AS String NULL))), map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=String NULL><T0, T0>(CAST("v2" AS String NULL), CAST(NULL AS String NULL))))
-optimized expr : {"k1":"v1", "k2":"v2", "k3":NULL}
+optimized expr : map_cat<T0=String, T1=String NULL><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', NULL]), map<T0=String, T1=String NULL><Array(T0), Array(T1)>(['k2', 'k3'], ['v2', NULL]))
 output type    : Map(String, String NULL)
-output domain  : {[{"k1"..="k3"}], [{""..="v2"} ∪ {NULL}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k2':'v2', 'k3':NULL}
 
 
 ast            : map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k2': {'nk3': 'nv3'}, 'k3': {'nk4': 'nv4'}})
 raw expr       : map_cat(map(array('k1', 'k2'), array(map(array('nk1'), array('nv1')), map(array('nk2'), array('nv2')))), map(array('k2', 'k3'), array(map(array('nk3'), array('nv3')), map(array('nk4'), array('nv4')))))
 checked expr   : map_cat<T0=String, T1=Map(String, String)><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk1"), array<T0=String><T0>("nv1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk2"), array<T0=String><T0>("nv2")))), map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk3"), array<T0=String><T0>("nv3")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk4"), array<T0=String><T0>("nv4")))))
-optimized expr : {"k1":{"nk1":"nv1"}, "k2":{"nk3":"nv3"}, "k3":{"nk4":"nv4"}}
+optimized expr : map_cat<T0=String, T1=Map(String, String)><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(['k1', 'k2'], array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(['nk1'], ['nv1']), map<T0=String, T1=String><Array(T0), Array(T1)>(['nk2'], ['nv2']))), map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(['k2', 'k3'], array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(['nk3'], ['nv3']), map<T0=String, T1=String><Array(T0), Array(T1)>(['nk4'], ['nv4']))))
 output type    : Map(String, Map(String, String))
-output domain  : {[{"k1"..="k3"}], [{[{"nk1"..="nk4"}], [{"nv1"..="nv4"}]}]}
+output domain  : Unknown
 output         : {'k1':{'nk1':'nv1'}, 'k2':{'nk3':'nv3'}, 'k3':{'nk4':'nv4'}}
 
 
 ast            : map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k1': {'nk1': 'new_nv1'}, 'k2': {'nk3': 'nv3'}})
 raw expr       : map_cat(map(array('k1', 'k2'), array(map(array('nk1'), array('nv1')), map(array('nk2'), array('nv2')))), map(array('k1', 'k2'), array(map(array('nk1'), array('new_nv1')), map(array('nk3'), array('nv3')))))
 checked expr   : map_cat<T0=String, T1=Map(String, String)><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk1"), array<T0=String><T0>("nv1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk2"), array<T0=String><T0>("nv2")))), map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk1"), array<T0=String><T0>("new_nv1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk3"), array<T0=String><T0>("nv3")))))
-optimized expr : {"k1":{"nk1":"new_nv1"}, "k2":{"nk3":"nv3"}}
+optimized expr : map_cat<T0=String, T1=Map(String, String)><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(['k1', 'k2'], array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(['nk1'], ['nv1']), map<T0=String, T1=String><Array(T0), Array(T1)>(['nk2'], ['nv2']))), map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(['k1', 'k2'], array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(['nk1'], ['new_nv1']), map<T0=String, T1=String><Array(T0), Array(T1)>(['nk3'], ['nv3']))))
 output type    : Map(String, Map(String, String))
-output domain  : {[{"k1"..="k2"}], [{[{"nk1"..="nk3"}], [{"new_nv1"..="nv3"}]}]}
+output domain  : Unknown
 output         : {'k1':{'nk1':'new_nv1'}, 'k2':{'nk3':'nv3'}}
 
 
@@ -573,18 +573,18 @@ error:
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 'k3', 'k2')
 raw expr       : map_delete(map(array('k1', 'k2', 'k3', 'k4'), array('v1', 'v2', 'v3', 'v4')), 'k3', 'k2')
 checked expr   : map_delete<Map(String, String), String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0, T0>("k1", "k2", "k3", "k4"), array<T0=String><T0, T0, T0, T0>("v1", "v2", "v3", "v4")), "k3", "k2")
-optimized expr : {"k1":"v1", "k4":"v4"}
+optimized expr : map_delete<Map(String, String), String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2', 'k3', 'k4'], ['v1', 'v2', 'v3', 'v4']), "k3", "k2")
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k4"}], [{"v1"..="v4"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k4':'v4'}
 
 
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2'])
 raw expr       : map_delete(map(array('k1', 'k2', 'k3', 'k4'), array('v1', 'v2', 'v3', 'v4')), array('k3', 'k2'))
 checked expr   : map_delete<Map(String, String), Array(String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0, T0>("k1", "k2", "k3", "k4"), array<T0=String><T0, T0, T0, T0>("v1", "v2", "v3", "v4")), array<T0=String><T0, T0>("k3", "k2"))
-optimized expr : {"k1":"v1", "k4":"v4"}
+optimized expr : map_delete<Map(String, String), Array(String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2', 'k3', 'k4'], ['v1', 'v2', 'v3', 'v4']), ['k3', 'k2'])
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k4"}], [{"v1"..="v4"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k4':'v4'}
 
 
@@ -616,16 +616,16 @@ evaluation (internal):
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, string_key_col)
 raw expr       : map_delete(map(array('k1', 'k2', 'k3', 'k4'), array('v1', 'v2', 'v3', 'v4')), string_key_col::String)
 checked expr   : map_delete<Map(String, String), String>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0, T0>("k1", "k2", "k3", "k4"), array<T0=String><T0, T0, T0, T0>("v1", "v2", "v3", "v4")), string_key_col)
-optimized expr : map_delete<Map(String, String), String>({"k1":"v1", "k2":"v2", "k3":"v3", "k4":"v4"}, string_key_col)
+optimized expr : map_delete<Map(String, String), String>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2', 'k3', 'k4'], ['v1', 'v2', 'v3', 'v4']), string_key_col)
 evaluation:
-+--------+----------------+------------------------------------+
-|        | string_key_col | Output                             |
-+--------+----------------+------------------------------------+
-| Type   | String         | Map(String, String)                |
-| Domain | {"k2"..="k3"}  | {[{"k1"..="k4"}], [{"v1"..="v4"}]} |
-| Row 0  | 'k3'           | {'k1':'v1', 'k2':'v2', 'k4':'v4'}  |
-| Row 1  | 'k2'           | {'k1':'v1', 'k3':'v3', 'k4':'v4'}  |
-+--------+----------------+------------------------------------+
++--------+----------------+-----------------------------------+
+|        | string_key_col | Output                            |
++--------+----------------+-----------------------------------+
+| Type   | String         | Map(String, String)               |
+| Domain | {"k2"..="k3"}  | Unknown                           |
+| Row 0  | 'k3'           | {'k1':'v1', 'k2':'v2', 'k4':'v4'} |
+| Row 1  | 'k2'           | {'k1':'v1', 'k3':'v3', 'k4':'v4'} |
++--------+----------------+-----------------------------------+
 evaluation (internal):
 +----------------+---------------------------------------------------------------------------------------------------------------------------------+
 | Column         | Data                                                                                                                            |
@@ -638,27 +638,27 @@ evaluation (internal):
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k2', 'k3')
 raw expr       : map_delete(map(array('k1', 'k2', 'k3'), array('v1', 'v2', 'v3')), 'k1', 'k2', 'k3')
 checked expr   : map_delete<Map(String, String), String, String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3")), "k1", "k2", "k3")
-optimized expr : {}
+optimized expr : map_delete<Map(String, String), String, String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2', 'k3'], ['v1', 'v2', 'v3']), "k1", "k2", "k3")
 output type    : Map(String, String)
-output domain  : {}
+output domain  : Unknown
 output         : {}
 
 
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k1')
 raw expr       : map_delete(map(array('k1', 'k2', 'k3'), array('v1', 'v2', 'v3')), 'k1', 'k1')
 checked expr   : map_delete<Map(String, String), String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3")), "k1", "k1")
-optimized expr : {"k2":"v2", "k3":"v3"}
+optimized expr : map_delete<Map(String, String), String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2', 'k3'], ['v1', 'v2', 'v3']), "k1", "k1")
 output type    : Map(String, String)
-output domain  : {[{"k2"..="k3"}], [{"v2"..="v3"}]}
+output domain  : Unknown
 output         : {'k2':'v2', 'k3':'v3'}
 
 
 ast            : map_delete({'k1': 'v1', 'k2': 'v2'}, 'k3', 'k4')
 raw expr       : map_delete(map(array('k1', 'k2'), array('v1', 'v2')), 'k3', 'k4')
 checked expr   : map_delete<Map(String, String), String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), "k3", "k4")
-optimized expr : {"k1":"v1", "k2":"v2"}
+optimized expr : map_delete<Map(String, String), String, String>(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', 'v2']), "k3", "k4")
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k2':'v2'}
 
 
@@ -706,9 +706,9 @@ error:
 ast            : map_contains_key({'a':1,'b':2,'c':3}, 'a')
 raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(1, 2, 3)), 'a')
 checked expr   : map_contains_key<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), "a")
-optimized expr : true
+optimized expr : map_contains_key<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]), "a")
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : Unknown
 output         : true
 
 
@@ -724,18 +724,18 @@ output         : false
 ast            : map_contains_key({'a':1,'b':2,'c':3}, 'd')
 raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(1, 2, 3)), 'd')
 checked expr   : map_contains_key<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), "d")
-optimized expr : false
+optimized expr : map_contains_key<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]), "d")
 output type    : Boolean
-output domain  : {FALSE}
+output domain  : Unknown
 output         : false
 
 
 ast            : map_contains_key({'a':NULL,'b':2,'c':NULL}, 'a')
 raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(NULL, 2, NULL)), 'a')
 checked expr   : map_contains_key<T0=String, T1=UInt8 NULL><Map(T0, T1), T0>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))), "a")
-optimized expr : true
+optimized expr : map_contains_key<T0=String, T1=UInt8 NULL><Map(T0, T1), T0>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(['a', 'b', 'c'], [NULL, 2, NULL]), "a")
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : Unknown
 output         : true
 
 
@@ -796,36 +796,36 @@ evaluation (internal):
 ast            : map_pick({'a':1,'b':2,'c':3}, 'a', 'b')
 raw expr       : map_pick(map(array('a', 'b', 'c'), array(1, 2, 3)), 'a', 'b')
 checked expr   : map_pick<Map(String, UInt8), String, String>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), "a", "b")
-optimized expr : {"a":1_u8, "b":2_u8}
+optimized expr : map_pick<Map(String, UInt8), String, String>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]), "a", "b")
 output type    : Map(String, UInt8)
-output domain  : {[{"a"..="b"}], [{1..=2}]}
+output domain  : Unknown
 output         : {'a':1, 'b':2}
 
 
 ast            : map_pick({'a':1,'b':2,'c':3}, ['a', 'b'])
 raw expr       : map_pick(map(array('a', 'b', 'c'), array(1, 2, 3)), array('a', 'b'))
 checked expr   : map_pick<Map(String, UInt8), Array(String)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), array<T0=String><T0, T0>("a", "b"))
-optimized expr : {"a":1_u8, "b":2_u8}
+optimized expr : map_pick<Map(String, UInt8), Array(String)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]), ['a', 'b'])
 output type    : Map(String, UInt8)
-output domain  : {[{"a"..="b"}], [{1..=2}]}
+output domain  : Unknown
 output         : {'a':1, 'b':2}
 
 
 ast            : map_pick({'a':1,'b':2,'c':3}, [])
 raw expr       : map_pick(map(array('a', 'b', 'c'), array(1, 2, 3)), array())
 checked expr   : map_pick<Map(String, UInt8), Array(Nothing)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), array<>())
-optimized expr : {}
+optimized expr : map_pick<Map(String, UInt8), Array(Nothing)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(['a', 'b', 'c'], [1, 2, 3]), [] :: Array(Nothing))
 output type    : Map(String, UInt8)
-output domain  : {}
+output domain  : Unknown
 output         : {}
 
 
 ast            : map_pick({1:'a',2:'b',3:'c'}, 1, 3)
 raw expr       : map_pick(map(array(1, 2, 3), array('a', 'b', 'c')), 1, 3)
 checked expr   : map_pick<Map(UInt8, String), UInt8, UInt8>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), array<T0=String><T0, T0, T0>("a", "b", "c")), 1_u8, 3_u8)
-optimized expr : {1_u8:"a", 3_u8:"c"}
+optimized expr : map_pick<Map(UInt8, String), UInt8, UInt8>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>([1, 2, 3], ['a', 'b', 'c']), 1_u8, 3_u8)
 output type    : Map(UInt8, String)
-output domain  : {[{1..=3}], [{"a"..="c"}]}
+output domain  : Unknown
 output         : {1:'a', 3:'c'}
 
 
@@ -877,7 +877,7 @@ evaluation (internal):
 ast            : map_insert({}, 'k1', 'v1')
 raw expr       : map_insert(map(array(), array()), 'k1', 'v1')
 checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String) NULL), "k1", "v1")
-optimized expr : {"k1":"v1"}
+optimized expr : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>({}, "k1", "v1")
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
 output         : {'k1':'v1'}
@@ -886,9 +886,9 @@ output         : {'k1':'v1'}
 ast            : map_insert({'k1': 'v1'}, 'k2', 'v2')
 raw expr       : map_insert(map(array('k1'), array('v1')), 'k2', 'v2')
 checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")) AS Map(String, String) NULL), "k2", "v2")
-optimized expr : {"k1":"v1", "k2":"v2"}
+optimized expr : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1'], ['v1']) AS Map(String, String) NULL), "k2", "v2")
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
+output domain  : Unknown
 output         : {'k1':'v1', 'k2':'v2'}
 
 
@@ -903,9 +903,9 @@ error:
 ast            : map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', true)
 raw expr       : map_insert(map(array('k1', 'k2'), array('v1', 'v2')), 'k1', 'v10', true)
 checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1, Boolean>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String) NULL), "k1", "v10", true)
-optimized expr : {"k1":"v10", "k2":"v2"}
+optimized expr : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1, Boolean>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(['k1', 'k2'], ['v1', 'v2']) AS Map(String, String) NULL), "k1", "v10", true)
 output type    : Map(String, String)
-output domain  : {[{"k1"..="k2"}], [{"v10"..="v2"}]}
+output domain  : Unknown
 output         : {'k1':'v10', 'k2':'v2'}
 
 

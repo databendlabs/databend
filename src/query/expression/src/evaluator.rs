@@ -227,7 +227,10 @@ impl<'a> Evaluator<'a> {
                 };
 
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(&args, &mut ctx);
+                let mut result = (eval)(&args, &mut ctx);
+                if ctx.num_rows == 1 {
+                    result = Value::Scalar(result.index(0).unwrap().to_owned());
+                }
 
                 ctx.render_error(
                     *span,
@@ -771,7 +774,7 @@ impl<'a> Evaluator<'a> {
                                     validity.clone(),
                                     options,
                                 )
-                                .map(|val| val.into_scalar().unwrap())
+                                .map(|val| val.index(0).unwrap().to_owned())
                             })
                             .collect::<Result<Vec<_>>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
@@ -959,8 +962,9 @@ impl<'a> Evaluator<'a> {
                             .map(|((field, src_ty), dest_ty)| {
                                 Ok(self
                                     .run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
-                                    .into_scalar()
-                                    .unwrap())
+                                    .index(0)
+                                    .unwrap()
+                                    .to_owned())
                             })
                             .collect::<Result<_>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))

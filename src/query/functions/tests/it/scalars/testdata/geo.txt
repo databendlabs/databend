@@ -9,9 +9,9 @@ error:
 ast            : geo_to_h3(37.79506683, 55.71290588, 15)
 raw expr       : geo_to_h3(37.79506683, 55.71290588, 15)
 checked expr   : geo_to_h3<Float64, Float64, UInt8>(to_float64<Decimal(10, 8)>(37.79506683_d128(10,8)), to_float64<Decimal(10, 8)>(55.71290588_d128(10,8)), 15_u8)
-optimized expr : 644325524701193974_u64
+optimized expr : geo_to_h3<Float64, Float64, UInt8>(37.79506683_f64, 55.71290588_f64, 15_u8)
 output type    : UInt64
-output domain  : {644325524701193974..=644325524701193974}
+output domain  : {0..=18446744073709551615}
 output         : 644325524701193974
 
 
@@ -41,9 +41,9 @@ evaluation (internal):
 ast            : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
 raw expr       : great_circle_distance(55.755831, 37.617673, minus(55.755831), minus(37.617673))
 checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(to_float64<Decimal(8, 6)>(55.755831_d128(8,6)), to_float64<Decimal(8, 6)>(37.617673_d128(8,6)), to_float64<Decimal(8, 6)>(minus<Decimal(8, 6)>(55.755831_d128(8,6))), to_float64<Decimal(8, 6)>(minus<Decimal(8, 6)>(37.617673_d128(8,6))))
-optimized expr : 14128353_f32
+optimized expr : great_circle_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, -55.755831_f64, -37.617673_f64)
 output type    : Float32
-output domain  : {14128353..=14128353}
+output domain  : {-inf..=NaN}
 output         : 14128353
 
 
@@ -75,9 +75,9 @@ evaluation (internal):
 ast            : geo_distance(55.755831, 37.617673, -55.755831, -37.617673)
 raw expr       : geo_distance(55.755831, 37.617673, minus(55.755831), minus(37.617673))
 checked expr   : geo_distance<Float64, Float64, Float64, Float64>(to_float64<Decimal(8, 6)>(55.755831_d128(8,6)), to_float64<Decimal(8, 6)>(37.617673_d128(8,6)), to_float64<Decimal(8, 6)>(minus<Decimal(8, 6)>(55.755831_d128(8,6))), to_float64<Decimal(8, 6)>(minus<Decimal(8, 6)>(37.617673_d128(8,6))))
-optimized expr : 14128353_f32
+optimized expr : geo_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, -55.755831_f64, -37.617673_f64)
 output type    : Float32
-output domain  : {14128353..=14128353}
+output domain  : {-inf..=NaN}
 output         : 14128353
 
 
@@ -109,9 +109,9 @@ evaluation (internal):
 ast            : great_circle_angle(0, 0, 45, 0)
 raw expr       : great_circle_angle(0, 0, 45, 0)
 checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(to_float64<UInt8>(0_u8), to_float64<UInt8>(0_u8), to_float64<UInt8>(45_u8), to_float64<UInt8>(0_u8))
-optimized expr : 44.99998_f32
+optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, 45_f64, 0_f64)
 output type    : Float32
-output domain  : {44.99998..=44.99998}
+output domain  : {-inf..=NaN}
 output         : 44.99998
 
 
@@ -280,36 +280,35 @@ evaluation (internal):
 ast            : geohash_encode(-5.60302734375, 42.593994140625)
 raw expr       : geohash_encode(minus(5.60302734375), 42.593994140625)
 checked expr   : geohash_encode<Float64, Float64>(to_float64<Decimal(12, 11)>(minus<Decimal(12, 11)>(5.60302734375_d128(12,11))), to_float64<Decimal(14, 12)>(42.593994140625_d128(14,12)))
-optimized expr : "ezs42d000000"
+optimized expr : geohash_encode<Float64, Float64>(-5.6030273437_f64, 42.5939941406_f64)
 output type    : String
-output domain  : {"ezs42d000000"..="ezs42d000000"}
+output domain  : {""..}
 output         : 'ezs42d000000'
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 11)
 raw expr       : geohash_encode(minus(5.60302734375), 42.593994140625, 11)
 checked expr   : geohash_encode<Float64, Float64, UInt8>(to_float64<Decimal(12, 11)>(minus<Decimal(12, 11)>(5.60302734375_d128(12,11))), to_float64<Decimal(14, 12)>(42.593994140625_d128(14,12)), 11_u8)
-optimized expr : "ezs42d00000"
+optimized expr : geohash_encode<Float64, Float64, UInt8>(-5.6030273437_f64, 42.5939941406_f64, 11_u8)
 output type    : String
-output domain  : {"ezs42d00000"..="ezs42d00000"}
+output domain  : {""..}
 output         : 'ezs42d00000'
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 0)
 raw expr       : geohash_encode(minus(5.60302734375), 42.593994140625, 0)
 checked expr   : geohash_encode<Float64, Float64, UInt8>(to_float64<Decimal(12, 11)>(minus<Decimal(12, 11)>(5.60302734375_d128(12,11))), to_float64<Decimal(14, 12)>(42.593994140625_d128(14,12)), 0_u8)
-optimized expr : "ezs42d000000"
+optimized expr : geohash_encode<Float64, Float64, UInt8>(-5.6030273437_f64, 42.5939941406_f64, 0_u8)
 output type    : String
-output domain  : {"ezs42d000000"..="ezs42d000000"}
+output domain  : {""..}
 output         : 'ezs42d000000'
 
 
 ast            : geohash_decode('ezs42')
 raw expr       : geohash_decode('ezs42')
 checked expr   : geohash_decode<String>("ezs42")
-optimized expr : (-5.6030273437_f64, 42.6049804687_f64)
 output type    : Tuple(Float64, Float64)
-output domain  : ({-5.6030273437..=-5.6030273437}, {42.6049804687..=42.6049804687})
+output domain  : ({-inf..=NaN}, {-inf..=NaN})
 output         : (-5.6030273437, 42.6049804687)
 
 
