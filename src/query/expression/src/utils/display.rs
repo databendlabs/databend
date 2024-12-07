@@ -20,11 +20,14 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkt;
+use databend_common_io::Interval;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;
 use jiff::tz::TimeZone;
@@ -45,6 +48,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
+use crate::types::interval::interval_to_string;
 use crate::types::map::KvPair;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
@@ -126,6 +130,19 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
+            ScalarRef::Interval(i) => {
+                let interval: [u8; 16] = i
+                    .to_vec()
+                    .try_into()
+                    .expect("Interval should have 16 elements");
+                let i = months_days_micros::from_le_bytes(interval);
+                let interval = Interval {
+                    months: i.0,
+                    days: i.1,
+                    micros: i.2,
+                };
+                write!(f, "{interval:?}")
+            }
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -193,6 +210,7 @@ impl Debug for Column {
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
+            Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Bitmap(col) => write!(f, "{col:?}"),
@@ -223,6 +241,22 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
+            ScalarRef::Interval(interval) => {
+                let interval: [u8; 16] = interval
+                    .to_vec()
+                    .try_into()
+                    .expect("Interval should have 16 elements");
+                let i = months_days_micros::from_le_bytes(interval);
+                write!(
+                    f,
+                    "{}",
+                    interval_to_string(Interval {
+                        months: i.0,
+                        days: i.1,
+                        micros: i.2,
+                    })
+                )
+            }
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -484,6 +518,7 @@ impl Display for DataType {
             DataType::Decimal(decimal) => write!(f, "{decimal}"),
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Date => write!(f, "Date"),
+            DataType::Interval => write!(f, "Interval"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -559,6 +594,7 @@ impl Display for TableDataType {
                 write!(f, ")")
             }
             TableDataType::Variant => write!(f, "Variant"),
+            TableDataType::Interval => write!(f, "Interval"),
             TableDataType::Geometry => write!(f, "Geometry"),
             TableDataType::Geography => write!(f, "Geography"),
         }
@@ -1016,6 +1052,7 @@ impl Display for Domain {
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
+            Domain::Interval(domain) => write!(f, "{:?}", domain),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),

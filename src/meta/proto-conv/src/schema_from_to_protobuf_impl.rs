@@ -232,6 +232,7 @@ impl FromToProto for ex::TableDataType {
                     }
                     Dt24::TimestampT(_) => ex::TableDataType::Timestamp,
                     Dt24::DateT(_) => ex::TableDataType::Date,
+                    Dt24::IntervalT(_) => ex::TableDataType::Interval,
                     Dt24::NullableT(x) => ex::TableDataType::Nullable(Box::new(
                         ex::TableDataType::from_pb(Box::into_inner(x))?,
                     )),
@@ -291,6 +292,7 @@ impl FromToProto for ex::TableDataType {
             }
             TableDataType::Timestamp => new_pb_dt24(Dt24::TimestampT(pb::Empty {})),
             TableDataType::Date => new_pb_dt24(Dt24::DateT(pb::Empty {})),
+            TableDataType::Interval => new_pb_dt24(Dt24::IntervalT(pb::Empty {})),
             TableDataType::Nullable(v) => {
                 let x = v.to_pb()?;
                 new_pb_dt24(Dt24::NullableT(Box::new(x)))

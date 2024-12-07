@@ -44,6 +44,7 @@ pub mod geometry;
 mod position;
 mod stat_buffer;
 
+pub mod interval;
 pub mod wkb;
 
 pub use bitmap::deserialize_bitmap;
@@ -66,3 +67,4 @@ pub use geometry::read_srid;
 pub use geometry::Axis;
 pub use geometry::Extremum;
 pub use geometry::GeometryDataType;
+pub use interval::Interval;

@@ -731,6 +731,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_float32",
     "to_float64",
     "to_timestamp",
+    "to_interval",
     "to_date",
     "to_variant",
     "to_boolean",

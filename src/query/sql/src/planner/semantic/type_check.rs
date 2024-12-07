@@ -5140,6 +5140,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
             }
         }
         TypeName::Bitmap => TableDataType::Bitmap,
+        TypeName::Interval => TableDataType::Interval,
         TypeName::Tuple {
             fields_type,
             fields_name,
