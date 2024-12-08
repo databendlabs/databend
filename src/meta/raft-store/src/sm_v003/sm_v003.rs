@@ -29,7 +29,7 @@ use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 use crate::state_machine::ExpireKey;
-use crate::state_machine::StateMachineSubscriber;
+use crate::state_machine_api::SMEventSender;
 use crate::state_machine_api::StateMachineApi;
 
 #[derive(Debug, Default)]
@@ -40,7 +40,7 @@ pub struct SMV003 {
     expire_cursor: ExpireKey,
 
     /// subscriber of state machine data
-    pub(crate) subscriber: Option<Box<dyn StateMachineSubscriber>>,
+    pub(crate) subscriber: Option<Box<dyn SMEventSender>>,
 }
 
 impl StateMachineApi for SMV003 {
@@ -70,7 +70,7 @@ impl StateMachineApi for SMV003 {
         self.levels.sys_data_mut()
     }
 
-    fn get_subscriber(&self) -> Option<&dyn StateMachineSubscriber> {
+    fn event_sender(&self) -> Option<&dyn SMEventSender> {
         self.subscriber.as_ref().map(|x| x.as_ref())
     }
 }
@@ -171,7 +171,7 @@ impl SMV003 {
         self.map_mut()
     }
 
-    pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
+    pub fn set_event_sender(&mut self, subscriber: Box<dyn SMEventSender>) {
         self.subscriber = Some(subscriber);
     }
 
