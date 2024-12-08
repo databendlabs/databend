@@ -18,7 +18,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
@@ -268,8 +268,8 @@ impl Interpreter for InsertInterpreter {
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
         let binding = self.ctx.get_mutation_status();
         let status = binding.read();
-        let blocks = vec![DataBlock::new_from_columns(vec![UInt32Type::from_data(
-            vec![status.insert_rows as u32],
+        let blocks = vec![DataBlock::new_from_columns(vec![UInt64Type::from_data(
+            vec![status.insert_rows],
         )])];
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }

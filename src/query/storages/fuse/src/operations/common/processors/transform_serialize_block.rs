@@ -322,16 +322,18 @@ impl Processor for TransformSerializeBlock {
                     })
                 } else {
                     // appending new data block
-                    if let Some(tid) = self.table_id {
-                        self.block_builder
-                            .ctx
-                            .update_multi_table_insert_status(tid, block_meta.row_count);
-                    } else {
-                        self.block_builder.ctx.add_mutation_status(MutationStatus {
-                            insert_rows: block_meta.row_count,
-                            update_rows: 0,
-                            deleted_rows: 0,
-                        });
+                    if matches!(self.kind, MutationKind::Insert) {
+                        if let Some(tid) = self.table_id {
+                            self.block_builder
+                                .ctx
+                                .update_multi_table_insert_status(tid, block_meta.row_count);
+                        } else {
+                            self.block_builder.ctx.add_mutation_status(MutationStatus {
+                                insert_rows: block_meta.row_count,
+                                update_rows: 0,
+                                deleted_rows: 0,
+                            });
+                        }
                     }
 
                     if matches!(self.kind, MutationKind::Recluster) {
