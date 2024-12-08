@@ -353,7 +353,7 @@ impl From<tonic::Status> for ErrorCode {
             tonic::Code::Unknown => {
                 let details = status.details();
                 if details.is_empty() {
-                    if status.source().map_or(false, |e| e.is::<hyper::Error>()) {
+                    if status.source().is_some_and(|e| e.is::<hyper::Error>()) {
                         return ErrorCode::CannotConnectNode(format!(
                             "{}, source: {:?}",
                             status.message(),
