@@ -224,6 +224,8 @@ impl Catalog for ImmutableCatalog {
         for id in table_ids {
             if let Some(table) = self.sys_db_meta.get_by_id(id) {
                 table_name.push(Some(table.name().to_string()));
+            } else {
+                table_name.push(None);
             }
         }
         Ok(table_name)
@@ -270,6 +272,8 @@ impl Catalog for ImmutableCatalog {
                 res.push(Some("system".to_string()));
             } else if self.info_schema_db.get_db_info().database_id.db_id == *id {
                 res.push(Some("information_schema".to_string()));
+            } else {
+                res.push(None);
             }
         }
         Ok(res)
