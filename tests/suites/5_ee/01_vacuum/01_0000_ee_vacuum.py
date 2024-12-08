@@ -26,6 +26,8 @@ def insert_data(name):
     while value < 20:
         sql = "insert into table gc_test values(%d);" % value
         mycursor.execute(sql)
+        res = mycursor.fetchall()
+        assert res == [(1,)]
         value += 1
 
 

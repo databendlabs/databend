@@ -23,18 +23,6 @@ pub struct MutationStatus {
 }
 
 impl MutationStatus {
-    pub fn add_insert_rows(&mut self, insert_rows: u64) {
-        self.insert_rows += insert_rows;
-    }
-
-    pub fn add_deleted_rows(&mut self, deleted_rows: u64) {
-        self.deleted_rows += deleted_rows
-    }
-
-    pub fn add_update_rows(&mut self, update_rows: u64) {
-        self.update_rows += update_rows
-    }
-
     pub fn merge_mutation_status(&mut self, mutation_status: MutationStatus) {
         self.insert_rows += mutation_status.insert_rows;
         self.deleted_rows += mutation_status.deleted_rows;

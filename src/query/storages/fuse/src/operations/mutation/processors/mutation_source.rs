@@ -16,7 +16,6 @@ use std::any::Any;
 use std::ops::Not;
 use std::sync::Arc;
 
-use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -414,12 +413,6 @@ impl Processor for MutationSource {
 
 impl MutationSource {
     fn update_mutation_status(&self, num_rows: usize) {
-        let progress_values = ProgressValues {
-            rows: num_rows,
-            bytes: 0,
-        };
-        self.ctx.get_write_progress().incr(&progress_values);
-
         let (update_rows, deleted_rows) = if self.action == MutationAction::Update {
             (num_rows as u64, 0)
         } else {

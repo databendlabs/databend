@@ -21,7 +21,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
@@ -249,14 +249,10 @@ impl MutationInterpreter {
         let mut columns = Vec::new();
         for field in self.schema.as_ref().fields() {
             match field.name().as_str() {
-                plans::INSERT_NAME => {
-                    columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
-                }
-                plans::UPDATE_NAME => {
-                    columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
-                }
+                plans::INSERT_NAME => columns.push(UInt64Type::from_data(vec![status.insert_rows])),
+                plans::UPDATE_NAME => columns.push(UInt64Type::from_data(vec![status.update_rows])),
                 plans::DELETE_NAME => {
-                    columns.push(UInt32Type::from_data(vec![status.deleted_rows as u32]))
+                    columns.push(UInt64Type::from_data(vec![status.deleted_rows]))
                 }
                 _ => unreachable!(),
             }
