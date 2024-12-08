@@ -37,7 +37,6 @@ use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -698,6 +697,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+        todo!()
+    }
+
     async fn get_table_with_batch(
         &self,
         _catalog: &str,
@@ -727,25 +730,6 @@ impl TableContext for CtxDelegation {
 
     fn get_all_variables(&self) -> HashMap<String, Scalar> {
         HashMap::new()
-    }
-
-    fn set_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-        _blocks: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()> {
-        todo!()
-    }
-
-    fn get_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
-        todo!()
-    }
-
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
-        todo!()
     }
 
     fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
@@ -894,6 +878,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_runtime(&self) -> Result<Arc<Runtime>> {
+        todo!()
+    }
+
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
         todo!()
     }
 }

@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-
 use databend_common_meta_types::Change;
 
-/// StateMachine subscriber trait
-pub trait StateMachineSubscriber: Debug + Sync + Send {
-    fn kv_changed(&self, change: Change<Vec<u8>, String>);
+use crate::watcher::subscriber::EventSubscriber;
+
+/// An event sent to EventDispatcher.
+pub(crate) enum Command {
+    /// Submit a kv change event to dispatcher
+    KVChange(Change<Vec<u8>, String>),
+
+    /// Send a fn to [`EventSubscriber`] to run it.
+    ///
+    /// The function will be called with a mutable reference to the dispatcher.
+    Request {
+        req: Box<dyn FnOnce(&mut EventSubscriber) + Send + 'static>,
+    },
 }

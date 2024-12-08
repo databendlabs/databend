@@ -80,11 +80,10 @@ impl DefaultCostModel {
         match m_expr.plan.as_ref() {
             RelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
             RelOperator::ConstantTableScan(plan) => self.compute_cost_constant_scan(plan),
-            RelOperator::DummyTableScan(_) | RelOperator::CteScan(_) => Ok(Cost(0.0)),
+            RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
             RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
             RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
             RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
-            RelOperator::MaterializedCte(_) => self.compute_materialized_cte(memo, m_expr),
 
             RelOperator::EvalScalar(_)
             | RelOperator::Filter(_)
@@ -126,12 +125,6 @@ impl DefaultCostModel {
             // So if join type is right anti or right semi, cost needs multiply three (an approximate value)
             cost *= 3.0;
         }
-        Ok(Cost(cost))
-    }
-
-    fn compute_materialized_cte(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        let right_group = m_expr.child_group(memo, 1)?;
-        let cost = right_group.stat_info.cardinality * self.compute_per_row;
         Ok(Cost(cost))
     }
 

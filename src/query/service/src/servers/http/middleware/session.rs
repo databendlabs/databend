@@ -322,6 +322,12 @@ pub struct HTTPSessionEndpoint<E> {
     pub auth_manager: Arc<AuthMgr>,
 }
 
+fn make_cookie(name: impl Into<String>, value: impl Into<String>) -> Cookie {
+    let mut cookie = Cookie::new_with_str(name, value);
+    cookie.set_path("/");
+    cookie
+}
+
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
@@ -364,8 +370,7 @@ impl<E> HTTPSessionEndpoint<E> {
                 Some(id1.clone())
             }
             (Some(id), None) => {
-                req.cookie()
-                    .add(Cookie::new_with_str(COOKIE_SESSION_ID, id));
+                req.cookie().add(make_cookie(COOKIE_SESSION_ID, id));
                 Some(id.clone())
             }
             (None, Some(id)) => Some(id.clone()),
@@ -373,8 +378,7 @@ impl<E> HTTPSessionEndpoint<E> {
                 if cookie_enabled {
                     let id = Uuid::new_v4().to_string();
                     info!("new session id: {}", id);
-                    req.cookie()
-                        .add(Cookie::new_with_str(COOKIE_SESSION_ID, &id));
+                    req.cookie().add(make_cookie(COOKIE_SESSION_ID, &id));
                     Some(id)
                 } else {
                     None
@@ -397,9 +401,10 @@ impl<E> HTTPSessionEndpoint<E> {
             }
         }
 
-        let ts = unix_ts().as_secs().to_string();
-        req.cookie()
-            .add(Cookie::new_with_str(COOKIE_LAST_ACCESS_TIME, ts));
+        if cookie_enabled {
+            let ts = unix_ts().as_secs().to_string();
+            req.cookie().add(make_cookie(COOKIE_LAST_ACCESS_TIME, ts));
+        }
 
         let session = session_manager.register_session(session)?;
 

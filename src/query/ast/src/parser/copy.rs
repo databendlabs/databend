@@ -175,6 +175,10 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             CopyIntoTableOption::OnError(on_error.to_string())
         }),
         map(
+            rule! { COLUMN_MATCH_MODE ~ "=" ~ #ident },
+            |(_, _, mode)| CopyIntoTableOption::ColumnMatchMode(mode.to_string()),
+        ),
+        map(
             rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| {
                 CopyIntoTableOption::DisableVariantCheck(disable_variant_check)

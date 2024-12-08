@@ -174,6 +174,9 @@ impl InterpreterFactory {
             Plan::DropCatalog(plan) => {
                 Ok(Arc::new(DropCatalogInterpreter::create(ctx, *plan.clone())))
             }
+            Plan::UseCatalog(plan) => {
+                Ok(Arc::new(UseCatalogInterpreter::create(ctx, *plan.clone())))
+            }
 
             // Databases
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(

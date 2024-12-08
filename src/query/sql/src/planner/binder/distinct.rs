@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 
-use crate::binder::project_set::SetReturningRewriter;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::optimizer::SExpr;
@@ -43,14 +42,6 @@ impl Binder {
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
-        if !bind_context.srf_info.srfs.is_empty() {
-            // Rewrite the Set-returning functions as columns.
-            let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-            for (_, item) in scalar_items.iter_mut() {
-                srf_rewriter.visit(&mut item.scalar)?;
-            }
-        }
-
         let scalar_items: Vec<ScalarItem> = scalar_items
             .drain()
             .map(|(_, item)| {

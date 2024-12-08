@@ -26,12 +26,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int16Type;
@@ -50,6 +55,8 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::DecimalSumState;
+use ethnum::I256;
 use itertools::Itertools;
 
 // cargo test --package databend-common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
@@ -173,4 +180,33 @@ fn test_agg_hashtable() {
 
         assert_block_value_sort_eq(&block, &block_expected);
     }
+}
+
+#[test]
+fn test_layout() {
+    let factory = AggregateFunctionFactory::instance();
+    let decimal_type = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+        precision: 18,
+        scale: 2,
+    }));
+
+    let aggrs = factory.get("sum", vec![], vec![decimal_type]).unwrap();
+    type S = DecimalSumState<false, DecimalType<i128>>;
+    type M = DecimalSumState<false, DecimalType<I256>>;
+
+    assert_eq!(
+        aggrs.state_layout(),
+        Layout::from_size_align(24, 8).unwrap()
+    );
+    assert_eq!(Layout::new::<S>(), Layout::from_size_align(16, 8).unwrap());
+    assert_eq!(Layout::new::<M>(), Layout::from_size_align(32, 8).unwrap());
+    assert_eq!(
+        Layout::new::<i128>(),
+        Layout::from_size_align(16, 16).unwrap()
+    );
+
+    assert_eq!(
+        Layout::new::<i128>(),
+        Layout::from_size_align(16, 16).unwrap()
+    );
 }

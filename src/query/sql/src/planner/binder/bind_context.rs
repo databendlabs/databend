@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
@@ -45,9 +44,6 @@ use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
-use crate::plans::MaterializedCte;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -182,28 +178,10 @@ pub struct BindContext {
 pub struct CteContext {
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
-    /// Use `IndexMap` because need to keep the insertion order
-    /// Then wrap materialized ctes to main plan.
     pub cte_map: Box<IndexMap<String, CteInfo>>,
-    /// Record the bound s_expr of materialized cte
-    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
-    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
 }
 
 impl CteContext {
-    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
-        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
-    }
-
-    pub fn set_m_cte_materialized_indexes(&mut self, cte_idx: IndexType, index: IndexType) {
-        self.m_cte_materialized_indexes.insert(cte_idx, index);
-    }
-
-    // Check if the materialized cte has been bound.
-    pub fn has_bound(&self, cte_idx: IndexType) -> bool {
-        self.m_cte_bound_s_expr.contains_key(&cte_idx)
-    }
-
     // Merge two `CteContext` into one.
     pub fn merge(&mut self, other: CteContext) {
         let mut merged_cte_map = IndexMap::new();
@@ -217,41 +195,11 @@ impl CteContext {
             }
         }
         self.cte_map = Box::new(merged_cte_map);
-        self.m_cte_bound_s_expr.extend(other.m_cte_bound_s_expr);
-        self.m_cte_materialized_indexes
-            .extend(other.m_cte_materialized_indexes);
-    }
-
-    // Wrap materialized cte to main plan.
-    // It will be called at the end of binding.
-    pub fn wrap_m_cte(&self, mut s_expr: SExpr) -> SExpr {
-        for (_, cte_info) in self.cte_map.iter().rev() {
-            if !cte_info.materialized {
-                continue;
-            }
-            if let Some(cte_s_expr) = self.m_cte_bound_s_expr.get(&cte_info.cte_idx) {
-                let materialized_output_columns = cte_info.columns.clone();
-                s_expr = SExpr::create_binary(
-                    Arc::new(RelOperator::MaterializedCte(MaterializedCte {
-                        cte_idx: cte_info.cte_idx,
-                        materialized_output_columns,
-                        materialized_indexes: self.m_cte_materialized_indexes.clone(),
-                    })),
-                    Arc::new(s_expr),
-                    Arc::new(cte_s_expr.clone()),
-                );
-            }
-        }
-        s_expr
     }
 
     // Set cte context to current `BindContext`.
-    // To make sure the last `BindContext` of the whole binding phase contains `cte context`
-    // Then we can wrap materialized cte to main plan.
     pub fn set_cte_context(&mut self, cte_context: CteContext) {
         self.cte_map = cte_context.cte_map;
-        self.m_cte_bound_s_expr = cte_context.m_cte_bound_s_expr;
-        self.m_cte_materialized_indexes = cte_context.m_cte_materialized_indexes;
     }
 }
 

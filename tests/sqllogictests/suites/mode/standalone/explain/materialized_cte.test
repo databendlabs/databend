@@ -1,61 +1,57 @@
-# Nest materialized cte
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
-MaterializedCTE
-├── output columns: [a (#1)]
-├── TableScan
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#0)]
+HashJoin
+├── output columns: [t1.a (#0)]
+├── join type: INNER
+├── build keys: [t2.b (#1)]
+├── probe keys: [t1.a (#0)]
+├── filters: []
+├── estimated rows: 100.00
+├── TableScan(Build)
+│   ├── table: default.default.t1
+│   ├── output columns: [a (#1)]
 │   ├── read rows: 10
 │   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 10.00
-└── HashJoin
-    ├── output columns: [a (#1)]
-    ├── join type: INNER
-    ├── build keys: [t2.b (#2)]
-    ├── probe keys: [t1.a (#1)]
-    ├── filters: []
-    ├── estimated rows: 100.00
-    ├── CTEScan(Build)
-    │   ├── CTE index: 0, sub index: 2
-    │   └── estimated rows: 10.00
-    └── CTEScan(Probe)
-        ├── CTE index: 0, sub index: 1
-        └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
-MaterializedCTE
-├── output columns: [a (#1)]
-├── TableScan
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#0)]
+HashJoin
+├── output columns: [t1.a (#0)]
+├── join type: INNER
+├── build keys: [t2.b (#1)]
+├── probe keys: [t1.a (#0)]
+├── filters: []
+├── estimated rows: 100.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [b (#1)]
 │   ├── read rows: 10
 │   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 10.00
-└── MaterializedCTE
-    ├── output columns: [a (#1)]
-    ├── CTEScan
-    │   ├── CTE index: 0, sub index: 2
-    │   └── estimated rows: 10.00
-    └── HashJoin
-        ├── output columns: [a (#1)]
-        ├── join type: INNER
-        ├── build keys: [t2.b (#3)]
-        ├── probe keys: [t1.a (#1)]
-        ├── filters: []
-        ├── estimated rows: 100.00
-        ├── CTEScan(Build)
-        │   ├── CTE index: 1, sub index: 1
-        │   └── estimated rows: 10.00
-        └── CTEScan(Probe)
-            ├── CTE index: 0, sub index: 1
-            └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00

@@ -24,14 +24,12 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::CacheScan;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CteScan;
 use databend_common_sql::executor::physical_plans::ExpressionScan;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::plans::CacheSource;
 
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
-use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::processors::transforms::TransformCacheScan;
 use crate::pipelines::processors::transforms::TransformExpressionScan;
@@ -83,26 +81,6 @@ impl PipelineBuilder {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn build_cte_scan(&mut self, cte_scan: &CteScan) -> Result<()> {
-        let max_threads = self.settings.get_max_threads()?;
-        self.main_pipeline.add_source(
-            |output| {
-                MaterializedCteSource::create(
-                    self.ctx.clone(),
-                    output,
-                    cte_scan.cte_idx,
-                    self.cte_state.get(&cte_scan.cte_idx.0).unwrap().clone(),
-                    cte_scan.offsets.clone(),
-                    self.cte_scan_offsets
-                        .get(&cte_scan.cte_idx.0)
-                        .unwrap()
-                        .clone(),
-                )
-            },
-            max_threads as usize,
-        )
     }
 
     pub(crate) fn build_constant_table_scan(&mut self, scan: &ConstantTableScan) -> Result<()> {

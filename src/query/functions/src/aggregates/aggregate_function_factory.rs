@@ -26,6 +26,17 @@ use super::AggregateFunctionOrNullAdaptor;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
+// The NULL value in the those function needs to be handled separately.
+const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 7] = [
+    "array_agg",
+    "list",
+    "json_array_agg",
+    "json_object_agg",
+    "group_array_moving_avg",
+    "group_array_moving_sum",
+    "st_collect",
+];
+
 const STATE_SUFFIX: &str = "_state";
 
 pub type AggregateFunctionCreator =
@@ -172,15 +183,8 @@ impl AggregateFunctionFactory {
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
-        // The NULL value in the array_agg function needs to be added to the returned array column,
-        // so handled separately.
-        if name == "array_agg"
-            || name == "list"
-            || name == "json_array_agg"
-            || name == "json_object_agg"
-            || name == "group_array_moving_avg"
-            || name == "group_array_moving_sum"
-        {
+
+        if NEED_NULL_AGGREGATE_FUNCTIONS.contains(&name) {
             let agg = self.get_impl(name, params, arguments, &mut features)?;
             return Ok(agg);
         }
