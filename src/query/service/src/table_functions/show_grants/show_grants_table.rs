@@ -503,7 +503,8 @@ async fn show_account_grants(
             .iter()
             .map(|res| res.0)
             .collect::<HashSet<u64>>();
-        let db_ids = db_id_set.into_iter().collect::<Vec<u64>>();
+        let mut db_ids = db_id_set.into_iter().collect::<Vec<u64>>();
+        db_ids.sort();
         let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
         let db_map = db_ids
             .into_iter()
@@ -531,7 +532,8 @@ async fn show_account_grants(
             .iter()
             .map(|res| res.0)
             .collect::<HashSet<u64>>();
-        let db_ids = db_id_set.into_iter().collect::<Vec<u64>>();
+        let mut db_ids = db_id_set.into_iter().collect::<Vec<u64>>();
+        db_ids.sort();
         let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
         let db_map = db_ids
             .into_iter()
@@ -544,7 +546,8 @@ async fn show_account_grants(
             .iter()
             .map(|res| res.1)
             .collect::<HashSet<u64>>();
-        let table_ids = table_id_set.into_iter().collect::<Vec<u64>>();
+        let mut table_ids = table_id_set.into_iter().collect::<Vec<u64>>();
+        table_ids.sort();
         let table_names = catalog.mget_table_names_by_ids(&tenant, &table_ids).await?;
         let table_map = table_ids
             .into_iter()

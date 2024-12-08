@@ -283,7 +283,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 invalid_reason.append(&mut joint);
             }
 
-            let source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
+            let mut source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
+            source_db_ids.sort();
             let source_db_names = ctl
                 .mget_database_names_by_ids(&tenant, &source_db_ids)
                 .await?;
@@ -294,7 +295,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
                 .collect::<HashMap<_, _>>();
 
-            let source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
+            let mut source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
+            source_tb_ids.sort();
             let source_tb_names = ctl.mget_table_names_by_ids(&tenant, &source_tb_ids).await?;
             let source_tb_map = source_tb_ids
                 .into_iter()
