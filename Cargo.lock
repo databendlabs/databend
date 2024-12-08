@@ -4200,6 +4200,7 @@ dependencies = [
  "jsonb",
  "log",
  "opendal",
+ "parking_lot 0.12.3",
  "parquet",
  "rand",
  "serde",

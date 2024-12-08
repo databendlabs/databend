@@ -22,11 +22,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
+use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
@@ -90,6 +92,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -134,7 +137,11 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    pub(crate) pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
+
+type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -244,6 +251,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -773,6 +781,15 @@ impl Table for FuseTable {
         put_cache: bool,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline, put_cache)
+    }
+
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        source_pipeline: &mut Pipeline,
+    ) -> Result<Option<Pipeline>> {
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
     }
 
     fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {

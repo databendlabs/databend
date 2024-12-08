@@ -818,6 +818,10 @@ impl Settings {
         self.try_set_u64("short_sql_max_length", val)
     }
 
+    pub fn get_enable_prune_pipeline(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
