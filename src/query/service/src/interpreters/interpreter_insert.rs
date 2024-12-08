@@ -18,7 +18,11 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FromData;
+use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -43,6 +47,7 @@ use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::stream::DataBlockStream;
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
@@ -258,5 +263,14 @@ impl Interpreter for InsertInterpreter {
         }
 
         Ok(build_res)
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let binding = self.ctx.get_mutation_status();
+        let status = binding.read();
+        let blocks = vec![DataBlock::new_from_columns(vec![UInt32Type::from_data(
+            vec![status.insert_rows as u32],
+        )])];
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
