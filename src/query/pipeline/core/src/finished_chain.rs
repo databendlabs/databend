@@ -510,11 +510,9 @@ mod tests {
             }),
         );
 
-        assert!(
-            chain
-                .apply(ExecutionInfo::create(Ok(()), HashMap::new()))
-                .is_err()
-        );
+        assert!(chain
+            .apply(ExecutionInfo::create(Ok(()), HashMap::new()))
+            .is_err());
 
         assert_eq!(seq.load(Ordering::SeqCst), 13);
 

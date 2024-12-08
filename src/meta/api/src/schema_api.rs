@@ -237,7 +237,7 @@ pub trait SchemaApi: Send + Sync {
     ///
     /// It returns None instead of KVAppError, if table_id does not exist
     async fn get_table_by_id(&self, table_id: MetaId)
-    -> Result<Option<SeqV<TableMeta>>, MetaError>;
+        -> Result<Option<SeqV<TableMeta>>, MetaError>;
 
     async fn mget_table_names_by_ids(
         &self,
@@ -259,7 +259,7 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<GetTableCopiedFileReply, KVAppError>;
 
     async fn truncate_table(&self, req: TruncateTableReq)
-    -> Result<TruncateTableReply, KVAppError>;
+        -> Result<TruncateTableReply, KVAppError>;
 
     async fn upsert_table_option(
         &self,
@@ -324,7 +324,7 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError>;
 
     async fn list_catalogs(&self, req: ListCatalogReq)
-    -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
+        -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
 
     // least visible time
 

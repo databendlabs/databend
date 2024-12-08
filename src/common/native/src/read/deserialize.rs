@@ -32,7 +32,7 @@ pub struct DynIter<'a, V> {
     iter: Box<dyn Iterator<Item = V> + Send + Sync + 'a>,
 }
 
-impl<'a, V> Iterator for DynIter<'a, V> {
+impl<V> Iterator for DynIter<'_, V> {
     type Item = V;
 
     fn next(&mut self) -> Option<Self::Item> {

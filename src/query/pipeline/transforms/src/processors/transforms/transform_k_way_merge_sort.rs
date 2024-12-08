@@ -393,7 +393,7 @@ where A: SortAlgorithm
     }
 
     fn ready(&self) -> bool {
-        self.task.map_or(false, |state| state.done())
+        self.task.is_some_and(|state| state.done())
     }
 
     fn pull(&mut self) -> Result<Event> {
@@ -718,7 +718,7 @@ impl Processor for KWayMergeCombinerProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() || self.limit.map_or(false, |limit| limit == 0) {
+        if self.output.is_finished() || self.limit == Some(0) {
             self.inputs.iter().for_each(|i| i.finish());
             self.output.finish();
             return Ok(Event::Finished);

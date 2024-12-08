@@ -603,7 +603,9 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
 
 impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
     type HashKey = Method::HashKey;
-    type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
+    type HashKeyIter<'a>
+        = Method::HashKeyIter<'a>
+    where Self: 'a;
 
     fn name(&self) -> String {
         format!("Partitioned{}", self.method.name())
@@ -654,7 +656,11 @@ where
         Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(arena, tables))
     }
 
-    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
+    type ColumnBuilder<'a>
+        = Method::ColumnBuilder<'a>
+    where
+        Self: 'a,
+        PartitionedHashMethod<Method>: 'a;
 
     fn keys_column_builder(
         &self,
@@ -670,7 +676,11 @@ where
         self.method.keys_iter_from_column(column)
     }
 
-    type GroupColumnsBuilder<'a> = Method::GroupColumnsBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
+    type GroupColumnsBuilder<'a>
+        = Method::GroupColumnsBuilder<'a>
+    where
+        Self: 'a,
+        PartitionedHashMethod<Method>: 'a;
 
     fn group_columns_builder(
         &self,

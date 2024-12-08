@@ -108,7 +108,7 @@ where I: databend_common_column::types::Index
     }
 }
 
-impl<'a, I> ValueVisitor for TakeVisitor<'a, I>
+impl<I> ValueVisitor for TakeVisitor<'_, I>
 where I: databend_common_column::types::Index
 {
     fn visit_scalar(&mut self, scalar: crate::Scalar) -> Result<()> {
@@ -247,7 +247,7 @@ where I: databend_common_column::types::Index
     }
 }
 
-impl<'a, I> TakeVisitor<'a, I>
+impl<I> TakeVisitor<'_, I>
 where I: databend_common_column::types::Index
 {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {

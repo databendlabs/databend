@@ -187,7 +187,7 @@ where I: Index
     }
 }
 
-impl<'a, 'b, const IS_FIRST: bool, I> ValueVisitor for IndexHashVisitor<'a, 'b, IS_FIRST, I>
+impl<const IS_FIRST: bool, I> ValueVisitor for IndexHashVisitor<'_, '_, IS_FIRST, I>
 where I: Index
 {
     fn visit_scalar(&mut self, scalar: Scalar) -> Result<()> {
@@ -318,7 +318,7 @@ where I: Index
     }
 }
 
-impl<'a, 'b, const IS_FIRST: bool, I> IndexHashVisitor<'a, 'b, IS_FIRST, I>
+impl<const IS_FIRST: bool, I> IndexHashVisitor<'_, '_, IS_FIRST, I>
 where I: Index
 {
     fn visit_indices<F>(&mut self, do_hash: F) -> Result<()>

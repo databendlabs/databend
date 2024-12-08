@@ -39,7 +39,7 @@ impl<'a> GroupingChecker<'a> {
     }
 }
 
-impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
+impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
             let column = &self.bind_context.aggregate_info.group_items[*index];

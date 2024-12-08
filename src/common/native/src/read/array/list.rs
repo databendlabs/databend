@@ -33,7 +33,7 @@ impl<'a> ListIterator<'a> {
     }
 }
 
-impl<'a> ListIterator<'a> {
+impl ListIterator<'_> {
     fn deserialize(
         &mut self,
         value: Option<Result<(NestedState, Column)>>,
@@ -48,7 +48,7 @@ impl<'a> ListIterator<'a> {
     }
 }
 
-impl<'a> Iterator for ListIterator<'a> {
+impl Iterator for ListIterator<'_> {
     type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {

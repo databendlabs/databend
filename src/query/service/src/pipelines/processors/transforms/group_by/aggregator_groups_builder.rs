@@ -38,7 +38,7 @@ pub struct FixedKeysGroupColumnsBuilder<'a, T> {
     group_data_types: Vec<DataType>,
 }
 
-impl<'a, T> FixedKeysGroupColumnsBuilder<'a, T> {
+impl<T> FixedKeysGroupColumnsBuilder<'_, T> {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             _t: Default::default(),
@@ -82,7 +82,7 @@ pub struct SerializedKeysGroupColumnsBuilder<'a> {
     single_string_builder: Option<StringColumnBuilder>,
 }
 
-impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
+impl SerializedKeysGroupColumnsBuilder<'_> {
     pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
         let (single_binary_builder, single_string_builder, data) =
             if params.group_data_types.len() == 1 {
@@ -172,7 +172,7 @@ pub struct DictionarySerializedKeysGroupColumnsBuilder<'a> {
     group_data_types: Vec<DataType>,
 }
 
-impl<'a> DictionarySerializedKeysGroupColumnsBuilder<'a> {
+impl DictionarySerializedKeysGroupColumnsBuilder<'_> {
     pub fn create(capacity: usize, _data_capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             other_type_data: Vec::with_capacity(capacity),

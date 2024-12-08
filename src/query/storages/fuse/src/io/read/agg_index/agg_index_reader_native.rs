@@ -42,11 +42,12 @@ impl AggIndexReader {
                     })
                     .ok()?;
                 let num_rows = metadata[0].pages.iter().map(|p| p.num_values).sum();
-                debug_assert!(
-                    metadata
-                        .iter()
-                        .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
-                );
+                debug_assert!(metadata.iter().all(|c| c
+                    .pages
+                    .iter()
+                    .map(|p| p.num_values)
+                    .sum::<u64>()
+                    == num_rows));
 
                 let columns_meta = metadata
                     .into_iter()
@@ -97,11 +98,12 @@ impl AggIndexReader {
                     return None;
                 }
                 let num_rows = metadata[0].pages.iter().map(|p| p.num_values).sum();
-                debug_assert!(
-                    metadata
-                        .iter()
-                        .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
-                );
+                debug_assert!(metadata.iter().all(|c| c
+                    .pages
+                    .iter()
+                    .map(|p| p.num_values)
+                    .sum::<u64>()
+                    == num_rows));
                 let columns_meta = metadata
                     .into_iter()
                     .enumerate()
@@ -150,11 +152,9 @@ impl AggIndexReader {
                 self.reader.data_schema(),
             )));
         }
-        debug_assert!(
-            all_columns_arrays
-                .iter()
-                .all(|a| a.len() == all_columns_arrays[0].len())
-        );
+        debug_assert!(all_columns_arrays
+            .iter()
+            .all(|a| a.len() == all_columns_arrays[0].len()));
         let page_num = all_columns_arrays[0].len();
         let mut blocks = Vec::with_capacity(page_num);
 

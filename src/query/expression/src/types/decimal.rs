@@ -1297,12 +1297,12 @@ impl DecimalColumnBuilder {
             }
             (DecimalColumnBuilder::Decimal128(_, _), DecimalColumn::Decimal256(_, _)) =>
                 unreachable!(
-                    "unable append column(data type: Decimal256) into builder(data type: Decimal128)"
-                ),
+                "unable append column(data type: Decimal256) into builder(data type: Decimal128)"
+            ),
             (DecimalColumnBuilder::Decimal256(_, _), DecimalColumn::Decimal128(_, _)) =>
                 unreachable!(
-                    "unable append column(data type: Decimal128) into builder(data type: Decimal256)"
-                ),
+                "unable append column(data type: Decimal128) into builder(data type: Decimal256)"
+            ),
         })
     }
 

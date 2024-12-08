@@ -47,7 +47,7 @@ where T: AsRef<[u8]>
                     return Ok(());
                 }
             } else if self.ignore_byte(b'\\') {
-                let b = self.remaining_slice();
+                let b = Cursor::split(self).1;
                 if b.is_empty() {
                     return Err(std::io::Error::new(
                         ErrorKind::InvalidData,
@@ -87,7 +87,7 @@ where T: AsRef<[u8]>
         loop {
             self.keep_read(buf, |f| f != b'\\');
             if self.ignore_byte(b'\\') {
-                let buffer = self.remaining_slice();
+                let buffer = Cursor::split(self).1;
                 let c = buffer[0];
                 match c {
                     b'\'' | b'\"' | b'\\' | b'/' | b'`' => {
@@ -136,13 +136,13 @@ where T: AsRef<[u8]>
         // Get next possible end position.
         while let Some(pos) = positions.pop_front() {
             let len = pos - start;
-            buf.extend_from_slice(&self.remaining_slice()[..len]);
+            buf.extend_from_slice(&Cursor::split(self).1[..len]);
             self.consume(len);
 
             if self.ignore_byte(b'\'') {
                 return Ok(());
             } else if self.ignore_byte(b'\\') {
-                let b = self.remaining_slice();
+                let b = Cursor::split(self).1;
                 if b.is_empty() {
                     return Err(std::io::Error::new(
                         ErrorKind::InvalidData,

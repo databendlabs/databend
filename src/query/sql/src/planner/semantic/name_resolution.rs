@@ -109,7 +109,7 @@ pub struct IdentifierNormalizer<'a> {
     pub ctx: &'a NameResolutionContext,
 }
 
-impl<'a> IdentifierNormalizer<'a> {
+impl IdentifierNormalizer<'_> {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
         let normalized_ident = normalize_identifier(ident, self.ctx);
         *ident = normalized_ident;

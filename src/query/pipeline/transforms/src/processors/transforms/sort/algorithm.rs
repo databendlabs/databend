@@ -63,7 +63,9 @@ pub type HeapSort<R> = BinaryHeap<Reverse<Cursor<R>>>;
 impl<R: Rows + Send> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     const SHOULD_PEEK_TOP2: bool = true;
     type Rows = R;
-    type PeekMut<'a> = binary_heap::PeekMut<'a, Reverse<Cursor<R>>> where R:'a;
+    type PeekMut<'a>
+        = binary_heap::PeekMut<'a, Reverse<Cursor<R>>>
+    where R: 'a;
     fn with_capacity(capacity: usize) -> Self {
         BinaryHeap::with_capacity(capacity)
     }
@@ -130,7 +132,9 @@ impl<R: Rows> fmt::Debug for LoserTreeSort<R> {
 impl<R: Rows + Send> SortAlgorithm for LoserTreeSort<R> {
     const SHOULD_PEEK_TOP2: bool = false;
     type Rows = R;
-    type PeekMut<'a> = LoserTreePeekMut<'a,Self::Rows>  where Self: 'a;
+    type PeekMut<'a>
+        = LoserTreePeekMut<'a, Self::Rows>
+    where Self: 'a;
     fn with_capacity(capacity: usize) -> Self {
         let data = vec![None; capacity];
         LoserTreeSort {

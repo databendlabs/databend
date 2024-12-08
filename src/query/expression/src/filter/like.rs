@@ -36,7 +36,7 @@ pub enum LikePattern<'a> {
     Constant(bool),
 }
 
-impl<'a> PartialEq for LikePattern<'a> {
+impl PartialEq for LikePattern<'_> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (LikePattern::OrdinalStr(a), LikePattern::OrdinalStr(b)) => a == b,
@@ -53,7 +53,7 @@ impl<'a> PartialEq for LikePattern<'a> {
     }
 }
 
-impl<'a> LikePattern<'a> {
+impl LikePattern<'_> {
     #[inline]
     pub fn compare(&self, haystack: &[u8]) -> bool {
         match self {

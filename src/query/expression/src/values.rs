@@ -425,7 +425,7 @@ impl Scalar {
     }
 }
 
-impl<'a> ScalarRef<'a> {
+impl ScalarRef<'_> {
     pub fn to_owned(&self) -> Scalar {
         match self {
             ScalarRef::Null => Scalar::Null,
@@ -721,7 +721,7 @@ impl PartialEq for Scalar {
     }
 }
 
-impl<'a, 'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'a> {
+impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
     fn partial_cmp(&self, other: &ScalarRef<'b>) -> Option<Ordering> {
         match (self, other) {
             (ScalarRef::Null, ScalarRef::Null) => Some(Ordering::Equal),
@@ -756,7 +756,7 @@ impl Ord for ScalarRef<'_> {
     }
 }
 
-impl<'a, 'b> PartialEq<ScalarRef<'b>> for ScalarRef<'a> {
+impl<'b> PartialEq<ScalarRef<'b>> for ScalarRef<'_> {
     fn eq(&self, other: &ScalarRef<'b>) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)
     }
@@ -1444,7 +1444,7 @@ impl<'de> Deserialize<'de> for Column {
     where D: Deserializer<'de> {
         struct ColumnVisitor;
 
-        impl<'de> Visitor<'de> for ColumnVisitor {
+        impl Visitor<'_> for ColumnVisitor {
             type Value = Column;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -2372,7 +2372,7 @@ impl<'a> Iterator for ColumnIterator<'a> {
     }
 }
 
-unsafe impl<'a> TrustedLen for ColumnIterator<'a> {}
+unsafe impl TrustedLen for ColumnIterator<'_> {}
 
 #[macro_export]
 macro_rules! for_all_number_varints {

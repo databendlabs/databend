@@ -37,13 +37,11 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_function_factory("unnest", |_, arg_types: &[DataType]| {
         match arg_types {
-            [
-                ty @ (DataType::Null
-                | DataType::EmptyArray
-                | DataType::Nullable(_)
-                | DataType::Array(_)
-                | DataType::Variant),
-            ] => Some(build_unnest(ty, Box::new(|ty| ty))),
+            [ty @ (DataType::Null
+            | DataType::EmptyArray
+            | DataType::Nullable(_)
+            | DataType::Array(_)
+            | DataType::Variant)] => Some(build_unnest(ty, Box::new(|ty| ty))),
             _ => {
                 // Generate a fake function with signature `unset(Array(T0 NULL))` to have a better error message.
                 Some(build_unnest(

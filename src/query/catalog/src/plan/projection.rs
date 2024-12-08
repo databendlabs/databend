@@ -73,7 +73,7 @@ impl Projection {
     pub fn project_column_nodes<'a>(
         &'a self,
         column_nodes: &'a ColumnNodes,
-    ) -> Result<Vec<&ColumnNode>> {
+    ) -> Result<Vec<&'a ColumnNode>> {
         let column_nodes = match self {
             Projection::Columns(indices) => indices
                 .iter()

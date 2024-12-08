@@ -431,46 +431,44 @@ pub struct SignalListener;
 
 impl SignalListener {
     pub fn spawn(mut file: File, crash_version: String) {
-        Thread::named_spawn(Some(String::from("SignalListener")), move || {
-            loop {
-                let mut buffer = [0_u8; BUFFER_SIZE];
+        Thread::named_spawn(Some(String::from("SignalListener")), move || loop {
+            let mut buffer = [0_u8; BUFFER_SIZE];
 
-                if file.read_exact(&mut buffer).is_ok() {
-                    let pos = 0;
-                    let (sig, pos) = read_i32(&buffer, pos);
-                    let (si_code, pos) = read_i32(&buffer, pos);
-                    let (si_addr, pos) = read_u64(&buffer, pos);
-                    let (crash_query_id, pos) = read_string(&buffer, pos);
+            if file.read_exact(&mut buffer).is_ok() {
+                let pos = 0;
+                let (sig, pos) = read_i32(&buffer, pos);
+                let (si_code, pos) = read_i32(&buffer, pos);
+                let (si_addr, pos) = read_u64(&buffer, pos);
+                let (crash_query_id, pos) = read_string(&buffer, pos);
 
-                    let (frames_len, mut pos) = read_u64(&buffer, pos);
-                    let mut frames = Vec::with_capacity(50);
+                let (frames_len, mut pos) = read_u64(&buffer, pos);
+                let mut frames = Vec::with_capacity(50);
 
-                    for _ in 0..frames_len {
-                        let (ip, new_pos) = read_u64(&buffer, pos);
-                        frames.push(ip);
-                        pos = new_pos;
-                    }
-
-                    let stack_trace = StackTrace::from_ips(&frames);
-
-                    eprintln!("{:#^80}", " Crash fault info ");
-                    eprintln!("PID: {}", std::process::id());
-                    eprintln!("Version: {}", crash_version);
-                    eprintln!("Timestamp(UTC): {}", chrono::Utc::now());
-                    eprintln!("Timestamp(Local): {}", chrono::Local::now());
-                    eprintln!("QueryId: {:?}", crash_query_id);
-                    eprintln!("{}", signal_message(sig, si_code, si_addr as usize));
-                    eprintln!("Backtrace:\n {:?}", stack_trace);
-
-                    log::error!("{:#^80}", " Crash fault info ");
-                    log::error!("PID: {}", std::process::id());
-                    log::error!("Version: {}", crash_version);
-                    log::error!("Timestamp(UTC): {}", chrono::Utc::now());
-                    log::error!("Timestamp(Local): {}", chrono::Local::now());
-                    log::error!("QueryId: {:?}", crash_query_id);
-                    log::error!("{}", signal_message(sig, si_code, si_addr as usize));
-                    log::error!("Backtrace:\n {:?}", stack_trace);
+                for _ in 0..frames_len {
+                    let (ip, new_pos) = read_u64(&buffer, pos);
+                    frames.push(ip);
+                    pos = new_pos;
                 }
+
+                let stack_trace = StackTrace::from_ips(&frames);
+
+                eprintln!("{:#^80}", " Crash fault info ");
+                eprintln!("PID: {}", std::process::id());
+                eprintln!("Version: {}", crash_version);
+                eprintln!("Timestamp(UTC): {}", chrono::Utc::now());
+                eprintln!("Timestamp(Local): {}", chrono::Local::now());
+                eprintln!("QueryId: {:?}", crash_query_id);
+                eprintln!("{}", signal_message(sig, si_code, si_addr as usize));
+                eprintln!("Backtrace:\n {:?}", stack_trace);
+
+                log::error!("{:#^80}", " Crash fault info ");
+                log::error!("PID: {}", std::process::id());
+                log::error!("Version: {}", crash_version);
+                log::error!("Timestamp(UTC): {}", chrono::Utc::now());
+                log::error!("Timestamp(Local): {}", chrono::Local::now());
+                log::error!("QueryId: {:?}", crash_query_id);
+                log::error!("{}", signal_message(sig, si_code, si_addr as usize));
+                log::error!("Backtrace:\n {:?}", stack_trace);
             }
         });
     }

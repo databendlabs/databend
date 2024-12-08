@@ -184,11 +184,9 @@ pub async fn check_data_dir(
             "ts_location_opt: {:?}, table_statistic_files: {:?}",
             ts_location, table_statistic_files
         );
-        assert!(
-            table_statistic_files
-                .iter()
-                .any(|e| e.contains(&ts_location))
-        );
+        assert!(table_statistic_files
+            .iter()
+            .any(|e| e.contains(&ts_location)));
     }
 
     Ok(())

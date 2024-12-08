@@ -198,11 +198,9 @@ fn test_dictionary_hash_map() {
                     NonNull::from(index1_str.as_bytes()),
                     NonNull::from(index2_str.as_bytes()),
                 ];
-                assert!(
-                    hashtable
-                        .insert_and_entry(&DictionaryKeys::create(&keys))
-                        .is_err()
-                );
+                assert!(hashtable
+                    .insert_and_entry(&DictionaryKeys::create(&keys))
+                    .is_err());
             }
         }
     }

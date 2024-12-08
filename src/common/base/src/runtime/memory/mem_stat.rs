@@ -265,11 +265,9 @@ mod tests {
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
-        assert!(
-            mem_stat
-                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
-                .is_err()
-        );
+        assert!(mem_stat
+            .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
+            .is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
@@ -358,11 +356,9 @@ mod tests {
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
-        assert!(
-            mem_stat
-                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
-                .is_ok()
-        );
+        assert!(mem_stat
+            .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
+            .is_ok());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
@@ -375,11 +371,9 @@ mod tests {
         assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
         child_mem_stat.record_memory::<false>(1, 1).unwrap();
-        assert!(
-            child_mem_stat
-                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
-                .is_err()
-        );
+        assert!(child_mem_stat
+            .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
+            .is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1 + MINIMUM_MEMORY_LIMIT
@@ -404,11 +398,9 @@ mod tests {
             MemStat::create_child("TEST_CHILD".to_string(), vec![mem_stat.clone()]);
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
 
-        assert!(
-            child_mem_stat
-                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
-                .is_err()
-        );
+        assert!(child_mem_stat
+            .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
+            .is_err());
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
@@ -421,11 +413,9 @@ mod tests {
             MemStat::create_child("TEST_CHILD".to_string(), vec![mem_stat.clone()]);
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
-        assert!(
-            child_mem_stat
-                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
-                .is_err()
-        );
+        assert!(child_mem_stat
+            .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
+            .is_err());
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         // assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);

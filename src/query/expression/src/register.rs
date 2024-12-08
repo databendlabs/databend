@@ -1150,9 +1150,9 @@ pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
 
 pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
+        + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(func(
@@ -1188,15 +1188,10 @@ pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        &mut EvalContext,
-    ) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
+        + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
         (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3)) => Value::Scalar(func(
@@ -1294,15 +1289,15 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
 
 pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        &mut EvalContext,
-    ) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            &mut EvalContext,
+        ) -> O::Scalar
+        + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
 {
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
@@ -1545,20 +1540,20 @@ pub fn vectorize_5_arg<
     O: ArgType,
 >(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        I5::ScalarRef<'_>,
-        &mut EvalContext,
-    ) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            I5::ScalarRef<'_>,
+            &mut EvalContext,
+        ) -> O::Scalar
+        + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, Value<I5>, &mut EvalContext) -> Value<O>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
         (
             Value::Scalar(arg1),
@@ -2336,9 +2331,9 @@ pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
 
 pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext)
-    + Copy
-    + Send
-    + Sync,
+        + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(arg1), Value::Scalar(arg2)) => {
@@ -2388,14 +2383,14 @@ pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 
 pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        &mut O::ColumnBuilder,
-        &mut EvalContext,
-    ) + Copy
-    + Send
-    + Sync,
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            &mut O::ColumnBuilder,
+            &mut EvalContext,
+        ) + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
         (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3)) => {
@@ -2514,15 +2509,15 @@ pub fn vectorize_with_builder_4_arg<
     O: ArgType,
 >(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        &mut O::ColumnBuilder,
-        &mut EvalContext,
-    ) + Copy
-    + Send
-    + Sync,
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            &mut O::ColumnBuilder,
+            &mut EvalContext,
+        ) + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
 {
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
@@ -2816,20 +2811,20 @@ pub fn vectorize_with_builder_5_arg<
     O: ArgType,
 >(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        I5::ScalarRef<'_>,
-        &mut O::ColumnBuilder,
-        &mut EvalContext,
-    ) + Copy
-    + Send
-    + Sync,
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            I5::ScalarRef<'_>,
+            &mut O::ColumnBuilder,
+            &mut EvalContext,
+        ) + Copy
+        + Send
+        + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, Value<I5>, &mut EvalContext) -> Value<O>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
         (
             Value::Scalar(arg1),
@@ -3646,9 +3641,9 @@ pub fn vectorize_with_builder_5_arg<
 pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, ctx| match (arg1) {
         (Value::Scalar(None)) => Value::Scalar(None),
         (Value::Scalar(Some(arg1))) => {
@@ -3675,9 +3670,9 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     Value<NullableType<I2>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(None), _) | (_, Value::Scalar(None)) => Value::Scalar(None),
         (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2))) => Value::Scalar(Some(
@@ -3729,18 +3724,18 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 
 pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
     Value<NullableType<I3>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
         (Value::Scalar(None), _, _) | (_, Value::Scalar(None), _) | (_, _, Value::Scalar(None)) => {
             Value::Scalar(None)
@@ -3897,9 +3892,9 @@ pub fn passthrough_nullable_4_arg<
     O: ArgType,
 >(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
@@ -3907,9 +3902,9 @@ pub fn passthrough_nullable_4_arg<
     Value<NullableType<I4>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
         (Value::Scalar(None), _, _, _)
         | (_, Value::Scalar(None), _, _)
@@ -4316,16 +4311,16 @@ pub fn passthrough_nullable_5_arg<
     O: ArgType,
 >(
     func: impl for<'a> Fn(
-        Value<I1>,
-        Value<I2>,
-        Value<I3>,
-        Value<I4>,
-        Value<I5>,
-        &mut EvalContext,
-    ) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+            Value<I1>,
+            Value<I2>,
+            Value<I3>,
+            Value<I4>,
+            Value<I5>,
+            &mut EvalContext,
+        ) -> Value<O>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
@@ -4334,9 +4329,9 @@ pub fn passthrough_nullable_5_arg<
     Value<NullableType<I5>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
         (Value::Scalar(None), _, _, _, _)
         | (_, Value::Scalar(None), _, _, _)
@@ -5242,9 +5237,9 @@ pub fn passthrough_nullable_5_arg<
 pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, ctx| match (arg1) {
         (Value::Scalar(None)) => Value::Scalar(None),
         (Value::Scalar(Some(arg1))) => {
@@ -5271,17 +5266,17 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
 
 pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(None), _) | (_, Value::Scalar(None)) => Value::Scalar(None),
         (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2))) => Value::Scalar(
@@ -5348,18 +5343,18 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 
 pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
     Value<NullableType<I3>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
         (Value::Scalar(None), _, _) | (_, Value::Scalar(None), _) | (_, _, Value::Scalar(None)) => {
             Value::Scalar(None)
@@ -5545,15 +5540,15 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
 
 pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
     func: impl for<'a> Fn(
-        Value<I1>,
-        Value<I2>,
-        Value<I3>,
-        Value<I4>,
-        &mut EvalContext,
-    ) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+            Value<I1>,
+            Value<I2>,
+            Value<I3>,
+            Value<I4>,
+            &mut EvalContext,
+        ) -> Value<NullableType<O>>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
@@ -5561,9 +5556,9 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
     Value<NullableType<I4>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
         (Value::Scalar(None), _, _, _)
         | (_, Value::Scalar(None), _, _)
@@ -6045,16 +6040,16 @@ pub fn combine_nullable_5_arg<
     O: ArgType,
 >(
     func: impl for<'a> Fn(
-        Value<I1>,
-        Value<I2>,
-        Value<I3>,
-        Value<I4>,
-        Value<I5>,
-        &mut EvalContext,
-    ) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+            Value<I1>,
+            Value<I2>,
+            Value<I3>,
+            Value<I4>,
+            Value<I5>,
+            &mut EvalContext,
+        ) -> Value<NullableType<O>>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
@@ -6063,9 +6058,9 @@ pub fn combine_nullable_5_arg<
     Value<NullableType<I5>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
         (Value::Scalar(None), _, _, _, _)
         | (_, Value::Scalar(None), _, _, _)

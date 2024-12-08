@@ -13,7 +13,6 @@
 // limitations under the License.
 
 // For use of const fn: `Option::<T>::unwrap` at compile time.
-#![feature(const_option)]
 #![feature(box_into_inner)]
 #![allow(clippy::uninlined_format_args)]
 

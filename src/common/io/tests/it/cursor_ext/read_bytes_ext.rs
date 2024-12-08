@@ -22,13 +22,13 @@ fn test_read_ext() {
 
     cursor.ignore_byte(b'1');
     cursor.ignore_white_spaces_or_comments();
-    let bs = cursor.remaining_slice();
+    let bs = Cursor::split(&cursor).1;
     assert_eq!(String::from_utf8_lossy(bs), "bytes   helloworld");
 
     let mut vec = vec![];
     cursor.until(b's', &mut vec);
     assert_eq!(
-        String::from_utf8_lossy(cursor.remaining_slice()),
+        String::from_utf8_lossy(Cursor::split(&cursor).1),
         "   helloworld"
     );
     assert_eq!(String::from_utf8_lossy(&vec), "bytes".to_string());
@@ -36,7 +36,7 @@ fn test_read_ext() {
     let spaces = cursor.ignore_white_spaces_or_comments();
     assert!(spaces);
     assert_eq!(
-        String::from_utf8_lossy(cursor.remaining_slice()),
+        String::from_utf8_lossy(Cursor::split(&cursor).1),
         "helloworld"
     );
 
@@ -44,6 +44,6 @@ fn test_read_ext() {
 
     cursor.ignore_byte(b'1');
     cursor.ignore_white_spaces_or_comments();
-    let bs = cursor.remaining_slice();
+    let bs = Cursor::split(&cursor).1;
     assert_eq!(String::from_utf8_lossy(bs), "bytes   helloworld");
 }

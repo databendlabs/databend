@@ -164,7 +164,7 @@ impl<'a> FilterVisitor<'a> {
     }
 }
 
-impl<'a> ValueVisitor for FilterVisitor<'a> {
+impl ValueVisitor for FilterVisitor<'_> {
     fn visit_value(&mut self, value: Value<AnyType>) -> Result<()> {
         match value {
             Value::Scalar(c) => self.visit_scalar(c),
@@ -316,7 +316,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
     }
 }
 
-impl<'a> FilterVisitor<'a> {
+impl FilterVisitor<'_> {
     fn filter_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         match self.strategy {
             IterationStrategy::IndexIterator => {

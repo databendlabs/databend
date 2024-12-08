@@ -496,8 +496,8 @@ impl HttpQuery {
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
         // and the data in the stage attachment (which is mostly a s3 path) will be inserted into
         // the table.
-        match &request.stage_attachment {
-            Some(attachment) => ctx.attach_stage(StageAttachment {
+        if let Some(attachment) = &request.stage_attachment {
+            ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
                 file_format_options: attachment.file_format_options.as_ref().map(|v| {
                     v.iter()
@@ -505,8 +505,7 @@ impl HttpQuery {
                         .collect::<BTreeMap<_, _>>()
                 }),
                 copy_options: attachment.copy_options.clone(),
-            }),
-            None => {}
+            })
         };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);

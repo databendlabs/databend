@@ -303,7 +303,7 @@ pub struct ArrayIterator<'a, T: ValueType> {
     offsets: std::slice::Windows<'a, u64>,
 }
 
-impl<'a, T: ValueType> Iterator for ArrayIterator<'a, T> {
+impl<T: ValueType> Iterator for ArrayIterator<'_, T> {
     type Item = T::Column;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -317,7 +317,7 @@ impl<'a, T: ValueType> Iterator for ArrayIterator<'a, T> {
     }
 }
 
-unsafe impl<'a, T: ValueType> TrustedLen for ArrayIterator<'a, T> {}
+unsafe impl<T: ValueType> TrustedLen for ArrayIterator<'_, T> {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayColumnBuilder<T: ValueType> {

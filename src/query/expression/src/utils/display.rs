@@ -108,7 +108,7 @@ impl Display for DataBlock {
     }
 }
 
-impl<'a> Debug for ScalarRef<'a> {
+impl Debug for ScalarRef<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
@@ -205,7 +205,7 @@ impl Debug for Column {
     }
 }
 
-impl<'a> Display for ScalarRef<'a> {
+impl Display for ScalarRef<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),

@@ -50,7 +50,7 @@ impl<'a> TrueIdxIter<'a> {
     }
 }
 
-impl<'a> Iterator for TrueIdxIter<'a> {
+impl Iterator for TrueIdxIter<'_> {
     type Item = usize;
 
     #[inline]
@@ -85,7 +85,7 @@ impl<'a> Iterator for TrueIdxIter<'a> {
     }
 }
 
-unsafe impl<'a> TrustedLen for TrueIdxIter<'a> {}
+unsafe impl TrustedLen for TrueIdxIter<'_> {}
 
 /// This crates' equivalent of [`std::vec::IntoIter`] for [`Bitmap`].
 #[derive(Debug, Clone)]

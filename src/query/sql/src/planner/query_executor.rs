@@ -21,7 +21,7 @@ use crate::executor::PhysicalPlan;
 #[async_trait]
 pub trait QueryExecutor: Send + Sync {
     async fn execute_query_with_physical_plan(&self, plan: &PhysicalPlan)
-    -> Result<Vec<DataBlock>>;
+        -> Result<Vec<DataBlock>>;
 
     async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
 }

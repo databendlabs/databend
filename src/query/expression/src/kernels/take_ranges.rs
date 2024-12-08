@@ -81,7 +81,7 @@ impl<'a> TakeRangeVisitor<'a> {
     }
 }
 
-impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
+impl ValueVisitor for TakeRangeVisitor<'_> {
     fn visit_scalar(&mut self, scalar: crate::Scalar) -> Result<()> {
         self.result = Some(Value::Scalar(scalar));
         Ok(())
@@ -204,7 +204,7 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
     }
 }
 
-impl<'a> TakeRangeVisitor<'a> {
+impl TakeRangeVisitor<'_> {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
         let values = buffer.as_slice();

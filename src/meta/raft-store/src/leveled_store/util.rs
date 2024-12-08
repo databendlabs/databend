@@ -108,5 +108,9 @@ pub(crate) fn rotbl_choose_greater(
 }
 
 fn seq_marked_max(a: SeqMarked, b: SeqMarked) -> SeqMarked {
-    if a.seq() > b.seq() { a } else { b }
+    if a.seq() > b.seq() {
+        a
+    } else {
+        b
+    }
 }

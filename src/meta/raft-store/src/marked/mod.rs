@@ -141,14 +141,22 @@ impl<T> Marked<T> {
 
     /// Return the one with the larger sequence number.
     pub fn max(a: Self, b: Self) -> Self {
-        if a.order_key() > b.order_key() { a } else { b }
+        if a.order_key() > b.order_key() {
+            a
+        } else {
+            b
+        }
     }
 
     /// Return the one with the larger sequence number.
     // Not used, may be useful.
     #[allow(dead_code)]
     pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
-        if a.order_key() > b.order_key() { a } else { b }
+        if a.order_key() > b.order_key() {
+            a
+        } else {
+            b
+        }
     }
 
     pub fn new_tombstone(internal_seq: u64) -> Self {

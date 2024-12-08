@@ -209,7 +209,11 @@ impl TopKSorter {
     }
 
     fn ordering(&self) -> Ordering {
-        if self.asc { Less } else { Less.reverse() }
+        if self.asc {
+            Less
+        } else {
+            Less.reverse()
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 edition = "2021"
-version = "Two"
+style_edition = "2021"
 reorder_imports = true
 imports_granularity = "Item"
 group_imports = "StdExternalCrate"

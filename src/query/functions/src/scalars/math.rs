@@ -465,5 +465,9 @@ type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
 
 fn factorial(n: i64) -> i64 {
-    if n <= 0 { 1 } else { n * factorial(n - 1) }
+    if n <= 0 {
+        1
+    } else {
+        n * factorial(n - 1)
+    }
 }

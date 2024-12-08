@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::large_enum_variant)]
 
 pub mod catalog;
 pub mod catalog_kind;

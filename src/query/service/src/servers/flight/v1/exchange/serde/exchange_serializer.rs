@@ -196,14 +196,12 @@ pub fn serialize_block(
     let (_, dict, values) = match data_block.is_empty() {
         true => batches_to_flight_data_with_options(
             &ArrowSchema::empty(),
-            vec![
-                RecordBatch::try_new_with_options(
-                    Arc::new(ArrowSchema::empty()),
-                    vec![],
-                    &RecordBatchOptions::new().with_row_count(Some(0)),
-                )
-                .unwrap(),
-            ],
+            vec![RecordBatch::try_new_with_options(
+                Arc::new(ArrowSchema::empty()),
+                vec![],
+                &RecordBatchOptions::new().with_row_count(Some(0)),
+            )
+            .unwrap()],
             options,
         )?,
         false => {

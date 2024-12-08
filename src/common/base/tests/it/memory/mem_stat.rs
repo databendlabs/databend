@@ -62,7 +62,7 @@ fn test_mem_tracker_with_string_type() {
 
         let str = "".repeat(length);
         drop(_guard);
-        assert_eq!(mem_stat.get_memory_usage(), str.as_bytes().len() as i64);
+        assert_eq!(mem_stat.get_memory_usage(), str.len() as i64);
     }
 }
 

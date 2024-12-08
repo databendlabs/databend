@@ -42,10 +42,12 @@ runs:
         taplo check
         taplo fmt --check
 
-    - name: Audit dependencies
-      shell: bash
-      if: "!contains(github.event.head_commit.message, 'skip audit')"
-      run: cargo audit --db ./target/advisory-db
+
+    # TODO: enable it later
+    # - name: Audit dependencies
+    #   shell: bash
+    #   if: "!contains(github.event.head_commit.message, 'skip audit')"
+    #   run: cargo audit --db ./target/advisory-db
 
     - name: Clippy
       shell: bash

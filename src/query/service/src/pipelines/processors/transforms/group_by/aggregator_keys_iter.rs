@@ -48,7 +48,11 @@ impl<T: Number> FixedKeysColumnIter<T> {
 }
 
 impl<T: Number> KeysColumnIter<T> for FixedKeysColumnIter<T> {
-    type Iterator<'a> = Iter<'a, T> where Self: 'a, T: 'a;
+    type Iterator<'a>
+        = Iter<'a, T>
+    where
+        Self: 'a,
+        T: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.column.iter()
@@ -66,7 +70,11 @@ impl<T: LargeNumber> LargeFixedKeysColumnIter<T> {
 }
 
 impl<T: LargeNumber> KeysColumnIter<T> for LargeFixedKeysColumnIter<T> {
-    type Iterator<'a> = Iter<'a, T> where Self: 'a, T: 'a;
+    type Iterator<'a>
+        = Iter<'a, T>
+    where
+        Self: 'a,
+        T: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.holder.iter()
@@ -86,7 +94,9 @@ impl SerializedKeysColumnIter {
 }
 
 impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
-    type Iterator<'a> = BinaryColumnIter<'a> where Self: 'a;
+    type Iterator<'a>
+        = BinaryColumnIter<'a>
+    where Self: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.column.iter()

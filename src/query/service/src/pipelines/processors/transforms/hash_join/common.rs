@@ -36,7 +36,6 @@ use super::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 
 /// Some common methods for hash join.
-
 impl HashJoinProbeState {
     // Merge build chunk and probe chunk that have the same number of rows
     pub(crate) fn merge_eq_block(

@@ -163,9 +163,9 @@ pub fn serialize_group_by<Method: HashMethodBounds>(
         group_key_builder.append_value(group_entity.key());
     }
 
-    Ok(DataBlock::new_from_columns(vec![
-        group_key_builder.finish(),
-    ]))
+    Ok(DataBlock::new_from_columns(
+        vec![group_key_builder.finish()],
+    ))
 }
 
 pub enum SerializePayload<Method: HashMethodBounds, V: Send + Sync + 'static> {

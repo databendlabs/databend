@@ -66,7 +66,7 @@ pub struct MetaLeader<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
+impl Handler<ForwardRequestBody> for MetaLeader<'_> {
     #[fastrace::trace]
     async fn handle(
         &self,
@@ -110,7 +110,7 @@ impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
+impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     #[fastrace::trace]
     async fn handle(
         &self,
@@ -165,7 +165,7 @@ impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
 }
 
 impl<'a> MetaLeader<'a> {
-    pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
+    pub fn new(meta_node: &'a MetaNode) -> MetaLeader<'a> {
         MetaLeader {
             sto: &meta_node.raft_store,
             raft: &meta_node.raft,

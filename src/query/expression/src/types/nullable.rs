@@ -369,7 +369,11 @@ impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
             .zip(self.validity.next())
             .map(
                 |(scalar, is_not_null)| {
-                    if is_not_null { Some(scalar) } else { None }
+                    if is_not_null {
+                        Some(scalar)
+                    } else {
+                        None
+                    }
                 },
             )
     }
@@ -380,7 +384,7 @@ impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
     }
 }
 
-unsafe impl<'a, T: ValueType> TrustedLen for NullableIterator<'a, T> {}
+unsafe impl<T: ValueType> TrustedLen for NullableIterator<'_, T> {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NullableColumnBuilder<T: ValueType> {

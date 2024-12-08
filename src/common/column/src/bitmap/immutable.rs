@@ -484,7 +484,6 @@ impl Bitmap {
     /// Create a new [`Bitmap`] from an arrow [`NullBuffer`]
     ///
     /// [`NullBuffer`]: arrow_buffer::buffer::NullBuffer
-
     pub fn from_null_buffer(value: arrow_buffer::buffer::NullBuffer) -> Self {
         let offset = value.offset();
         let length = value.len();

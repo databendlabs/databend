@@ -161,12 +161,12 @@ impl PhysicalPlanBuilder {
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
-                    // If the aggregation function argument if a group item,
-                    // we cannot use the group item directly.
-                    // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
-                    // which will cause panic while executing aggregation function.
-                    // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
-                    // we should use these columns instead.
+                                                                                            // If the aggregation function argument if a group item,
+                                                                                            // we cannot use the group item directly.
+                                                                                            // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
+                                                                                            // which will cause panic while executing aggregation function.
+                                                                                            // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
+                                                                                            // we should use these columns instead.
                     for func in agg_funcs.iter_mut() {
                         for arg in func.arg_indices.iter_mut() {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {

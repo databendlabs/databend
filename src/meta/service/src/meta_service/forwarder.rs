@@ -80,7 +80,7 @@ impl<'a> MetaForwarder<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Forwarder<ForwardRequestBody> for MetaForwarder<'a> {
+impl Forwarder<ForwardRequestBody> for MetaForwarder<'_> {
     #[fastrace::trace]
     async fn forward(
         &self,
@@ -105,7 +105,7 @@ impl<'a> Forwarder<ForwardRequestBody> for MetaForwarder<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Forwarder<MetaGrpcReadReq> for MetaForwarder<'a> {
+impl Forwarder<MetaGrpcReadReq> for MetaForwarder<'_> {
     #[fastrace::trace]
     async fn forward(
         &self,

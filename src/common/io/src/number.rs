@@ -147,7 +147,6 @@ impl KeyWord {
 
 #[derive(Debug)]
 #[expect(dead_code)]
-
 enum FormatNode {
     End,
     Action(KeyWord),
@@ -620,11 +619,11 @@ impl NumProc {
                 self.sign_wrote = true;
             } else if self.sign {
                 if !self.desc.flag.contains(NumFlag::FillMode) {
-                    self.inout.push(' '); /* Write + */
+                    self.inout.push(' '); // Write +
                 }
                 self.sign_wrote = true;
             } else {
-                self.inout.push('-'); /* Write - */
+                self.inout.push('-'); // Write -
                 self.sign_wrote = true;
             }
         }
@@ -636,14 +635,14 @@ impl NumProc {
             {
                 // Write blank space
                 if !self.desc.flag.contains(NumFlag::FillMode) {
-                    self.inout.push(' ') /* Write ' ' */
+                    self.inout.push(' ') // Write ' '
                 }
             } else if self.desc.flag.contains(NumFlag::Zero)
                 && self.num_curr < self.out_pre_spaces
                 && self.desc.zero_start <= self.num_curr
             {
                 // Write ZERO
-                self.inout.push('0'); /* Write '0' */
+                self.inout.push('0'); // Write '0'
                 self.num_in = true
             } else {
                 // Write Decimal point
@@ -652,7 +651,7 @@ impl NumProc {
                         || self.desc.flag.contains(NumFlag::FillMode) && self.last_relevant_is_dot()
                     // Ora 'n' -- FM9.9 --> 'n.'s
                     {
-                        self.inout.push_str(&self.decimal) /* Write DEC/D */
+                        self.inout.push_str(&self.decimal) // Write DEC/D
                     }
                 } else if self.last_relevant.is_some_and(|(_, i)| self.number_p > i)
                     && !matches!(id, NumPoz::Tk0)
@@ -668,7 +667,7 @@ impl NumProc {
                         self.inout.push('0')
                     }
                 } else if self.number_p < self.number.len() {
-                    self.inout.push(self.number[self.number_p]); /* Write DIGIT */
+                    self.inout.push(self.number[self.number_p]); // Write DIGIT
                     self.num_in = true
                 }
                 if self.number_p < self.number.len() {
@@ -830,8 +829,8 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
         //     np.sign_wrote = false; /* need sign */
         // } else {
         // TODO: Why is this not the same as the postgres implementation?
-        np.sign_wrote = true; /* needn't sign */
-    // }
+        np.sign_wrote = true; // needn't sign
+                              // }
     } else {
         if np.sign && np.desc.flag.contains(NumFlag::FillMode) {
             np.desc.flag.remove(NumFlag::Bracket)
@@ -841,9 +840,9 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
             && np.desc.flag.contains(NumFlag::FillMode)
             && !np.desc.flag.contains(NumFlag::LSign)
         {
-            np.sign_wrote = true /* needn't sign */
+            np.sign_wrote = true // needn't sign
         } else {
-            np.sign_wrote = false /* need sign */
+            np.sign_wrote = false // need sign
         }
         if matches!(np.desc.lsign, Some(NumLSign::Pre)) && np.desc.pre == np.desc.pre_lsign_num {
             np.desc.lsign = Some(NumLSign::Post)

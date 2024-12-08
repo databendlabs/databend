@@ -101,7 +101,7 @@ impl<B> ReadNumberExt for Cursor<B>
 where B: AsRef<[u8]>
 {
     fn read_int_text<T: FromLexical>(&mut self) -> Result<T> {
-        let buf = self.remaining_slice();
+        let buf = Cursor::split(self).1;
         let (n_in, n_out) = collect_number(buf);
         if n_in == 0 {
             return Err(ErrorCode::BadBytes(
@@ -114,19 +114,19 @@ where B: AsRef<[u8]>
     }
 
     fn read_float_text<T: FromLexical>(&mut self) -> Result<T> {
-        let (n_in, n_out) = collect_number(self.remaining_slice());
+        let (n_in, n_out) = collect_number(Cursor::split(self).1);
         if n_in == 0 {
             return Err(ErrorCode::BadBytes(
                 "Unable to parse float: provided text is not in a recognizable floating-point format.",
             ));
         }
-        let n = read_num_text_exact(&self.remaining_slice()[..n_out])?;
+        let n = read_num_text_exact(&Cursor::split(self).1[..n_out])?;
         self.consume(n_in);
         Ok(n)
     }
 
     fn read_num_text_exact<T: FromLexical>(&mut self) -> Result<T> {
-        let buf = self.remaining_slice();
+        let buf = Cursor::split(self).1;
         read_num_text_exact(buf)
     }
 }

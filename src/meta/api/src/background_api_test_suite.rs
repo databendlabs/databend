@@ -271,14 +271,13 @@ impl BackgroundApiTestSuite {
                 std::time::Duration::from_secs(3600),
                 res.info.job_params.as_ref().unwrap().scheduled_job_interval
             );
-            assert!(
-                res.info
-                    .job_params
-                    .as_ref()
-                    .unwrap()
-                    .manual_trigger_params
-                    .is_some()
-            );
+            assert!(res
+                .info
+                .job_params
+                .as_ref()
+                .unwrap()
+                .manual_trigger_params
+                .is_some());
             assert_eq!(
                 res.info
                     .job_params

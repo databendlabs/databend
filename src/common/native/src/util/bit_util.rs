@@ -145,7 +145,7 @@ impl AsBytes for Vec<u8> {
     }
 }
 
-impl<'a> AsBytes for &'a str {
+impl AsBytes for &str {
     fn as_bytes(&self) -> &[u8] {
         (self as &str).as_bytes()
     }

@@ -171,10 +171,10 @@ mod tests {
     fn test_escape_specified() {
         let inp = "a/'b'/%";
 
-        let out = super::escape_specified(inp, &[b'%', b'\'']);
+        let out = super::escape_specified(inp, b"%'");
         assert_eq!("a/%27b%27/%25", out);
 
-        let out = super::escape_specified(inp, &[b'\'']);
+        let out = super::escape_specified(inp, b"'");
         assert_eq!("a/%27b%27/%", out);
 
         let out = super::escape_specified(inp, &[]);
@@ -185,19 +185,19 @@ mod tests {
     fn test_unescape_specified() {
         let inp = "a/%27b%27/%25";
 
-        let out = super::unescape_specified(inp, &[b'%', b'\'']).unwrap();
+        let out = super::unescape_specified(inp, b"%'").unwrap();
         assert_eq!("a/'b'/%", out);
 
-        let out = super::unescape_specified(inp, &[b'\'']).unwrap();
+        let out = super::unescape_specified(inp, b"'").unwrap();
         assert_eq!("a/'b'/%25", out);
 
-        let out = super::unescape_specified(inp, &[b'%']).unwrap();
+        let out = super::unescape_specified(inp, b"%").unwrap();
         assert_eq!("a/%27b%27/%", out);
 
         let out = super::unescape_specified(inp, &[]).unwrap();
         assert_eq!("a/%27b%27/%25", out);
 
-        let out = super::unescape_specified("a/%25/%2", &[b'%']).unwrap();
+        let out = super::unescape_specified("a/%25/%2", b"%").unwrap();
         assert_eq!("a/%/%2", out, "incomplete input wont be unescaped");
     }
 }

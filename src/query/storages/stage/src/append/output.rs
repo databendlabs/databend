@@ -138,7 +138,7 @@ impl UnloadOutput {
             UnloadOutput::Detail(files) => {
                 let batch = 1000;
                 let mut blocks = vec![];
-                for i in 0..(files.len() + batch - 1) / batch {
+                for i in 0..files.len().div_ceil(batch) {
                     let end = files.len().min((i + 1) * batch);
                     let chunk = &files[i * batch..end];
                     blocks.push(file_infos_to_block(chunk));

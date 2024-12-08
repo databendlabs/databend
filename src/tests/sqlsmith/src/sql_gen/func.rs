@@ -39,7 +39,7 @@ use rand::Rng;
 use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_scalar_func(&mut self, ty: &DataType) -> Expr {
         let mut indices = Vec::new();
         for (i, func_sig) in self.scalar_func_sigs.iter().enumerate() {

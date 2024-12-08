@@ -73,12 +73,10 @@ impl DataBlock {
     }
 
     pub fn concat_columns(blocks: &[&DataBlock], column_index: usize) -> Result<Value<AnyType>> {
-        debug_assert!(
-            blocks
-                .iter()
-                .map(|block| &block.get_by_offset(column_index).data_type)
-                .all_equal()
-        );
+        debug_assert!(blocks
+            .iter()
+            .map(|block| &block.get_by_offset(column_index).data_type)
+            .all_equal());
 
         let entry0 = blocks[0].get_by_offset(column_index);
         if matches!(entry0.value, Value::Scalar(_))

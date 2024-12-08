@@ -143,8 +143,11 @@ pub struct TreeHumanizer<'a, I, O> {
     verbose: bool,
 }
 
-impl<'a, I: IdHumanizer<ColumnId = IndexType>, O: OperatorHumanizer<I, Output = FormatTreeNode>>
-    TreeHumanizer<'a, I, O>
+impl<
+        'a,
+        I: IdHumanizer<ColumnId = IndexType>,
+        O: OperatorHumanizer<I, Output = FormatTreeNode>,
+    > TreeHumanizer<'a, I, O>
 {
     pub fn new(id_humanizer: &'a I, operator_humanizer: &'a O, verbose: bool) -> Self {
         TreeHumanizer {

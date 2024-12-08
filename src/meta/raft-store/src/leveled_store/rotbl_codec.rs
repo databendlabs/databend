@@ -167,10 +167,10 @@ mod tests {
         assert!(RotblCodec::decode_key::<ExpireKey>("exp").is_err());
         assert!(RotblCodec::decode_key::<ExpireKey>("exp-").is_err());
         assert!(RotblCodec::decode_key::<ExpireKey>("exp-/").is_err());
-        assert!(
-            RotblCodec::decode_key::<ExpireKey>("exp-/00000000000000000012/00000000000000000034/")
-                .is_err()
-        );
+        assert!(RotblCodec::decode_key::<ExpireKey>(
+            "exp-/00000000000000000012/00000000000000000034/"
+        )
+        .is_err());
     }
 
     #[test]

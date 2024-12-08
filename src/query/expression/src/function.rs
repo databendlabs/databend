@@ -189,13 +189,11 @@ pub struct FunctionRegistry {
 
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
-        debug_assert!(
-            !self
-                .signature
-                .args_type
-                .iter()
-                .any(|ty| ty.is_nullable_or_null())
-        );
+        debug_assert!(!self
+            .signature
+            .args_type
+            .iter()
+            .any(|ty| ty.is_nullable_or_null()));
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -558,7 +556,7 @@ impl FunctionID {
     }
 }
 
-impl<'a> EvalContext<'a> {
+impl EvalContext<'_> {
     #[inline]
     pub fn set_error(&mut self, row: usize, error_msg: impl Into<String>) {
         // If the row is NULL, we don't need to set error.

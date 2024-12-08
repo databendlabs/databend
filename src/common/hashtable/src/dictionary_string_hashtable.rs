@@ -283,10 +283,26 @@ impl<V> DictionaryStringHashTable<V> {
 impl<V> HashtableLike for DictionaryStringHashTable<V> {
     type Key = DictionaryKeys;
     type Value = V;
-    type EntryRef<'a> = DictionaryEntryRef<'a, V> where Self: 'a, V: 'a;
-    type EntryMutRef<'a> = DictionaryMutEntryRef<'a, V> where Self: 'a, V: 'a;
-    type Iterator<'a> = DictionaryTableIter<'a, V> where Self: 'a, V: 'a;
-    type IteratorMut<'a> = DictionaryTableMutIter<'a, V> where Self: 'a, V: 'a;
+    type EntryRef<'a>
+        = DictionaryEntryRef<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
+    type EntryMutRef<'a>
+        = DictionaryMutEntryRef<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
+    type Iterator<'a>
+        = DictionaryTableIter<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
+    type IteratorMut<'a>
+        = DictionaryTableMutIter<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
 
     fn len(&self) -> usize {
         self.entries_len
@@ -458,7 +474,7 @@ where Self: 'a
     }
 }
 
-impl<'a, V> Copy for DictionaryEntryRef<'a, V> {}
+impl<V> Copy for DictionaryEntryRef<'_, V> {}
 
 impl<'a, V> DictionaryEntryRef<'a, V>
 where Self: 'a
@@ -545,7 +561,7 @@ pub struct DictionaryTableIter<'a, V> {
     dict_keys: usize,
 }
 
-unsafe impl<'a, V> TrustedLen for DictionaryTableIter<'a, V> {}
+unsafe impl<V> TrustedLen for DictionaryTableIter<'_, V> {}
 
 impl<'a, V> Iterator for DictionaryTableIter<'a, V> {
     type Item = DictionaryEntryRef<'a, V>;
@@ -644,7 +660,7 @@ pub struct DictionaryTableKeySlotIter<'a, T> {
     dictionary_hashset: &'a StringHashSet<[u8]>,
 }
 
-impl<'a, T> Iterator for DictionaryTableKeySlotIter<'a, T> {
+impl<T> Iterator for DictionaryTableKeySlotIter<'_, T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {

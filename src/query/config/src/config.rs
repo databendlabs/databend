@@ -1346,7 +1346,7 @@ impl From<SettingValue> for UserSettingValue {
 
 struct SettingVisitor;
 
-impl<'de> serde::de::Visitor<'de> for SettingVisitor {
+impl serde::de::Visitor<'_> for SettingVisitor {
     type Value = SettingValue;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

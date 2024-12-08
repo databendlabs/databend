@@ -149,7 +149,11 @@ impl Mutation {
             .iter()
             .filter_map(
                 |(field, include)| {
-                    if *include { Some(field.clone()) } else { None }
+                    if *include {
+                        Some(field.clone())
+                    } else {
+                        None
+                    }
                 },
             )
             .collect();

@@ -149,7 +149,7 @@ fn test_is_full() {
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct DropCounted<'a>(&'a RefCell<usize>);
 
-impl<'a> Drop for DropCounted<'a> {
+impl Drop for DropCounted<'_> {
     fn drop(&mut self) {
         *self.0.borrow_mut() += 1;
     }

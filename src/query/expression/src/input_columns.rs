@@ -87,7 +87,7 @@ pub struct InputColumnsIter<'a> {
     this: &'a InputColumns<'a>,
 }
 
-unsafe impl<'a> std::iter::TrustedLen for InputColumnsIter<'a> {}
+unsafe impl std::iter::TrustedLen for InputColumnsIter<'_> {}
 
 impl<'a> Iterator for InputColumnsIter<'a> {
     type Item = &'a Column;

@@ -969,7 +969,8 @@ pub mod regexp {
         occur: i64,
         builder: &mut StringColumnBuilder,
     ) {
-        let pos = (pos - 1) as usize; // set the index start from 0
+        let pos = (pos - 1) as usize;
+        // set the index start from 0
         // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let char_pos = match s.char_indices().nth(pos) {

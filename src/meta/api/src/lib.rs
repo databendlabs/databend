@@ -14,7 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
-#![feature(const_fn_floating_point_arithmetic)]
+#![allow(clippy::type_complexity)]
 
 extern crate databend_common_meta_types;
 

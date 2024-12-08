@@ -19,7 +19,7 @@ use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::ValueType;
 
-impl<'a> Selector<'a> {
+impl Selector<'_> {
     // Select indices by comparing two columns.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_columns<

@@ -14,7 +14,7 @@ class GlobalCookieJar(RequestsCookieJar):
         super().__init__()
 
     def set_cookie(self, cookie: Cookie, *args, **kwargs):
-        assert cookie.path == "/" , cookie
+        assert cookie.path == "/", cookie
         # "" is prefix of any host name or IP, so it will be applied
         cookie.domain = ""
         super().set_cookie(cookie, *args, **kwargs)

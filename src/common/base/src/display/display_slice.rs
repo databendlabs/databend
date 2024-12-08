@@ -20,7 +20,7 @@ use std::fmt;
 /// - `DisplaySlice(&[1,2,3,4,5,6])` outputs: `"[1,2,3,4,...,6]"`.
 pub struct DisplaySlice<'a, T: fmt::Display, const MAX: usize = 5>(pub &'a [T]);
 
-impl<'a, T: fmt::Display, const MAX: usize> fmt::Display for DisplaySlice<'a, T, MAX> {
+impl<T: fmt::Display, const MAX: usize> fmt::Display for DisplaySlice<'_, T, MAX> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let slice = self.0;
         let len = slice.len();

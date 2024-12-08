@@ -482,8 +482,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> databend_common_except
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming_using_eval()
--> databend_common_exception::Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming_using_eval(
+) -> databend_common_exception::Result<()> {
     // verifies (randomly) the following assumptions:
     //
     // https://github.com/datafuselabs/databend/issues/7829

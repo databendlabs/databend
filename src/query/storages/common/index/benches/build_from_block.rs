@@ -50,7 +50,6 @@ use rand::SeedableRng;
 ///   Platform: MacBook Pro M1 MAX
 ///   i64:                       122ns/key
 ///   string of length 16 to 32: 123ns/key
-
 fn bench_u64(c: &mut Criterion) {
     let column = rand_i64_column(1_000_000);
 
