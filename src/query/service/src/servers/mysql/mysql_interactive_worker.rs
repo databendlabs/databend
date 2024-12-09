@@ -525,11 +525,6 @@ impl ProgressReporter for ContextProgressReporter {
     fn progress_info(&self) -> String {
         let progress = self.context.get_scan_progress_value();
         let seconds = self.instant.elapsed().as_nanos() as f64 / 1e9f64;
-        println!(
-            "scan: {:?}. write: {:?}",
-            progress,
-            self.context.get_write_progress_value()
-        );
         format!(
             "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
             progress.rows,
