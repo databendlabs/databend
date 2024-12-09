@@ -136,7 +136,7 @@ impl<'a> SessionPrivilegeManagerImpl<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
+impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will overwrite the current user's granted roles, and

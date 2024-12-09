@@ -108,7 +108,7 @@ where
     }
 
     pub fn is_finished(&self) -> bool {
-        self.limit.map_or(false, |limit| self.total_rows >= limit)
+        self.limit.is_some_and(|limit| self.total_rows >= limit)
             || !self.has_pending_stream() && self.rows.iter().all(|x| x.is_none())
     }
 
@@ -150,10 +150,9 @@ where
     }
 
     fn calc_partition_point(&self) -> Partition {
-        let mut candidate = Candidate::new(&self.rows, EndDomain {
-            min: self.min_task,
-            max: self.max_task,
-        });
+        let mut candidate =
+            Candidate::new(&self.rows, EndDomain::new(self.min_task, self.max_task));
+
         candidate.init();
 
         // if candidate.is_small_task() {
@@ -214,7 +213,9 @@ where
 }
 
 impl<R: Rows> List for Option<R> {
-    type Item<'a> = R::Item<'a> where R: 'a;
+    type Item<'a>
+        = R::Item<'a>
+    where R: 'a;
     fn len(&self) -> usize {
         match self {
             Some(r) => r.len(),

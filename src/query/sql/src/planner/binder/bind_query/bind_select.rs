@@ -141,10 +141,10 @@ impl Binder {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        // Check Set-returning functions, if the argument contains aggregation function or group item,
+        // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
         // set as lazy Set-returning functions.
         if !from_context.srf_info.srfs.is_empty() {
-            self.check_project_set_select(&mut from_context)?;
+            self.rewrite_project_set_select(&mut from_context)?;
         }
 
         // Bind Set-returning functions before filter plan and aggregate plan.
@@ -290,7 +290,7 @@ struct SelectRewriter<'a> {
 }
 
 // helper functions to SelectRewriter
-impl<'a> SelectRewriter<'a> {
+impl SelectRewriter<'_> {
     fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
         if self.is_unquoted_ident_case_sensitive {
             a == b

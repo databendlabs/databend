@@ -202,7 +202,8 @@ impl<'a> ClusteringStatisticsImpl<'a> {
                     let clustered = block
                         .cluster_stats
                         .as_ref()
-                        .map_or(false, |v| v.cluster_key_id == self.cluster_key_id);
+                        .is_some_and(|v| v.cluster_key_id == self.cluster_key_id);
+
                     if clustered {
                         // Safe to unwrap
                         let cluster_stats = cluster_stats.unwrap();

@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
+use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::CopyIntoTableSource;
@@ -35,6 +36,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Span;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
@@ -74,7 +76,7 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 
-impl<'a> Binder {
+impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_copy_into_table(
         &mut self,
@@ -157,6 +159,10 @@ impl<'a> Binder {
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
+        let mut options = stmt.options.clone();
+        stage_info
+            .file_format_params
+            .check_copy_options(&mut options)?;
 
         if !(stmt.options.purge && stmt.options.force)
             && stmt.options.max_files > COPY_MAX_FILES_PER_COMMIT
@@ -235,15 +241,25 @@ impl<'a> Binder {
 
         if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
+            let case_sensitive = plan
+                .stage_table_info
+                .copy_into_table_options
+                .column_match_mode
+                == Some(ColumnMatchMode::CaseSensitive);
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
                     column: ColumnRef {
                         database: None,
                         table: None,
-                        column: AstColumnID::Name(Identifier::from_name(
+                        column: AstColumnID::Name(Identifier::from_name_with_quoted(
                             None,
-                            dest_field.name().to_string(),
+                            if case_sensitive {
+                                dest_field.name().to_string()
+                            } else {
+                                dest_field.name().to_lowercase().to_string()
+                            },
+                            Some('"'),
                         )),
                     },
                 };
@@ -260,7 +276,10 @@ impl<'a> Binder {
                 };
                 select_list.push(SelectTarget::AliasedExpr {
                     expr: Box::new(expr),
-                    alias: None,
+                    alias: Some(Identifier::from_name(
+                        Span::None,
+                        dest_field.name().to_string(),
+                    )),
                 });
             }
 
@@ -301,6 +320,9 @@ impl<'a> Binder {
             copy_options.apply(options, true)?;
         }
         copy_options.force = true;
+        stage_info
+            .file_format_params
+            .check_copy_options(&mut copy_options)?;
 
         let files_info = StageFilesInfo {
             path,
@@ -393,13 +415,18 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         mut plan: CopyIntoTablePlan,
-        select_list: &'a [SelectTarget],
+        select_list: &[SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
         plan.collect_files(self.ctx.as_ref()).await?;
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
+        let case_sensitive = plan
+            .stage_table_info
+            .copy_into_table_options
+            .column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -410,6 +437,7 @@ impl<'a> Binder {
                 plan.stage_table_info.files_info.clone(),
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
+                case_sensitive,
             )
             .await?;
 

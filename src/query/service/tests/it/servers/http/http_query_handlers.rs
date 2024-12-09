@@ -1384,6 +1384,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1409,6 +1410,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1429,6 +1431,7 @@ async fn test_affect() -> Result<()> {
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1451,6 +1454,7 @@ async fn test_affect() -> Result<()> {
                 name: "db2".to_string(),
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("db2".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1475,6 +1479,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![true],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1524,13 +1529,11 @@ async fn test_session_secondary_roles() -> Result<()> {
     let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
     assert!(result.error.is_some());
-    assert!(
-        result
-            .error
-            .unwrap()
-            .message
-            .contains("only ALL or NONE is allowed on setting secondary roles")
-    );
+    assert!(result
+        .error
+        .unwrap()
+        .message
+        .contains("only ALL or NONE is allowed on setting secondary roles"));
     assert_eq!(result.state, ExecuteStateKind::Failed);
 
     let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public", "secondary_roles": Vec::<String>::new()}});

@@ -15,6 +15,7 @@
 use std::alloc::Layout;
 use std::fmt;
 use std::marker::PhantomData;
+use std::mem;
 use std::sync::Arc;
 
 use borsh::BorshDeserialize;
@@ -102,8 +103,9 @@ where
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
         let tz = TimeZone::UTC;
         let mut items = Vec::with_capacity(self.values.len());
-        for value in &self.values {
-            let v = T::upcast_scalar(value.clone());
+        let values = mem::take(&mut self.values);
+        for value in values.into_iter() {
+            let v = T::upcast_scalar(value);
             // NULL values are omitted from the output.
             if v == Scalar::Null {
                 continue;

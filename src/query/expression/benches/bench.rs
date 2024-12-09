@@ -20,11 +20,14 @@ use criterion::Criterion;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Value;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -46,6 +49,29 @@ fn bench(c: &mut Criterion) {
 
             group.bench_function(format!("concat_string_view/{length}"), |b| {
                 b.iter(|| Column::concat_columns(str_col.clone()).unwrap())
+            });
+
+            let binary_col = BinaryType::column_from_iter(b.iter().cloned(), &[]);
+            let mut c = 0;
+            group.bench_function(format!("binary_sum_len/{length}"), |b| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..binary_col.len() {
+                        sum += binary_col.value(i).len();
+                    }
+
+                    c += sum;
+                })
+            });
+
+            group.bench_function(format!("binary_sum_len_unchecked/{length}"), |b| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..binary_col.len() {
+                        sum += unsafe { binary_col.index_unchecked(i).len() };
+                    }
+                    c += sum;
+                })
             });
         }
     }
@@ -222,6 +248,29 @@ fn bench(c: &mut Criterion) {
                     .collect::<Vec<i32>>();
             })
         });
+
+        let value1 = Value::<Int32Type>::Column(left.clone());
+        let value2 = Value::<Int32Type>::Column(right.clone());
+
+        group.bench_function(format!("register_new/{length}"), |b| {
+            b.iter(|| {
+                let iter = (0..length).map(|i| {
+                    let a = unsafe { value1.index_unchecked(i) };
+                    let b = unsafe { value2.index_unchecked(i) };
+                    a + b
+                });
+                let _c = Int32Type::column_from_iter(iter, &[]);
+            })
+        });
+
+        group.bench_function(format!("register_old/{length}"), |b| {
+            b.iter(|| {
+                let a = value1.as_column().unwrap();
+                let b = value2.as_column().unwrap();
+                let iter = a.iter().zip(b.iter()).map(|(a, b)| *a + b);
+                let _c = Int32Type::column_from_iter(iter, &[]);
+            })
+        });
     }
 }
 
@@ -229,7 +278,7 @@ criterion_group!(benches, bench);
 criterion_main!(benches);
 
 fn generate_random_string_data(rng: &mut StdRng, length: usize) -> (Vec<String>, Vec<Vec<u8>>) {
-    let iter_str: Vec<_> = (0..10000)
+    let iter_str: Vec<_> = (0..102400)
         .map(|_| {
             let random_string: String = (0..length)
                 .map(|_| {

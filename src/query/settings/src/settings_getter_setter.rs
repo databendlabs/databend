@@ -821,4 +821,16 @@ impl Settings {
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
+
+    pub fn get_persist_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("persist_materialized_cte")? != 0)
+    }
+
+    pub fn get_flight_max_retry_times(&self) -> Result<u64> {
+        self.try_get_u64("flight_connection_max_retry_times")
+    }
+
+    pub fn get_flight_retry_interval(&self) -> Result<u64> {
+        self.try_get_u64("flight_connection_retry_interval")
+    }
 }

@@ -857,7 +857,11 @@ impl Table for FuseTable {
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
+                if dry_run {
+                    Ok(Some(vec![]))
+                } else {
+                    Ok(None)
+                }
             }
             Err(e) => Err(e),
         }

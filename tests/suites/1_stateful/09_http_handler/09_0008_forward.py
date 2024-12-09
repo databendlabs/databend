@@ -10,11 +10,11 @@ import logging
 logging.basicConfig(level=logging.ERROR, format="%(asctime)s %(levelname)s %(message)s")
 
 
-def do_query(query, port=8000, session=None, node_id=None):
+def do_query(query, port=8000, session=None, node_id=None, wait=100):
     url = f"http://localhost:{port}/v1/query"
     query_payload = {
         "sql": query,
-        "pagination": {"wait_time_secs": 100, "max_rows_per_page": 2},
+        "pagination": {"wait_time_secs": wait, "max_rows_per_page": 2},
     }
     if session:
         query_payload["session"] = session
@@ -88,15 +88,22 @@ def test_query():
     assert resp.status_code == 400, resp.text
 
 
+def test_initial_response():
+    sql = "select * from numbers(1000000000000) ignore_result"
+    resp = do_query(sql, wait=1).json()
+    assert not (resp.get("session").get("need_sticky")), resp
+
+
 def main():
+    test_initial_response()
+
     # only test under cluster mode
     query_resp = do_query("select count(*) from system.clusters").json()
     num_nodes = int(query_resp.get("data")[0][0])
     if num_nodes == 1:
         return
 
-    # test_query()
-
+    test_query()
     test_txn()
 
 

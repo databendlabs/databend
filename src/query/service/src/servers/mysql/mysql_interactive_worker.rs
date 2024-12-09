@@ -430,10 +430,11 @@ impl InteractiveWorkerBase {
             None,
         )?;
 
-        let query_result = query_result.await.map_err_to_code(
-            ErrorCode::TokioError,
-            || "Cannot join handle from context's runtime",
-        )?;
+        let query_result = query_result
+            .await
+            .map_err_to_code(ErrorCode::TokioError, || {
+                "Cannot join handle from context's runtime"
+            })?;
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
         query_result.map(|data| (data, Some(reporter)))

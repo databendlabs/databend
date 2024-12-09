@@ -17,7 +17,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(trusted_len)]
-#![feature(cursor_remaining)]
+#![feature(cursor_split)]
 
 mod data_field;
 mod data_schema;

@@ -165,7 +165,7 @@ impl FuseTable {
 
                 format!(
                     "with _change({a_cols}, change$action, change$row_id, \
-                        {d_cols}, d_change$action, d_change$row_id) as materialized \
+                        {d_cols}, d_change$action, d_change$row_id) as \
                     ( \
                         select * \
                         from ( \

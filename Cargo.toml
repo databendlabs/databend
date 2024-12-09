@@ -294,7 +294,7 @@ gimli = "0.31.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.4.0"
-hashbrown = { version = "0.15.0", default-features = false }
+hashbrown = { version = "0.15.2", default-features = false }
 hashbrown_v0_14 = { package = "hashbrown", version = "0.14.0", default-features = false, features = ["ahash"] }
 hashlink = "0.8"
 headers = "0.4.0"
@@ -450,6 +450,7 @@ sled = { version = "0.34", default-features = false }
 snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
+span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 state = "0.6.0"
 stream-more = "0.1.3"

@@ -124,6 +124,9 @@ pub enum Statement {
     ShowCreateCatalog(ShowCreateCatalogStmt),
     CreateCatalog(CreateCatalogStmt),
     DropCatalog(DropCatalogStmt),
+    UseCatalog {
+        catalog: Identifier,
+    },
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -410,6 +413,7 @@ impl Statement {
             | Statement::Update(..)
             | Statement::ShowCatalogs(..)
             | Statement::ShowCreateCatalog(..)
+            | Statement::UseCatalog { .. }
             | Statement::ShowDatabases(..)
             | Statement::ShowDropDatabases(..)
             | Statement::ShowCreateDatabase(..)
@@ -718,6 +722,7 @@ impl Display for Statement {
             Statement::ShowCreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::CreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::DropCatalog(stmt) => write!(f, "{stmt}")?,
+            Statement::UseCatalog { catalog } => write!(f, "USE CATALOG {catalog}")?,
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDropDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,

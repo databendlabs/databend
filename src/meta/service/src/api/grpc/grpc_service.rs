@@ -393,18 +393,10 @@ impl MetaService for MetaServiceImpl {
 
         let mn = &self.meta_node;
 
-        let add_res = mn.add_watcher(request.into_inner(), tx).await;
+        let sender = mn.add_watcher(request.into_inner(), tx).await?;
 
-        match add_res {
-            Ok(watcher) => {
-                let stream = WatchStream::new(rx, watcher, mn.dispatcher_handle.clone());
-                Ok(Response::new(Box::pin(stream) as Self::WatchStream))
-            }
-            Err(e) => {
-                // TODO: test error return.
-                Err(Status::invalid_argument(e))
-            }
-        }
+        let stream = WatchStream::new(rx, sender, mn.subscriber_handle.clone());
+        Ok(Response::new(Box::pin(stream) as Self::WatchStream))
     }
 
     async fn member_list(
