@@ -136,41 +136,53 @@ pub struct FuseTable {
     pub(crate) changes_desc: Option<ChangesDesc>,
 }
 
+// TODO refresh timeout
+// const DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS: std::time::Duration = std::time::Duration::from_secs(5);
+
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create(table_info)?)
+        Ok(Self::do_create_table_ext(table_info, false)?)
+    }
+    pub fn try_create_ext(table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
+        Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
     }
 
-    pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
-        // check if table is AttachedReadOnly in a lighter way
-        let need_refresh_schema = match table_info.db_type {
-            DatabaseType::NormalDB => {
-                table_info.meta.storage_params.is_some()
-                    && Self::is_table_attached(&table_info.meta.options)
-            }
-        };
+    // pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
+    //    // check if table is AttachedReadOnly in a lighter way
+    //    let need_refresh_schema = match table_info.db_type {
+    //        DatabaseType::NormalDB => {
+    //            table_info.meta.storage_params.is_some()
+    //                && Self::is_table_attached(&table_info.meta.options)
+    //        }
+    //    };
 
-        if need_refresh_schema {
-            info!("refreshing table schema {}", table_info.desc);
-            let table = Self::do_create(table_info.as_ref().clone())?;
-            let snapshot = table.read_table_snapshot().await?;
-            let schema = snapshot
-                .ok_or_else(|| {
-                    ErrorCode::ShareStorageError(
-                        "Failed to load snapshot of read_only attach table".to_string(),
-                    )
-                })?
-                .schema
-                .clone();
-            let mut table_info = table_info.as_ref().clone();
-            table_info.meta.schema = Arc::new(schema);
-            Ok(Arc::new(table_info))
-        } else {
-            Ok(table_info)
-        }
+    //    if need_refresh_schema {
+    //        info!("refreshing table schema {}", table_info.desc);
+    //        let table = Self::do_create(table_info.as_ref().clone())?;
+    //        let snapshot = table.read_table_snapshot().await?;
+    //        let schema = snapshot
+    //            .ok_or_else(|| {
+    //                ErrorCode::ShareStorageError(
+    //                    "Failed to load snapshot of read_only attach table".to_string(),
+    //                )
+    //            })?
+    //            .schema
+    //            .clone();
+    //        let mut table_info = table_info.as_ref().clone();
+    //        table_info.meta.schema = Arc::new(schema);
+    //        Ok(Arc::new(table_info))
+    //    } else {
+    //        Ok(table_info)
+    //    }
+    //}
+    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
+        Self::do_create_table_ext(table_info, true)
     }
 
-    pub fn do_create(mut table_info: TableInfo) -> Result<Box<FuseTable>> {
+    pub fn do_create_table_ext(
+        mut table_info: TableInfo,
+        disable_refresh: bool,
+    ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
@@ -182,16 +194,17 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
                         let operator = init_operator(&sp)?;
-                        let table_type = if Self::is_table_attached(table_meta_options) {
-                            Self::tweak_attach_table_snapshot_location(
-                                &mut table_info,
-                                &operator,
-                                &storage_prefix,
-                            )?;
-                            FuseTableType::Attached
-                        } else {
-                            FuseTableType::External
-                        };
+                        let table_type =
+                            if !disable_refresh && Self::is_table_attached(table_meta_options) {
+                                Self::tweak_attach_table_snapshot_location(
+                                    &mut table_info,
+                                    &operator,
+                                    &storage_prefix,
+                                )?;
+                                FuseTableType::Attached
+                            } else {
+                                FuseTableType::External
+                            };
 
                         (operator, table_type)
                     }
@@ -465,6 +478,23 @@ impl FuseTable {
         operator: &Operator,
         storage_prefix: &str,
     ) -> Result<Option<String>> {
+        //            tokio::time::timeout(
+        //                self.schema_refreshing_timeout,
+        //                refresher.refresh(table_info),
+        //            )
+        //            .await
+        //            .map_err(|elapsed| {
+        //                ErrorCode::RefreshTableInfoFailure(format!(
+        //                    "failed to refresh table meta {} in time. Elapsed: {}",
+        //                    table_description, elapsed
+        //                ))
+        //            })
+        //            .map_err(|e| {
+        //                ErrorCode::RefreshTableInfoFailure(format!(
+        //                    "failed to refresh table meta {} : {}",
+        //                    table_description, e
+        //                ))
+        //            })?
         GlobalIORuntime::instance().block_on(async {
             let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
             let begin_load_hint = Instant::now();
