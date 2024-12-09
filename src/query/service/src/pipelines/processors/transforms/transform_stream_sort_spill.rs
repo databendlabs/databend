@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
-use databend_common_expression::simpler::FixedRateSimpler;
+use databend_common_expression::sampler::FixedRateSampler;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -74,7 +74,7 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     output_data: VecDeque<DataBlock>,
     state: State,
 
-    simpler: Option<FixedRateSimpler<StdRng>>,
+    sampler: Option<FixedRateSampler<StdRng>>,
     /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
     bounds: Vec<Column>,
@@ -177,8 +177,8 @@ where
                         self.input_data.push(block);
                         self.state = State::Spill;
 
-                        self.simpler = Some(
-                            FixedRateSimpler::new(
+                        self.sampler = Some(
+                            FixedRateSampler::new(
                                 vec![self.sort_row_offset],
                                 self.batch_rows,
                                 self.batch_rows * self.num_merge,
@@ -283,7 +283,7 @@ where
             output_data: VecDeque::new(),
             state: State::Init,
             spiller: Arc::new(spiller),
-            simpler: None,
+            sampler: None,
             bounds: Vec::new(),
             batch_rows: 0,
             num_merge: 0,
@@ -301,11 +301,11 @@ where
     }
 
     fn sort_input_data(&mut self) -> Result<()> {
-        let simpler = self.simpler.as_mut().unwrap();
+        let sampler = self.sampler.as_mut().unwrap();
         for data in &self.input_data {
-            simpler.add_block(data.clone());
+            sampler.add_block(data.clone());
         }
-        simpler.compact_blocks(false);
+        sampler.compact_blocks(false);
 
         let sorted = if self.input_data.len() == 1 {
             let data = self.input_data.pop().unwrap();
@@ -333,7 +333,7 @@ where
     }
 
     async fn on_restore(&mut self) -> Result<()> {
-        if self.simpler.is_some() {
+        if self.sampler.is_some() {
             self.determine_bounds()?;
         }
 
@@ -480,15 +480,15 @@ where
     }
 
     fn determine_bounds(&mut self) -> Result<()> {
-        let mut simpler = self.simpler.take().unwrap();
-        simpler.compact_blocks(true);
-        let simpled_rows = simpler.dense_blocks;
+        let mut sampler = self.sampler.take().unwrap();
+        sampler.compact_blocks(true);
+        let sampled_rows = sampler.dense_blocks;
 
-        match simpled_rows.len() {
+        match sampled_rows.len() {
             0 => (),
             1 => self.bounds.push(
                 DataBlock::sort(
-                    &simpled_rows[0],
+                    &sampled_rows[0],
                     &[SortColumnDescription {
                         offset: 0,
                         asc: A::Rows::IS_ASC_COLUMN,
@@ -500,7 +500,7 @@ where
                 .clone(),
             ),
             _ => {
-                let streams = simpled_rows
+                let streams = sampled_rows
                     .into_iter()
                     .map(|data| {
                         let data = DataBlock::sort(

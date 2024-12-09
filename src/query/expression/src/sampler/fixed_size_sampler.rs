@@ -20,7 +20,7 @@ use reservoir_sampling::AlgoL;
 use crate::BlockRowIndex;
 use crate::DataBlock;
 
-pub struct FixedSizeSimpler<R: Rng> {
+pub struct FixedSizeSampler<R: Rng> {
     columns: Vec<usize>,
     k: usize,
     block_size: usize,
@@ -32,7 +32,7 @@ pub struct FixedSizeSimpler<R: Rng> {
     s: usize,
 }
 
-impl<R: Rng> FixedSizeSimpler<R> {
+impl<R: Rng> FixedSizeSampler<R> {
     pub fn new(columns: Vec<usize>, block_size: usize, k: usize, rng: R) -> Self {
         let core = AlgoL::new(k.try_into().unwrap(), rng);
         Self {
@@ -254,7 +254,7 @@ mod tests {
         let rng = StdRng::seed_from_u64(0);
         let k = 5;
         let core = AlgoL::new(k.try_into().unwrap(), rng);
-        let mut simpler = FixedSizeSimpler {
+        let mut sampler = FixedSizeSampler {
             columns: vec![0],
             k,
             block_size: 65536,
@@ -264,17 +264,17 @@ mod tests {
             s: usize::MAX,
         };
 
-        simpler.add_indices(15, 0);
+        sampler.add_indices(15, 0);
 
         let want: Vec<BlockRowIndex> =
             vec![(0, 10, 1), (0, 1, 1), (0, 2, 1), (0, 8, 1), (0, 12, 1)];
-        assert_eq!(&want, &simpler.indices);
-        assert_eq!(0, simpler.s);
+        assert_eq!(&want, &sampler.indices);
+        assert_eq!(0, sampler.s);
 
-        simpler.add_indices(20, 1);
+        sampler.add_indices(20, 1);
 
         let want: Vec<BlockRowIndex> = vec![(1, 0, 1), (0, 1, 1), (1, 6, 1), (0, 8, 1), (1, 9, 1)];
-        assert_eq!(&want, &simpler.indices);
-        assert_eq!(1, simpler.s);
+        assert_eq!(&want, &sampler.indices);
+        assert_eq!(1, sampler.s);
     }
 }

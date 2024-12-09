@@ -20,7 +20,7 @@ use rate_sampling::Sampling;
 use crate::BlockRowIndex;
 use crate::DataBlock;
 
-pub struct FixedRateSimpler<R: Rng> {
+pub struct FixedRateSampler<R: Rng> {
     columns: Vec<usize>,
     block_size: usize,
 
@@ -32,7 +32,7 @@ pub struct FixedRateSimpler<R: Rng> {
     s: usize,
 }
 
-impl<R: Rng> FixedRateSimpler<R> {
+impl<R: Rng> FixedRateSampler<R> {
     pub fn new(
         columns: Vec<usize>,
         block_size: usize,
@@ -188,7 +188,7 @@ mod tests {
         let rng = StdRng::seed_from_u64(0);
         let mut core = Sampling::new(3..=6, rng);
         let s = core.search();
-        let mut simpler = FixedRateSimpler {
+        let mut sampler = FixedRateSampler {
             columns: vec![0],
             block_size: 65536,
             indices: VecDeque::new(),
@@ -198,13 +198,13 @@ mod tests {
             s,
         };
 
-        simpler.add_indices(15, 0);
+        sampler.add_indices(15, 0);
 
         let want: Vec<BlockRowIndex> = vec![(0, 6, 1), (0, 9, 1), (0, 14, 1)];
-        assert_eq!(Some(&want), simpler.indices.front());
-        assert_eq!(3, simpler.s);
+        assert_eq!(Some(&want), sampler.indices.front());
+        assert_eq!(3, sampler.s);
 
-        simpler.add_indices(20, 1);
+        sampler.add_indices(20, 1);
 
         let want: Vec<BlockRowIndex> = vec![
             (0, 6, 1),
@@ -215,8 +215,8 @@ mod tests {
             (1, 15, 1),
             (1, 18, 1),
         ];
-        assert_eq!(Some(&want), simpler.indices.front());
-        assert_eq!(1, simpler.s);
+        assert_eq!(Some(&want), sampler.indices.front());
+        assert_eq!(1, sampler.s);
     }
 
     #[test]
@@ -235,7 +235,7 @@ mod tests {
 
         {
             let core = Sampling::new(3..=6, rng.clone());
-            let mut simpler = FixedRateSimpler {
+            let mut sampler = FixedRateSampler {
                 columns: vec![0],
                 block_size: 3,
                 indices: indices.clone(),
@@ -245,26 +245,26 @@ mod tests {
                 s: 0,
             };
 
-            simpler.compact_blocks(false);
+            sampler.compact_blocks(false);
 
-            assert_eq!(Some(&vec![(0, 0, 1), (0, 1, 1)]), simpler.indices.front());
+            assert_eq!(Some(&vec![(0, 0, 1), (0, 1, 1)]), sampler.indices.front());
             assert_eq!(
                 &Int32Type::from_data(vec![7, 8]),
-                simpler.sparse_blocks[0].get_last_column()
+                sampler.sparse_blocks[0].get_last_column()
             );
             assert_eq!(
                 &Int32Type::from_data(vec![2, 3, 6]),
-                simpler.dense_blocks[0].get_last_column()
+                sampler.dense_blocks[0].get_last_column()
             );
 
-            simpler.compact_blocks(true);
-            assert!(simpler.indices.is_empty());
-            assert!(simpler.sparse_blocks.is_empty());
+            sampler.compact_blocks(true);
+            assert!(sampler.indices.is_empty());
+            assert!(sampler.sparse_blocks.is_empty());
         }
 
         {
             let core = Sampling::new(3..=6, rng.clone());
-            let mut simpler = FixedRateSimpler {
+            let mut sampler = FixedRateSampler {
                 columns: vec![0],
                 block_size: 3,
                 indices: indices.clone(),
@@ -274,16 +274,16 @@ mod tests {
                 s: 0,
             };
 
-            simpler.compact_blocks(true);
+            sampler.compact_blocks(true);
 
-            assert!(simpler.indices.is_empty());
+            assert!(sampler.indices.is_empty());
             assert_eq!(
                 &Int32Type::from_data(vec![2, 3, 6]),
-                simpler.dense_blocks[0].get_last_column()
+                sampler.dense_blocks[0].get_last_column()
             );
             assert_eq!(
                 &Int32Type::from_data(vec![7, 8]),
-                simpler.dense_blocks[1].get_last_column()
+                sampler.dense_blocks[1].get_last_column()
             );
         }
 
@@ -295,7 +295,7 @@ mod tests {
             ]]);
 
             let core = Sampling::new(3..=6, rng.clone());
-            let mut simpler = FixedRateSimpler {
+            let mut sampler = FixedRateSampler {
                 columns: vec![0],
                 block_size: 3,
                 indices: indices.clone(),
@@ -305,16 +305,16 @@ mod tests {
                 s: 0,
             };
 
-            simpler.compact_blocks(false);
+            sampler.compact_blocks(false);
 
-            assert!(simpler.indices.is_empty());
+            assert!(sampler.indices.is_empty());
             assert_eq!(
                 &Int32Type::from_data(vec![2, 3, 6]),
-                simpler.dense_blocks[0].get_last_column()
+                sampler.dense_blocks[0].get_last_column()
             );
             assert_eq!(
                 &Int32Type::from_data(vec![7, 8, 9]),
-                simpler.dense_blocks[1].get_last_column()
+                sampler.dense_blocks[1].get_last_column()
             );
         }
     }
