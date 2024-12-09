@@ -47,6 +47,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -137,7 +138,7 @@ pub struct FuseTable {
     pub(crate) changes_desc: Option<ChangesDesc>,
 }
 
-const DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS: std::time::Duration = std::time::Duration::from_secs(5);
+const DEFAULT_SCHEMA_REFRESHING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -194,17 +195,14 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
                         let operator = init_operator(&sp)?;
-                        let table_type =
-                            if !disable_refresh && Self::is_table_attached(table_meta_options) {
-                                Self::tweak_attach_table_snapshot_location(
-                                    &mut table_info,
-                                    &operator,
-                                    &storage_prefix,
-                                )?;
-                                FuseTableType::Attached
-                            } else {
-                                FuseTableType::External
-                            };
+                        let table_type = if !disable_refresh
+                            && Self::is_table_attached(table_meta_options)
+                        {
+                            Self::refresh_table_info(&mut table_info, &operator, &storage_prefix)?;
+                            FuseTableType::Attached
+                        } else {
+                            FuseTableType::External
+                        };
 
                         (operator, table_type)
                     }
@@ -478,11 +476,11 @@ impl FuseTable {
         self.meta_location_generator.prefix()
     }
 
-    fn load_snapshot_location_from_hint(
+    fn refresh_schema_from_hint(
         operator: &Operator,
         storage_prefix: &str,
         table_description: &str,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<(String, TableSchema)>> {
         let refresh_task = async {
             let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
             let begin_load_hint = Instant::now();
@@ -498,9 +496,30 @@ impl FuseTable {
                     let hint_content = buf.to_vec();
                     let snapshot_full_path = String::from_utf8(hint_content)?;
                     let operator_info = operator.info();
-                    Ok::<_, ErrorCode>(Some(
+
+                    let loc = snapshot_full_path[operator_info.root().len()..].to_string();
+
+                    // refresh table schema by loading the snapshot
+                    let begin = Instant::now();
+                    let reader = MetaReaders::table_snapshot_reader_without_cache(operator.clone());
+                    let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
+                    let snapshot =
+                        Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
+                    info!("table snapshot refreshed, time used {:?}", begin.elapsed());
+
+                    let schema = snapshot
+                        .ok_or_else(|| {
+                            ErrorCode::ShareStorageError(
+                                "Failed to load snapshot of read_only attach table".to_string(),
+                            )
+                        })?
+                        .schema
+                        .clone();
+
+                    Ok::<_, ErrorCode>(Some((
                         snapshot_full_path[operator_info.root().len()..].to_string(),
-                    ))
+                        schema,
+                    )))
                 }
                 Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
                     // Table be attached has not last snapshot hint file, treat it as empty table
@@ -510,27 +529,27 @@ impl FuseTable {
             }
         };
 
-        let refresh_task_with_to = async {
-            tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS, refresh_task)
+        let refresh_task_with_timeout = async {
+            tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT, refresh_task)
                 .await
-                .map_err(|elapsed| {
+                .map_err(|_e| {
                     ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table meta {} in time. Elapsed: {}",
-                        table_description, elapsed
+                        "failed to refresh table info {} in time.",
+                        table_description
                     ))
                 })
                 .map_err(|e| {
                     ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table meta {} : {}",
+                        "failed to refresh table info {} : {}",
                         table_description, e
                     ))
                 })?
         };
 
-        GlobalIORuntime::instance().block_on(refresh_task_with_to)
+        GlobalIORuntime::instance().block_on(refresh_task_with_timeout)
     }
 
-    fn tweak_attach_table_snapshot_location(
+    fn refresh_table_info(
         table_info: &mut TableInfo,
         operator: &Operator,
         storage_prefix: &str,
@@ -544,23 +563,26 @@ impl FuseTable {
             return Ok(());
         }
 
-        let location =
-            Self::load_snapshot_location_from_hint(operator, storage_prefix, &table_info.desc)?;
+        let refreshed = Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-            location, table_info.desc, table_info.ident
+            refreshed.as_ref().map(|(location, _)| location),
+            table_info.desc,
+            table_info.ident
         );
 
         // Adjust snapshot location to the values extracted from the last snapshot hint
-        match location {
+        match refreshed {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
-            Some(location) => {
+            Some((location, schema)) => {
                 table_info
                     .options_mut()
                     .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+
+                table_info.meta.schema = Arc::new(schema);
             }
         }
 
