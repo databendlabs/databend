@@ -467,7 +467,7 @@ impl Binder {
                     Some(self.ctx.as_ref()),
                     "when create TABLE with external location",
                 )
-                .await?;
+                    .await?;
 
                 // create a temporary op to check if params is correct
                 let data_operator = DataOperator::try_create(&sp).await?;
@@ -1042,15 +1042,13 @@ impl Binder {
                     None
                 };
 
-                let recluster = RelOperator::Recluster(Recluster {
+                let s_expr = self.bind_recluster_table(
                     catalog,
                     database,
                     table,
+                    limit.map(|v| v as usize),
                     filters,
-                    limit: limit.map(|v| v as usize),
-                    cluster_type: ClusterType::Linear,
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+                ).await?;
                 Ok(Plan::ReclusterTable {
                     s_expr: Box::new(s_expr),
                     is_final: *is_final,
@@ -1111,14 +1109,14 @@ impl Binder {
                     filters,
                     cluster_type: ClusterType::Linear,
                 });
-                let _ = SExpr::create_leaf(Arc::new(recluster));
+                Ok(SExpr::create_leaf(Arc::new(recluster)))
             }
             ClusterType::Hilbert => {
                 let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
                 let cluster_keys_len = ast_exprs.len();
                 let settings = Settings::create(Tenant::new_literal("dummy"));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                let _ = ast_exprs.into_iter().fold(
+                let cluster_key_strs = ast_exprs.into_iter().fold(
                     Vec::with_capacity(cluster_keys_len),
                     |mut acc, mut ast| {
                         let mut normalizer = IdentifierNormalizer {
@@ -1129,10 +1127,61 @@ impl Binder {
                         acc
                     },
                 );
-                todo!()
+
+                let keys_bounds_str = cluster_key_strs
+                    .iter()
+                    .map(|s| format!("range_bound(1000)({}) AS {}_bound", s, s))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let hilbert_keys_str = cluster_key_strs
+                    .iter()
+                    .map(|s| {
+                        format!(
+                            "hilbert_key(to_uint16(range_partition_id({table}.{s}, _keys_bound.{s}_bound)))"
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let query = format!(
+                    "WITH _keys_bound AS ( \
+                        SELECT \
+                            {keys_bounds_str} \
+                        FROM {database}.{table} \
+                    ), \
+                    _source_data AS ( \
+                        SELECT \
+                            {table}.*, \
+                            hilbert_index([{hilbert_keys_str}], 2) AS _hilbert_index \
+                        FROM {database}.{table}, _keys_bound \
+                    ) \
+                    SELECT \
+                        * EXCLUDE(_hilbert_index) \
+                    FROM \
+                        _source_data \
+                    ORDER BY \
+                        _hilbert_index"
+                );
+                let tokens = tokenize_sql(query.as_str())?;
+                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                let Statement::Query(query) = &stmt else {
+                    unreachable!()
+                };
+                let mut bind_context = BindContext::new();
+                let (s_expr, _) = self.bind_query(&mut bind_context, query)?;
+                let s_expr = SExpr::create_unary(
+                    Arc::new(RelOperator::Recluster(Recluster {
+                        catalog,
+                        database,
+                        table,
+                        limit,
+                        filters,
+                        cluster_type: ClusterType::Hilbert,
+                    })),
+                    Arc::new(s_expr),
+                );
+                Ok(s_expr)
             }
         }
-        todo!()
     }
 
     #[async_backtrace::framed]
