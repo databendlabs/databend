@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 pub use databend_common_catalog::catalog::StorageDescription;
 use databend_common_config::InnerConfig;
@@ -30,8 +31,6 @@ use databend_common_storages_view::view_table::ViewTable;
 
 use crate::fuse::FuseTable;
 use crate::Table;
-
-// default schema refreshing timeout is 5 seconds.
 
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>>;
@@ -55,30 +54,6 @@ impl StorageCreator for FuseTableCreator {
     }
 }
 
-// impl<T> StorageCreator for T
-// where
-//    T: Fn(TableInfo, bool) -> Result<Box<dyn Table>>,
-//    T: Send + Sync,
-//{
-//    fn try_create(&self, table_info: TableInfo, need_refresh: bool) -> Result<Box<dyn Table>> {
-//        self(table_info, need_refresh)
-//    }
-//}
-
-use dashmap::mapref::one::Ref;
-
-//#[async_trait::async_trait]
-// impl<F, Fut> TableInfoRefresher for F
-// where
-//    F: Fn(Arc<TableInfo>) -> Fut,
-//    Fut: Future<Output = Result<Arc<TableInfo>>> + Send,
-//    F: Send + Sync,
-//{
-//    async fn refresh(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
-//        self(table_info).await
-//    }
-//}
-
 pub trait StorageDescriptor: Send + Sync {
     fn description(&self) -> StorageDescription;
 }
@@ -92,14 +67,6 @@ where
         self()
     }
 }
-
-// // Table engines that need to refresh schema should provide implementation of this
-// // trait. For example, FUSE table engine that attaches to a remote storage may
-// // need to refresh schema to get the latest schema.
-// #[async_trait::async_trait]
-//  pub trait TableInfoRefresher: Send + Sync {
-//     async fn refresh(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>>;
-// }
 
 pub struct Storage {
     creator: Arc<dyn StorageCreator>,
@@ -180,33 +147,6 @@ impl StorageFactory {
             .into();
         Ok(table)
     }
-
-    // pub async fn refresh_table_info(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
-    //    let factory = self.get_storage_factory(table_info.as_ref())?;
-    //    match factory.table_info_refresher.as_ref() {
-    //        None => Ok(table_info),
-    //        Some(refresher) => {
-    //            let table_description = table_info.desc.clone();
-    //            tokio::time::timeout(
-    //                self.schema_refreshing_timeout,
-    //                refresher.refresh(table_info),
-    //            )
-    //            .await
-    //            .map_err(|elapsed| {
-    //                ErrorCode::RefreshTableInfoFailure(format!(
-    //                    "failed to refresh table meta {} in time. Elapsed: {}",
-    //                    table_description, elapsed
-    //                ))
-    //            })
-    //            .map_err(|e| {
-    //                ErrorCode::RefreshTableInfoFailure(format!(
-    //                    "failed to refresh table meta {} : {}",
-    //                    table_description, e
-    //                ))
-    //            })?
-    //        }
-    //    }
-    //}
 
     fn get_storage_factory(&self, table_info: &TableInfo) -> Result<Ref<String, Storage>> {
         let engine = table_info.engine().to_uppercase();

@@ -100,26 +100,6 @@ impl DefaultDatabase {
             .collect::<Vec<_>>();
 
         Ok(table_infos)
-        // if self.ctx.disable_table_info_refresh {
-        //    Ok(table_infos)
-        //} else {
-        //    let mut refreshed = Vec::with_capacity(table_infos.len());
-        //    for table_info in table_infos {
-        //        refreshed.push(
-        //            self.ctx
-        //                .storage_factory
-        //                .refresh_table_info(table_info.clone())
-        //                .await
-        //                .map_err(|err| {
-        //                    err.add_message_back(format!(
-        //                        "(while refresh table info on {})",
-        //                        table_info.name
-        //                    ))
-        //                })?,
-        //        );
-        //    }
-        //    Ok(refreshed)
-        //}
     }
 }
 #[async_trait::async_trait]
@@ -166,15 +146,6 @@ impl Database for DefaultDatabase {
         };
 
         let table_info = Arc::new(table_info);
-
-        // let table_info = if self.ctx.disable_table_info_refresh {
-        //    table_info
-        //} else {
-        //    self.ctx
-        //        .storage_factory
-        //        .refresh_table_info(table_info)
-        //        .await?
-        //};
 
         self.get_table_by_info(table_info.as_ref())
     }

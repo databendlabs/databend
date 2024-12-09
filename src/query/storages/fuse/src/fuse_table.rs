@@ -138,6 +138,7 @@ pub struct FuseTable {
     pub(crate) changes_desc: Option<ChangesDesc>,
 }
 
+// default schema refreshing timeout is 5 seconds.
 const DEFAULT_SCHEMA_REFRESHING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl FuseTable {
@@ -148,34 +149,6 @@ impl FuseTable {
         Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
     }
 
-    // pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
-    //    // check if table is AttachedReadOnly in a lighter way
-    //    let need_refresh_schema = match table_info.db_type {
-    //        DatabaseType::NormalDB => {
-    //            table_info.meta.storage_params.is_some()
-    //                && Self::is_table_attached(&table_info.meta.options)
-    //        }
-    //    };
-
-    //    if need_refresh_schema {
-    //        info!("refreshing table schema {}", table_info.desc);
-    //        let table = Self::do_create(table_info.as_ref().clone())?;
-    //        let snapshot = table.read_table_snapshot().await?;
-    //        let schema = snapshot
-    //            .ok_or_else(|| {
-    //                ErrorCode::ShareStorageError(
-    //                    "Failed to load snapshot of read_only attach table".to_string(),
-    //                )
-    //            })?
-    //            .schema
-    //            .clone();
-    //        let mut table_info = table_info.as_ref().clone();
-    //        table_info.meta.schema = Arc::new(schema);
-    //        Ok(Arc::new(table_info))
-    //    } else {
-    //        Ok(table_info)
-    //    }
-    //}
     pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
         Self::do_create_table_ext(table_info, true)
     }
