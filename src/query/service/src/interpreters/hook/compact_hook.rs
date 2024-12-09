@@ -105,9 +105,11 @@ async fn do_hook_compact(
                 }
             };
 
-            // keep the original write progress value
+            // keep the original progress value
             let write_progress = ctx.get_write_progress();
             let write_progress_value = write_progress.as_ref().get_values();
+            let scan_progress = ctx.get_scan_progress();
+            let scan_progress_value = scan_progress.as_ref().get_values();
 
             match GlobalIORuntime::instance().block_on({
                 compact_table(ctx, compact_target, compaction_limits, lock_opt)
@@ -118,8 +120,9 @@ async fn do_hook_compact(
                 Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e); }
             }
 
-            // reset the write progress value
+            // reset the progress value
             write_progress.set(&write_progress_value);
+            scan_progress.set(&scan_progress_value);
             metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
         }
 
