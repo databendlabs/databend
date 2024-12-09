@@ -123,7 +123,12 @@ impl PipelineBuilder {
         )?;
         let storage_format = table.get_storage_format();
         self.main_pipeline.add_block_meta_transformer(|| {
-            CompactTransform::create(block_reader.clone(), storage_format, stream_ctx.clone())
+            CompactTransform::create(
+                self.ctx.clone(),
+                block_reader.clone(),
+                storage_format,
+                stream_ctx.clone(),
+            )
         });
 
         // sort
