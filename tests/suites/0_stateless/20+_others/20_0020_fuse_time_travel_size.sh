@@ -30,6 +30,8 @@ stmt "alter table test_fuse_time_travel_size.t SET OPTIONS (data_retention_perio
 
 stmt "drop table test_fuse_time_travel_size.t"
 
-query "select is_dropped, data_retention_period_in_hours from fuse_time_travel_size('test_fuse_time_travel_size')"
+query "select is_dropped from fuse_time_travel_size('test_fuse_time_travel_size')"
+
+query "select data_retention_period_in_hours from fuse_time_travel_size('test_fuse_time_travel_size')"
 
 
