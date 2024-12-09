@@ -28,13 +28,13 @@ struct PipelineIndentDisplayWrapper<'a> {
     pipeline: &'a Pipeline,
 }
 
-impl<'a> PipelineIndentDisplayWrapper<'a> {
+impl PipelineIndentDisplayWrapper<'_> {
     fn pipe_name(pipe: &Pipe) -> String {
         unsafe { pipe.items[0].processor.name() }
     }
 }
 
-impl<'a> Display for PipelineIndentDisplayWrapper<'a> {
+impl Display for PipelineIndentDisplayWrapper<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let pipes = &self.pipeline.pipes;
         for (index, pipe) in pipes.iter().rev().enumerate() {

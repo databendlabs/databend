@@ -76,7 +76,7 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 
-impl<'a> Binder {
+impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_copy_into_table(
         &mut self,
@@ -415,7 +415,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         mut plan: CopyIntoTablePlan,
-        select_list: &'a [SelectTarget],
+        select_list: &[SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
         plan.collect_files(self.ctx.as_ref()).await?;

@@ -352,9 +352,9 @@ impl Binder {
         false
     }
 
-    async fn bind_matched_clause<'a>(
+    async fn bind_matched_clause(
         &mut self,
-        scalar_binder: &mut ScalarBinder<'a>,
+        scalar_binder: &mut ScalarBinder<'_>,
         clause: &MatchedClause,
         schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
@@ -440,9 +440,9 @@ impl Binder {
         Ok(MatchedEvaluator { condition, update })
     }
 
-    async fn bind_unmatched_clause<'a>(
+    async fn bind_unmatched_clause(
         &mut self,
-        scalar_binder: &mut ScalarBinder<'a>,
+        scalar_binder: &mut ScalarBinder<'_>,
         clause: &UnmatchedClause,
         table_schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,

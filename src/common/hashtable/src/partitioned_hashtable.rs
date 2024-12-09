@@ -110,19 +110,39 @@ impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32, const HIGH_BIT: boo
 }
 
 impl<
-    K: ?Sized + FastHash,
-    V,
-    Impl: HashtableLike<Key = K, Value = V>,
-    const BUCKETS_LG2: u32,
-    const HIGH_BIT: bool,
-> HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+        K: ?Sized + FastHash,
+        V,
+        Impl: HashtableLike<Key = K, Value = V>,
+        const BUCKETS_LG2: u32,
+        const HIGH_BIT: bool,
+    > HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;
-    type EntryRef<'a> = Impl::EntryRef<'a> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-    type EntryMutRef<'a> = Impl::EntryMutRef<'a> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-    type Iterator<'a> = PartitionedHashtableIter<Impl::Iterator<'a>> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-    type IteratorMut<'a> = PartitionedHashtableIter<Impl::IteratorMut<'a>> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
+    type EntryRef<'a>
+        = Impl::EntryRef<'a>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+    type EntryMutRef<'a>
+        = Impl::EntryMutRef<'a>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+    type Iterator<'a>
+        = PartitionedHashtableIter<Impl::Iterator<'a>>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+    type IteratorMut<'a>
+        = PartitionedHashtableIter<Impl::IteratorMut<'a>>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
 
     fn len(&self) -> usize {
         self.tables.iter().map(|x| x.len()).sum::<usize>()

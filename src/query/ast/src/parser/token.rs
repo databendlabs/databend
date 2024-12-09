@@ -43,7 +43,7 @@ impl<'a> Token<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for Token<'a> {
+impl std::fmt::Debug for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}({:?})", self.kind, self.span)
     }

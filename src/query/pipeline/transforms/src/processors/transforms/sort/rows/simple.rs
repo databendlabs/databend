@@ -41,7 +41,8 @@ where
     T: ArgType,
     for<'a> T::ScalarRef<'a>: Ord,
 {
-    type Item<'a> = T::ScalarRef<'a>
+    type Item<'a>
+        = T::ScalarRef<'a>
     where Self: 'a;
 
     type Type = T;
@@ -86,7 +87,8 @@ where
     T: ArgType,
     for<'a> T::ScalarRef<'a>: Ord,
 {
-    type Item<'a> = Reverse<T::ScalarRef<'a>>
+    type Item<'a>
+        = Reverse<T::ScalarRef<'a>>
     where Self: 'a;
 
     type Type = T;

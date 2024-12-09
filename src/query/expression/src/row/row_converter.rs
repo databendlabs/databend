@@ -74,12 +74,10 @@ impl RowConverter {
     /// Convert columns into [`BinaryColumn`] represented comparable row format.
     pub fn convert_columns(&self, columns: &[Column], num_rows: usize) -> BinaryColumn {
         debug_assert!(columns.len() == self.fields.len());
-        debug_assert!(
-            columns
-                .iter()
-                .zip(self.fields.iter())
-                .all(|(col, f)| col.len() == num_rows && col.data_type() == f.data_type)
-        );
+        debug_assert!(columns
+            .iter()
+            .zip(self.fields.iter())
+            .all(|(col, f)| col.len() == num_rows && col.data_type() == f.data_type));
 
         let mut builder = self.new_empty_rows(columns, num_rows);
         for (column, field) in columns.iter().zip(self.fields.iter()) {
@@ -228,7 +226,11 @@ impl RowConverter {
 
 #[inline(always)]
 pub(super) fn null_sentinel(nulls_first: bool) -> u8 {
-    if nulls_first { 0 } else { 0xFF }
+    if nulls_first {
+        0
+    } else {
+        0xFF
+    }
 }
 
 fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, nulls_first: bool) {

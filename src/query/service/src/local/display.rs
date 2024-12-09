@@ -97,7 +97,7 @@ impl<'a> FormatDisplay<'a> {
     }
 }
 
-impl<'a> FormatDisplay<'a> {
+impl FormatDisplay<'_> {
     async fn display_progress(progress_bar: &mut Option<ProgressBar>, pg: &QueryProgress) {
         let pgo = progress_bar.take();
         *progress_bar = Some(display_read_progress(pgo, pg));
@@ -294,7 +294,7 @@ impl<'a> FormatDisplay<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> ChunkDisplay for FormatDisplay<'a> {
+impl ChunkDisplay for FormatDisplay<'_> {
     async fn display(&mut self) -> Result<()> {
         match self.settings.output_format {
             OutputFormat::Null => {}

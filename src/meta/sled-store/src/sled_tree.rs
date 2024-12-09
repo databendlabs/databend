@@ -179,7 +179,7 @@ pub struct AsKeySpace<'a, KV: SledKeySpace> {
 }
 
 #[allow(clippy::type_complexity)]
-impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
+impl<KV: SledKeySpace> AsKeySpace<'_, KV> {
     pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, MetaStorageError> {
         self.inner.get::<KV>(key)
     }
