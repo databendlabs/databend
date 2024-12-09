@@ -78,6 +78,7 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
     bounds: Vec<Column>,
+    cur_bound: Option<A::Rows>,
 
     batch_rows: usize,
     /// Blocks to merge one time.
@@ -246,7 +247,7 @@ where
                 let max = self.max_rows();
 
                 if subsequent > 0 && subsequent + input > max {
-                    self.spill_subsequent_last(subsequent + input - max).await?;
+                    self.subsequent_spill_last(subsequent + input - max).await?;
                 }
                 let finished = self.input.is_finished();
                 if input > max || finished && input > 0 {
@@ -293,6 +294,7 @@ where
             spiller: Arc::new(spiller),
             sampler: None,
             bounds: Vec::new(),
+            cur_bound: None,
             batch_rows: 0,
             num_merge: 0,
             subsequent: Vec::new(),
@@ -340,7 +342,7 @@ where
         Ok(())
     }
 
-    async fn spill_subsequent_last(&mut self, target_rows: usize) -> Result<()> {
+    async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
         let Some(s) = self.subsequent.last_mut() else {
             return Ok(());
         };
@@ -386,7 +388,7 @@ where
     }
 
     async fn merge_current(&mut self) -> Result<()> {
-        self.spill_subsequent_all().await?;
+        self.subsequent_spill_all().await?;
         for (i, s) in self.current.iter_mut().rev().enumerate() {
             if i < self.num_merge {
                 s.spill(1).await?;
@@ -395,7 +397,6 @@ where
             }
         }
 
-        let bound = self.current[0].bound.clone();
         let streams = self
             .current
             .drain(self.current.len() - self.num_merge..)
@@ -412,7 +413,7 @@ where
         }
         debug_assert!(merger.is_finished());
 
-        let stream = self.new_stream(sorted, bound);
+        let stream = self.new_stream(sorted, self.cur_bound.clone());
         self.current.insert(0, stream);
         self.subsequent
             .extend(merger.streams().into_iter().filter(|s| !s.is_empty()));
@@ -441,7 +442,7 @@ where
                     return Ok(self.subsequent.is_empty());
                 }
 
-                self.spill_sort().await?;
+                self.sort_spill().await?;
 
                 let streams = mem::take(&mut self.current);
                 let merger =
@@ -450,19 +451,48 @@ where
             }
         };
 
-        if let Some(data) = merger.async_next_block().await? {
-            self.output_data = Some(data);
-            return Ok(false);
+        let Some(data) = merger.async_next_block().await? else {
+            debug_assert!(merger.is_finished());
+            let streams = self.output_merger.take().unwrap().streams();
+            self.subsequent
+                .extend(streams.into_iter().filter(|s| !s.is_empty()));
+            return Ok(self.subsequent.is_empty());
+        };
+
+        let mut sorted = BoundBlockStream {
+            blocks: VecDeque::new(),
+            bound: self.cur_bound.clone(),
+            sort_row_offset: self.sort_row_offset,
+            spiller: self.spiller.clone(),
+        };
+        sorted
+            .blocks
+            .push_back(SpillableBlock::new(data, self.sort_row_offset));
+
+        if sorted.should_include_first() {
+            self.output_data = Some(sorted.take_next_bounded_block());
+            if sorted.is_empty() {
+                return Ok(false);
+            }
+        }
+
+        while let Some(data) = merger.async_next_block().await? {
+            let mut block = SpillableBlock::new(data, self.sort_row_offset);
+            block.spill(&self.spiller).await?;
+            sorted.blocks.push_back(block);
         }
         debug_assert!(merger.is_finished());
 
+        if !sorted.is_empty() {
+            self.subsequent.push(sorted);
+        }
         let streams = self.output_merger.take().unwrap().streams();
         self.subsequent
             .extend(streams.into_iter().filter(|s| !s.is_empty()));
         Ok(self.subsequent.is_empty())
     }
 
-    async fn spill_sort(&mut self) -> Result<()> {
+    async fn sort_spill(&mut self) -> Result<()> {
         let need = self
             .current
             .iter()
@@ -502,7 +532,7 @@ where
         Ok(())
     }
 
-    async fn spill_subsequent_all(&mut self) -> Result<()> {
+    async fn subsequent_spill_all(&mut self) -> Result<()> {
         for s in &mut self.subsequent {
             s.spill(0).await?;
         }
@@ -512,19 +542,21 @@ where
     fn choice_streams_by_bound(&mut self) {
         debug_assert!(self.current.is_empty());
         debug_assert!(!self.subsequent.is_empty());
-        let Some(bound) = self.next_bound() else {
+
+        self.cur_bound = self.next_bound();
+        if self.cur_bound.is_none() {
             mem::swap(&mut self.current, &mut self.subsequent);
             for s in &mut self.current {
                 s.bound = None
             }
             return;
-        };
+        }
 
         (self.current, self.subsequent) = self
             .subsequent
             .drain(..)
             .map(|mut s| {
-                s.bound = Some(bound.clone());
+                s.bound = self.cur_bound.clone();
                 s
             })
             .partition(|s| s.should_include_first());
@@ -709,7 +741,7 @@ impl<R: Rows> SortedStream for BoundBlockStream<R> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
-            let data = self.take_next_bounded_block();
+            let data = self.take_next_block();
             let col = sort_column(&data, self.sort_row_offset).clone();
             Ok((Some((data, col)), false))
         } else {
