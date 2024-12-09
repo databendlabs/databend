@@ -24,6 +24,7 @@ use std::time::Instant;
 
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::base::tokio;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -136,8 +137,7 @@ pub struct FuseTable {
     pub(crate) changes_desc: Option<ChangesDesc>,
 }
 
-// TODO refresh timeout
-// const DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS: std::time::Duration = std::time::Duration::from_secs(5);
+const DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -338,24 +338,28 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        self.read_table_snapshot_with_reader(reader).await
+        let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        Self::read_table_snapshot_with_reader(reader, loc, ver).await
     }
 
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
-        self.read_table_snapshot_with_reader(reader).await
+        let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        Self::read_table_snapshot_with_reader(reader, loc, ver).await
     }
 
     async fn read_table_snapshot_with_reader(
-        &self,
         reader: TableSnapshotReader,
+        snapshot_location: Option<String>,
+        ver: u64,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc() {
-            let ver = self.snapshot_format_version(Some(loc.clone()))?;
+        if let Some(location) = snapshot_location {
             let params = LoadParams {
-                location: loc,
+                location,
                 len_hint: None,
                 ver,
                 put_cache: true,
@@ -477,25 +481,9 @@ impl FuseTable {
     fn load_snapshot_location_from_hint(
         operator: &Operator,
         storage_prefix: &str,
+        table_description: &str,
     ) -> Result<Option<String>> {
-        //            tokio::time::timeout(
-        //                self.schema_refreshing_timeout,
-        //                refresher.refresh(table_info),
-        //            )
-        //            .await
-        //            .map_err(|elapsed| {
-        //                ErrorCode::RefreshTableInfoFailure(format!(
-        //                    "failed to refresh table meta {} in time. Elapsed: {}",
-        //                    table_description, elapsed
-        //                ))
-        //            })
-        //            .map_err(|e| {
-        //                ErrorCode::RefreshTableInfoFailure(format!(
-        //                    "failed to refresh table meta {} : {}",
-        //                    table_description, e
-        //                ))
-        //            })?
-        GlobalIORuntime::instance().block_on(async {
+        let refresh_task = async {
             let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
             let begin_load_hint = Instant::now();
             let maybe_hint_content = operator.read(&hint_file_path).await;
@@ -520,7 +508,26 @@ impl FuseTable {
                 }
                 Err(e) => Err(e.into()),
             }
-        })
+        };
+
+        let refresh_task_with_to = async {
+            tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS, refresh_task)
+                .await
+                .map_err(|elapsed| {
+                    ErrorCode::RefreshTableInfoFailure(format!(
+                        "failed to refresh table meta {} in time. Elapsed: {}",
+                        table_description, elapsed
+                    ))
+                })
+                .map_err(|e| {
+                    ErrorCode::RefreshTableInfoFailure(format!(
+                        "failed to refresh table meta {} : {}",
+                        table_description, e
+                    ))
+                })?
+        };
+
+        GlobalIORuntime::instance().block_on(refresh_task_with_to)
     }
 
     fn tweak_attach_table_snapshot_location(
@@ -537,7 +544,8 @@ impl FuseTable {
             return Ok(());
         }
 
-        let location = Self::load_snapshot_location_from_hint(operator, storage_prefix)?;
+        let location =
+            Self::load_snapshot_location_from_hint(operator, storage_prefix, &table_info.desc)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
