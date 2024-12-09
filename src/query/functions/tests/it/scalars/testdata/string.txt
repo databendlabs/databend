@@ -1,27 +1,24 @@
 ast            : upper('Abc')
 raw expr       : upper('Abc')
 checked expr   : upper<String>("Abc")
-optimized expr : "ABC"
 output type    : String
-output domain  : {"ABC"..="ABC"}
+output domain  : {""..}
 output         : 'ABC'
 
 
 ast            : upper('Dobrý den')
 raw expr       : upper('Dobrý den')
 checked expr   : upper<String>("Dobrý den")
-optimized expr : "DOBRÝ DEN"
 output type    : String
-output domain  : {"DOBRÝ DEN"..="DOBRÝ DEN"}
+output domain  : {""..}
 output         : 'DOBRÝ DEN'
 
 
 ast            : upper('ß😀山')
 raw expr       : upper('ß😀山')
 checked expr   : upper<String>("ß😀山")
-optimized expr : "SS😀山"
 output type    : String
-output domain  : {"SS😀山"..="SS😀山"}
+output domain  : {""..}
 output         : 'SS😀山'
 
 
@@ -59,27 +56,24 @@ evaluation (internal):
 ast            : lower('Abc')
 raw expr       : lower('Abc')
 checked expr   : lower<String>("Abc")
-optimized expr : "abc"
 output type    : String
-output domain  : {"abc"..="abc"}
+output domain  : {""..}
 output         : 'abc'
 
 
 ast            : lower('DOBRÝ DEN')
 raw expr       : lower('DOBRÝ DEN')
 checked expr   : lower<String>("DOBRÝ DEN")
-optimized expr : "dobrý den"
 output type    : String
-output domain  : {"dobrý den"..="dobrý den"}
+output domain  : {""..}
 output         : 'dobrý den'
 
 
 ast            : lower('İ😀山')
 raw expr       : lower('İ😀山')
 checked expr   : lower<String>("İ😀山")
-optimized expr : "i\u{307}😀山"
 output type    : String
-output domain  : {"i\u{307}😀山"..="i\u{307}😀山"}
+output domain  : {""..}
 output         : 'i̇😀山'
 
 
@@ -345,36 +339,32 @@ evaluation (internal):
 ast            : quote('a\0b')
 raw expr       : quote('a b')
 checked expr   : quote<String>("a\0b")
-optimized expr : "a\\0b"
 output type    : String
-output domain  : {"a\\0b"..="a\\0b"}
+output domain  : {""..}
 output         : 'a\0b'
 
 
 ast            : quote('a\'b')
 raw expr       : quote('a'b')
 checked expr   : quote<String>("a'b")
-optimized expr : "a\\'b"
 output type    : String
-output domain  : {"a\\'b"..="a\\'b"}
+output domain  : {""..}
 output         : 'a\'b'
 
 
 ast            : quote('a\"b')
 raw expr       : quote('a"b')
 checked expr   : quote<String>("a\"b")
-optimized expr : "a\\\"b"
 output type    : String
-output domain  : {"a\\\"b"..="a\\\"b"}
+output domain  : {""..}
 output         : 'a\"b'
 
 
 ast            : quote('a\bb')
 raw expr       : quote('ab')
 checked expr   : quote<String>("a\u{8}b")
-optimized expr : "a\\bb"
 output type    : String
-output domain  : {"a\\bb"..="a\\bb"}
+output domain  : {""..}
 output         : 'a\bb'
 
 
@@ -382,63 +372,56 @@ ast            : quote('a\nb')
 raw expr       : quote('a
 b')
 checked expr   : quote<String>("a\nb")
-optimized expr : "a\\nb"
 output type    : String
-output domain  : {"a\\nb"..="a\\nb"}
+output domain  : {""..}
 output         : 'a\nb'
 
 
 ast            : quote('a\rb')
 raw expr       : quote('ab')
 checked expr   : quote<String>("a\rb")
-optimized expr : "a\\rb"
 output type    : String
-output domain  : {"a\\rb"..="a\\rb"}
+output domain  : {""..}
 output         : 'a\rb'
 
 
 ast            : quote('a\tb')
 raw expr       : quote('a	b')
 checked expr   : quote<String>("a\tb")
-optimized expr : "a\\tb"
 output type    : String
-output domain  : {"a\\tb"..="a\\tb"}
+output domain  : {""..}
 output         : 'a\tb'
 
 
 ast            : quote('a\\b')
 raw expr       : quote('a\b')
 checked expr   : quote<String>("a\\b")
-optimized expr : "a\\\\b"
 output type    : String
-output domain  : {"a\\\\b"..="a\\\\b"}
+output domain  : {""..}
 output         : 'a\\b'
 
 
 ast            : quote('你好')
 raw expr       : quote('你好')
 checked expr   : quote<String>("你好")
-optimized expr : "你好"
 output type    : String
-output domain  : {"你好"..="你好"}
+output domain  : {""..}
 output         : '你好'
 
 
 ast            : quote('ß😀山')
 raw expr       : quote('ß😀山')
 checked expr   : quote<String>("ß😀山")
-optimized expr : "ß😀山"
 output type    : String
-output domain  : {"ß😀山"..="ß😀山"}
+output domain  : {""..}
 output         : 'ß😀山'
 
 
 ast            : quote('Dobrý den')
 raw expr       : quote('Dobrý den')
 checked expr   : quote<String>("Dobrý den")
-optimized expr : "Dobrý den"
 output type    : String
-output domain  : {"Dobrý den"..="Dobrý den"}
+output domain  : {""..}
 output         : 'Dobrý den'
 
 
@@ -476,54 +459,48 @@ evaluation (internal):
 ast            : reverse('abc')
 raw expr       : reverse('abc')
 checked expr   : reverse<String>("abc")
-optimized expr : "cba"
 output type    : String
-output domain  : {"cba"..="cba"}
+output domain  : {""..}
 output         : 'cba'
 
 
 ast            : reverse('a')
 raw expr       : reverse('a')
 checked expr   : reverse<String>("a")
-optimized expr : "a"
 output type    : String
-output domain  : {"a"..="a"}
+output domain  : {""..}
 output         : 'a'
 
 
 ast            : reverse('')
 raw expr       : reverse('')
 checked expr   : reverse<String>("")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : reverse('你好')
 raw expr       : reverse('你好')
 checked expr   : reverse<String>("你好")
-optimized expr : "好你"
 output type    : String
-output domain  : {"好你"..="好你"}
+output domain  : {""..}
 output         : '好你'
 
 
 ast            : reverse('ß😀山')
 raw expr       : reverse('ß😀山')
 checked expr   : reverse<String>("ß😀山")
-optimized expr : "山😀ß"
 output type    : String
-output domain  : {"山😀ß"..="山😀ß"}
+output domain  : {""..}
 output         : '山😀ß'
 
 
 ast            : reverse('Dobrý den')
 raw expr       : reverse('Dobrý den')
 checked expr   : reverse<String>("Dobrý den")
-optimized expr : "ned ýrboD"
 output type    : String
-output domain  : {"ned ýrboD"..="ned ýrboD"}
+output domain  : {""..}
 output         : 'ned ýrboD'
 
 
@@ -648,65 +625,48 @@ ast            : ascii(b)
 raw expr       : ascii(b::String)
 checked expr   : ascii<String>(b)
 optimized expr : 0_u8
-evaluation:
-+--------+-----------+---------+
-|        | b         | Output  |
-+--------+-----------+---------+
-| Type   | String    | UInt8   |
-| Domain | {""..=""} | {0..=0} |
-| Row 0  | ''        | 0       |
-+--------+-----------+---------+
-evaluation (internal):
-+--------+----------------+
-| Column | Data           |
-+--------+----------------+
-| b      | StringColumn[] |
-| Output | UInt8([0])     |
-+--------+----------------+
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0
 
 
 ast            : ltrim('   abc   ')
 raw expr       : ltrim('   abc   ')
 checked expr   : ltrim<String>("   abc   ")
-optimized expr : "abc   "
 output type    : String
-output domain  : {"abc   "..="abc   "}
+output domain  : {""..}
 output         : 'abc   '
 
 
 ast            : ltrim('  ')
 raw expr       : ltrim('  ')
 checked expr   : ltrim<String>("  ")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : ltrim('  你  好  ')
 raw expr       : ltrim('  你  好  ')
 checked expr   : ltrim<String>("  你  好  ")
-optimized expr : "你  好  "
 output type    : String
-output domain  : {"你  好  "..="你  好  "}
+output domain  : {""..}
 output         : '你  好  '
 
 
 ast            : ltrim('  분산 데이터베이스    ')
 raw expr       : ltrim('  분산 데이터베이스    ')
 checked expr   : ltrim<String>("  분산 데이터베이스    ")
-optimized expr : "분산 데이터베이스    "
 output type    : String
-output domain  : {"분산 데이터베이스    "..="분산 데이터베이스    "}
+output domain  : {""..}
 output         : '분산 데이터베이스    '
 
 
 ast            : ltrim('   あなたのことが好きです   ')
 raw expr       : ltrim('   あなたのことが好きです   ')
 checked expr   : ltrim<String>("   あなたのことが好きです   ")
-optimized expr : "あなたのことが好きです   "
 output type    : String
-output domain  : {"あなたのことが好きです   "..="あなたのことが好きです   "}
+output domain  : {""..}
 output         : 'あなたのことが好きです   '
 
 
@@ -745,45 +705,40 @@ evaluation (internal):
 ast            : rtrim('   abc   ')
 raw expr       : rtrim('   abc   ')
 checked expr   : rtrim<String>("   abc   ")
-optimized expr : "   abc"
 output type    : String
-output domain  : {"   abc"..="   abc"}
+output domain  : {""..}
 output         : '   abc'
 
 
 ast            : rtrim('  ')
 raw expr       : rtrim('  ')
 checked expr   : rtrim<String>("  ")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : rtrim('  你  好  ')
 raw expr       : rtrim('  你  好  ')
 checked expr   : rtrim<String>("  你  好  ")
-optimized expr : "  你  好"
 output type    : String
-output domain  : {"  你  好"..="  你  好"}
+output domain  : {""..}
 output         : '  你  好'
 
 
 ast            : rtrim('  분산 데이터베이스    ')
 raw expr       : rtrim('  분산 데이터베이스    ')
 checked expr   : rtrim<String>("  분산 데이터베이스    ")
-optimized expr : "  분산 데이터베이스"
 output type    : String
-output domain  : {"  분산 데이터베이스"..="  분산 데이터베이스"}
+output domain  : {""..}
 output         : '  분산 데이터베이스'
 
 
 ast            : rtrim('   あなたのことが好きです   ')
 raw expr       : rtrim('   あなたのことが好きです   ')
 checked expr   : rtrim<String>("   あなたのことが好きです   ")
-optimized expr : "   あなたのことが好きです"
 output type    : String
-output domain  : {"   あなたのことが好きです"..="   あなたのことが好きです"}
+output domain  : {""..}
 output         : '   あなたのことが好きです'
 
 
@@ -822,36 +777,32 @@ evaluation (internal):
 ast            : trim_leading('aaabbaaa', 'a')
 raw expr       : trim_leading('aaabbaaa', 'a')
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
-optimized expr : "bbaaa"
 output type    : String
-output domain  : {"bbaaa"..="bbaaa"}
+output domain  : {""..}
 output         : 'bbaaa'
 
 
 ast            : trim_leading('aaabbaaa', 'aa')
 raw expr       : trim_leading('aaabbaaa', 'aa')
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
-optimized expr : "abbaaa"
 output type    : String
-output domain  : {"abbaaa"..="abbaaa"}
+output domain  : {""..}
 output         : 'abbaaa'
 
 
 ast            : trim_leading('aaaaaaaa', 'a')
 raw expr       : trim_leading('aaaaaaaa', 'a')
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim_leading('aaabbaaa', 'b')
 raw expr       : trim_leading('aaabbaaa', 'b')
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
-optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {"aaabbaaa"..="aaabbaaa"}
+output domain  : {""..}
 output         : 'aaabbaaa'
 
 
@@ -876,27 +827,24 @@ output         : NULL
 ast            : trim_leading('aaaaaaaa', '')
 raw expr       : trim_leading('aaaaaaaa', '')
 checked expr   : trim_leading<String, String>("aaaaaaaa", "")
-optimized expr : "aaaaaaaa"
 output type    : String
-output domain  : {"aaaaaaaa"..="aaaaaaaa"}
+output domain  : {""..}
 output         : 'aaaaaaaa'
 
 
 ast            : trim_leading('분산 데이터베이스', '분산 ')
 raw expr       : trim_leading('분산 데이터베이스', '분산 ')
 checked expr   : trim_leading<String, String>("분산 데이터베이스", "분산 ")
-optimized expr : "데이터베이스"
 output type    : String
-output domain  : {"데이터베이스"..="데이터베이스"}
+output domain  : {""..}
 output         : '데이터베이스'
 
 
 ast            : trim_leading('あなたのことが好きです', 'あなたの')
 raw expr       : trim_leading('あなたのことが好きです', 'あなたの')
 checked expr   : trim_leading<String, String>("あなたのことが好きです", "あなたの")
-optimized expr : "ことが好きです"
 output type    : String
-output domain  : {"ことが好きです"..="ことが好きです"}
+output domain  : {""..}
 output         : 'ことが好きです'
 
 
@@ -973,36 +921,32 @@ evaluation (internal):
 ast            : trim_trailing('aaabbaaa', 'a')
 raw expr       : trim_trailing('aaabbaaa', 'a')
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
-optimized expr : "aaabb"
 output type    : String
-output domain  : {"aaabb"..="aaabb"}
+output domain  : {""..}
 output         : 'aaabb'
 
 
 ast            : trim_trailing('aaabbaaa', 'aa')
 raw expr       : trim_trailing('aaabbaaa', 'aa')
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
-optimized expr : "aaabba"
 output type    : String
-output domain  : {"aaabba"..="aaabba"}
+output domain  : {""..}
 output         : 'aaabba'
 
 
 ast            : trim_trailing('aaaaaaaa', 'a')
 raw expr       : trim_trailing('aaaaaaaa', 'a')
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim_trailing('aaabbaaa', 'b')
 raw expr       : trim_trailing('aaabbaaa', 'b')
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
-optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {"aaabbaaa"..="aaabbaaa"}
+output domain  : {""..}
 output         : 'aaabbaaa'
 
 
@@ -1027,27 +971,24 @@ output         : NULL
 ast            : trim_trailing('aaaaaaaa', '')
 raw expr       : trim_trailing('aaaaaaaa', '')
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "")
-optimized expr : "aaaaaaaa"
 output type    : String
-output domain  : {"aaaaaaaa"..="aaaaaaaa"}
+output domain  : {""..}
 output         : 'aaaaaaaa'
 
 
 ast            : trim_trailing('분산 데이터베이스', '베이스')
 raw expr       : trim_trailing('분산 데이터베이스', '베이스')
 checked expr   : trim_trailing<String, String>("분산 데이터베이스", "베이스")
-optimized expr : "분산 데이터"
 output type    : String
-output domain  : {"분산 데이터"..="분산 데이터"}
+output domain  : {""..}
 output         : '분산 데이터'
 
 
 ast            : trim_trailing('あなたのことが好きです', '好きです')
 raw expr       : trim_trailing('あなたのことが好きです', '好きです')
 checked expr   : trim_trailing<String, String>("あなたのことが好きです", "好きです")
-optimized expr : "あなたのことが"
 output type    : String
-output domain  : {"あなたのことが"..="あなたのことが"}
+output domain  : {""..}
 output         : 'あなたのことが'
 
 
@@ -1124,36 +1065,32 @@ evaluation (internal):
 ast            : trim_both('aaabbaaa', 'a')
 raw expr       : trim_both('aaabbaaa', 'a')
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
-optimized expr : "bb"
 output type    : String
-output domain  : {"bb"..="bb"}
+output domain  : {""..}
 output         : 'bb'
 
 
 ast            : trim_both('aaabbaaa', 'aa')
 raw expr       : trim_both('aaabbaaa', 'aa')
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
-optimized expr : "abba"
 output type    : String
-output domain  : {"abba"..="abba"}
+output domain  : {""..}
 output         : 'abba'
 
 
 ast            : trim_both('aaaaaaaa', 'a')
 raw expr       : trim_both('aaaaaaaa', 'a')
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim_both('aaabbaaa', 'b')
 raw expr       : trim_both('aaabbaaa', 'b')
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
-optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {"aaabbaaa"..="aaabbaaa"}
+output domain  : {""..}
 output         : 'aaabbaaa'
 
 
@@ -1178,36 +1115,32 @@ output         : NULL
 ast            : trim_both('aaaaaaaa', '')
 raw expr       : trim_both('aaaaaaaa', '')
 checked expr   : trim_both<String, String>("aaaaaaaa", "")
-optimized expr : "aaaaaaaa"
 output type    : String
-output domain  : {"aaaaaaaa"..="aaaaaaaa"}
+output domain  : {""..}
 output         : 'aaaaaaaa'
 
 
 ast            : trim_both('  你  好  ', ' ')
 raw expr       : trim_both('  你  好  ', ' ')
 checked expr   : trim_both<String, String>("  你  好  ", " ")
-optimized expr : "你  好"
 output type    : String
-output domain  : {"你  好"..="你  好"}
+output domain  : {""..}
 output         : '你  好'
 
 
 ast            : trim_both('  분산 데이터베이스    ', ' ')
 raw expr       : trim_both('  분산 데이터베이스    ', ' ')
 checked expr   : trim_both<String, String>("  분산 데이터베이스    ", " ")
-optimized expr : "분산 데이터베이스"
 output type    : String
-output domain  : {"분산 데이터베이스"..="분산 데이터베이스"}
+output domain  : {""..}
 output         : '분산 데이터베이스'
 
 
 ast            : trim_both('   あなたのことが好きです   ', ' ')
 raw expr       : trim_both('   あなたのことが好きです   ', ' ')
 checked expr   : trim_both<String, String>("   あなたのことが好きです   ", " ")
-optimized expr : "あなたのことが好きです"
 output type    : String
-output domain  : {"あなたのことが好きです"..="あなたのことが好きです"}
+output domain  : {""..}
 output         : 'あなたのことが好きです'
 
 
@@ -1284,45 +1217,40 @@ evaluation (internal):
 ast            : trim('   abc   ')
 raw expr       : trim('   abc   ')
 checked expr   : trim<String>("   abc   ")
-optimized expr : "abc"
 output type    : String
-output domain  : {"abc"..="abc"}
+output domain  : {""..}
 output         : 'abc'
 
 
 ast            : trim('  ')
 raw expr       : trim('  ')
 checked expr   : trim<String>("  ")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim('  你  好  ')
 raw expr       : trim('  你  好  ')
 checked expr   : trim<String>("  你  好  ")
-optimized expr : "你  好"
 output type    : String
-output domain  : {"你  好"..="你  好"}
+output domain  : {""..}
 output         : '你  好'
 
 
 ast            : trim('  분산 데이터베이스    ')
 raw expr       : trim('  분산 데이터베이스    ')
 checked expr   : trim<String>("  분산 데이터베이스    ")
-optimized expr : "분산 데이터베이스"
 output type    : String
-output domain  : {"분산 데이터베이스"..="분산 데이터베이스"}
+output domain  : {""..}
 output         : '분산 데이터베이스'
 
 
 ast            : trim('   あなたのことが好きです   ')
 raw expr       : trim('   あなたのことが好きです   ')
 checked expr   : trim<String>("   あなたのことが好きです   ")
-optimized expr : "あなたのことが好きです"
 output type    : String
-output domain  : {"あなたのことが好きです"..="あなたのことが好きです"}
+output domain  : {""..}
 output         : 'あなたのことが好きです'
 
 
@@ -1361,36 +1289,32 @@ evaluation (internal):
 ast            : trim(both 'a' from 'aaabbaaa')
 raw expr       : trim_both('aaabbaaa', 'a')
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
-optimized expr : "bb"
 output type    : String
-output domain  : {"bb"..="bb"}
+output domain  : {""..}
 output         : 'bb'
 
 
 ast            : trim(both 'aa' from 'aaabbaaa')
 raw expr       : trim_both('aaabbaaa', 'aa')
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
-optimized expr : "abba"
 output type    : String
-output domain  : {"abba"..="abba"}
+output domain  : {""..}
 output         : 'abba'
 
 
 ast            : trim(both 'a' from 'aaaaaaaa')
 raw expr       : trim_both('aaaaaaaa', 'a')
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim(both 'b' from 'aaabbaaa')
 raw expr       : trim_both('aaabbaaa', 'b')
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
-optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {"aaabbaaa"..="aaabbaaa"}
+output domain  : {""..}
 output         : 'aaabbaaa'
 
 
@@ -1504,36 +1428,32 @@ evaluation (internal):
 ast            : trim(leading 'a' from 'aaabbaaa')
 raw expr       : trim_leading('aaabbaaa', 'a')
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
-optimized expr : "bbaaa"
 output type    : String
-output domain  : {"bbaaa"..="bbaaa"}
+output domain  : {""..}
 output         : 'bbaaa'
 
 
 ast            : trim(leading 'aa' from 'aaabbaaa')
 raw expr       : trim_leading('aaabbaaa', 'aa')
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
-optimized expr : "abbaaa"
 output type    : String
-output domain  : {"abbaaa"..="abbaaa"}
+output domain  : {""..}
 output         : 'abbaaa'
 
 
 ast            : trim(leading 'a' from 'aaaaaaaa')
 raw expr       : trim_leading('aaaaaaaa', 'a')
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim(leading 'b' from 'aaabbaaa')
 raw expr       : trim_leading('aaabbaaa', 'b')
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
-optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {"aaabbaaa"..="aaabbaaa"}
+output domain  : {""..}
 output         : 'aaabbaaa'
 
 
@@ -1647,36 +1567,32 @@ evaluation (internal):
 ast            : trim(trailing 'a' from 'aaabbaaa')
 raw expr       : trim_trailing('aaabbaaa', 'a')
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
-optimized expr : "aaabb"
 output type    : String
-output domain  : {"aaabb"..="aaabb"}
+output domain  : {""..}
 output         : 'aaabb'
 
 
 ast            : trim(trailing 'aa' from 'aaabbaaa')
 raw expr       : trim_trailing('aaabbaaa', 'aa')
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
-optimized expr : "aaabba"
 output type    : String
-output domain  : {"aaabba"..="aaabba"}
+output domain  : {""..}
 output         : 'aaabba'
 
 
 ast            : trim(trailing 'a' from 'aaaaaaaa')
 raw expr       : trim_trailing('aaaaaaaa', 'a')
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
-optimized expr : ""
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : trim(trailing 'b' from 'aaabbaaa')
 raw expr       : trim_trailing('aaabbaaa', 'b')
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
-optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {"aaabbaaa"..="aaabbaaa"}
+output domain  : {""..}
 output         : 'aaabbaaa'
 
 
@@ -2314,36 +2230,36 @@ evaluation (internal):
 ast            : lpad('hi', 2, '?')
 raw expr       : lpad('hi', 2, '?')
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
-optimized expr : "hi"
+optimized expr : lpad<String, UInt64, String>("hi", 2_u64, "?")
 output type    : String
-output domain  : {"hi"..="hi"}
+output domain  : Unknown
 output         : 'hi'
 
 
 ast            : lpad('hi', 4, '?')
 raw expr       : lpad('hi', 4, '?')
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
-optimized expr : "??hi"
+optimized expr : lpad<String, UInt64, String>("hi", 4_u64, "?")
 output type    : String
-output domain  : {"??hi"..="??hi"}
+output domain  : Unknown
 output         : '??hi'
 
 
 ast            : lpad('hi', 0, '?')
 raw expr       : lpad('hi', 0, '?')
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
-optimized expr : ""
+optimized expr : lpad<String, UInt64, String>("hi", 0_u64, "?")
 output type    : String
-output domain  : {""..=""}
+output domain  : Unknown
 output         : ''
 
 
 ast            : lpad('hi', 1, '?')
 raw expr       : lpad('hi', 1, '?')
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
-optimized expr : "h"
+optimized expr : lpad<String, UInt64, String>("hi", 1_u64, "?")
 output type    : String
-output domain  : {"h"..="h"}
+output domain  : Unknown
 output         : 'h'
 
 
@@ -2358,18 +2274,18 @@ error:
 ast            : lpad('hi', 1, '')
 raw expr       : lpad('hi', 1, '')
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
-optimized expr : "h"
+optimized expr : lpad<String, UInt64, String>("hi", 1_u64, "")
 output type    : String
-output domain  : {"h"..="h"}
+output domain  : Unknown
 output         : 'h'
 
 
 ast            : lpad('', 1, '?')
 raw expr       : lpad('', 1, '?')
 checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
-optimized expr : "?"
+optimized expr : lpad<String, UInt64, String>("", 1_u64, "?")
 output type    : String
-output domain  : {"?"..="?"}
+output domain  : Unknown
 output         : '?'
 
 
@@ -2424,36 +2340,36 @@ error:
 ast            : rpad('hi', 2, '?')
 raw expr       : rpad('hi', 2, '?')
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
-optimized expr : "hi"
+optimized expr : rpad<String, UInt64, String>("hi", 2_u64, "?")
 output type    : String
-output domain  : {"hi"..="hi"}
+output domain  : Unknown
 output         : 'hi'
 
 
 ast            : rpad('hi', 4, '?')
 raw expr       : rpad('hi', 4, '?')
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
-optimized expr : "hi??"
+optimized expr : rpad<String, UInt64, String>("hi", 4_u64, "?")
 output type    : String
-output domain  : {"hi??"..="hi??"}
+output domain  : Unknown
 output         : 'hi??'
 
 
 ast            : rpad('hi', 0, '?')
 raw expr       : rpad('hi', 0, '?')
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
-optimized expr : ""
+optimized expr : rpad<String, UInt64, String>("hi", 0_u64, "?")
 output type    : String
-output domain  : {""..=""}
+output domain  : Unknown
 output         : ''
 
 
 ast            : rpad('hi', 1, '?')
 raw expr       : rpad('hi', 1, '?')
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
-optimized expr : "h"
+optimized expr : rpad<String, UInt64, String>("hi", 1_u64, "?")
 output type    : String
-output domain  : {"h"..="h"}
+output domain  : Unknown
 output         : 'h'
 
 
@@ -2468,18 +2384,18 @@ error:
 ast            : rpad('hi', 1, '')
 raw expr       : rpad('hi', 1, '')
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
-optimized expr : "h"
+optimized expr : rpad<String, UInt64, String>("hi", 1_u64, "")
 output type    : String
-output domain  : {"h"..="h"}
+output domain  : Unknown
 output         : 'h'
 
 
 ast            : rpad('', 1, '?')
 raw expr       : rpad('', 1, '?')
 checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
-optimized expr : "?"
+optimized expr : rpad<String, UInt64, String>("", 1_u64, "?")
 output type    : String
-output domain  : {"?"..="?"}
+output domain  : Unknown
 output         : '?'
 
 
@@ -2534,36 +2450,32 @@ error:
 ast            : replace('hi', '', '?')
 raw expr       : replace('hi', '', '?')
 checked expr   : replace<String, String, String>("hi", "", "?")
-optimized expr : "hi"
 output type    : String
-output domain  : {"hi"..="hi"}
+output domain  : {""..}
 output         : 'hi'
 
 
 ast            : replace('hi', '', 'hi')
 raw expr       : replace('hi', '', 'hi')
 checked expr   : replace<String, String, String>("hi", "", "hi")
-optimized expr : "hi"
 output type    : String
-output domain  : {"hi"..="hi"}
+output domain  : {""..}
 output         : 'hi'
 
 
 ast            : replace('hi', 'i', '?')
 raw expr       : replace('hi', 'i', '?')
 checked expr   : replace<String, String, String>("hi", "i", "?")
-optimized expr : "h?"
 output type    : String
-output domain  : {"h?"..="h?"}
+output domain  : {""..}
 output         : 'h?'
 
 
 ast            : replace('hi', 'x', '?')
 raw expr       : replace('hi', 'x', '?')
 checked expr   : replace<String, String, String>("hi", "x", "?")
-optimized expr : "hi"
 output type    : String
-output domain  : {"hi"..="hi"}
+output domain  : {""..}
 output         : 'hi'
 
 
@@ -2595,36 +2507,32 @@ evaluation (internal):
 ast            : translate('abcdefabcdef', 'dc', 'zy')
 raw expr       : translate('abcdefabcdef', 'dc', 'zy')
 checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "zy")
-optimized expr : "abyzefabyzef"
 output type    : String
-output domain  : {"abyzefabyzef"..="abyzefabyzef"}
+output domain  : {""..}
 output         : 'abyzefabyzef'
 
 
 ast            : translate('abcdefabcdef', '', 'zy')
 raw expr       : translate('abcdefabcdef', '', 'zy')
 checked expr   : translate<String, String, String>("abcdefabcdef", "", "zy")
-optimized expr : "abcdefabcdef"
 output type    : String
-output domain  : {"abcdefabcdef"..="abcdefabcdef"}
+output domain  : {""..}
 output         : 'abcdefabcdef'
 
 
 ast            : translate('abcdefabcdef', 'dc', '')
 raw expr       : translate('abcdefabcdef', 'dc', '')
 checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "")
-optimized expr : "abefabef"
 output type    : String
-output domain  : {"abefabef"..="abefabef"}
+output domain  : {""..}
 output         : 'abefabef'
 
 
 ast            : translate('abcdefabcdef', 'dc', 'dc')
 raw expr       : translate('abcdefabcdef', 'dc', 'dc')
 checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "dc")
-optimized expr : "abcdefabcdef"
 output type    : String
-output domain  : {"abcdefabcdef"..="abcdefabcdef"}
+output domain  : {""..}
 output         : 'abcdefabcdef'
 
 
@@ -2807,18 +2715,18 @@ output         : 0
 ast            : locate('bar', 'foobarbar', 5)
 raw expr       : locate('bar', 'foobarbar', 5)
 checked expr   : locate<String, String, UInt64>("bar", "foobarbar", to_uint64<UInt8>(5_u8))
-optimized expr : 7_u64
+optimized expr : locate<String, String, UInt64>("bar", "foobarbar", 5_u64)
 output type    : UInt64
-output domain  : {7..=7}
+output domain  : {0..=18446744073709551615}
 output         : 7
 
 
 ast            : locate('好世', '你好世界', 1)
 raw expr       : locate('好世', '你好世界', 1)
 checked expr   : locate<String, String, UInt64>("好世", "你好世界", to_uint64<UInt8>(1_u8))
-optimized expr : 2_u64
+optimized expr : locate<String, String, UInt64>("好世", "你好世界", 1_u64)
 output type    : UInt64
-output domain  : {2..=2}
+output domain  : {0..=18446744073709551615}
 output         : 2
 
 
@@ -2926,36 +2834,32 @@ candidate functions:
 ast            : soundex('你好中国北京')
 raw expr       : soundex('你好中国北京')
 checked expr   : soundex<String>("你好中国北京")
-optimized expr : "你000"
 output type    : String
-output domain  : {"你000"..="你000"}
+output domain  : {""..}
 output         : '你000'
 
 
 ast            : soundex('')
 raw expr       : soundex('')
 checked expr   : soundex<String>("")
-optimized expr : "0000"
 output type    : String
-output domain  : {"0000"..="0000"}
+output domain  : {""..}
 output         : '0000'
 
 
 ast            : soundex('hello all folks')
 raw expr       : soundex('hello all folks')
 checked expr   : soundex<String>("hello all folks")
-optimized expr : "H4142"
 output type    : String
-output domain  : {"H4142"..="H4142"}
+output domain  : {""..}
 output         : 'H4142'
 
 
 ast            : soundex('#3556 in bugdb')
 raw expr       : soundex('#3556 in bugdb')
 checked expr   : soundex<String>("#3556 in bugdb")
-optimized expr : "I51231"
 output type    : String
-output domain  : {"I51231"..="I51231"}
+output domain  : {""..}
 output         : 'I51231'
 
 
@@ -3030,27 +2934,27 @@ output         : NULL
 ast            : repeat('3', 5)
 raw expr       : repeat('3', 5)
 checked expr   : repeat<String, UInt64>("3", to_uint64<UInt8>(5_u8))
-optimized expr : "33333"
+optimized expr : repeat<String, UInt64>("3", 5_u64)
 output type    : String
-output domain  : {"33333"..="33333"}
+output domain  : Unknown
 output         : '33333'
 
 
 ast            : repeat('你好世界', 3)
 raw expr       : repeat('你好世界', 3)
 checked expr   : repeat<String, UInt64>("你好世界", to_uint64<UInt8>(3_u8))
-optimized expr : "你好世界你好世界你好世界"
+optimized expr : repeat<String, UInt64>("你好世界", 3_u64)
 output type    : String
-output domain  : {"你好世界你好世界你好世界"..="你好世界你好世界你好世界"}
+output domain  : Unknown
 output         : '你好世界你好世界你好世界'
 
 
 ast            : repeat('こんにちは', 2)
 raw expr       : repeat('こんにちは', 2)
 checked expr   : repeat<String, UInt64>("こんにちは", to_uint64<UInt8>(2_u8))
-optimized expr : "こんにちはこんにちは"
+optimized expr : repeat<String, UInt64>("こんにちは", 2_u64)
 output type    : String
-output domain  : {"こんにちはこんにちは"..="こんにちはこんにちは"}
+output domain  : Unknown
 output         : 'こんにちはこんにちは'
 
 
@@ -3104,27 +3008,27 @@ error:
 ast            : insert('Quadratic', 3, 4, 'What')
 raw expr       : insert('Quadratic', 3, 4, 'What')
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), "What")
-optimized expr : "QuWhattic"
+optimized expr : insert<String, Int64, Int64, String>("Quadratic", 3_i64, 4_i64, "What")
 output type    : String
-output domain  : {"QuWhattic"..="QuWhattic"}
+output domain  : {""..}
 output         : 'QuWhattic'
 
 
 ast            : insert('Quadratic', -1, 4, 'What')
 raw expr       : insert('Quadratic', minus(1), 4, 'What')
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<Int16>(minus<UInt8>(1_u8)), to_int64<UInt8>(4_u8), "What")
-optimized expr : "Quadratic"
+optimized expr : insert<String, Int64, Int64, String>("Quadratic", -1_i64, 4_i64, "What")
 output type    : String
-output domain  : {"Quadratic"..="Quadratic"}
+output domain  : {""..}
 output         : 'Quadratic'
 
 
 ast            : insert('Quadratic', 3, 100, 'What')
 raw expr       : insert('Quadratic', 3, 100, 'What')
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(100_u8), "What")
-optimized expr : "QuWhat"
+optimized expr : insert<String, Int64, Int64, String>("Quadratic", 3_i64, 100_i64, "What")
 output type    : String
-output domain  : {"QuWhat"..="QuWhat"}
+output domain  : {""..}
 output         : 'QuWhat'
 
 
@@ -3158,9 +3062,9 @@ output         : NULL
 ast            : insert('你好世界', 1, 2, 'こんにちは')
 raw expr       : insert('你好世界', 1, 2, 'こんにちは')
 checked expr   : insert<String, Int64, Int64, String>("你好世界", to_int64<UInt8>(1_u8), to_int64<UInt8>(2_u8), "こんにちは")
-optimized expr : "こんにちは世界"
+optimized expr : insert<String, Int64, Int64, String>("你好世界", 1_i64, 2_i64, "こんにちは")
 output type    : String
-output domain  : {"こんにちは世界"..="こんにちは世界"}
+output domain  : {""..}
 output         : 'こんにちは世界'
 
 
@@ -3228,18 +3132,18 @@ evaluation (internal):
 ast            : space(0)
 raw expr       : space(0)
 checked expr   : space<UInt64>(to_uint64<UInt8>(0_u8))
-optimized expr : ""
+optimized expr : space<UInt64>(0_u64)
 output type    : String
-output domain  : {""..=""}
+output domain  : Unknown
 output         : ''
 
 
 ast            : space(5)
 raw expr       : space(5)
 checked expr   : space<UInt64>(to_uint64<UInt8>(5_u8))
-optimized expr : "     "
+optimized expr : space<UInt64>(5_u64)
 output type    : String
-output domain  : {"     "..="     "}
+output domain  : Unknown
 output         : '     '
 
 
@@ -3331,18 +3235,18 @@ evaluation (internal):
 ast            : right('', 0)
 raw expr       : right('', 0)
 checked expr   : right<String, UInt64>("", to_uint64<UInt8>(0_u8))
-optimized expr : ""
+optimized expr : right<String, UInt64>("", 0_u64)
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : right('', 1)
 raw expr       : right('', 1)
 checked expr   : right<String, UInt64>("", to_uint64<UInt8>(1_u8))
-optimized expr : ""
+optimized expr : right<String, UInt64>("", 1_u64)
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
@@ -3379,81 +3283,81 @@ evaluation (internal):
 ast            : mid('1234567890', -3, 3)
 raw expr       : mid('1234567890', minus(3), 3)
 checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<UInt8>(3_u8))
-optimized expr : "890"
+optimized expr : substr<String, Int64, UInt64>("1234567890", -3_i64, 3_u64)
 output type    : String
-output domain  : {"890"..="890"}
+output domain  : {""..}
 output         : '890'
 
 
 ast            : mid('1234567890', -3, 4 - 1)
 raw expr       : mid('1234567890', minus(3), minus(4, 1))
 checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8)))
-optimized expr : "890"
+optimized expr : substr<String, Int64, UInt64>("1234567890", -3_i64, 3_u64)
 output type    : String
-output domain  : {"890"..="890"}
+output domain  : {""..}
 output         : '890'
 
 
 ast            : mid('1234567890', -3)
 raw expr       : mid('1234567890', minus(3))
 checked expr   : substr<String, Int64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)))
-optimized expr : "890"
+optimized expr : substr<String, Int64>("1234567890", -3_i64)
 output type    : String
-output domain  : {"890"..="890"}
+output domain  : {""..}
 output         : '890'
 
 
 ast            : substring('', 0, 1)
 raw expr       : substr('', 0, 1)
 checked expr   : substr<String, Int64, UInt64>("", to_int64<UInt8>(0_u8), to_uint64<UInt8>(1_u8))
-optimized expr : ""
+optimized expr : substr<String, Int64, UInt64>("", 0_i64, 1_u64)
 output type    : String
-output domain  : {""..=""}
+output domain  : {""..}
 output         : ''
 
 
 ast            : substr('Sakila' from -4 for 2)
 raw expr       : substr('Sakila', minus(4), 2)
 checked expr   : substr<String, Int64, UInt64>("Sakila", to_int64<Int16>(minus<UInt8>(4_u8)), to_uint64<UInt8>(2_u8))
-optimized expr : "ki"
+optimized expr : substr<String, Int64, UInt64>("Sakila", -4_i64, 2_u64)
 output type    : String
-output domain  : {"ki"..="ki"}
+output domain  : {""..}
 output         : 'ki'
 
 
 ast            : substr('sakila' FROM -4)
 raw expr       : substr('sakila', minus(4))
 checked expr   : substr<String, Int64>("sakila", to_int64<Int16>(minus<UInt8>(4_u8)))
-optimized expr : "kila"
+optimized expr : substr<String, Int64>("sakila", -4_i64)
 output type    : String
-output domain  : {"kila"..="kila"}
+output domain  : {""..}
 output         : 'kila'
 
 
 ast            : substr('abc',2)
 raw expr       : substr('abc', 2)
 checked expr   : substr<String, Int64>("abc", to_int64<UInt8>(2_u8))
-optimized expr : "bc"
+optimized expr : substr<String, Int64>("abc", 2_i64)
 output type    : String
-output domain  : {"bc"..="bc"}
+output domain  : {""..}
 output         : 'bc'
 
 
 ast            : substr('你好世界', 3)
 raw expr       : substr('你好世界', 3)
 checked expr   : substr<String, Int64>("你好世界", to_int64<UInt8>(3_u8))
-optimized expr : "世界"
+optimized expr : substr<String, Int64>("你好世界", 3_i64)
 output type    : String
-output domain  : {"世界"..="世界"}
+output domain  : {""..}
 output         : '世界'
 
 
 ast            : substr('こんにちは', 2)
 raw expr       : substr('こんにちは', 2)
 checked expr   : substr<String, Int64>("こんにちは", to_int64<UInt8>(2_u8))
-optimized expr : "んにちは"
+optimized expr : substr<String, Int64>("こんにちは", 2_i64)
 output type    : String
-output domain  : {"んにちは"..="んにちは"}
+output domain  : {""..}
 output         : 'んにちは'
 
 
@@ -3525,45 +3429,40 @@ evaluation (internal):
 ast            : split('Sakila', 'il')
 raw expr       : split('Sakila', 'il')
 checked expr   : split<String, String>("Sakila", "il")
-optimized expr : ['Sak', 'a']
 output type    : Array(String)
-output domain  : [{"Sak"..="a"}]
+output domain  : [{""..}]
 output         : ['Sak', 'a']
 
 
 ast            : split('sakila', 'a')
 raw expr       : split('sakila', 'a')
 checked expr   : split<String, String>("sakila", "a")
-optimized expr : ['s', 'kil', '']
 output type    : Array(String)
-output domain  : [{""..="s"}]
+output domain  : [{""..}]
 output         : ['s', 'kil', '']
 
 
 ast            : split('abc','b')
 raw expr       : split('abc', 'b')
 checked expr   : split<String, String>("abc", "b")
-optimized expr : ['a', 'c']
 output type    : Array(String)
-output domain  : [{"a"..="c"}]
+output domain  : [{""..}]
 output         : ['a', 'c']
 
 
 ast            : split('你好世界', '好')
 raw expr       : split('你好世界', '好')
 checked expr   : split<String, String>("你好世界", "好")
-optimized expr : ['你', '世界']
 output type    : Array(String)
-output domain  : [{"世界"..="你"}]
+output domain  : [{""..}]
 output         : ['你', '世界']
 
 
 ast            : split('こんにちは', 'に')
 raw expr       : split('こんにちは', 'に')
 checked expr   : split<String, String>("こんにちは", "に")
-optimized expr : ['こん', 'ちは']
 output type    : Array(String)
-output domain  : [{"こん"..="ちは"}]
+output domain  : [{""..}]
 output         : ['こん', 'ちは']
 
 

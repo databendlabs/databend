@@ -58,9 +58,8 @@ candidate functions:
 ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
 raw expr       : array(parse_json('[]'), parse_json('{"foo":"bar"}'))
 checked expr   : array<T0=Variant><T0, T0>(parse_json<String>("[]"), parse_json<String>("{\"foo\":\"bar\"}"))
-optimized expr : ['[]', '{"foo":"bar"}']
 output type    : Array(Variant)
-output domain  : [Undefined]
+output domain  : Unknown
 output         : ['[]', '{"foo":"bar"}']
 
 
@@ -173,63 +172,63 @@ output         : NULL
 ast            : [true, false][1]
 raw expr       : get(array(true, false), 1)
 checked expr   : get<T0=Boolean><Array(T0 NULL), UInt64>(CAST(array<T0=Boolean><T0, T0>(true, false) AS Array(Boolean NULL)), to_uint64<UInt8>(1_u8))
-optimized expr : true
+optimized expr : get<T0=Boolean><Array(T0 NULL), UInt64>([true, false], 1_u64)
 output type    : Boolean NULL
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE} ∪ {NULL}
 output         : true
 
 
 ast            : ['a', 'b', 'c'][2]
 raw expr       : get(array('a', 'b', 'c'), 2)
 checked expr   : get<T0=String><Array(T0 NULL), UInt64>(CAST(array<T0=String><T0, T0, T0>("a", "b", "c") AS Array(String NULL)), to_uint64<UInt8>(2_u8))
-optimized expr : "b"
+optimized expr : get<T0=String><Array(T0 NULL), UInt64>(['a', 'b', 'c'], 2_u64)
 output type    : String NULL
-output domain  : {"b"..="b"}
+output domain  : {"a"..="c"} ∪ {NULL}
 output         : 'b'
 
 
 ast            : [1, 2, 3][1]
 raw expr       : get(array(1, 2, 3), 1)
 checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(1_u8))
-optimized expr : 1_u8
+optimized expr : get<T0=UInt8><Array(T0 NULL), UInt64>([1, 2, 3], 1_u64)
 output type    : UInt8 NULL
-output domain  : {1..=1}
+output domain  : {1..=3} ∪ {NULL}
 output         : 1
 
 
 ast            : [1, 2, 3][3]
 raw expr       : get(array(1, 2, 3), 3)
 checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(3_u8))
-optimized expr : 3_u8
+optimized expr : get<T0=UInt8><Array(T0 NULL), UInt64>([1, 2, 3], 3_u64)
 output type    : UInt8 NULL
-output domain  : {3..=3}
+output domain  : {1..=3} ∪ {NULL}
 output         : 3
 
 
 ast            : [1, null, 3][1]
 raw expr       : get(array(1, NULL, 3), 1)
 checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(1_u8))
-optimized expr : 1_u8
+optimized expr : get<T0=UInt8><Array(T0 NULL), UInt64>([1, NULL, 3], 1_u64)
 output type    : UInt8 NULL
-output domain  : {1..=1}
+output domain  : {0..=3} ∪ {NULL}
 output         : 1
 
 
 ast            : [1, null, 3][2]
 raw expr       : get(array(1, NULL, 3), 2)
 checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(2_u8))
-optimized expr : NULL
+optimized expr : get<T0=UInt8><Array(T0 NULL), UInt64>([1, NULL, 3], 2_u64)
 output type    : UInt8 NULL
-output domain  : {NULL}
+output domain  : {0..=3} ∪ {NULL}
 output         : NULL
 
 
 ast            : [1, 2, 3][4]
 raw expr       : get(array(1, 2, 3), 4)
 checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(4_u8))
-optimized expr : NULL
+optimized expr : get<T0=UInt8><Array(T0 NULL), UInt64>([1, 2, 3], 4_u64)
 output type    : UInt8 NULL
-output domain  : {NULL}
+output domain  : {1..=3} ∪ {NULL}
 output         : NULL
 
 
@@ -260,7 +259,7 @@ evaluation (internal):
 ast            : slice([], 1)
 raw expr       : slice(array(), 1)
 checked expr   : slice<Array(Nothing), UInt64>(array<>(), to_uint64<UInt8>(1_u8))
-optimized expr : [] :: Array(Nothing)
+optimized expr : slice<Array(Nothing), UInt64>([] :: Array(Nothing), 1_u64)
 output type    : Array(Nothing)
 output domain  : []
 output         : []
@@ -269,18 +268,18 @@ output         : []
 ast            : slice([0, 1, 2, 3], 2)
 raw expr       : slice(array(0, 1, 2, 3), 2)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [1, 2, 3]
+optimized expr : slice<T0=UInt8><Array(T0), UInt64>([0, 1, 2, 3], 2_u64)
 output type    : Array(UInt8)
-output domain  : [{1..=3}]
+output domain  : [{0..=3}]
 output         : [1, 2, 3]
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 3)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 3)
 checked expr   : slice<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(3_u8))
-optimized expr : ['c', 'd']
+optimized expr : slice<T0=String><Array(T0), UInt64>(['a', 'b', 'c', 'd'], 3_u64)
 output type    : Array(String)
-output domain  : [{"c"..="d"}]
+output domain  : [{"a"..="d"}]
 output         : ['c', 'd']
 
 
@@ -312,7 +311,7 @@ evaluation (internal):
 ast            : slice([], 1, 2)
 raw expr       : slice(array(), 1, 2)
 checked expr   : slice<Array(Nothing), UInt64, UInt64>(array<>(), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [] :: Array(Nothing)
+optimized expr : slice<Array(Nothing), UInt64, UInt64>([] :: Array(Nothing), 1_u64, 2_u64)
 output type    : Array(Nothing)
 output domain  : []
 output         : []
@@ -321,7 +320,7 @@ output         : []
 ast            : slice([1], 1, 2)
 raw expr       : slice(array(1), 1, 2)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0>(1_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [1]
+optimized expr : slice<T0=UInt8><Array(T0), UInt64, UInt64>([1], 1_u64, 2_u64)
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
 output         : [1]
@@ -330,25 +329,25 @@ output         : [1]
 ast            : slice([NULL, 1, 2, 3], 0, 2)
 raw expr       : slice(array(NULL, 1, 2, 3), 0, 2)
 checked expr   : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [NULL, 1]
+optimized expr : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>([NULL, 1, 2, 3], 0_u64, 2_u64)
 output type    : Array(UInt8 NULL)
-output domain  : [{0..=1} ∪ {NULL}]
+output domain  : [{0..=3} ∪ {NULL}]
 output         : [NULL, 1]
 
 
 ast            : slice([0, 1, 2, 3], 1, 2)
 raw expr       : slice(array(0, 1, 2, 3), 1, 2)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [0, 1]
+optimized expr : slice<T0=UInt8><Array(T0), UInt64, UInt64>([0, 1, 2, 3], 1_u64, 2_u64)
 output type    : Array(UInt8)
-output domain  : [{0..=1}]
+output domain  : [{0..=3}]
 output         : [0, 1]
 
 
 ast            : slice([0, 1, 2, 3], 1, 5)
 raw expr       : slice(array(0, 1, 2, 3), 1, 5)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(5_u8))
-optimized expr : [0, 1, 2, 3]
+optimized expr : slice<T0=UInt8><Array(T0), UInt64, UInt64>([0, 1, 2, 3], 1_u64, 5_u64)
 output type    : Array(UInt8)
 output domain  : [{0..=3}]
 output         : [0, 1, 2, 3]
@@ -357,16 +356,16 @@ output         : [0, 1, 2, 3]
 ast            : slice(['a', 'b', 'c', 'd'], 0, 2)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 0, 2)
 checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
-optimized expr : ['a', 'b']
+optimized expr : slice<T0=String><Array(T0), UInt64, UInt64>(['a', 'b', 'c', 'd'], 0_u64, 2_u64)
 output type    : Array(String)
-output domain  : [{"a"..="b"}]
+output domain  : [{"a"..="d"}]
 output         : ['a', 'b']
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 1, 4)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 1, 4)
 checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(4_u8))
-optimized expr : ['a', 'b', 'c', 'd']
+optimized expr : slice<T0=String><Array(T0), UInt64, UInt64>(['a', 'b', 'c', 'd'], 1_u64, 4_u64)
 output type    : Array(String)
 output domain  : [{"a"..="d"}]
 output         : ['a', 'b', 'c', 'd']
@@ -375,9 +374,9 @@ output         : ['a', 'b', 'c', 'd']
 ast            : slice(['a', 'b', 'c', 'd'], 2, 6)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 2, 6)
 checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(2_u8), to_uint64<UInt8>(6_u8))
-optimized expr : ['b', 'c', 'd']
+optimized expr : slice<T0=String><Array(T0), UInt64, UInt64>(['a', 'b', 'c', 'd'], 2_u64, 6_u64)
 output type    : Array(String)
-output domain  : [{"b"..="d"}]
+output domain  : [{"a"..="d"}]
 output         : ['b', 'c', 'd']
 
 
@@ -600,7 +599,7 @@ candidate functions:
 ast            : array_remove_first([])
 raw expr       : array_remove_first(array())
 checked expr   : array_remove_first<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
+optimized expr : array_remove_first<Array(Nothing)>([] :: Array(Nothing))
 output type    : Array(Nothing)
 output domain  : []
 output         : []
@@ -609,16 +608,16 @@ output         : []
 ast            : array_remove_first([1])
 raw expr       : array_remove_first(array(1))
 checked expr   : array_remove_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0>(1_u8))
-optimized expr : []
+optimized expr : array_remove_first<T0=UInt8><Array(T0)>([1])
 output type    : Array(UInt8)
-output domain  : []
+output domain  : [{1..=1}]
 output         : []
 
 
 ast            : array_remove_first([0, 1, 2, NULL])
 raw expr       : array_remove_first(array(0, 1, 2, NULL))
 checked expr   : array_remove_first<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
-optimized expr : [1, 2, NULL]
+optimized expr : array_remove_first<T0=UInt8 NULL><Array(T0)>([0, 1, 2, NULL])
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=2} ∪ {NULL}]
 output         : [1, 2, NULL]
@@ -627,18 +626,18 @@ output         : [1, 2, NULL]
 ast            : array_remove_first([0, 1, 2, 3])
 raw expr       : array_remove_first(array(0, 1, 2, 3))
 checked expr   : array_remove_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8))
-optimized expr : [1, 2, 3]
+optimized expr : array_remove_first<T0=UInt8><Array(T0)>([0, 1, 2, 3])
 output type    : Array(UInt8)
-output domain  : [{1..=3}]
+output domain  : [{0..=3}]
 output         : [1, 2, 3]
 
 
 ast            : array_remove_first(['a', 'b', 'c', 'd'])
 raw expr       : array_remove_first(array('a', 'b', 'c', 'd'))
 checked expr   : array_remove_first<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
-optimized expr : ['b', 'c', 'd']
+optimized expr : array_remove_first<T0=String><Array(T0)>(['a', 'b', 'c', 'd'])
 output type    : Array(String)
-output domain  : [{"b"..="d"}]
+output domain  : [{"a"..="d"}]
 output         : ['b', 'c', 'd']
 
 
@@ -668,7 +667,7 @@ evaluation (internal):
 ast            : array_remove_last([])
 raw expr       : array_remove_last(array())
 checked expr   : array_remove_last<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
+optimized expr : array_remove_last<Array(Nothing)>([] :: Array(Nothing))
 output type    : Array(Nothing)
 output domain  : []
 output         : []
@@ -677,36 +676,36 @@ output         : []
 ast            : array_remove_last([1])
 raw expr       : array_remove_last(array(1))
 checked expr   : array_remove_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0>(1_u8))
-optimized expr : []
+optimized expr : array_remove_last<T0=UInt8><Array(T0)>([1])
 output type    : Array(UInt8)
-output domain  : []
+output domain  : [{1..=1}]
 output         : []
 
 
 ast            : array_remove_last([0, 1, 2, NULL])
 raw expr       : array_remove_last(array(0, 1, 2, NULL))
 checked expr   : array_remove_last<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
-optimized expr : [0, 1, 2]
+optimized expr : array_remove_last<T0=UInt8 NULL><Array(T0)>([0, 1, 2, NULL])
 output type    : Array(UInt8 NULL)
-output domain  : [{0..=2}]
+output domain  : [{0..=2} ∪ {NULL}]
 output         : [0, 1, 2]
 
 
 ast            : array_remove_last([0, 1, 2, 3])
 raw expr       : array_remove_last(array(0, 1, 2, 3))
 checked expr   : array_remove_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8))
-optimized expr : [0, 1, 2]
+optimized expr : array_remove_last<T0=UInt8><Array(T0)>([0, 1, 2, 3])
 output type    : Array(UInt8)
-output domain  : [{0..=2}]
+output domain  : [{0..=3}]
 output         : [0, 1, 2]
 
 
 ast            : array_remove_last(['a', 'b', 'c', 'd'])
 raw expr       : array_remove_last(array('a', 'b', 'c', 'd'))
 checked expr   : array_remove_last<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
-optimized expr : ['a', 'b', 'c']
+optimized expr : array_remove_last<T0=String><Array(T0)>(['a', 'b', 'c', 'd'])
 output type    : Array(String)
-output domain  : [{"a"..="c"}]
+output domain  : [{"a"..="d"}]
 output         : ['a', 'b', 'c']
 
 
@@ -745,7 +744,7 @@ output         : []
 ast            : array_concat([], [1,2])
 raw expr       : array_concat(array(), array(1, 2))
 checked expr   : array_concat<T0=UInt8><Array(T0), Array(T0)>(CAST(array<>() AS Array(UInt8)), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
-optimized expr : [1, 2]
+optimized expr : array_concat<T0=UInt8><Array(T0), Array(T0)>([], [1, 2])
 output type    : Array(UInt8)
 output domain  : [{1..=2}]
 output         : [1, 2]
@@ -754,7 +753,7 @@ output         : [1, 2]
 ast            : array_concat([false, true], [])
 raw expr       : array_concat(array(false, true), array())
 checked expr   : array_concat<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0, T0>(false, true), CAST(array<>() AS Array(Boolean)))
-optimized expr : [false, true]
+optimized expr : array_concat<T0=Boolean><Array(T0), Array(T0)>([false, true], [])
 output type    : Array(Boolean)
 output domain  : [{FALSE, TRUE}]
 output         : [false, true]
@@ -777,7 +776,7 @@ candidate functions:
 ast            : array_concat([false, true], [true, false])
 raw expr       : array_concat(array(false, true), array(true, false))
 checked expr   : array_concat<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0, T0>(false, true), array<T0=Boolean><T0, T0>(true, false))
-optimized expr : [false, true, true, false]
+optimized expr : array_concat<T0=Boolean><Array(T0), Array(T0)>([false, true], [true, false])
 output type    : Array(Boolean)
 output domain  : [{FALSE, TRUE}]
 output         : [false, true, true, false]
@@ -842,7 +841,7 @@ evaluation (internal):
 ast            : array_prepend(1, [])
 raw expr       : array_prepend(1, array())
 checked expr   : array_prepend<T0=UInt8><T0, Array(T0) NULL>(1_u8, CAST(array<>() AS Array(UInt8) NULL))
-optimized expr : [1]
+optimized expr : array_prepend<T0=UInt8><T0, Array(T0) NULL>(1_u8, [])
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
 output         : [1]
@@ -851,7 +850,7 @@ output         : [1]
 ast            : array_prepend(1, [2, 3, NULL, 4])
 raw expr       : array_prepend(1, array(2, 3, NULL, 4))
 checked expr   : array_prepend<T0=UInt8 NULL><T0, Array(T0) NULL>(CAST(1_u8 AS UInt8 NULL), CAST(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL))
-optimized expr : [1, 2, 3, NULL, 4]
+optimized expr : array_prepend<T0=UInt8 NULL><T0, Array(T0) NULL>(1_u8, [2, 3, NULL, 4])
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=4} ∪ {NULL}]
 output         : [1, 2, 3, NULL, 4]
@@ -860,7 +859,7 @@ output         : [1, 2, 3, NULL, 4]
 ast            : array_prepend('a', ['b', NULL, NULL, 'c', 'd'])
 raw expr       : array_prepend('a', array('b', NULL, NULL, 'c', 'd'))
 checked expr   : array_prepend<T0=String NULL><T0, Array(T0) NULL>(CAST("a" AS String NULL), CAST(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)) AS Array(String NULL) NULL))
-optimized expr : ['a', 'b', NULL, NULL, 'c', 'd']
+optimized expr : array_prepend<T0=String NULL><T0, Array(T0) NULL>("a", ['b', NULL, NULL, 'c', 'd'])
 output type    : Array(String NULL)
 output domain  : [{""..="d"} ∪ {NULL}]
 output         : ['a', 'b', NULL, NULL, 'c', 'd']
@@ -869,16 +868,16 @@ output         : ['a', 'b', NULL, NULL, 'c', 'd']
 ast            : array_prepend(NULL, CAST([2, 3] AS Array(INT8 NULL) NULL))
 raw expr       : array_prepend(NULL, CAST(array(2, 3) AS Array(Int8 NULL) NULL))
 checked expr   : array_prepend<T0=Int8 NULL><T0, Array(T0) NULL>(CAST(NULL AS Int8 NULL), CAST(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL))
-optimized expr : [NULL, 2, 3]
+optimized expr : array_prepend<T0=Int8 NULL><T0, Array(T0) NULL>(NULL, [2, 3])
 output type    : Array(Int8 NULL)
-output domain  : [{0..=3} ∪ {NULL}]
+output domain  : [{2..=3} ∪ {NULL}]
 output         : [NULL, 2, 3]
 
 
 ast            : array_prepend(1, CAST([2, 3] AS Array(INT8 NULL) NULL))
 raw expr       : array_prepend(1, CAST(array(2, 3) AS Array(Int8 NULL) NULL))
 checked expr   : array_prepend<T0=Int16 NULL><T0, Array(T0) NULL>(CAST(1_u8 AS Int16 NULL), CAST(CAST(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL))
-optimized expr : [1, 2, 3]
+optimized expr : array_prepend<T0=Int16 NULL><T0, Array(T0) NULL>(1_i16, [2, 3])
 output type    : Array(Int16 NULL)
 output domain  : [{1..=3}]
 output         : [1, 2, 3]
@@ -911,7 +910,7 @@ evaluation (internal):
 ast            : array_append([], 1)
 raw expr       : array_append(array(), 1)
 checked expr   : array_append<T0=UInt8><Array(T0) NULL, T0>(CAST(array<>() AS Array(UInt8) NULL), 1_u8)
-optimized expr : [1]
+optimized expr : array_append<T0=UInt8><Array(T0) NULL, T0>([], 1_u8)
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
 output         : [1]
@@ -920,7 +919,7 @@ output         : [1]
 ast            : array_append([2, 3, NULL, 4], 5)
 raw expr       : array_append(array(2, 3, NULL, 4), 5)
 checked expr   : array_append<T0=UInt8 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL), CAST(5_u8 AS UInt8 NULL))
-optimized expr : [2, 3, NULL, 4, 5]
+optimized expr : array_append<T0=UInt8 NULL><Array(T0) NULL, T0>([2, 3, NULL, 4], 5_u8)
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=5} ∪ {NULL}]
 output         : [2, 3, NULL, 4, 5]
@@ -929,7 +928,7 @@ output         : [2, 3, NULL, 4, 5]
 ast            : array_append(['b', NULL, NULL, 'c', 'd'], 'e')
 raw expr       : array_append(array('b', NULL, NULL, 'c', 'd'), 'e')
 checked expr   : array_append<T0=String NULL><Array(T0) NULL, T0>(CAST(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)) AS Array(String NULL) NULL), CAST("e" AS String NULL))
-optimized expr : ['b', NULL, NULL, 'c', 'd', 'e']
+optimized expr : array_append<T0=String NULL><Array(T0) NULL, T0>(['b', NULL, NULL, 'c', 'd'], "e")
 output type    : Array(String NULL)
 output domain  : [{""..="e"} ∪ {NULL}]
 output         : ['b', NULL, NULL, 'c', 'd', 'e']
@@ -938,16 +937,16 @@ output         : ['b', NULL, NULL, 'c', 'd', 'e']
 ast            : array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), NULL)
 raw expr       : array_append(CAST(array(1, 2) AS Array(Int8 NULL) NULL), NULL)
 checked expr   : array_append<T0=Int8 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL), CAST(NULL AS Int8 NULL))
-optimized expr : [1, 2, NULL]
+optimized expr : array_append<T0=Int8 NULL><Array(T0) NULL, T0>([1, 2], NULL)
 output type    : Array(Int8 NULL)
-output domain  : [{0..=2} ∪ {NULL}]
+output domain  : [{1..=2} ∪ {NULL}]
 output         : [1, 2, NULL]
 
 
 ast            : array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), 3)
 raw expr       : array_append(CAST(array(1, 2) AS Array(Int8 NULL) NULL), 3)
 checked expr   : array_append<T0=Int16 NULL><Array(T0) NULL, T0>(CAST(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL), CAST(3_u8 AS Int16 NULL))
-optimized expr : [1, 2, 3]
+optimized expr : array_append<T0=Int16 NULL><Array(T0) NULL, T0>([1, 2], 3_i16)
 output type    : Array(Int16 NULL)
 output domain  : [{1..=3}]
 output         : [1, 2, 3]
@@ -2286,99 +2285,99 @@ output         : NULL
 ast            : array_sort_asc_null_first([NULL, NULL, NULL])
 raw expr       : array_sort_asc_null_first(array(NULL, NULL, NULL))
 checked expr   : array_sort_asc_null_first<T0=NULL><Array(T0)>(array<T0=NULL><T0, T0, T0>(NULL, NULL, NULL))
-optimized expr : [NULL, NULL, NULL]
+optimized expr : array_sort_asc_null_first<T0=NULL><Array(T0)>([NULL, NULL, NULL])
 output type    : Array(NULL)
-output domain  : [{NULL}]
+output domain  : Unknown
 output         : [NULL, NULL, NULL]
 
 
 ast            : array_sort_desc_null_first([[], [], []])
 raw expr       : array_sort_desc_null_first(array(array(), array(), array()))
 checked expr   : array_sort_desc_null_first<T0=Array(Nothing)><Array(T0)>(array<T0=Array(Nothing)><T0, T0, T0>(array<>(), array<>(), array<>()))
-optimized expr : [[], [], []]
+optimized expr : array_sort_desc_null_first<T0=Array(Nothing)><Array(T0)>([[], [], []])
 output type    : Array(Array(Nothing))
-output domain  : [[]]
+output domain  : Unknown
 output         : [[], [], []]
 
 
 ast            : array_sort_asc_null_first([{}, {}, {}])
 raw expr       : array_sort_asc_null_first(array(map(array(), array()), map(array(), array()), map(array(), array())))
 checked expr   : array_sort_asc_null_first<T0=Map(Nothing)><Array(T0)>(array<T0=Map(Nothing)><T0, T0, T0>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>())))
-optimized expr : [{}, {}, {}]
+optimized expr : array_sort_asc_null_first<T0=Map(Nothing)><Array(T0)>([{}, {}, {}])
 output type    : Array(Map(Nothing))
-output domain  : [{}]
+output domain  : Unknown
 output         : [{}, {}, {}]
 
 
 ast            : array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_asc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_asc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
-optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
+optimized expr : array_sort_asc_null_first<T0=UInt8><Array(T0)>([8, 20, 1, 2, 3, 4, 5, 6, 7])
 output type    : Array(UInt8)
-output domain  : [{1..=20}]
+output domain  : Unknown
 output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
 ast            : array_sort_asc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_asc_null_last(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_asc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
-optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
+optimized expr : array_sort_asc_null_last<T0=UInt8><Array(T0)>([8, 20, 1, 2, 3, 4, 5, 6, 7])
 output type    : Array(UInt8)
-output domain  : [{1..=20}]
+output domain  : Unknown
 output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
 ast            : array_sort_desc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_desc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_desc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
-optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+optimized expr : array_sort_desc_null_first<T0=UInt8><Array(T0)>([8, 20, 1, 2, 3, 4, 5, 6, 7])
 output type    : Array(UInt8)
-output domain  : [{1..=20}]
+output domain  : Unknown
 output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
 ast            : array_sort_desc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_desc_null_last(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_desc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
-optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+optimized expr : array_sort_desc_null_last<T0=UInt8><Array(T0)>([8, 20, 1, 2, 3, 4, 5, 6, 7])
 output type    : Array(UInt8)
-output domain  : [{1..=20}]
+output domain  : Unknown
 output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
 ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_first(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
-optimized expr : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
+optimized expr : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>([1.2, NULL, 3.4, 5.6, 2.2, NULL])
 output type    : Array(Decimal(2, 1) NULL)
-output domain  : [{0.0..=5.6} ∪ {NULL}]
+output domain  : Unknown
 output         : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 
 
 ast            : array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_last(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
-optimized expr : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
+optimized expr : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>([1.2, NULL, 3.4, 5.6, 2.2, NULL])
 output type    : Array(Decimal(2, 1) NULL)
-output domain  : [{0.0..=5.6} ∪ {NULL}]
+output domain  : Unknown
 output         : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 
 
 ast            : array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
-optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
+optimized expr : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>([1.2, NULL, 3.4, 5.6, 2.2, NULL])
 output type    : Array(Decimal(2, 1) NULL)
-output domain  : [{0.0..=5.6} ∪ {NULL}]
+output domain  : Unknown
 output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 
 
 ast            : array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
-optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
+optimized expr : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>([1.2, NULL, 3.4, 5.6, 2.2, NULL])
 output type    : Array(Decimal(2, 1) NULL)
-output domain  : [{0.0..=5.6} ∪ {NULL}]
+output domain  : Unknown
 output         : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
 
 

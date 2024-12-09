@@ -81,45 +81,45 @@ evaluation (internal):
 ast            : humanize_size(100)
 raw expr       : humanize_size(100)
 checked expr   : humanize_size<Float64>(to_float64<UInt8>(100_u8))
-optimized expr : "100.00 B"
+optimized expr : humanize_size<Float64>(100_f64)
 output type    : String
-output domain  : {"100.00 B"..="100.00 B"}
+output domain  : {""..}
 output         : '100.00 B'
 
 
 ast            : humanize_size(1024.33)
 raw expr       : humanize_size(1024.33)
 checked expr   : humanize_size<Float64>(to_float64<Decimal(6, 2)>(1024.33_d128(6,2)))
-optimized expr : "1.00 KiB"
+optimized expr : humanize_size<Float64>(1024.33_f64)
 output type    : String
-output domain  : {"1.00 KiB"..="1.00 KiB"}
+output domain  : {""..}
 output         : '1.00 KiB'
 
 
 ast            : humanize_number(100)
 raw expr       : humanize_number(100)
 checked expr   : humanize_number<Float64>(to_float64<UInt8>(100_u8))
-optimized expr : "100"
+optimized expr : humanize_number<Float64>(100_f64)
 output type    : String
-output domain  : {"100"..="100"}
+output domain  : {""..}
 output         : '100'
 
 
 ast            : humanize_number(1024.33)
 raw expr       : humanize_number(1024.33)
 checked expr   : humanize_number<Float64>(to_float64<Decimal(6, 2)>(1024.33_d128(6,2)))
-optimized expr : "1.02 thousand"
+optimized expr : humanize_number<Float64>(1024.33_f64)
 output type    : String
-output domain  : {"1.02 thousand"..="1.02 thousand"}
+output domain  : {""..}
 output         : '1.02 thousand'
 
 
 ast            : typeof(humanize_size(100))
 raw expr       : typeof(humanize_size(100))
 checked expr   : typeof<T0=String><T0>(humanize_size<Float64>(to_float64<UInt8>(100_u8)))
-optimized expr : "VARCHAR"
+optimized expr : typeof<T0=String><T0>(humanize_size<Float64>(100_f64))
 output type    : String
-output domain  : {"VARCHAR"..="VARCHAR"}
+output domain  : {""..}
 output         : 'VARCHAR'
 
 
@@ -200,45 +200,42 @@ evaluation (internal):
 ast            : inet_aton('1.2.3.4')
 raw expr       : inet_aton('1.2.3.4')
 checked expr   : inet_aton<String>("1.2.3.4")
-optimized expr : 16909060_u32
 output type    : UInt32
-output domain  : {16909060..=16909060}
+output domain  : Unknown
 output         : 16909060
 
 
 ast            : try_inet_aton('10.0.5.9000')
 raw expr       : try_inet_aton('10.0.5.9000')
 checked expr   : try_inet_aton<String>("10.0.5.9000")
-optimized expr : NULL
 output type    : UInt32 NULL
-output domain  : {NULL}
+output domain  : {0..=4294967295} ∪ {NULL}
 output         : NULL
 
 
 ast            : try_inet_aton('10.0.5.9')
 raw expr       : try_inet_aton('10.0.5.9')
 checked expr   : try_inet_aton<String>("10.0.5.9")
-optimized expr : 167773449_u32
 output type    : UInt32 NULL
-output domain  : {167773449..=167773449}
+output domain  : {0..=4294967295} ∪ {NULL}
 output         : 167773449
 
 
 ast            : inet_ntoa(16909060)
 raw expr       : inet_ntoa(16909060)
 checked expr   : inet_ntoa<Int64>(to_int64<UInt32>(16909060_u32))
-optimized expr : "1.2.3.4"
+optimized expr : inet_ntoa<Int64>(16909060_i64)
 output type    : String
-output domain  : {"1.2.3.4"..="1.2.3.4"}
+output domain  : Unknown
 output         : '1.2.3.4'
 
 
 ast            : try_inet_ntoa(121211111111111)
 raw expr       : try_inet_ntoa(121211111111111)
 checked expr   : try_inet_ntoa<Int64>(to_int64<UInt64>(121211111111111_u64))
-optimized expr : NULL
+optimized expr : try_inet_ntoa<Int64>(121211111111111_i64)
 output type    : String NULL
-output domain  : {NULL}
+output domain  : {""..} ∪ {NULL}
 output         : NULL
 
 
