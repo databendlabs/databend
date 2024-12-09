@@ -958,6 +958,18 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("flight_connection_max_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The maximum retry count for cluster flight. Disable if 0.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=10)),
+                }),
+                ("flight_connection_retry_interval", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The retry interval of cluster flight is in seconds.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=30)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -1100,7 +1112,7 @@ impl DefaultSettings {
                 // If not a valid u64, try parsing as f64
                 match v.parse::<f64>() {
                     Ok(f) if f.fract() == 0.0 && f >= 0.0 && f <= u64::MAX as f64 => {
-                        Ok(f.trunc() as u64) /* Convert to u64 if no fractional part, non-negative, and within u64 range */
+                        Ok(f.trunc() as u64) // Convert to u64 if no fractional part, non-negative, and within u64 range
                     }
                     _ => Err(ErrorCode::WrongValueForVariable(format!(
                         "{} is not a valid integer value",

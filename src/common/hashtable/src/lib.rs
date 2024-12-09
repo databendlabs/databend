@@ -17,7 +17,6 @@
 #![feature(core_intrinsics)]
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
-#![feature(new_uninit)]
 #![feature(ptr_metadata)]
 #![feature(maybe_uninit_slice)]
 #![feature(trusted_len)]

@@ -14,17 +14,14 @@ class GlobalCookieJar(RequestsCookieJar):
         super().__init__()
 
     def set_cookie(self, cookie: Cookie, *args, **kwargs):
+        assert cookie.path == "/", cookie
+        # "" is prefix of any host name or IP, so it will be applied
         cookie.domain = ""
-        cookie.path = "/"
         super().set_cookie(cookie, *args, **kwargs)
-
-    def get_dict(self, domain=None, path=None):
-        # 忽略 domain 和 path 参数，返回所有 Cookie
-        return {cookie.name: cookie.value for cookie in self}
 
 
 def do_query(session_client, query, session_state=None):
-    url = f"http://localhost:8000/v1/query"
+    url = f"http://127.0.0.1:8000/v1/query"
     query_payload = {
         "sql": query,
         "pagination": {"wait_time_secs": 100, "max_rows_per_page": 2},
@@ -47,12 +44,12 @@ def test_simple():
     resp = do_query(client, "select 1")
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"] == [["1"]], resp.text
-    sid = client.cookies.get("session_id")
-    # print(sid)
+    # print(client.cookies)
+    sid = client.cookies.get("session_id", path="/")
 
     last_access_time1 = int(client.cookies.get("last_access_time"))
     # print(last_access_time1)
-    assert time.time() - 10 < last_access_time1 < time.time()
+    assert time.time() - 10 < last_access_time1 <= time.time()
 
     time.sleep(1.5)
 
@@ -60,9 +57,10 @@ def test_simple():
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"] == [["1"]], resp.text
     sid2 = client.cookies.get("session_id")
+    # print(client.cookies)
     last_access_time2 = int(client.cookies.get("last_access_time"))
     assert sid2 == sid
-    assert last_access_time1 < last_access_time2 < time.time()
+    assert last_access_time1 < last_access_time2 <= time.time()
 
 
 def test_temp_table():

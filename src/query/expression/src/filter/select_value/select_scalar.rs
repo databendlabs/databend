@@ -19,7 +19,7 @@ use crate::filter::Selector;
 use crate::types::ValueType;
 use crate::Scalar;
 
-impl<'a> Selector<'a> {
+impl Selector<'_> {
     #[allow(clippy::too_many_arguments)]
     // Select indices by comparing two scalars.
     pub(crate) fn select_scalars<

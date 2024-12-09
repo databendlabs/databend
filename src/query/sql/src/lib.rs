@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(non_local_definitions)]
 #![feature(box_patterns)]
 #![feature(iterator_try_reduce)]
 #![feature(let_chains)]

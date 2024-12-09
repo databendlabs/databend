@@ -35,7 +35,7 @@ struct QueryFragmentsActionsWrap<'a> {
     metadata: &'a MetadataRef,
 }
 
-impl<'a> Display for QueryFragmentsActionsWrap<'a> {
+impl Display for QueryFragmentsActionsWrap<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         for (index, fragment_actions) in self.inner.fragments_actions.iter().enumerate() {
             if index != 0 {
@@ -63,7 +63,7 @@ struct QueryFragmentActionsWrap<'a> {
     metadata: &'a MetadataRef,
 }
 
-impl<'a> Display for QueryFragmentActionsWrap<'a> {
+impl Display for QueryFragmentActionsWrap<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         writeln!(f, "Fragment {}:", self.inner.fragment_id)?;
 

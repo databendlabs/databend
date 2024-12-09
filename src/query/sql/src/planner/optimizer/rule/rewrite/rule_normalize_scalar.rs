@@ -40,13 +40,11 @@ fn remove_true_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
 
 fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
     if predicates.iter().any(is_falsy) {
-        vec![
-            ConstantExpr {
-                span: None,
-                value: Scalar::Boolean(false),
-            }
-            .into(),
-        ]
+        vec![ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(false),
+        }
+        .into()]
     } else {
         predicates
     }
