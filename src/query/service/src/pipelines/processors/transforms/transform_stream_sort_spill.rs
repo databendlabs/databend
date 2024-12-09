@@ -427,7 +427,7 @@ where
                 if self.current.len() == 1 {
                     let mut s = self.current.pop().unwrap();
                     s.restore_first().await?;
-                    self.output_data = Some(s.pop_front_data());
+                    self.output_data = Some(s.take_next_bounded_block());
 
                     if !s.is_empty() {
                         if s.should_include_first() {
@@ -709,7 +709,7 @@ impl<R: Rows> SortedStream for BoundBlockStream<R> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
-            let data = self.pop_front_data();
+            let data = self.take_next_bounded_block();
             let col = sort_column(&data, self.sort_row_offset).clone();
             Ok((Some((data, col)), false))
         } else {
@@ -730,24 +730,24 @@ impl<R: Rows> BoundBlockStream<R> {
         }
     }
 
-    fn pop_front_data(&mut self) -> DataBlock {
+    fn take_next_bounded_block(&mut self) -> DataBlock {
         let Some(bound) = &self.bound else {
-            let mut block = self.blocks.pop_front().unwrap();
-            return block.data.take().unwrap();
+            return self.take_next_block();
         };
 
         let block = self.blocks.front_mut().unwrap();
-        let data = block.data.as_ref().unwrap();
-        let rows = R::from_column(sort_column(data, self.sort_row_offset)).unwrap();
-        debug_assert!(rows.len() > 0);
-        debug_assert!(bound.len() == 1);
-        let bound = bound.row(0);
-        if let Some(pos) = partition_point(&rows, &bound) {
+        if let Some(pos) =
+            block_split_off_position(block.data.as_ref().unwrap(), bound, self.sort_row_offset)
+        {
             block.slice(pos, self.sort_row_offset)
         } else {
-            let mut block = self.blocks.pop_front().unwrap();
-            block.data.take().unwrap()
+            self.take_next_block()
         }
+    }
+
+    fn take_next_block(&mut self) -> DataBlock {
+        let mut block = self.blocks.pop_front().unwrap();
+        block.data.take().unwrap()
     }
 
     async fn restore_first(&mut self) -> Result<()> {
@@ -803,6 +803,18 @@ impl<R: Rows> BoundBlockStream<R> {
         }
         Ok(())
     }
+}
+
+fn block_split_off_position<R: Rows>(
+    data: &DataBlock,
+    bound: &R,
+    sort_row_offset: usize,
+) -> Option<usize> {
+    let rows = R::from_column(sort_column(data, sort_row_offset)).unwrap();
+    debug_assert!(rows.len() > 0);
+    debug_assert!(bound.len() == 1);
+    let bound = bound.row(0);
+    partition_point(&rows, &bound)
 }
 
 /// partition_point find the first element that is greater than bound
@@ -971,7 +983,7 @@ mod tests {
         sort_desc: Arc<Vec<SortColumnDescription>>,
         bound: Column,
         block_part: usize,
-        want: Option<Column>,
+        want: Column,
     ) -> Result<()> {
         let (schema, block) = test_data();
         let block = DataBlock::sort(&block, &sort_desc, None)?;
@@ -997,12 +1009,9 @@ mod tests {
             spiller: spiller.clone(),
         };
 
-        let (got, _) = stream.async_next().await?;
-
-        match want {
-            Some(col) => assert_eq!(col, got.unwrap().1),
-            None => assert!(got.is_none(), "{:?}", &got),
-        }
+        let data = stream.take_next_bounded_block();
+        let got = sort_column(&data, stream.sort_row_offset).clone();
+        assert_eq!(want, got);
 
         Ok(())
     }
@@ -1033,16 +1042,7 @@ mod tests {
                 sort_desc.clone(),
                 Int32Type::from_data(vec![5]),
                 4,
-                Some(Int32Type::from_data(vec![3, 5])),
-            )
-            .await?;
-
-            run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
-                spiller.clone(),
-                sort_desc.clone(),
-                Int32Type::from_data(vec![2]),
-                4,
-                None,
+                Int32Type::from_data(vec![3, 5]),
             )
             .await?;
 
@@ -1051,7 +1051,7 @@ mod tests {
                 sort_desc.clone(),
                 Int32Type::from_data(vec![8]),
                 4,
-                Some(Int32Type::from_data(vec![3, 5, 7, 7])),
+                Int32Type::from_data(vec![3, 5, 7, 7]),
             )
             .await?;
         }
@@ -1068,7 +1068,7 @@ mod tests {
                 sort_desc.clone(),
                 StringType::from_data(vec!["f"]),
                 4,
-                Some(StringType::from_data(vec!["w", "h", "g", "f"])),
+                StringType::from_data(vec!["w", "h", "g", "f"]),
             )
             .await?;
         }
