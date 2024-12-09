@@ -25,6 +25,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::EmptySink;
+use databend_common_pipeline_sources::EmptySource;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
@@ -266,8 +269,6 @@ impl MutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
-        let mut build_res = PipelineBuildResult::create();
-
         // Check if the filter is a constant.
         let mut truncate_table = mutation.truncate_table;
         if let Some(filter) = &mutation.direct_filter
@@ -284,7 +285,7 @@ impl MutationInterpreter {
                 truncate_table = true;
             } else if !filter_result {
                 // The update/delete condition is always false, do nothing.
-                return Ok(Some(build_res));
+                return self.no_effect_mutation();
             }
         }
 
@@ -295,15 +296,16 @@ impl MutationInterpreter {
         // Check if table is empty.
         let Some(snapshot) = snapshot else {
             // No snapshot, no mutation.
-            return Ok(Some(build_res));
+            return self.no_effect_mutation();
         };
         if snapshot.summary.row_count == 0 {
             // Empty snapshot, no mutation.
-            return Ok(Some(build_res));
+            return self.no_effect_mutation();
         }
 
         if mutation.mutation_type == MutationType::Delete {
             if truncate_table {
+                let mut build_res = PipelineBuildResult::create();
                 self.ctx.add_mutation_status(MutationStatus {
                     insert_rows: 0,
                     deleted_rows: snapshot.summary.row_count,
@@ -324,6 +326,15 @@ impl MutationInterpreter {
         } else {
             Ok(None)
         }
+    }
+
+    fn no_effect_mutation(&self) -> Result<Option<PipelineBuildResult>> {
+        let mut build_res = PipelineBuildResult::create();
+        build_res.main_pipeline.add_source(EmptySource::create, 1)?;
+        build_res
+            .main_pipeline
+            .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        Ok(Some(build_res))
     }
 
     async fn mutation_source_partitions(
