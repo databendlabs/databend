@@ -22,6 +22,7 @@ use bumpalo::Bump;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -30,11 +31,15 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StateAddr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -50,6 +55,8 @@ pub struct PartialSingleStateAggregator {
     places: Vec<StateAddr>,
     arg_indices: Vec<Vec<usize>>,
     funcs: Vec<AggregateFunctionRef>,
+    func_ctx: FunctionContext,
+    filter: Option<Expr>,
 
     start: Instant,
     first_block_start: Option<Instant>,
@@ -58,7 +65,7 @@ pub struct PartialSingleStateAggregator {
 }
 
 impl PartialSingleStateAggregator {
-    pub fn try_new(params: &Arc<AggregatorParams>) -> Result<Self> {
+    pub fn try_new(params: &Arc<AggregatorParams>, func_ctx: FunctionContext) -> Result<Self> {
         assert!(!params.offsets_aggregate_states.is_empty());
 
         let arena = Bump::new();
@@ -83,6 +90,8 @@ impl PartialSingleStateAggregator {
             arena,
             places,
             funcs: params.aggregate_functions.clone(),
+            func_ctx,
+            filter: params.pushdown_filter.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
             start: Instant::now(),
             first_block_start: None,
@@ -106,6 +115,22 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
+        let validity = self
+            .filter
+            .as_ref()
+            .map(|expr| {
+                let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let res = evaluator
+                    .run(expr)?
+                    .convert_to_full_column(&DataType::Boolean, block.num_rows())
+                    .as_boolean()
+                    .cloned()
+                    .unwrap();
+                Ok::<_, ErrorCode>(res)
+            })
+            .transpose()?;
+        let validity = Bitmap::map_all_sets_to_none(validity);
+
         let block = block.consume_convert_to_full();
 
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -119,7 +144,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             } else {
                 let columns =
                     InputColumns::new_block_proxy(self.arg_indices[idx].as_slice(), &block);
-                func.accumulate(place, columns, None, block.num_rows())?;
+                func.accumulate(place, columns, validity.as_ref(), block.num_rows())?;
             }
         }
 

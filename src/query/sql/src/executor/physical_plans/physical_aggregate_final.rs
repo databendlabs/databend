@@ -16,13 +16,16 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::SortDesc;
+use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFunctionDesc;
@@ -37,6 +40,7 @@ use crate::plans::DummyTableScan;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
+use crate::TypeCheck;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -106,6 +110,7 @@ impl PhysicalPlanBuilder {
             mode: agg.mode,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
+            pushdown_filter: agg.pushdown_filter.clone(),
         };
 
         // 2. Build physical plan.
@@ -115,6 +120,20 @@ impl PhysicalPlanBuilder {
 
         let result = match &agg.mode {
             AggregateMode::Partial => {
+                let pushdown_filter =
+                    agg.pushdown_filter
+                        .iter()
+                        .map(|expr| {
+                            let expr = expr.type_check(input_schema.as_ref())?.project_column_ref(
+                                |index| input_schema.index_of(&index.to_string()).unwrap(),
+                            );
+                            let expr = cast_expr_to_non_null_boolean(expr)?;
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            Ok(expr.as_remote_expr())
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
                 let group_by_display = agg
                     .group_items
                     .iter()
@@ -210,6 +229,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                                 rank_limit: None,
+                                pushdown_filter,
                             }
                         } else {
                             AggregatePartial {
@@ -221,6 +241,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                                 rank_limit,
+                                pushdown_filter,
                             }
                         };
 
@@ -290,6 +311,7 @@ impl PhysicalPlanBuilder {
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
                                 rank_limit: None,
+                                pushdown_filter,
                             })
                         } else {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
@@ -301,6 +323,7 @@ impl PhysicalPlanBuilder {
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
                                 rank_limit,
+                                pushdown_filter,
                             })
                         }
                     }

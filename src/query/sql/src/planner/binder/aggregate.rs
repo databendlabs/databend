@@ -529,14 +529,14 @@ impl Binder {
             mode: AggregateMode::Initial,
             group_items: agg_info.group_items.clone(),
             aggregate_functions: agg_info.aggregate_functions.clone(),
-            from_distinct: false,
-            rank_limit: None,
 
             grouping_sets: agg_info.grouping_sets.as_ref().map(|g| GroupingSets {
                 grouping_id_index: g.grouping_id_column.index,
                 sets: g.sets.clone(),
                 dup_group_items: g.dup_group_items.clone(),
             }),
+
+            ..Default::default()
         };
         new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
 

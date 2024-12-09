@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use super::ScalarExpr;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -67,6 +68,7 @@ pub struct Aggregate {
     pub rank_limit: Option<(Vec<SortItem>, usize)>,
 
     pub grouping_sets: Option<GroupingSets>,
+    pub pushdown_filter: Vec<ScalarExpr>,
 }
 
 impl Default for Aggregate {
@@ -78,6 +80,7 @@ impl Default for Aggregate {
             from_distinct: false,
             rank_limit: None,
             grouping_sets: None,
+            pushdown_filter: vec![],
         }
     }
 }
@@ -93,6 +96,11 @@ impl Aggregate {
             used_columns.insert(agg.index);
             used_columns.extend(agg.scalar.used_columns())
         }
+
+        for p in self.pushdown_filter.iter() {
+            used_columns.extend(p.used_columns());
+        }
+
         Ok(used_columns)
     }
 

@@ -19,6 +19,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 
 use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
@@ -40,6 +41,7 @@ pub struct AggregatePartial {
     pub rank_limit: Option<(Vec<SortDesc>, usize)>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+    pub pushdown_filter: Vec<RemoteExpr>,
 }
 
 impl AggregatePartial {

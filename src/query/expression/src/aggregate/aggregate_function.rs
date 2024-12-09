@@ -158,6 +158,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(None)
     }
 
+    fn ignore_null_values(&self) -> bool {
+        true
+    }
+
     fn get_if_condition(&self, _columns: InputColumns) -> Option<Bitmap> {
         None
     }

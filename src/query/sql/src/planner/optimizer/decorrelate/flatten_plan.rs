@@ -621,6 +621,7 @@ impl SubqueryRewriter {
                     from_distinct: aggregate.from_distinct,
                     rank_limit: aggregate.rank_limit.clone(),
                     grouping_sets: aggregate.grouping_sets.clone(),
+                    pushdown_filter: aggregate.pushdown_filter.clone(),
                 }
                 .into(),
             ),
