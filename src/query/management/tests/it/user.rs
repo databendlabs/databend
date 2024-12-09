@@ -530,8 +530,8 @@ mod update {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_with_conflict_when_writing_back()
-    -> databend_common_exception::Result<()> {
+    async fn test_update_user_with_conflict_when_writing_back(
+    ) -> databend_common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(

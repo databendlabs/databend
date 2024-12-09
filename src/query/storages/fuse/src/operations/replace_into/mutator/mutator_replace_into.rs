@@ -435,9 +435,10 @@ impl Partitioner {
                 let row_bloom_hashes: Vec<Option<&u64>> = column_bloom_hashes
                     .iter()
                     .filter_map(|(hashes, validity)| match validity {
-                        Some(v) if v.null_count() != 0 => v
-                            .get(row_idx)
-                            .map(|v| if v { hashes.get(row_idx) } else { None }),
+                        Some(v) if v.null_count() != 0 => {
+                            v.get(row_idx)
+                                .map(|v| if v { hashes.get(row_idx) } else { None })
+                        }
                         _ => Some(hashes.get(row_idx)),
                     })
                     .collect();

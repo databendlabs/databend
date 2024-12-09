@@ -177,7 +177,6 @@ fn test_agg_hashtable() {
         ]);
 
         let block_expected = DataBlock::new_from_columns(expected_results.clone());
-
         assert_block_value_sort_eq(&block, &block_expected);
     }
 }

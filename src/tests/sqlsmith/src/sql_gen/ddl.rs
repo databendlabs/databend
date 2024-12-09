@@ -63,7 +63,7 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
     TypeName::Geography,
 ];
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_base_tables(&mut self) -> Vec<(DropTableStmt, CreateTableStmt)> {
         let mut tables = Vec::with_capacity(BASE_TABLE_NAMES.len());
 

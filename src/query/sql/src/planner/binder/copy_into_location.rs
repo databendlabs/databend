@@ -29,7 +29,7 @@ use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Plan;
 use crate::BindContext;
 
-impl<'a> Binder {
+impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_copy_into_location(
         &mut self,

@@ -72,11 +72,9 @@ mod tests {
         let res: Result<Foo, MetaAPIError> = reply_to_api_result(msg);
         match res {
             Err(MetaAPIError::NetworkError(MetaNetworkError::InvalidReply(inv_reply))) => {
-                assert!(
-                    inv_reply
-                        .to_string()
-                        .starts_with("InvalidReply: can not decode RaftReply.data")
-                );
+                assert!(inv_reply
+                    .to_string()
+                    .starts_with("InvalidReply: can not decode RaftReply.data"));
             }
             _ => {
                 unreachable!("expect InvalidReply")
@@ -92,11 +90,9 @@ mod tests {
         let res: Result<Foo, MetaAPIError> = reply_to_api_result(msg);
         match res {
             Err(MetaAPIError::NetworkError(MetaNetworkError::InvalidReply(inv_reply))) => {
-                assert!(
-                    inv_reply
-                        .to_string()
-                        .starts_with("InvalidReply: can not decode RaftReply.error")
-                );
+                assert!(inv_reply
+                    .to_string()
+                    .starts_with("InvalidReply: can not decode RaftReply.error"));
             }
             _ => {
                 unreachable!("expect InvalidReply")

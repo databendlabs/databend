@@ -100,7 +100,7 @@ impl Semaphore {
     }
 }
 
-impl<'a> Drop for SemaphoreGuard<'a> {
+impl Drop for SemaphoreGuard<'_> {
     fn drop(&mut self) {
         self.sem.release();
     }
