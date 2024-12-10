@@ -24,6 +24,7 @@ use msql_srv::MysqlShim;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
 use mysql_common::Value;
+use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::Expr;
 use sqlparser::ast::SelectItem;
 use sqlparser::ast::SetExpr;
@@ -186,11 +187,22 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     if let TableFactor::Table { name, .. } = &select.from[0].relation {
                         table = Some(name.0[0].value.clone());
                     }
-                    if let Some(Expr::InList { expr, list, .. }) = &select.selection {
-                        if let Expr::Identifier(ident) = *expr.clone() {
-                            key = Some(ident.value.clone());
-                            in_list_keys.extend(list.clone());
+                    match &select.selection {
+                        Some(Expr::InList { expr, list, .. }) => {
+                            if let Expr::Identifier(ident) = *expr.clone() {
+                                key = Some(ident.value.clone());
+                                in_list_keys.extend(list.clone());
+                            }
                         }
+                        Some(Expr::BinaryOp { left, op, right }) => {
+                            if op == &BinaryOperator::Eq {
+                                if let Expr::Identifier(ident) = *left.clone() {
+                                    key = Some(ident.value.clone());
+                                    in_list_keys.push(*right.clone());
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
