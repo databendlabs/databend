@@ -154,6 +154,9 @@ pub struct QueryContext {
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
     target_segment_locs: Arc<DashMap<SegmentIndex, Location>>,
+    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
+    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
+    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
@@ -180,6 +183,7 @@ impl QueryContext {
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
             target_segment_locs: Arc::new(DashMap::new()),
+            m_cte_temp_table: Arc::new(Default::default()),
         })
     }
 

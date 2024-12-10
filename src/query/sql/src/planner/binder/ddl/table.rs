@@ -1283,7 +1283,6 @@ impl Binder {
                 _hilbert_index \
             "
         );
-
         let tokens = tokenize_sql(query.as_str())?;
         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
         let Statement::Query(query) = &stmt else {
@@ -1291,8 +1290,6 @@ impl Binder {
         };
         let mut new_bind_context = BindContext::new();
         let (s_expr, new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
-        // Wrap `LogicalMaterializedCte` to `s_expr`
-        let s_expr = new_bind_context.cte_context.wrap_m_cte(s_expr);
         let new_bind_context = Box::new(new_bind_context);
         bind_context.parent = Some(new_bind_context.clone());
         let cluster_by = OptimizeClusterBy {
