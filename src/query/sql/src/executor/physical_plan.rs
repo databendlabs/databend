@@ -873,9 +873,11 @@ impl PhysicalPlan {
                     ),
                     v.name_mapping.keys().cloned().collect(),
                 );
-                labels.insert(String::from("Total partitions"), vec![
-                    v.source.statistics.partitions_total.to_string(),
-                ]);
+                labels.insert(String::from("Total partitions"), vec![v
+                    .source
+                    .statistics
+                    .partitions_total
+                    .to_string()]);
             }
             PhysicalPlan::Filter(v) => {
                 labels.insert(

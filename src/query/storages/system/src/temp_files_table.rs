@@ -255,11 +255,6 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
         }
     }
 
-    pub fn limit(mut self, limit: usize) -> Self {
-        self.limit = Some(limit);
-        self
-    }
-
     pub fn limit_opt(mut self, limit: Option<usize>) -> Self {
         self.limit = limit;
         self

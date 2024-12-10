@@ -222,7 +222,7 @@ impl<'a> SettingsIter<'a> {
     }
 }
 
-impl<'a> Iterator for SettingsIter<'a> {
+impl Iterator for SettingsIter<'_> {
     type Item = SettingsItem;
 
     fn next(&mut self) -> Option<Self::Item> {

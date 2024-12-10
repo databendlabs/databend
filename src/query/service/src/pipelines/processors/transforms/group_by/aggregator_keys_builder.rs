@@ -68,7 +68,7 @@ pub struct BinaryKeysColumnBuilder<'a> {
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> BinaryKeysColumnBuilder<'a> {
+impl BinaryKeysColumnBuilder<'_> {
     pub fn create(capacity: usize, value_capacity: usize) -> Self {
         BinaryKeysColumnBuilder {
             inner_builder: BinaryColumnBuilder::with_capacity(capacity, value_capacity),
@@ -138,7 +138,7 @@ pub struct DictionaryBinaryKeysColumnBuilder<'a> {
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> DictionaryBinaryKeysColumnBuilder<'a> {
+impl DictionaryBinaryKeysColumnBuilder<'_> {
     pub fn create(_: usize, _: usize) -> Self {
         DictionaryBinaryKeysColumnBuilder {
             bytes_size: 0,
