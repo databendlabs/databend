@@ -70,7 +70,14 @@ pub fn compress_integer<T: IntegerType>(
             let input_buf = bytemuck::cast_slice(col.as_slice());
             c.compress(input_buf, buf)
         }
-        IntCompressor::Extend(c) => c.compress(col, &stats, &write_options, buf),
+        IntCompressor::Extend(c) => {
+            if T::USE_COMMON_COMPRESSION {
+                return Err(Error::NotYetImplemented(
+                    "Not support Extend compressor".to_string(),
+                ));
+            }
+            c.compress(col, &stats, &write_options, buf)
+        }
     }?;
     buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
     buf[pos + 4..pos + 8]

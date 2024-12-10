@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use ethnum::i256;
 
 use super::row_converter::null_sentinel;
@@ -95,6 +97,14 @@ impl FixedLengthEncoding for F64 {
         let s = self.to_bits() as i64;
         let val = s ^ (((s >> 63) as u64) >> 1) as i64;
         val.encode()
+    }
+}
+
+impl FixedLengthEncoding for months_days_micros {
+    type Encoded = [u8; 16];
+
+    fn encode(self) -> [u8; 16] {
+        self.to_be_bytes()
     }
 }
 

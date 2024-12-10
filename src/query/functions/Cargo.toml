@@ -20,6 +20,7 @@ crc32fast = { workspace = true }
 ctor = { workspace = true }
 
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-hashtable = { workspace = true }

@@ -28,6 +28,8 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumnBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
@@ -122,6 +124,7 @@ pub enum Scalar {
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
     Geometry(Vec<u8>),
+    Interval(Vec<u8>),
     Geography(Geography),
 }
 
@@ -144,6 +147,7 @@ pub enum ScalarRef<'a> {
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
     Geometry(&'a [u8]),
+    Interval(&'a [u8]),
     Geography(GeographyRef<'a>),
 }
 
@@ -166,6 +170,7 @@ pub enum Column {
     Tuple(Vec<Column>),
     Variant(BinaryColumn),
     Geometry(BinaryColumn),
+    Interval(FixedSizeBinaryColumn),
     Geography(GeographyColumn),
 }
 
@@ -189,6 +194,7 @@ pub enum ColumnVec {
     Variant(Vec<BinaryColumn>),
     Geometry(Vec<BinaryColumn>),
     Geography(Vec<GeographyColumn>),
+    Interval(Vec<FixedSizeBinaryColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -211,6 +217,7 @@ pub enum ColumnBuilder {
     Variant(BinaryColumnBuilder),
     Geometry(BinaryColumnBuilder),
     Geography(BinaryColumnBuilder),
+    Interval(FixedSizeBinaryColumnBuilder),
 }
 
 impl<T: ValueType> Value<T> {
@@ -329,6 +336,7 @@ impl Scalar {
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
             Scalar::Geometry(s) => ScalarRef::Geometry(s.as_slice()),
+            Scalar::Interval(i) => ScalarRef::Interval(i.as_slice()),
             Scalar::Geography(g) => ScalarRef::Geography(g.as_ref()),
         }
     }
@@ -386,6 +394,7 @@ impl Scalar {
             | Scalar::Decimal(_)
             | Scalar::Timestamp(_)
             | Scalar::Date(_)
+            | Scalar::Interval(_)
             | Scalar::Boolean(_)
             | Scalar::Binary(_)
             | Scalar::String(_)
@@ -438,6 +447,7 @@ impl ScalarRef<'_> {
             ScalarRef::String(s) => Scalar::String(s.to_string()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
             ScalarRef::Date(d) => Scalar::Date(*d),
+            ScalarRef::Interval(i) => Scalar::Interval(i.to_vec()),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
             ScalarRef::Map(col) => Scalar::Map(col.clone()),
             ScalarRef::Bitmap(b) => Scalar::Bitmap(b.to_vec()),
@@ -512,6 +522,7 @@ impl ScalarRef<'_> {
             | ScalarRef::Bitmap(_)
             | ScalarRef::Variant(_)
             | ScalarRef::Geometry(_)
+            | ScalarRef::Interval(_)
             | ScalarRef::Geography(_) => Domain::Undefined,
         }
     }
@@ -536,6 +547,7 @@ impl ScalarRef<'_> {
             ScalarRef::String(s) => s.len(),
             ScalarRef::Timestamp(_) => 8,
             ScalarRef::Date(_) => 4,
+            ScalarRef::Interval(_) => 16,
             ScalarRef::Array(col) => col.memory_size(),
             ScalarRef::Map(col) => col.memory_size(),
             ScalarRef::Bitmap(b) => b.len(),
@@ -564,6 +576,7 @@ impl ScalarRef<'_> {
             ScalarRef::String(_) => DataType::String,
             ScalarRef::Timestamp(_) => DataType::Timestamp,
             ScalarRef::Date(_) => DataType::Date,
+            ScalarRef::Interval(_) => DataType::Interval,
             ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
             ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
             ScalarRef::Bitmap(_) => DataType::Bitmap,
@@ -661,6 +674,7 @@ impl ScalarRef<'_> {
                 (ScalarRef::Binary(_), DataType::Binary) => true,
                 (ScalarRef::String(_), DataType::String) => true,
                 (ScalarRef::Timestamp(_), DataType::Timestamp) => true,
+                (ScalarRef::Interval(_), DataType::Interval) => true,
                 (ScalarRef::Date(_), DataType::Date) => true,
                 (ScalarRef::Bitmap(_), DataType::Bitmap) => true,
                 (ScalarRef::Variant(_), DataType::Variant) => true,
@@ -781,6 +795,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::String(v) => v.hash(state),
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
+            ScalarRef::Interval(v) => v.hash(state),
             ScalarRef::Array(v) => {
                 let str = serialize_column(v);
                 str.hash(state);
@@ -841,6 +856,9 @@ impl PartialOrd for Column {
             (Column::Geography(col1), Column::Geography(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
+            (Column::Interval(col1), Column::Interval(col2)) => {
+                col1.iter().partial_cmp(col2.iter())
+            }
             (a, b) => {
                 if a.len() != b.len() {
                     a.len().partial_cmp(&b.len())
@@ -883,6 +901,7 @@ impl Column {
             Column::String(col) => col.len(),
             Column::Timestamp(col) => col.len(),
             Column::Date(col) => col.len(),
+            Column::Interval(col) => col.len(),
             Column::Array(col) => col.len(),
             Column::Map(col) => col.len(),
             Column::Bitmap(col) => col.len(),
@@ -918,6 +937,7 @@ impl Column {
             )),
             Column::Variant(col) => Some(ScalarRef::Variant(col.index(index)?)),
             Column::Geometry(col) => Some(ScalarRef::Geometry(col.index(index)?)),
+            Column::Interval(col) => Some(ScalarRef::Interval(col.index(index)?)),
             Column::Geography(col) => Some(ScalarRef::Geography(col.index(index)?)),
         }
     }
@@ -949,6 +969,7 @@ impl Column {
             ),
             Column::Variant(col) => ScalarRef::Variant(col.index_unchecked(index)),
             Column::Geometry(col) => ScalarRef::Geometry(col.index_unchecked(index)),
+            Column::Interval(col) => ScalarRef::Interval(col.index_unchecked(index)),
             Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
         }
     }
@@ -1002,6 +1023,7 @@ impl Column {
                     .collect(),
             ),
             Column::Variant(col) => Column::Variant(col.slice(range)),
+            Column::Interval(col) => Column::Interval(col.slice(range)),
             Column::Geometry(col) => Column::Geometry(col.slice(range)),
             Column::Geography(col) => Column::Geography(col.slice(range)),
         }
@@ -1084,6 +1106,7 @@ impl Column {
             | Column::Bitmap(_)
             | Column::Variant(_)
             | Column::Geometry(_)
+            | Column::Interval(_)
             | Column::Geography(_) => Domain::Undefined,
         }
     }
@@ -1105,6 +1128,7 @@ impl Column {
             Column::String(_) => DataType::String,
             Column::Timestamp(_) => DataType::Timestamp,
             Column::Date(_) => DataType::Date,
+            Column::Interval(_) => DataType::Interval,
             Column::Array(array) => {
                 let inner = array.values.data_type();
                 DataType::Array(Box::new(inner))
@@ -1133,6 +1157,7 @@ impl Column {
             Column::Binary(x) => Ok(x.check_valid()?),
             Column::Variant(x) => Ok(x.check_valid()?),
             Column::Geometry(x) => Ok(x.check_valid()?),
+            Column::Interval(x) => Ok(x.check_valid()?),
             Column::Geography(x) => Ok(x.check_valid()?),
             Column::Bitmap(x) => Ok(x.check_valid()?),
             Column::Map(x) => {
@@ -1322,7 +1347,7 @@ impl Column {
                 }
                 Column::Geography(GeographyColumn(builder.build()))
             }
-            DataType::Generic(_) => unreachable!(),
+            DataType::Generic(_) | DataType::Interval => unreachable!(),
         }
     }
 
@@ -1379,6 +1404,7 @@ impl Column {
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             Column::Variant(col) => col.memory_size(),
             Column::Geometry(col) => col.memory_size(),
+            Column::Interval(col) => col.memory_size(),
             Column::Geography(col) => GeographyType::column_memory_size(col),
         }
     }
@@ -1400,6 +1426,7 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Boolean(c) => c.len(),
+            Column::Interval(col) => col.memory_size(),
             // 8 * len + size of bytes
             Column::Binary(col)
             | Column::Bitmap(col)
@@ -1512,6 +1539,9 @@ impl ColumnBuilder {
                     .collect(),
             ),
             Column::Variant(col) => ColumnBuilder::Variant(BinaryColumnBuilder::from_column(col)),
+            Column::Interval(col) => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::from_column(col))
+            }
             Column::Geometry(col) => ColumnBuilder::Geometry(BinaryColumnBuilder::from_column(col)),
             Column::Geography(col) => {
                 ColumnBuilder::Geography(GeographyType::column_to_builder(col))
@@ -1573,6 +1603,9 @@ impl ColumnBuilder {
             }
             ScalarRef::Variant(s) => ColumnBuilder::Variant(BinaryColumnBuilder::repeat(s, n)),
             ScalarRef::Geometry(s) => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat(s, n)),
+            ScalarRef::Interval(s) => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::repeat(s, n))
+            }
             ScalarRef::Geography(s) => {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat(s.0, n))
             }
@@ -1599,6 +1632,7 @@ impl ColumnBuilder {
             ColumnBuilder::Variant(builder) => builder.len(),
             ColumnBuilder::Geometry(builder) => builder.len(),
             ColumnBuilder::Geography(builder) => builder.len(),
+            ColumnBuilder::Interval(builder) => builder.len(),
         }
     }
 
@@ -1635,6 +1669,7 @@ impl ColumnBuilder {
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::Geometry(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Interval(col) => col.data.len(),
             ColumnBuilder::Geography(builder) => builder.memory_size(),
         }
     }
@@ -1656,6 +1691,7 @@ impl ColumnBuilder {
             ColumnBuilder::String(_) => DataType::String,
             ColumnBuilder::Timestamp(_) => DataType::Timestamp,
             ColumnBuilder::Date(_) => DataType::Date,
+            ColumnBuilder::Interval(_) => DataType::Interval,
             ColumnBuilder::Array(col) => {
                 let inner = col.builder.data_type();
                 DataType::Array(Box::new(inner))
@@ -1747,6 +1783,9 @@ impl ColumnBuilder {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Geometry(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
+            DataType::Interval => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::with_capacity(capacity, 16))
+            }
             DataType::Geography => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Geography(BinaryColumnBuilder::with_capacity(
@@ -1789,6 +1828,9 @@ impl ColumnBuilder {
             DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
             DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Interval => {
+                ColumnBuilder::Interval(FixedSizeBinaryColumnBuilder::repeat_default(len, 16))
+            }
             DataType::Geography => {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat_default(len))
             }
@@ -1838,6 +1880,9 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => {
                 DateType::push_item(builder, value)
+            }
+            (ColumnBuilder::Interval(builder), ScalarRef::Interval(value)) => {
+                IntervalType::push_item(builder, value)
             }
             (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
                 ArrayType::push_item(builder, value);
@@ -1925,6 +1970,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Geometry(builder), ScalarRef::Geometry(value)) => {
                 GeometryType::push_item_repeat(builder, value, n);
             }
+            (ColumnBuilder::Interval(builder), ScalarRef::Interval(value)) => {
+                IntervalType::push_item_repeat(builder, value, n);
+            }
             (ColumnBuilder::Geography(builder), ScalarRef::Geography(value)) => {
                 GeographyType::push_item_repeat(builder, *value, n);
             }
@@ -1958,6 +2006,7 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::Geometry(builder) => builder.commit_row(),
+            ColumnBuilder::Interval(builder) => builder.push_default(),
             ColumnBuilder::Geography(builder) => builder.commit_row(),
         }
     }
@@ -1982,6 +2031,12 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(builder) => {
                 let v: bool = reader.read_scalar()?;
                 builder.push(v);
+            }
+            ColumnBuilder::Interval(builder) => {
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
+                let last = builder.len();
+                reader.read_exact(&mut builder.data[last..last + offset])?;
             }
             ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
@@ -2086,6 +2141,13 @@ impl ColumnBuilder {
                     let mut reader = &reader[step * row..];
                     let v: bool = reader.read_scalar()?;
                     builder.push(v);
+                }
+            }
+            ColumnBuilder::Interval(builder) => {
+                for row in 0..rows {
+                    let reader = &reader[step * row..];
+                    builder.put_slice(reader);
+                    builder.commit_row();
                 }
             }
             ColumnBuilder::Binary(builder)
@@ -2198,6 +2260,7 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) => builder.pop().map(Scalar::String),
             ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
+            ColumnBuilder::Interval(builder) => builder.pop().map(Scalar::Interval),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
             ColumnBuilder::Map(builder) => builder.pop().map(Scalar::Map),
             ColumnBuilder::Bitmap(builder) => builder.pop().map(Scalar::Bitmap),
@@ -2257,6 +2320,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Geography(builder), Column::Geography(other)) => {
                 GeographyType::append_column(builder, other);
             }
+            (ColumnBuilder::Interval(builder), Column::Interval(other)) => {
+                IntervalType::append_column(builder, other);
+            }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
                 builder.extend_from_slice(other);
             }
@@ -2309,6 +2375,7 @@ impl ColumnBuilder {
             ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
             ColumnBuilder::Timestamp(b) => Column::Timestamp(TimestampType::build_column(b)),
             ColumnBuilder::Date(b) => Column::Date(DateType::build_column(b)),
+            ColumnBuilder::Interval(b) => Column::Interval(IntervalType::build_column(b)),
             ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
             ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
             ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
@@ -2339,6 +2406,7 @@ impl ColumnBuilder {
             ColumnBuilder::String(b) => Scalar::String(StringType::build_scalar(b)),
             ColumnBuilder::Timestamp(b) => Scalar::Timestamp(TimestampType::build_scalar(b)),
             ColumnBuilder::Date(b) => Scalar::Date(DateType::build_scalar(b)),
+            ColumnBuilder::Interval(b) => Scalar::Interval(IntervalType::build_scalar(b)),
             ColumnBuilder::Bitmap(b) => Scalar::Bitmap(BitmapType::build_scalar(b)),
             ColumnBuilder::Variant(b) => Scalar::Variant(VariantType::build_scalar(b)),
             ColumnBuilder::Geometry(b) => Scalar::Geometry(GeometryType::build_scalar(b)),

@@ -33,6 +33,7 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
+use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
@@ -187,6 +188,13 @@ impl From<&TableField> for Field {
                 );
                 ArrowDataType::LargeBinary
             }
+            TableDataType::Interval => {
+                metadata.insert(
+                    EXTENSION_KEY.to_string(),
+                    ARROW_EXT_TYPE_INTERVAL.to_string(),
+                );
+                ArrowDataType::FixedSizeBinary(16)
+            }
         };
 
         Field::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
@@ -326,6 +334,7 @@ impl From<&Column> for ArrayData {
                 unsafe { builder.build_unchecked() }
             }
 
+            Column::Interval(col) => col.clone().into(),
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)

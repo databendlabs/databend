@@ -33,6 +33,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::EmptyMap
         | DataType::Boolean
         | DataType::Binary
+        | DataType::Interval
         | DataType::String
         | DataType::Number(_)
         | DataType::Decimal(_)
@@ -77,6 +78,7 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::Decimal(_)
         | ScalarRef::Timestamp(_)
         | ScalarRef::Date(_)
+        | ScalarRef::Interval(_)
         | ScalarRef::Boolean(_)
         | ScalarRef::Binary(_)
         | ScalarRef::String(_)

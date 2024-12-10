@@ -16,7 +16,10 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_io::deserialize_bitmap;
+use databend_common_io::Interval;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 use jiff::tz::TimeZone;
@@ -29,6 +32,7 @@ use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::property::Domain;
+use crate::types::interval::interval_to_string;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -231,6 +235,16 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
         ScalarRef::Timestamp(ts) => timestamp_to_string(ts, tz).to_string().into(),
         ScalarRef::Date(d) => date_to_string(d, tz).to_string().into(),
+        ScalarRef::Interval(i) => {
+            let interval: [u8; 16] = i.try_into().expect("Interval should have 16 elements");
+            let i = months_days_micros::from_le_bytes(interval);
+            let interval = Interval {
+                months: i.0,
+                days: i.1,
+                micros: i.2,
+            };
+            interval_to_string(interval).to_string().into()
+        }
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
             jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");

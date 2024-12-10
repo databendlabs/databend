@@ -33,3 +33,4 @@ pub mod types;
 
 #[macro_use]
 pub(crate) mod utils;
+pub mod fixedsizebinary;
