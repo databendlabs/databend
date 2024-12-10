@@ -14,6 +14,7 @@
 
 mod common;
 mod simple;
+mod utils;
 
 use std::fmt::Debug;
 
@@ -27,6 +28,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 pub use simple::*;
+pub use utils::*;
 
 /// Convert columns to rows.
 pub trait RowConverter<T: Rows>
