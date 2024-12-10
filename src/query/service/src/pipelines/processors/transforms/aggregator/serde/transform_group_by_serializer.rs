@@ -173,8 +173,7 @@ impl Iterator for SerializeGroupByStream {
 
         match self.payload.as_ref().get_ref() {
             SerializePayload::AggregatePayload(p) => {
-                let state = self.flush_state.as_mut().unwrap();
-                let block = p.payload.aggregate_flush(state).unwrap();
+                let block = p.payload.aggregate_flush(&mut self.flush_state).unwrap();
 
                 if block.is_none() {
                     self.end_iter = true;

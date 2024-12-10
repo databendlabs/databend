@@ -29,9 +29,9 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use jwt_simple::reexports::anyhow::Ok;
 
 use super::AggregatePayload;
+use super::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -568,7 +568,7 @@ pub fn build_partition_bucket<V: Copy + Send + Sync + 'static>(
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
-    let transform = NewTransformPartitionBucket::<Method, V>::create(input_nums, params.clone())?;
+    let transform = NewTransformPartitionBucket::<V>::create(input_nums, params.clone())?;
 
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
@@ -604,20 +604,10 @@ pub fn build_partition_bucket<V: Copy + Send + Sync + 'static>(
     pipeline.add_transform(|input, output| {
         Ok(ProcessorPtr::create(
             match params.aggregate_functions.is_empty() {
-                true => TransformFinalGroupBy::try_create(
-                    input,
-                    output,
-                    method.clone(),
-                    params.clone(),
-                )?,
-                false => TransformFinalAggregate::try_create(
-                    input,
-                    output,
-                    method.clone(),
-                    params.clone(),
-                )?,
+                true => TransformFinalGroupBy::try_create(input, output, params.clone())?,
+                false => TransformFinalAggregate::try_create(input, output, params.clone())?,
             },
         ))
     })?;
-    Ok((()))
+    Ok(())
 }

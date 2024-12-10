@@ -112,13 +112,13 @@ pub struct TransformPartialGroupBy {
 }
 
 impl TransformPartialGroupBy {
-    pub fn create(
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
         config: HashTableConfig,
-    ) -> Box<dyn Processor> {
+    ) -> Result<Box<dyn Processor>> {
         let arena = Arc::new(Bump::new());
         let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
             params.group_data_types.clone(),
@@ -127,16 +127,20 @@ impl TransformPartialGroupBy {
             arena,
         ));
 
-        AccumulatingTransformer::create(input, output, TransformPartialGroupBy {
-            hash_table,
-            probe_state: ProbeState::default(),
-            params,
-            settings: GroupBySettings::try_from(ctx)?,
-            start: Instant::now(),
-            first_block_start: None,
-            processed_bytes: 0,
-            processed_rows: 0,
-        })
+        Ok(AccumulatingTransformer::create(
+            input,
+            output,
+            TransformPartialGroupBy {
+                hash_table,
+                probe_state: ProbeState::default(),
+                params,
+                settings: GroupBySettings::try_from(ctx)?,
+                start: Instant::now(),
+                first_block_start: None,
+                processed_bytes: 0,
+                processed_rows: 0,
+            },
+        ))
     }
 }
 

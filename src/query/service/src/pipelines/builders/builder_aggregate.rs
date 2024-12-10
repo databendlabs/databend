@@ -163,13 +163,13 @@ impl PipelineBuilder {
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
                 match params.aggregate_functions.is_empty() {
-                    true => TransformPartialGroupBy::create(
+                    true => TransformPartialGroupBy::try_create(
                         self.ctx.clone(),
                         input,
                         output,
                         params.clone(),
                         partial_agg_config.clone(),
-                    ),
+                    )?,
                     false => TransformPartialAggregate::create(
                         self.ctx.clone(),
                         input,
