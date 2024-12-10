@@ -54,8 +54,8 @@ fn test_serde_node_info() {
 
     let json_str = serde_json::to_string(&info).unwrap();
     assert_eq!(info, serde_json::from_str::<NodeInfo>(&json_str).unwrap());
-    assert!(json_str.find("cluster").is_none());
-    assert!(json_str.find("warehouse").is_none());
+    assert!(!json_str.contains("cluster"));
+    assert!(!json_str.contains("warehouse"));
 
     info.cluster_id = String::from("test-cluster-id");
     info.warehouse_id = String::from("test-warehouse-id");
