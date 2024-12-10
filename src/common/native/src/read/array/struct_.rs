@@ -39,7 +39,7 @@ impl<'a> StructIterator<'a> {
     }
 }
 
-impl<'a> StructIterator<'a> {
+impl StructIterator<'_> {
     fn deserialize(&mut self, values: StructValues) -> Option<Result<(NestedState, Column)>> {
         // This code is copied from arrow2 `StructIterator` and adds a custom `nth` method implementation
         // https://github.com/jorgecarleitao/arrow2/blob/main/src/io/parquet/read/deserialize/struct_.rs
@@ -65,7 +65,7 @@ impl<'a> StructIterator<'a> {
     }
 }
 
-impl<'a> Iterator for StructIterator<'a> {
+impl Iterator for StructIterator<'_> {
     type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {

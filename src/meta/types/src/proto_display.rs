@@ -42,7 +42,7 @@ struct OptionDisplay<'a, T: Display> {
     t: &'a Option<T>,
 }
 
-impl<'a, T: Display> Display for OptionDisplay<'a, T> {
+impl<T: Display> Display for OptionDisplay<'_, T> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self.t {
             None => {
@@ -73,7 +73,7 @@ where T: Display
     }
 }
 
-impl<'a, T: Display> Display for VecDisplay<'a, T> {
+impl<T: Display> Display for VecDisplay<'_, T> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "[")?;
 

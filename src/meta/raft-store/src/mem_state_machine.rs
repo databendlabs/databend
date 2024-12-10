@@ -16,7 +16,7 @@ use databend_common_meta_types::sys_data::SysData;
 
 use crate::leveled_store::level::Level;
 use crate::state_machine::ExpireKey;
-use crate::state_machine::StateMachineSubscriber;
+use crate::state_machine_api::SMEventSender;
 use crate::state_machine_api::StateMachineApi;
 /// A pure in-memory state machine as mock for testing.
 #[derive(Debug, Default)]
@@ -48,7 +48,7 @@ impl StateMachineApi for MemStateMachine {
         &mut self.level.sys_data
     }
 
-    fn get_subscriber(&self) -> Option<&dyn StateMachineSubscriber> {
+    fn event_sender(&self) -> Option<&dyn SMEventSender> {
         None
     }
 }

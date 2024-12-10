@@ -66,7 +66,7 @@ impl Geography {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GeographyRef<'a>(pub &'a [u8]);
 
-impl<'a> GeographyRef<'a> {
+impl GeographyRef<'_> {
     pub fn to_owned(&self) -> Geography {
         Geography(self.0.to_owned())
     }
@@ -82,7 +82,7 @@ impl<'a> GeographyRef<'a> {
     }
 }
 
-impl<'a> AsRef<[u8]> for GeographyRef<'a> {
+impl AsRef<[u8]> for GeographyRef<'_> {
     fn as_ref(&self) -> &[u8] {
         self.0
     }
@@ -302,4 +302,4 @@ impl<'a> Iterator for GeographyIterator<'a> {
     }
 }
 
-unsafe impl<'a> std::iter::TrustedLen for GeographyIterator<'a> {}
+unsafe impl std::iter::TrustedLen for GeographyIterator<'_> {}

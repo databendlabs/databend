@@ -41,7 +41,7 @@ use crate::Scalar;
 use crate::Selector;
 use crate::Value;
 
-impl<'a> Selector<'a> {
+impl Selector<'_> {
     // Select indices by comparing two `Value`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_values(

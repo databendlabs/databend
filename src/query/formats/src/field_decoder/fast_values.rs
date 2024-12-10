@@ -248,7 +248,7 @@ impl FastFieldDecoderValues {
         size: DecimalSize,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        let buf = reader.remaining_slice();
+        let buf = Cursor::split(reader).1;
         let (n, n_read) = read_decimal_with_size(buf, size, false, true)?;
         column.push(n);
         reader.consume(n_read);
@@ -631,7 +631,8 @@ impl<'a> FastValuesDecoder<'a> {
                 // Parse from expression and append all columns.
                 self.reader.set_position(start_pos_of_row);
                 let row_len = end_pos_of_row - start_pos_of_row;
-                let buf = &self.reader.remaining_slice()[..row_len as usize];
+                let buf = Cursor::split(&self.reader).1;
+                let buf = &buf[..row_len as usize];
 
                 let sql = std::str::from_utf8(buf).unwrap();
                 let values = fallback.parse_fallback(sql).await?;
@@ -656,7 +657,7 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
     let mut escaped = false;
 
     while balance > 0 {
-        let buffer = reader.remaining_slice();
+        let buffer = Cursor::split(reader).1;
         if buffer.is_empty() {
             break;
         }
