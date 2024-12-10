@@ -190,6 +190,7 @@ where T: List
         true
     }
 
+    #[allow(dead_code)]
     pub fn is_small_task(&mut self) -> bool {
         loop {
             let sum = self.reduce_max_domain(Some(8));
@@ -509,7 +510,9 @@ mod tests {
     use super::*;
 
     impl List for &[i32] {
-        type Item<'a> = &'a i32 where Self: 'a;
+        type Item<'a>
+            = &'a i32
+        where Self: 'a;
 
         fn cmp_value(&self, i: usize, target: &&i32) -> Ordering {
             self[i].cmp(target)

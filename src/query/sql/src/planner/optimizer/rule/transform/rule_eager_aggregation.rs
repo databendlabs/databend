@@ -125,7 +125,6 @@ use crate::Visibility;
 ///                     | eager group-by: eager SUM(y), eager count: cnt2
 ///                     |
 ///                     eager group-by: eager SUM(x), eager count: cnt1
-
 pub struct RuleEagerAggregation {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -1378,9 +1377,10 @@ fn decompose_avg(
                     &column.column.column_name.clone(),
                 ),
             );
-            let func = function_factory.get(&agg.func_name, agg.params.clone(), vec![
-                *column.column.data_type.clone(),
-            ])?;
+            let func = function_factory.get(&agg.func_name, agg.params.clone(), vec![*column
+                .column
+                .data_type
+                .clone()])?;
             agg.return_type = Box::new(func.return_type()?);
         }
     }

@@ -334,9 +334,9 @@ impl Operator for Aggregate {
                         }
                         "before_merge" => {
                             children_required.push(vec![RequiredProperty {
-                                distribution: Distribution::Hash(vec![
-                                    self.group_items[0].scalar.clone(),
-                                ]),
+                                distribution: Distribution::Hash(vec![self.group_items[0]
+                                    .scalar
+                                    .clone()]),
                             }]);
                         }
                         value => {

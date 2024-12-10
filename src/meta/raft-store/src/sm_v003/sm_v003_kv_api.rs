@@ -36,7 +36,7 @@ pub struct SMV003KVApi<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> kvapi::KVApi for SMV003KVApi<'a> {
+impl kvapi::KVApi for SMV003KVApi<'_> {
     type Error = io::Error;
 
     async fn upsert_kv(&self, _req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
@@ -75,7 +75,7 @@ impl<'a> kvapi::KVApi for SMV003KVApi<'a> {
     }
 }
 
-impl<'a> SMV003KVApi<'a> {
+impl SMV003KVApi<'_> {
     fn non_expired<V>(seq_value: Option<SeqV<V>>, now_ms: u64) -> Option<SeqV<V>> {
         if seq_value.is_expired(now_ms) {
             None
