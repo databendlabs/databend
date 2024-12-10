@@ -66,7 +66,7 @@ impl BlockPruner {
     }
 
     /// Apply internal column pruning.
-    fn internal_column_pruning(
+    pub fn internal_column_pruning(
         &self,
         block_metas: &[Arc<BlockMeta>],
     ) -> Vec<(usize, Arc<BlockMeta>)> {
@@ -89,7 +89,7 @@ impl BlockPruner {
 
     // async pruning with bloom index, inverted index or virtual columns.
     #[async_backtrace::framed]
-    async fn block_pruning(
+    pub async fn block_pruning(
         &self,
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
@@ -301,7 +301,7 @@ impl BlockPruner {
         Ok(result)
     }
 
-    fn block_pruning_sync(
+    pub fn block_pruning_sync(
         &self,
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,

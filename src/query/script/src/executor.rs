@@ -34,7 +34,7 @@ pub trait Client {
     async fn query(&self, query: &str) -> Result<Self::Set>;
     fn var_to_ast(&self, scalar: &Self::Var) -> Result<Expr>;
     fn read_from_set(&self, block: &Self::Set, row: usize, col: &ColumnAccess)
-    -> Result<Self::Var>;
+        -> Result<Self::Var>;
     fn num_rows(&self, block: &Self::Set) -> usize;
     fn is_true(&self, scalar: &Self::Var) -> Result<bool>;
 }

@@ -958,6 +958,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_prune_pipeline", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable pruning pipeline",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("persist_materialized_cte", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0), // 0 for in-memory, 1 for disk
                     desc: "Decides if materialized CTEs should be persisted to disk.",
@@ -1118,7 +1124,7 @@ impl DefaultSettings {
                 // If not a valid u64, try parsing as f64
                 match v.parse::<f64>() {
                     Ok(f) if f.fract() == 0.0 && f >= 0.0 && f <= u64::MAX as f64 => {
-                        Ok(f.trunc() as u64) /* Convert to u64 if no fractional part, non-negative, and within u64 range */
+                        Ok(f.trunc() as u64) // Convert to u64 if no fractional part, non-negative, and within u64 range
                     }
                     _ => Err(ErrorCode::WrongValueForVariable(format!(
                         "{} is not a valid integer value",

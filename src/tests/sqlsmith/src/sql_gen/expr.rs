@@ -35,7 +35,7 @@ use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_expr(&mut self, ty: &DataType) -> Expr {
         // avoid generate too complex expression
         if self.expr_depth == 0 {

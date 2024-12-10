@@ -20,8 +20,7 @@
 #![feature(read_buf)]
 #![feature(slice_internals)]
 #![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-#![feature(cursor_remaining)]
+#![feature(cursor_split)]
 #![feature(buf_read_has_data_left)]
 
 pub mod constants;

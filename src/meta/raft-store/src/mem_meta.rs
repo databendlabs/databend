@@ -43,10 +43,7 @@ pub struct MemMeta {
 }
 
 impl MemMeta {
-    async fn init_applier<'a>(
-        &self,
-        a: &mut Applier<'a, MemStateMachine>,
-    ) -> Result<(), io::Error> {
+    async fn init_applier(&self, a: &mut Applier<'_, MemStateMachine>) -> Result<(), io::Error> {
         let now = SeqV::<()>::now_ms();
         a.cmd_ctx = CmdContext::from_millis(now);
         a.clean_expired_kvs(now).await?;

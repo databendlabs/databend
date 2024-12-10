@@ -103,7 +103,7 @@ where
     }
 
     pub fn is_finished(&self) -> bool {
-        self.limit.map_or(false, |limit| self.total_rows >= limit)
+        self.limit.is_some_and(|limit| self.total_rows >= limit)
             || !self.has_pending_stream() && self.rows.iter().all(|x| x.is_none())
     }
 
@@ -209,7 +209,9 @@ where
 }
 
 impl<R: Rows> List for Option<R> {
-    type Item<'a> = R::Item<'a> where R: 'a;
+    type Item<'a>
+        = R::Item<'a>
+    where R: 'a;
     fn len(&self) -> usize {
         match self {
             Some(r) => r.len(),

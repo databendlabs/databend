@@ -259,7 +259,7 @@ pub trait TableContext: Send + Sync {
     async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
-    -> Result<Arc<dyn Table>>;
+        -> Result<Arc<dyn Table>>;
 
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 

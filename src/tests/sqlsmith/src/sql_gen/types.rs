@@ -20,7 +20,7 @@ use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_data_type(&mut self) -> DataType {
         if self.rng.gen_bool(0.8) {
             self.gen_simple_data_type()

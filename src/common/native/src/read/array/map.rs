@@ -33,7 +33,7 @@ impl<'a> MapIterator<'a> {
     }
 }
 
-impl<'a> MapIterator<'a> {
+impl MapIterator<'_> {
     fn deserialize(
         &mut self,
         value: Option<Result<(NestedState, Column)>>,
@@ -48,7 +48,7 @@ impl<'a> MapIterator<'a> {
     }
 }
 
-impl<'a> Iterator for MapIterator<'a> {
+impl Iterator for MapIterator<'_> {
     type Item = Result<(NestedState, Column)>;
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {

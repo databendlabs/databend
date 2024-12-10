@@ -17,7 +17,7 @@ use databend_common_column::bitmap::utils::fmt;
 
 struct A<'a>(&'a [u8], usize, usize);
 
-impl<'a> std::fmt::Debug for A<'a> {
+impl std::fmt::Debug for A<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         fmt(self.0, self.1, self.2, f)
     }

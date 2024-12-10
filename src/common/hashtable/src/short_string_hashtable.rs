@@ -355,8 +355,7 @@ where K: UnsizedKeyable + ?Sized
     }
 }
 
-unsafe impl<'a, K, V> TrustedLen for ShortStringHashtableIter<'a, K, V> where K: UnsizedKeyable + ?Sized
-{}
+unsafe impl<K, V> TrustedLen for ShortStringHashtableIter<'_, K, V> where K: UnsizedKeyable + ?Sized {}
 
 pub struct ShortStringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
@@ -427,9 +426,9 @@ enum ShortStringHashtableEntryRefInner<'a, K: ?Sized, V> {
     Table4(&'a Entry<FallbackKey, V>),
 }
 
-impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRefInner<'a, K, V> {}
+impl<K: ?Sized, V> Copy for ShortStringHashtableEntryRefInner<'_, K, V> {}
 
-impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRefInner<'a, K, V> {
+impl<K: ?Sized, V> Clone for ShortStringHashtableEntryRefInner<'_, K, V> {
     fn clone(&self) -> Self {
         *self
     }
@@ -507,9 +506,9 @@ pub struct ShortStringHashtableEntryRef<'a, K: ?Sized, V>(
     ShortStringHashtableEntryRefInner<'a, K, V>,
 );
 
-impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRef<'a, K, V> {}
+impl<K: ?Sized, V> Copy for ShortStringHashtableEntryRef<'_, K, V> {}
 
-impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRef<'a, K, V> {
+impl<K: ?Sized, V> Clone for ShortStringHashtableEntryRef<'_, K, V> {
     fn clone(&self) -> Self {
         *self
     }
@@ -781,11 +780,27 @@ where A: Allocator + Clone + Default
     type Key = [u8];
     type Value = V;
 
-    type EntryRef<'a> = ShortStringHashtableEntryRef<'a, [u8], V> where Self: 'a, V: 'a;
-    type EntryMutRef<'a> = ShortStringHashtableEntryMutRef<'a, [u8], V> where Self: 'a, V: 'a;
+    type EntryRef<'a>
+        = ShortStringHashtableEntryRef<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
+    type EntryMutRef<'a>
+        = ShortStringHashtableEntryMutRef<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
 
-    type Iterator<'a> = ShortStringHashtableIter<'a, [u8], V> where Self: 'a, V: 'a;
-    type IteratorMut<'a> = ShortStringHashtableIterMut<'a, [u8], V> where Self: 'a, V: 'a;
+    type Iterator<'a>
+        = ShortStringHashtableIter<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
+    type IteratorMut<'a>
+        = ShortStringHashtableIterMut<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
 
     fn len(&self) -> usize {
         self.len()

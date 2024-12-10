@@ -92,7 +92,7 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
             )));
         }
     };
-    return match schedule_type {
+    match schedule_type {
         ScheduleType::IntervalType => {
             if s.milliseconds_interval.is_some() {
                 return Ok(format!(
@@ -119,7 +119,7 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
             }
             Ok(res)
         }
-    };
+    }
 }
 
 // convert from crate::pb::task to struct task
