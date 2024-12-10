@@ -520,7 +520,7 @@ impl FuseTable {
                 .await
                 .map_err(|_e| {
                     ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table info {} in time.",
+                        "failed to refresh table info {} in time",
                         table_description
                     ))
                 })
