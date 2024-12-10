@@ -181,5 +181,4 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer {
     }
 }
 
-pub type TransformGroupByDeserializer = TransformDeserializer;
 pub type TransformAggregateDeserializer = TransformDeserializer;

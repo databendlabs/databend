@@ -32,14 +32,10 @@ use databend_common_storage::DataOperator;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::TransformGroupByDeserializer;
-use crate::pipelines::processors::transforms::aggregator::TransformGroupBySerializer;
-use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
@@ -266,33 +262,19 @@ impl ExchangeInjector for AggregateInjector {
         let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
 
         pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => TransformGroupBySpillWriter::create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        location_prefix.clone(),
-                    ),
-                    false => TransformAggregateSpillWriter::create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    ),
-                },
-            ))
+            Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
+                self.ctx.clone(),
+                input,
+                output,
+                operator.clone(),
+                params.clone(),
+                location_prefix.clone(),
+            )))
         })?;
 
-        pipeline.add_transform(
-            |input, output| match params.aggregate_functions.is_empty() {
-                true => TransformGroupBySerializer::try_create(input, output),
-                false => TransformAggregateSerializer::try_create(input, output, params.clone()),
-            },
-        )
+        pipeline.add_transform(|input, output| {
+            TransformAggregateSerializer::try_create(input, output, params.clone())
+        })
     }
 
     fn apply_shuffle_serializer(
@@ -315,29 +297,17 @@ impl ExchangeInjector for AggregateInjector {
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => TransformExchangeGroupBySerializer::create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        location_prefix.clone(),
-                        schema.clone(),
-                        local_pos,
-                        compression,
-                    ),
-                    false => TransformExchangeAggregateSerializer::create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        location_prefix.clone(),
-                        params.clone(),
-                        compression,
-                        schema.clone(),
-                        local_pos,
-                    ),
-                },
+                TransformExchangeAggregateSerializer::create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    operator.clone(),
+                    location_prefix.clone(),
+                    params.clone(),
+                    compression,
+                    schema.clone(),
+                    local_pos,
+                ),
             ))
         })?;
 
@@ -350,10 +320,7 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            match self.aggregator_params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::try_create(input, output, &params.schema),
-                false => TransformAggregateDeserializer::try_create(input, output, &params.schema),
-            }
+            TransformAggregateDeserializer::try_create(input, output, &params.schema)
         })
     }
 
@@ -363,10 +330,7 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            match self.aggregator_params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::try_create(input, output, &params.schema),
-                false => TransformAggregateDeserializer::try_create(input, output, &params.schema),
-            }
+            TransformAggregateDeserializer::try_create(input, output, &params.schema)
         })
     }
 }

@@ -21,8 +21,6 @@ mod serde;
 mod transform_aggregate_expand;
 mod transform_aggregate_final;
 mod transform_aggregate_partial;
-mod transform_group_by_final;
-mod transform_group_by_partial;
 mod transform_single_key;
 mod utils;
 
@@ -34,8 +32,6 @@ pub use new_transform_partition_bucket::build_partition_bucket;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
-pub use transform_group_by_final::TransformFinalGroupBy;
-pub use transform_group_by_partial::TransformPartialGroupBy;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
 pub use utils::*;

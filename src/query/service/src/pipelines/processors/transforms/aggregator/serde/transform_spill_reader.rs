@@ -311,5 +311,4 @@ impl TransformSpillReader {
     }
 }
 
-pub type TransformGroupBySpillReader = TransformSpillReader;
 pub type TransformAggregateSpillReader = TransformSpillReader;

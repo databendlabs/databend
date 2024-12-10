@@ -41,9 +41,7 @@ use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggreg
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
-use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::pipelines::processors::transforms::aggregator::TransformPartialGroupBy;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -152,24 +150,13 @@ impl PipelineBuilder {
         }
 
         self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => TransformPartialGroupBy::try_create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                    )?,
-                    false => TransformPartialAggregate::try_create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                    )?,
-                },
-            ))
+            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
+                self.ctx.clone(),
+                input,
+                output,
+                params.clone(),
+                partial_agg_config.clone(),
+            )?))
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
@@ -178,25 +165,14 @@ impl PipelineBuilder {
             let location_prefix =
                 query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
             self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    match params.aggregate_functions.is_empty() {
-                        true => TransformGroupBySpillWriter::create(
-                            self.ctx.clone(),
-                            input,
-                            output,
-                            operator.clone(),
-                            location_prefix.clone(),
-                        ),
-                        false => TransformAggregateSpillWriter::create(
-                            self.ctx.clone(),
-                            input,
-                            output,
-                            operator.clone(),
-                            params.clone(),
-                            location_prefix.clone(),
-                        ),
-                    },
-                ))
+                Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    operator.clone(),
+                    params.clone(),
+                    location_prefix.clone(),
+                )))
             })?;
         }
 
@@ -234,29 +210,14 @@ impl PipelineBuilder {
         }
 
         let old_inject = self.exchange_injector.clone();
-        match params.aggregate_functions.is_empty() {
-            true => {
-                let input: &PhysicalPlan = &aggregate.input;
-                if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                    self.exchange_injector =
-                        AggregateInjector::create(self.ctx.clone(), params.clone());
-                }
 
-                self.build_pipeline(&aggregate.input)?;
-                self.exchange_injector = old_inject;
-                build_partition_bucket(&mut self.main_pipeline, params.clone())
-            }
-            false => {
-                let input: &PhysicalPlan = &aggregate.input;
-                if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                    self.exchange_injector =
-                        AggregateInjector::create(self.ctx.clone(), params.clone());
-                }
-                self.build_pipeline(&aggregate.input)?;
-                self.exchange_injector = old_inject;
-                build_partition_bucket(&mut self.main_pipeline, params.clone())
-            }
+        let input: &PhysicalPlan = &aggregate.input;
+        if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+            self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
         }
+        self.build_pipeline(&aggregate.input)?;
+        self.exchange_injector = old_inject;
+        build_partition_bucket(&mut self.main_pipeline, params.clone())
     }
 
     pub fn build_aggregator_params(

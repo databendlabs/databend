@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Formatter;
 use std::pin::Pin;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline_core::processors::Event;
@@ -25,9 +29,10 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use futures::future::BoxFuture;
 
-use super::SerializePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 pub struct TransformAggregateSerializer {
@@ -138,6 +143,40 @@ impl TransformAggregateSerializer {
         unreachable!()
     }
 }
+
+pub enum SerializePayload {
+    AggregatePayload(AggregatePayload),
+}
+
+pub enum FlightSerialized {
+    DataBlock(DataBlock),
+    Future(BoxFuture<'static, Result<DataBlock>>),
+}
+
+unsafe impl Sync for FlightSerialized {}
+
+pub struct FlightSerializedMeta {
+    pub serialized_blocks: Vec<FlightSerialized>,
+}
+
+impl FlightSerializedMeta {
+    pub fn create(blocks: Vec<FlightSerialized>) -> BlockMetaInfoPtr {
+        Box::new(FlightSerializedMeta {
+            serialized_blocks: blocks,
+        })
+    }
+}
+
+impl std::fmt::Debug for FlightSerializedMeta {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.debug_struct("FlightSerializedMeta").finish()
+    }
+}
+
+local_block_meta_serde!(FlightSerializedMeta);
+
+#[typetag::serde(name = "exchange_shuffle")]
+impl BlockMetaInfo for FlightSerializedMeta {}
 
 pub struct SerializeAggregateStream {
     _params: Arc<AggregatorParams>,

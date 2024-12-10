@@ -38,8 +38,6 @@ use tokio::sync::Semaphore;
 use super::AggregatePayload;
 use super::TransformAggregateSpillReader;
 use super::TransformFinalAggregate;
-use super::TransformFinalGroupBy;
-use super::TransformGroupBySpillReader;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -590,21 +588,15 @@ pub fn build_partition_bucket(
     let operator = DataOperator::instance().operator();
     pipeline.add_transform(|input, output| {
         let operator = operator.clone();
-        match params.aggregate_functions.is_empty() {
-            true => TransformGroupBySpillReader::create(input, output, operator, semaphore.clone()),
-            false => {
-                TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())
-            }
-        }
+        TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())
     })?;
 
     pipeline.add_transform(|input, output| {
-        Ok(ProcessorPtr::create(
-            match params.aggregate_functions.is_empty() {
-                true => TransformFinalGroupBy::try_create(input, output, params.clone())?,
-                false => TransformFinalAggregate::try_create(input, output, params.clone())?,
-            },
-        ))
+        Ok(ProcessorPtr::create(TransformFinalAggregate::try_create(
+            input,
+            output,
+            params.clone(),
+        )?))
     })?;
     Ok(())
 }
