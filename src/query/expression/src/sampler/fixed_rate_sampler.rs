@@ -99,7 +99,7 @@ impl<R: Rng> FixedRateSampler<R> {
         while self
             .indices
             .front()
-            .map_or(false, |indices| indices.len() == self.block_size)
+            .is_some_and(|indices| indices.len() == self.block_size)
         {
             let indices = self.indices.pop_front().unwrap();
             let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
@@ -153,6 +153,7 @@ mod rate_sampling {
     }
 
     impl<R: Rng> Sampling<R> {
+        #[allow(dead_code)]
         pub fn new(range: RangeInclusive<usize>, r: R) -> Self {
             Self { range, r }
         }

@@ -42,7 +42,8 @@ where
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     const IS_ASC_COLUMN: bool = true;
-    type Item<'a> = T::ScalarRef<'a>
+    type Item<'a>
+        = T::ScalarRef<'a>
     where Self: 'a;
 
     type Type = T;
@@ -83,7 +84,8 @@ where
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     const IS_ASC_COLUMN: bool = false;
-    type Item<'a> = Reverse<T::ScalarRef<'a>>
+    type Item<'a>
+        = Reverse<T::ScalarRef<'a>>
     where Self: 'a;
 
     type Type = T;

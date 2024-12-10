@@ -58,7 +58,7 @@ pub fn has_order_field(schema: &DataSchema) -> bool {
     schema
         .fields
         .last()
-        .map_or(false, |f| f.name() == ORDER_COL_NAME)
+        .is_some_and(|f| f.name() == ORDER_COL_NAME)
 }
 
 #[inline(always)]
