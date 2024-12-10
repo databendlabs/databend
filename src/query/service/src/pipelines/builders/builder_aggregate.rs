@@ -163,26 +163,20 @@ impl PipelineBuilder {
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
                 match params.aggregate_functions.is_empty() {
-                    true => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
-                            self.ctx.clone(),
-                            method,
-                            input,
-                            output,
-                            params.clone(),
-                            partial_agg_config.clone()
-                        ),
-                    }),
-                    false => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformPartialAggregate::try_create(
-                            self.ctx.clone(),
-                            method,
-                            input,
-                            output,
-                            params.clone(),
-                            partial_agg_config.clone()
-                        ),
-                    }),
+                    true => TransformPartialGroupBy::create(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        params.clone(),
+                        partial_agg_config.clone(),
+                    ),
+                    false => TransformPartialAggregate::create(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        params.clone(),
+                        partial_agg_config.clone(),
+                    ),
                 }?,
             ))
         })?;
@@ -195,41 +189,29 @@ impl PipelineBuilder {
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(
                     match params.aggregate_functions.is_empty() {
-                        true => with_mappedhash_method!(|T| match method.clone() {
-                            HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
-                                self.ctx.clone(),
-                                input,
-                                output,
-                                method,
-                                operator.clone(),
-                                location_prefix.clone()
-                            ),
-                        }),
-                        false => with_mappedhash_method!(|T| match method.clone() {
-                            HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
-                                self.ctx.clone(),
-                                input,
-                                output,
-                                method,
-                                operator.clone(),
-                                params.clone(),
-                                location_prefix.clone()
-                            ),
-                        }),
+                        true => TransformGroupBySpillWriter::create(
+                            self.ctx.clone(),
+                            input,
+                            output,
+                            operator.clone(),
+                            location_prefix.clone(),
+                        ),
+                        false => TransformAggregateSpillWriter::create(
+                            self.ctx.clone(),
+                            input,
+                            output,
+                            operator.clone(),
+                            params.clone(),
+                            location_prefix.clone(),
+                        ),
                     },
                 ))
             })?;
         }
 
         self.exchange_injector = match params.aggregate_functions.is_empty() {
-            true => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) =>
-                    AggregateInjector::<_, ()>::create(self.ctx.clone(), method, params.clone()),
-            }),
-            false => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) =>
-                    AggregateInjector::<_, usize>::create(self.ctx.clone(), method, params.clone()),
-            }),
+            true => AggregateInjector::<()>::create(self.ctx.clone(), params.clone()),
+            false => AggregateInjector::<usize>::create(self.ctx.clone(), params.clone()),
         };
 
         Ok(())
@@ -274,37 +256,27 @@ impl PipelineBuilder {
         let old_inject = self.exchange_injector.clone();
 
         match params.aggregate_functions.is_empty() {
-            true => with_hash_method!(|T| match method {
-                HashMethodKind::T(v) => {
-                    let input: &PhysicalPlan = &aggregate.input;
-                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector = AggregateInjector::<_, ()>::create(
-                            self.ctx.clone(),
-                            v.clone(),
-                            params.clone(),
-                        );
-                    }
+            true => {
+                let input: &PhysicalPlan = &aggregate.input;
+                if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+                    self.exchange_injector =
+                        AggregateInjector::<()>::create(self.ctx.clone(), params.clone());
+                }
 
-                    self.build_pipeline(&aggregate.input)?;
-                    self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
+                self.build_pipeline(&aggregate.input)?;
+                self.exchange_injector = old_inject;
+                build_partition_bucket::<()>(&mut self.main_pipeline, params.clone())
+            }
+            false => {
+                let input: &PhysicalPlan = &aggregate.input;
+                if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+                    self.exchange_injector =
+                        AggregateInjector::<usize>::create(self.ctx.clone(), params.clone());
                 }
-            }),
-            false => with_hash_method!(|T| match method {
-                HashMethodKind::T(v) => {
-                    let input: &PhysicalPlan = &aggregate.input;
-                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector = AggregateInjector::<_, usize>::create(
-                            self.ctx.clone(),
-                            v.clone(),
-                            params.clone(),
-                        );
-                    }
-                    self.build_pipeline(&aggregate.input)?;
-                    self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
-                }
-            }),
+                self.build_pipeline(&aggregate.input)?;
+                self.exchange_injector = old_inject;
+                build_partition_bucket::<usize>(&mut self.main_pipeline, params.clone())
+            }
         }
     }
 

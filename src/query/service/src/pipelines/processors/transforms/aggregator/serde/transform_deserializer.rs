@@ -45,13 +45,13 @@ use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
-pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
+pub struct TransformDeserializer<V: Send + Sync + 'static> {
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
-    _phantom: PhantomData<(Method, V)>,
+    _phantom: PhantomData<V>,
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<Method, V> {
+impl<V: Send + Sync + 'static> TransformDeserializer<V> {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -62,7 +62,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
-            TransformDeserializer::<Method, V> {
+            TransformDeserializer::<V> {
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
                 _phantom: Default::default(),
@@ -94,7 +94,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                 Some(meta) => {
                     return match meta.typ == BUCKET_TYPE {
                         true => Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, V>::create_serialized(
+                            AggregateMeta::<V>::create_serialized(
                                 meta.bucket,
                                 deserialize_block(
                                     dict,
@@ -152,7 +152,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                             }
 
                             Ok(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_spilled(buckets_payload),
+                                AggregateMeta::<V>::create_spilled(buckets_payload),
                             ))
                         }
                     };
@@ -167,10 +167,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
     }
 }
 
-impl<M, V> BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer<M, V>
-where
-    M: HashMethodBounds,
-    V: Send + Sync + 'static,
+impl<V> BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer<V>
+where V: Send + Sync + 'static
 {
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformDeserializer";
@@ -189,5 +187,5 @@ where
     }
 }
 
-pub type TransformGroupByDeserializer<Method> = TransformDeserializer<Method, ()>;
-pub type TransformAggregateDeserializer<Method> = TransformDeserializer<Method, usize>;
+pub type TransformGroupByDeserializer = TransformDeserializer<()>;
+pub type TransformAggregateDeserializer = TransformDeserializer<usize>;

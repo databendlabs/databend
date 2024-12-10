@@ -41,21 +41,18 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupB
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
-enum HashTable<Method: HashMethodBounds> {
+enum HashTable {
     MovedOut,
-    HashTable(HashTableCell<Method, ()>),
     AggregateHashTable(AggregateHashTable),
-    PartitionedHashTable(HashTableCell<PartitionedHashMethod<Method>, ()>),
 }
 
-impl<Method: HashMethodBounds> Default for HashTable<Method> {
+impl Default for HashTable {
     fn default() -> Self {
         Self::MovedOut
     }
@@ -102,9 +99,8 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
 }
 
 // SELECT column_name FROM table_name GROUP BY column_name
-pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
-    method: Method,
-    hash_table: HashTable<Method>,
+pub struct TransformPartialGroupBy {
+    hash_table: HashTable,
     probe_state: ProbeState,
     settings: GroupBySettings,
     params: Arc<AggregatorParams>,
@@ -115,49 +111,36 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     processed_bytes: usize,
 }
 
-impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
-    pub fn try_create(
+impl TransformPartialGroupBy {
+    pub fn create(
         ctx: Arc<QueryContext>,
-        method: Method,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
         config: HashTableConfig,
-    ) -> Result<Box<dyn Processor>> {
-        let hash_table = if !params.enable_experimental_aggregate_hashtable {
-            let arena = Arc::new(Bump::new());
-            let hashtable = method.create_hash_table(arena)?;
-            let _dropper = GroupByHashTableDropper::<Method>::create();
-            HashTable::HashTable(HashTableCell::create(hashtable, _dropper))
-        } else {
-            let arena = Arc::new(Bump::new());
-            HashTable::AggregateHashTable(AggregateHashTable::new(
-                params.group_data_types.clone(),
-                params.aggregate_functions.clone(),
-                config,
-                arena,
-            ))
-        };
+    ) -> Box<dyn Processor> {
+        let arena = Arc::new(Bump::new());
+        let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            config,
+            arena,
+        ));
 
-        Ok(AccumulatingTransformer::create(
-            input,
-            output,
-            TransformPartialGroupBy::<Method> {
-                method,
-                hash_table,
-                probe_state: ProbeState::default(),
-                params,
-                settings: GroupBySettings::try_from(ctx)?,
-                start: Instant::now(),
-                first_block_start: None,
-                processed_bytes: 0,
-                processed_rows: 0,
-            },
-        ))
+        AccumulatingTransformer::create(input, output, TransformPartialGroupBy {
+            hash_table,
+            probe_state: ProbeState::default(),
+            params,
+            settings: GroupBySettings::try_from(ctx)?,
+            start: Instant::now(),
+            first_block_start: None,
+            processed_bytes: 0,
+            processed_rows: 0,
+        })
     }
 }
 
-impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy<Method> {
+impl AccumulatingTransform for TransformPartialGroupBy {
     const NAME: &'static str = "TransformPartialGroupBy";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
@@ -176,22 +159,6 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
         {
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
-                HashTable::HashTable(cell) => {
-                    let state = self.method.build_keys_state(group_columns, rows_num)?;
-                    for key in self.method.build_keys_iter(&state)? {
-                        unsafe {
-                            let _ = cell.hashtable.insert_and_entry(key);
-                        }
-                    }
-                }
-                HashTable::PartitionedHashTable(cell) => {
-                    let state = self.method.build_keys_state(group_columns, rows_num)?;
-                    for key in self.method.build_keys_iter(&state)? {
-                        unsafe {
-                            let _ = cell.hashtable.insert_and_entry(key);
-                        }
-                    }
-                }
                 HashTable::AggregateHashTable(hashtable) => {
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
@@ -203,52 +170,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 }
             };
 
-            let is_new_agg = self.params.enable_experimental_aggregate_hashtable;
-
-            #[allow(clippy::collapsible_if)]
-            if Method::SUPPORT_PARTITIONED {
-                if !is_new_agg
-                    && (matches!(&self.hash_table, HashTable::HashTable(cell)
-                        if cell.len() >= self.settings.convert_threshold ||
-                            cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
-                            GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage))
-                {
-                    if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
-                        self.hash_table = HashTable::PartitionedHashTable(
-                            PartitionedHashMethod::convert_hashtable(&self.method, cell)?,
-                        );
-                    }
-                }
-
-                if !is_new_agg
-                    && (matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
-                        || GLOBAL_MEM_STAT.get_memory_usage() as usize
-                            >= self.settings.max_memory_usage)
-                {
-                    if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
-                    {
-                        let _dropper = v._dropper.clone();
-                        let blocks = vec![DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_spilling(v),
-                        )];
-
-                        let arena = Arc::new(Bump::new());
-                        let method = PartitionedHashMethod::<Method>::create(self.method.clone());
-                        let new_hashtable = method.create_hash_table(arena)?;
-                        self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
-                            new_hashtable,
-                            _dropper.unwrap(),
-                        ));
-                        return Ok(blocks);
-                    }
-
-                    unreachable!()
-                }
-            }
-
-            if is_new_agg
-                && (matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
-                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage))
+            if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
             {
                 if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
                     let group_types = v.payload.group_types.clone();
@@ -265,7 +188,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                         .payload
                         .repartition(1 << config.max_radix_bits, &mut state);
                     let blocks = vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, ()>::create_agg_spilling(partitioned_payload),
+                        AggregateMeta::<()>::create_agg_spilling(partitioned_payload),
                     )];
 
                     let arena = Arc::new(Bump::new());
@@ -291,34 +214,6 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 true => vec![],
                 false => unreachable!(),
             },
-            HashTable::HashTable(cell) => match cell.hashtable.len() == 0 {
-                true => vec![],
-                false => {
-                    vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, ()>::create_hashtable(-1, cell),
-                    )]
-                }
-            },
-            HashTable::PartitionedHashTable(v) => {
-                info!(
-                    "Processed {} different keys, allocated {} memory while in group by.",
-                    convert_number_size(v.len() as f64),
-                    convert_byte_size(v.allocated_bytes() as f64)
-                );
-
-                let _ = v.hashtable.unsize_key_size();
-                let cells = PartitionedHashTableDropper::split_cell(v);
-                let mut blocks = Vec::with_capacity(cells.len());
-                for (bucket, cell) in cells.into_iter().enumerate() {
-                    if cell.hashtable.len() != 0 {
-                        blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_hashtable(bucket as isize, cell),
-                        ));
-                    }
-                }
-
-                blocks
-            }
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
@@ -345,7 +240,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_agg_payload(
+                            AggregateMeta::<()>::create_agg_payload(
                                 bucket as isize,
                                 payload,
                                 partition_count,

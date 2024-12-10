@@ -33,26 +33,19 @@ use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
-use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 
-pub struct TransformGroupBySerializer<Method: HashMethodBounds> {
-    method: Method,
+pub struct TransformGroupBySerializer {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
-    input_data: Option<SerializeGroupByStream<Method>>,
+    input_data: Option<SerializeGroupByStream>,
 }
 
-impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        method: Method,
-    ) -> Result<ProcessorPtr> {
+impl TransformGroupBySerializer {
+    pub fn try_create(input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformGroupBySerializer {
-            method,
             input,
             output,
             output_data: None,
@@ -61,7 +54,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
     }
 }
 
-impl<Method: HashMethodBounds> Processor for TransformGroupBySerializer<Method> {
+impl Processor for TransformGroupBySerializer {
     fn name(&self) -> String {
         String::from("TransformGroupBySerializer")
     }
@@ -117,29 +110,20 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySerializer<Method> 
     }
 }
 
-impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
+impl TransformGroupBySerializer {
     fn transform_input_data(&mut self, mut data_block: DataBlock) -> Result<Event> {
         debug_assert!(data_block.is_empty());
         if let Some(block_meta) = data_block.take_meta() {
-            if let Some(block_meta) = AggregateMeta::<Method, ()>::downcast_from(block_meta) {
+            if let Some(block_meta) = AggregateMeta::<()>::downcast_from(block_meta) {
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
-                    AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         self.input_data = Some(SerializeGroupByStream::create(
-                            &self.method,
-                            SerializePayload::<Method, ()>::AggregatePayload(p),
-                        ));
-                        return Ok(Event::Sync);
-                    }
-                    AggregateMeta::HashTable(payload) => {
-                        self.input_data = Some(SerializeGroupByStream::create(
-                            &self.method,
-                            SerializePayload::<Method, ()>::HashTablePayload(payload),
+                            SerializePayload::<()>::AggregatePayload(p),
                         ));
                         return Ok(Event::Sync);
                     }
@@ -151,71 +135,35 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
     }
 }
 
-pub fn serialize_group_by<Method: HashMethodBounds>(
-    method: &Method,
-    hashtable: &Method::HashTable<()>,
-) -> Result<DataBlock> {
-    let keys_len = hashtable.len();
-    let value_size = estimated_key_size(hashtable);
-    let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
-
-    for group_entity in hashtable.iter() {
-        group_key_builder.append_value(group_entity.key());
-    }
-
-    Ok(DataBlock::new_from_columns(
-        vec![group_key_builder.finish()],
-    ))
-}
-
-pub enum SerializePayload<Method: HashMethodBounds, V: Send + Sync + 'static> {
-    HashTablePayload(HashTablePayload<Method, V>),
+pub enum SerializePayload<V: Send + Sync + 'static> {
     AggregatePayload(AggregatePayload),
 }
 
-pub struct SerializeGroupByStream<Method: HashMethodBounds> {
-    method: Method,
-    pub payload: Pin<Box<SerializePayload<Method, ()>>>,
-    // old hashtable' iter
-    iter: Option<<Method::HashTable<()> as HashtableLike>::Iterator<'static>>,
-    flush_state: Option<PayloadFlushState>,
+pub struct SerializeGroupByStream {
+    pub payload: Pin<Box<SerializePayload<()>>>,
+    flush_state: PayloadFlushState,
     end_iter: bool,
 }
 
-unsafe impl<Method: HashMethodBounds> Send for SerializeGroupByStream<Method> {}
+unsafe impl Send for SerializeGroupByStream {}
 
-unsafe impl<Method: HashMethodBounds> Sync for SerializeGroupByStream<Method> {}
+unsafe impl Sync for SerializeGroupByStream {}
 
-impl<Method: HashMethodBounds> SerializeGroupByStream<Method> {
-    pub fn create(method: &Method, payload: SerializePayload<Method, ()>) -> Self {
+impl SerializeGroupByStream {
+    pub fn create(payload: SerializePayload<()>) -> Self {
         unsafe {
             let payload = Box::pin(payload);
 
-            let iter = if let SerializePayload::HashTablePayload(p) = payload.as_ref().get_ref() {
-                Some(NonNull::from(&p.cell.hashtable).as_ref().iter())
-            } else {
-                None
-            };
-
-            let flush_state =
-                if let SerializePayload::AggregatePayload(_) = payload.as_ref().get_ref() {
-                    Some(PayloadFlushState::default())
-                } else {
-                    None
-                };
-
-            SerializeGroupByStream::<Method> {
-                iter,
+            SerializeGroupByStream {
                 payload,
-                flush_state,
-                method: method.clone(),
+                flush_state: PayloadFlushState::default(),
                 end_iter: false,
             }
         }
     }
 }
 
-impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
+impl Iterator for SerializeGroupByStream {
     type Item = Result<DataBlock>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -224,34 +172,6 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
         }
 
         match self.payload.as_ref().get_ref() {
-            SerializePayload::HashTablePayload(p) => {
-                let max_block_rows = std::cmp::min(8192, p.cell.hashtable.len());
-                let max_block_bytes = std::cmp::min(
-                    8 * 1024 * 1024 + 1024,
-                    p.cell.hashtable.unsize_key_size().unwrap_or(usize::MAX),
-                );
-
-                let mut group_key_builder = self
-                    .method
-                    .keys_column_builder(max_block_rows, max_block_bytes);
-
-                #[allow(clippy::while_let_on_iterator)]
-                while let Some(group_entity) = self.iter.as_mut()?.next() {
-                    group_key_builder.append_value(group_entity.key());
-
-                    if group_key_builder.bytes_size() >= 8 * 1024 * 1024 {
-                        let bucket = p.bucket;
-                        let data_block =
-                            DataBlock::new_from_columns(vec![group_key_builder.finish()]);
-                        return Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))));
-                    }
-                }
-
-                self.end_iter = true;
-                let bucket = p.bucket;
-                let data_block = DataBlock::new_from_columns(vec![group_key_builder.finish()]);
-                Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))))
-            }
             SerializePayload::AggregatePayload(p) => {
                 let state = self.flush_state.as_mut().unwrap();
                 let block = p.payload.aggregate_flush(state).unwrap();

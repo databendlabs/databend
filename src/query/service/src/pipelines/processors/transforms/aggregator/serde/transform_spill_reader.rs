@@ -41,23 +41,21 @@ use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
-type DeserializingMeta<Method, V> = (AggregateMeta<Method, V>, VecDeque<Vec<u8>>);
+type DeserializingMeta<V> = (AggregateMeta<V>, VecDeque<Vec<u8>>);
 
-pub struct TransformSpillReader<Method: HashMethodBounds, V: Send + Sync + 'static> {
+pub struct TransformSpillReader<V: Send + Sync + 'static> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     operator: Operator,
     semaphore: Arc<Semaphore>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
-    reading_meta: Option<AggregateMeta<Method, V>>,
-    deserializing_meta: Option<DeserializingMeta<Method, V>>,
+    reading_meta: Option<AggregateMeta<V>>,
+    deserializing_meta: Option<DeserializingMeta<V>>,
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
-    for TransformSpillReader<Method, V>
-{
+impl<V: Send + Sync + 'static> Processor for TransformSpillReader<V> {
     fn name(&self) -> String {
         String::from("TransformSpillReader")
     }
@@ -98,12 +96,12 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
 
             if let Some(block_meta) = data_block
                 .get_meta()
-                .and_then(AggregateMeta::<Method, V>::downcast_ref_from)
+                .and_then(AggregateMeta::<V>::downcast_ref_from)
             {
                 if matches!(block_meta, AggregateMeta::BucketSpilled(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
-                    self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
+                    self.reading_meta = AggregateMeta::<V>::downcast_from(block_meta);
                     return Ok(Event::Async);
                 }
 
@@ -114,7 +112,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     {
                         self.input.set_not_need_data();
                         let block_meta = data_block.take_meta().unwrap();
-                        self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
+                        self.reading_meta = AggregateMeta::<V>::downcast_from(block_meta);
                         return Ok(Event::Async);
                     }
                 }
@@ -137,10 +135,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
         if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
             match meta {
                 AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     debug_assert!(read_data.len() == 1);
@@ -164,9 +160,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         new_data.push(meta);
                     }
 
-                    self.deserialized_meta = Some(AggregateMeta::<Method, V>::create_partitioned(
-                        bucket, new_data,
-                    ));
+                    self.deserialized_meta =
+                        Some(AggregateMeta::<V>::create_partitioned(bucket, new_data));
                 }
             }
         }
@@ -179,8 +174,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
                 AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::Spilling(_) => unreachable!(),
-                AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
@@ -284,17 +277,14 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     }
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Method, V> {
+impl<V: Send + Sync + 'static> TransformSpillReader<V> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
         semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<
-            Method,
-            V,
-        > {
+        Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<V> {
             input,
             output,
             operator,
@@ -305,7 +295,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         })))
     }
 
-    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta<Method, V> {
+    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta<V> {
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
 
@@ -314,7 +304,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
             begin += column_layout as usize;
         }
 
-        AggregateMeta::<Method, V>::Serialized(SerializedPayload {
+        AggregateMeta::<V>::Serialized(SerializedPayload {
             bucket: payload.bucket,
             data_block: DataBlock::new_from_columns(columns),
             max_partition_count: payload.max_partition_count,
@@ -322,5 +312,5 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
     }
 }
 
-pub type TransformGroupBySpillReader<Method> = TransformSpillReader<Method, ()>;
-pub type TransformAggregateSpillReader<Method> = TransformSpillReader<Method, usize>;
+pub type TransformGroupBySpillReader = TransformSpillReader<()>;
+pub type TransformAggregateSpillReader = TransformSpillReader<usize>;

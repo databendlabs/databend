@@ -51,7 +51,6 @@ use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use super::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::HashTableCell;
-use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::BinaryKeysColumnBuilder;
@@ -550,54 +549,6 @@ pub struct PartitionedHashMethod<Method: HashMethodBounds> {
 impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
     pub fn create(method: Method) -> PartitionedHashMethod<Method> {
         PartitionedHashMethod::<Method> { method }
-    }
-
-    pub fn convert_hashtable<T>(
-        method: &Method,
-        mut cell: HashTableCell<Method, T>,
-    ) -> Result<HashTableCell<PartitionedHashMethod<Method>, T>>
-    where
-        T: Copy + Send + Sync + 'static,
-        Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,
-    {
-        let instant = Instant::now();
-        let arena = Arc::new(Bump::new());
-        let partitioned_method = Self::create(method.clone());
-        let mut partitioned_hashtable = partitioned_method.create_hash_table(arena)?;
-
-        unsafe {
-            for item in cell.hashtable.iter() {
-                match partitioned_hashtable.insert_and_entry(item.key()) {
-                    Ok(mut entry) => {
-                        *entry.get_mut() = *item.get();
-                    }
-                    Err(mut entry) => {
-                        *entry.get_mut() = *item.get();
-                    }
-                };
-            }
-        }
-
-        info!(
-            "Convert to Partitioned HashTable elapsed: {:?}",
-            instant.elapsed()
-        );
-
-        let arena = std::mem::replace(&mut cell.arena, Area::create());
-        cell.arena_holders.push(ArenaHolder::create(Some(arena)));
-        let arena_holders = cell.arena_holders.to_vec();
-
-        let _old_dropper = cell._dropper.clone().unwrap();
-        let _new_dropper = PartitionedHashTableDropper::<Method, T>::create(_old_dropper);
-
-        // TODO(winter): No idea(may memory leak).
-        // We need to ensure that the following two lines of code are atomic.
-        // take_old_dropper before create new HashTableCell - may memory leak
-        // create new HashTableCell before take_old_dropper - may double free memory
-        let _old_dropper = cell._dropper.take();
-        let mut cell = HashTableCell::create(partitioned_hashtable, _new_dropper);
-        cell.arena_holders = arena_holders;
-        Ok(cell)
     }
 }
 

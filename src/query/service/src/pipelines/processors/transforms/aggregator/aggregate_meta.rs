@@ -36,11 +36,6 @@ use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 
-pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
-    pub bucket: isize,
-    pub cell: HashTableCell<T, V>,
-}
-
 pub struct SerializedPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
@@ -123,42 +118,31 @@ pub struct AggregatePayload {
     pub max_partition_count: usize,
 }
 
-pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
+pub enum AggregateMeta<V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
-    HashTable(HashTablePayload<Method, V>),
     AggregatePayload(AggregatePayload),
     AggregateSpilling(PartitionedPayload),
     BucketSpilled(BucketSpilledPayload),
     Spilled(Vec<BucketSpilledPayload>),
-    Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V> {
-    pub fn create_hashtable(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::HashTable(HashTablePayload {
-            cell,
-            bucket,
-        }))
-    }
-
+impl<V: Send + Sync + 'static> AggregateMeta<V> {
     pub fn create_agg_payload(
         bucket: isize,
         payload: Payload,
         max_partition_count: usize,
     ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::AggregatePayload(
-            AggregatePayload {
-                bucket,
-                payload,
-                max_partition_count,
-            },
-        ))
+        Box::new(AggregateMeta::<V>::AggregatePayload(AggregatePayload {
+            bucket,
+            payload,
+            max_partition_count,
+        }))
     }
 
     pub fn create_agg_spilling(payload: PartitionedPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::AggregateSpilling(payload))
+        Box::new(AggregateMeta::<V>::AggregateSpilling(payload))
     }
 
     pub fn create_serialized(
@@ -166,64 +150,49 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         block: DataBlock,
         max_partition_count: usize,
     ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::Serialized(SerializedPayload {
+        Box::new(AggregateMeta::<V>::Serialized(SerializedPayload {
             bucket,
             data_block: block,
             max_partition_count,
         }))
     }
 
-    pub fn create_spilling(
-        cell: HashTableCell<PartitionedHashMethod<Method>, V>,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::Spilling(HashTablePayload {
-            cell,
-            bucket: 0,
-        }))
-    }
-
     pub fn create_spilled(buckets_payload: Vec<BucketSpilledPayload>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::Spilled(buckets_payload))
+        Box::new(AggregateMeta::<V>::Spilled(buckets_payload))
     }
 
     pub fn create_bucket_spilled(payload: BucketSpilledPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::BucketSpilled(payload))
+        Box::new(AggregateMeta::<V>::BucketSpilled(payload))
     }
 
     pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::Partitioned { data, bucket })
+        Box::new(AggregateMeta::<V>::Partitioned { data, bucket })
     }
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
-    for AggregateMeta<Method, V>
-{
+impl<V: Send + Sync + 'static> serde::Serialize for AggregateMeta<V> {
     fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
 
-impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize<'de>
-    for AggregateMeta<Method, V>
-{
+impl<'de, V: Send + Sync + 'static> serde::Deserialize<'de> for AggregateMeta<V> {
     fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta<Method, V> {
+impl<V: Send + Sync + 'static> Debug for AggregateMeta<V> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            AggregateMeta::HashTable(_) => f.debug_struct("AggregateMeta::HashTable").finish(),
             AggregateMeta::Partitioned { .. } => {
                 f.debug_struct("AggregateMeta::Partitioned").finish()
             }
             AggregateMeta::Serialized { .. } => {
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
-            AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
             AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
             AggregateMeta::AggregatePayload(_) => {
@@ -236,9 +205,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
     }
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
-    for AggregateMeta<Method, V>
-{
+impl<V: Send + Sync + 'static> BlockMetaInfo for AggregateMeta<V> {
     fn typetag_deserialize(&self) {
         unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
     }
