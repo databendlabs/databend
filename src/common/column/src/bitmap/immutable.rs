@@ -499,6 +499,14 @@ impl Bitmap {
     pub fn into_array_data(&self) -> ArrayData {
         ArrayData::from(self)
     }
+
+    pub fn map_all_sets_to_none(v: Option<Bitmap>) -> Option<Bitmap> {
+        match v {
+            Some(v) if v.unset_bits == 0 => None,
+            None => None,
+            other => other,
+        }
+    }
 }
 
 impl<'a> IntoIterator for &'a Bitmap {
