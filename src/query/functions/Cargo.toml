@@ -10,6 +10,11 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
+arrow-array = { workspace = true }
+arrow-cast = { workspace = true }
+arrow-schema = { workspace = true }
+arrow-select = { workspace = true }
+arrow-udf-js = { workspace = true }
 base64 = { workspace = true }
 blake3 = { workspace = true }
 borsh = { workspace = true, features = ["derive"] }

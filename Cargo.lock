@@ -3364,6 +3364,11 @@ dependencies = [
 name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
+ "arrow-cast",
+ "arrow-schema",
+ "arrow-select",
+ "arrow-udf-js",
  "base64 0.22.1",
  "blake3",
  "borsh",
