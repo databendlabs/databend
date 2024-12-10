@@ -45,7 +45,7 @@ use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
         self.cte_tables.clear();
         self.bound_tables.clear();

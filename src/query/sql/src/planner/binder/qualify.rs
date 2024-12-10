@@ -112,7 +112,7 @@ impl<'a> QualifyChecker<'a> {
     }
 }
 
-impl<'a> VisitorMut<'_> for QualifyChecker<'a> {
+impl VisitorMut<'_> for QualifyChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::WindowFunction(window) = expr {
             if let Some(column) = self
