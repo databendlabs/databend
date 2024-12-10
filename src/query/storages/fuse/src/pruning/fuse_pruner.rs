@@ -443,6 +443,53 @@ impl FusePruner {
         }
     }
 
+    // Temporarily using, will remove after finish pruning refactor.
+    pub async fn segment_pruning(
+        &self,
+        mut segment_locs: Vec<SegmentLocation>,
+    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+        // Segment pruner.
+        let segment_pruner =
+            SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
+
+        let mut remain = segment_locs.len() % self.max_concurrency;
+        let batch_size = segment_locs.len() / self.max_concurrency;
+        let mut works = Vec::with_capacity(self.max_concurrency);
+        while !segment_locs.is_empty() {
+            let gap_size = std::cmp::min(1, remain);
+            let batch_size = batch_size + gap_size;
+            remain -= gap_size;
+
+            let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
+            works.push(self.pruning_ctx.pruning_runtime.spawn({
+                let segment_pruner = segment_pruner.clone();
+                let pruning_ctx = self.pruning_ctx.clone();
+                async move {
+                    // Build pruning tasks.
+                    if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
+                        batch = batch
+                            .into_iter()
+                            .filter(|segment| {
+                                internal_column_pruner
+                                    .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
+                            })
+                            .collect::<Vec<_>>();
+                    }
+                    let pruned_segments = segment_pruner.pruning(batch).await?;
+                    Result::<_>::Ok(pruned_segments)
+                }
+            }));
+        }
+
+        let workers = futures::future::try_join_all(works).await?;
+        let mut pruned_segments = vec![];
+        for worker in workers {
+            let res = worker?;
+            pruned_segments.extend(res);
+        }
+        Ok(pruned_segments)
+    }
+
     fn extract_block_metas(
         segment_path: &str,
         segment: &CompactSegmentInfo,
@@ -575,7 +622,7 @@ impl FusePruner {
     }
 }
 
-fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>> {
+pub fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>> {
     let mut sample_probability = None;
     if let Some(sample) = push_down_info
         .as_ref()
