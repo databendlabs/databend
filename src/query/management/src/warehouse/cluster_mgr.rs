@@ -208,8 +208,8 @@ impl ClusterApi for ClusterMgr {
             let res = self.metastore.transaction(txn).await?;
 
             if res.success
-                && map_response(res.responses.get(0)).is_some()
-                && map_response(res.responses.get(1)).is_some()
+                && map_response(res.responses.first()).is_some()
+                && map_response(res.responses.last()).is_some()
             {
                 return Ok(());
             }
