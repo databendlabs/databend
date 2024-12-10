@@ -48,26 +48,18 @@ fn test_serde_node_info() {
         flight_address: "1.2.3.4:123".to_string(),
         discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
-        cluster_id: "test_cluster".to_string(),
-        warehouse_id: "test_warehouse".to_string(),
+        cluster_id: String::new(),
+        warehouse_id: String::new(),
     };
 
-    let serde_info: NodeInfo = serde_json::from_slice(&serde_json::to_vec(&info).unwrap()).unwrap();
+    assert_eq!(
+        info,
+        serde_json::from_slice::<NodeInfo>(&serde_json::to_vec(&info).unwrap()).unwrap()
+    );
 
-    assert_eq!(serde_info.id, info.id);
-    assert_eq!(serde_info.secret, info.secret);
-    assert_eq!(serde_info.version, info.version);
-    assert_eq!(serde_info.cpu_nums, info.cpu_nums);
-    assert_eq!(serde_info.http_address, info.http_address);
-    assert_eq!(serde_info.flight_address, info.flight_address);
-    assert_eq!(serde_info.discovery_address, info.discovery_address);
-    assert_eq!(serde_info.binary_version, info.binary_version);
+    info.cluster_id = String::from("test-cluster-id");
+    info.warehouse_id = String::from("test-warehouse-id");
 
-    assert!(serde_info.cluster_id.is_empty());
-    assert!(serde_info.warehouse_id.is_empty());
-
-    info.cluster_id = String::new();
-    info.warehouse_id = String::new();
     assert_eq!(
         info,
         serde_json::from_slice::<NodeInfo>(&serde_json::to_vec(&info).unwrap()).unwrap()

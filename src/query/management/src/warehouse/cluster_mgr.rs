@@ -61,7 +61,7 @@ impl ClusterMgr {
             ),
             // all computing cluster of tenant
             meta_key_prefix: format!(
-                "{}/{}/computing_cluster",
+                "{}/{}/online_clusters",
                 CLUSTER_API_KEY_PREFIX,
                 escape_for_key(tenant)?
             ),
@@ -77,10 +77,11 @@ fn map_condition(k: &str, seq: MatchSeq) -> TxnCondition {
     }
 }
 
-fn map_response(res: Option<&TxnOpResponse>) -> Option<SeqV> {
+fn map_response(res: Option<&TxnOpResponse>) -> Option<&SeqV> {
     res.and_then(|response| response.response.as_ref())
         .and_then(|response| match response {
-            Response::Put(v) => v.prev_value.clone(),
+            Response::Put(v) => v.prev_value.as_ref(),
+            Response::Delete(v) => v.prev_value.as_ref(),
             _ => unreachable!(),
         })
 }
@@ -204,16 +205,20 @@ impl ClusterApi for ClusterMgr {
                 )));
             }
 
-            return match self.metastore.transaction(txn).await? {
-                res if res.success => Ok(()),
-                _ => Err(ErrorCode::ClusterUnknownNode(format!(
-                    "Node with ID '{}' does not exist in the cluster.",
-                    node_id
-                ))),
-            };
+            let res = self.metastore.transaction(txn).await?;
+
+            if res.success
+                && map_response(res.responses.get(0)).is_some()
+                && map_response(res.responses.get(1)).is_some()
+            {
+                return Ok(());
+            }
         }
 
-        Ok(())
+        Err(ErrorCode::ClusterUnknownNode(format!(
+            "Node with ID '{}' does not exist in the cluster.",
+            node_id
+        )))
     }
 
     #[async_backtrace::framed]
