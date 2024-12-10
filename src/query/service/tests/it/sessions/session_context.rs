@@ -68,5 +68,13 @@ async fn test_session_context() -> Result<()> {
         assert!(val.is_none());
     }
 
+    // Warehouse.
+    {
+        session_ctx.set_current_warehouse(Some("wt".to_string()));
+
+        let val = session_ctx.get_current_warehouse().unwrap();
+        assert_eq!("wt".to_string(), val);
+    }
+
     Ok(())
 }
