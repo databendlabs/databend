@@ -54,6 +54,7 @@ mod input_columns;
 mod kernels;
 mod property;
 mod register;
+mod register_comparision;
 pub mod row;
 pub mod schema;
 pub mod type_check;
