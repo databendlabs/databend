@@ -5121,6 +5121,7 @@ dependencies = [
  "sqllogictest",
  "sqlparser 0.50.0",
  "thiserror",
+ "threadpool",
  "tokio",
  "url",
  "walkdir",
