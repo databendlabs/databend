@@ -1772,7 +1772,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST((1, TRUE) AS Tuple(STRING))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String,)`, during run expr: `CAST(tuple(1, true) AS Tuple(String,))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String,)`
 
 
 
@@ -3995,7 +3995,7 @@ error:
   --> SQL:1:1
   |
 1 | TRY_CAST((1, TRUE) AS Tuple(STRING))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String NULL,) NULL`, during run expr: `TRY_CAST(tuple(1, true) AS Tuple(String NULL,) NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String,)`
 
 
 
