@@ -19,7 +19,7 @@ use serde::Serialize;
 
 #[derive(Default)]
 pub struct DataCacheMetrics {
-    bytes_from_remote_disk: AtomicUsize,
+    pub bytes_from_remote_disk: AtomicUsize,
     bytes_from_local_disk: AtomicUsize,
     bytes_from_memory: AtomicUsize,
 }
