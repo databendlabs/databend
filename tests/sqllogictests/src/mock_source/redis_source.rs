@@ -22,13 +22,13 @@ pub async fn run_redis_source() {
     let listener = TcpListener::bind("0.0.0.0:6179").await.unwrap();
 
     loop {
-        let (socket, _) = listener.accept().await.unwrap();
-
-        // A new task is spawned for each inbound socket. The socket is
-        // moved to the new task and processed there.
-        databend_common_base::runtime::spawn(async move {
-            process(socket).await;
-        });
+        if let Ok((socket, _)) = listener.accept().await {
+            // A new task is spawned for each inbound socket. The socket is
+            // moved to the new task and processed there.
+            databend_common_base::runtime::spawn(async move {
+                process(socket).await;
+            });
+        }
     }
 }
 

@@ -32,17 +32,24 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
+use threadpool::ThreadPool;
 
 pub fn run_mysql_source() {
     // Bind the listener to the address
     let listener = TcpListener::bind("0.0.0.0:3106").unwrap();
 
+    // Create a thread pool
+    let pool = ThreadPool::new(32);
     let backend = Backend::create();
+
     loop {
         if let Ok((socket, _)) = listener.accept() {
             let backend = backend.clone();
-            databend_common_base::runtime::Thread::spawn(move || {
-                MysqlIntermediary::run_on_tcp(backend, socket).unwrap();
+
+            pool.execute(move || {
+                if let Err(e) = MysqlIntermediary::run_on_tcp(backend, socket) {
+                    eprintln!("handle MySQL connection error: {}", e);
+                }
             });
         }
     }
