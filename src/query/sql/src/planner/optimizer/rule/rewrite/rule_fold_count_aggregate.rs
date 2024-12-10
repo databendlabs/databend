@@ -61,7 +61,10 @@ impl Rule for RuleFoldCountAggregate {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let agg: Aggregate = s_expr.plan().clone().try_into()?;
 
-        if agg.mode == AggregateMode::Final || agg.mode == AggregateMode::Partial {
+        if agg.mode == AggregateMode::Final
+            || agg.mode == AggregateMode::Partial
+            || !agg.pushdown_filter.is_empty()
+        {
             return Ok(());
         }
 
