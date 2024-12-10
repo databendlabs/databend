@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod cluster;
 mod connection;
 mod file_format;
 mod network_policy;
@@ -26,14 +25,13 @@ mod setting;
 mod stage;
 pub mod udf;
 mod user;
+mod warehouse;
 
 mod client_session;
 pub mod errors;
 mod procedure;
 
 pub use client_session::ClientSessionMgr;
-pub use cluster::ClusterApi;
-pub use cluster::ClusterMgr;
 pub use connection::ConnectionMgr;
 pub use file_format::FileFormatMgr;
 pub use network_policy::NetworkPolicyMgr;
@@ -52,3 +50,5 @@ pub use stage::StageApi;
 pub use stage::StageMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
+pub use warehouse::ClusterApi;
+pub use warehouse::ClusterMgr;
