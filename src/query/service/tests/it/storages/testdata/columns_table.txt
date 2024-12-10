@@ -134,6 +134,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'database_id'                     | 'system'             | 'background_tasks'       | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'database_id'                     | 'system'             | 'databases'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'database_id'                     | 'system'             | 'databases_with_history' | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'database_id'                     | 'system'             | 'tables'                 | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'database_id'                     | 'system'             | 'tables_with_history'    | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'database_id'                     | 'system'             | 'views'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'database_id'                     | 'system'             | 'views_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'databases'                       | 'system'             | 'query_log'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'datetime_precision'              | 'information_schema' | 'columns'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'default'                         | 'information_schema' | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
