@@ -181,7 +181,9 @@ impl Binder {
 
     // The return value is temp_table name`
     fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<()> {
-        let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
+        let engine = if self.ctx.get_settings().get_persist_materialized_cte()?
+            || !self.ctx.get_cluster().is_empty()
+        {
             Engine::Fuse
         } else {
             Engine::Memory
