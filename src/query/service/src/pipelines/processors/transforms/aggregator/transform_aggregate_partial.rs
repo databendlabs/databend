@@ -31,24 +31,14 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
-use databend_common_functions::aggregates::StateAddr;
-use databend_common_functions::aggregates::StateAddrs;
-use databend_common_hashtable::HashtableEntryMutRefLike;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use log::info;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::HashTableCell;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::sessions::QueryContext;
 #[allow(clippy::enum_variant_names)]
 enum HashTable {
@@ -63,7 +53,6 @@ impl Default for HashTable {
 }
 
 struct AggregateSettings {
-    convert_threshold: usize,
     max_memory_usage: usize,
     spilling_bytes_threshold_per_proc: usize,
 }
@@ -74,7 +63,6 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
-        let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let mut memory_ratio = settings.get_aggregate_spilling_memory_ratio()? as f64 / 100_f64;
 
         if memory_ratio > 1_f64 {
@@ -90,7 +78,6 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
         };
 
         Ok(AggregateSettings {
-            convert_threshold,
             max_memory_usage,
             spilling_bytes_threshold_per_proc: match settings
                 .get_aggregate_spilling_bytes_threshold_per_proc()?
@@ -115,13 +102,13 @@ pub struct TransformPartialAggregate {
 }
 
 impl TransformPartialAggregate {
-    pub fn create(
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
         config: HashTableConfig,
-    ) -> Box<dyn Processor> {
+    ) -> Result<Box<dyn Processor>> {
         let hash_table = {
             let arena = Arc::new(Bump::new());
             match !params.has_distinct_combinator() {
@@ -143,16 +130,20 @@ impl TransformPartialAggregate {
             }
         };
 
-        AccumulatingTransformer::create(input, output, TransformPartialAggregate {
-            params,
-            hash_table,
-            probe_state: ProbeState::default(),
-            settings: AggregateSettings::try_from(ctx)?,
-            start: Instant::now(),
-            first_block_start: None,
-            processed_bytes: 0,
-            processed_rows: 0,
-        })
+        Ok(AccumulatingTransformer::create(
+            input,
+            output,
+            TransformPartialAggregate {
+                params,
+                hash_table,
+                probe_state: ProbeState::default(),
+                settings: AggregateSettings::try_from(ctx)?,
+                start: Instant::now(),
+                first_block_start: None,
+                processed_bytes: 0,
+                processed_rows: 0,
+            },
+        ))
     }
 
     // Block should be `convert_to_full`.
@@ -168,57 +159,6 @@ impl TransformPartialAggregate {
     }
 
     #[inline(always)]
-    #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute(
-        params: &Arc<AggregatorParams>,
-        block: &DataBlock,
-        places: &StateAddrs,
-    ) -> Result<()> {
-        let AggregatorParams {
-            aggregate_functions,
-            offsets_aggregate_states,
-            aggregate_functions_arguments,
-            ..
-        } = &**params;
-
-        // This can beneficial for the case of dereferencing
-        // This will help improve the performance ~hundreds of megabits per second
-        let aggr_arg_columns = Self::aggregate_arguments(block, aggregate_functions_arguments);
-        let aggr_arg_columns = aggr_arg_columns.as_slice();
-        let rows = block.num_rows();
-        for index in 0..aggregate_functions.len() {
-            let function = &aggregate_functions[index];
-            function.accumulate_keys(
-                places,
-                offsets_aggregate_states[index],
-                aggr_arg_columns[index],
-                rows,
-            )?;
-        }
-
-        Ok(())
-    }
-
-    #[inline(always)]
-    #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute_agg_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
-        let aggregate_functions = &self.params.aggregate_functions;
-        let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-
-        let num_rows = block.num_rows();
-        for index in 0..aggregate_functions.len() {
-            // Aggregation states are in the back of the block.
-            let agg_index = block.num_columns() - aggregate_functions.len() + index;
-            let function = &aggregate_functions[index];
-            let offset = offsets_aggregate_states[index];
-            let agg_state = block.get_by_offset(agg_index).to_column(num_rows);
-
-            function.batch_merge(places, offset, &agg_state)?;
-        }
-
-        Ok(())
-    }
-
     fn execute_one_block(&mut self, block: DataBlock) -> Result<()> {
         let is_agg_index_block = block
             .get_meta()
@@ -303,7 +243,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     .repartition(1 << config.max_radix_bits, &mut state);
 
                 let blocks = vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<usize>::create_agg_spilling(partitioned_payload),
+                    AggregateMeta::create_agg_spilling(partitioned_payload),
                 )];
 
                 let arena = Arc::new(Bump::new());
@@ -354,7 +294,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<usize>::create_agg_payload(
+                            AggregateMeta::create_agg_payload(
                                 bucket as isize,
                                 payload,
                                 partition_count,

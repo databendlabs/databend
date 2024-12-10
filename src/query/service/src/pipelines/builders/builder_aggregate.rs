@@ -16,12 +16,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::with_hash_method;
-use databend_common_expression::with_mappedhash_method;
 use databend_common_expression::AggregateFunctionRef;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
@@ -124,12 +120,7 @@ impl PipelineBuilder {
             });
         }
 
-        let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
-
-        let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by.clone());
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
         let partial_agg_config = if !self.is_exchange_neighbor {
@@ -170,14 +161,14 @@ impl PipelineBuilder {
                         params.clone(),
                         partial_agg_config.clone(),
                     )?,
-                    false => TransformPartialAggregate::create(
+                    false => TransformPartialAggregate::try_create(
                         self.ctx.clone(),
                         input,
                         output,
                         params.clone(),
                         partial_agg_config.clone(),
-                    ),
-                }?,
+                    )?,
+                },
             ))
         })?;
 
@@ -209,11 +200,7 @@ impl PipelineBuilder {
             })?;
         }
 
-        self.exchange_injector = match params.aggregate_functions.is_empty() {
-            true => AggregateInjector::<()>::create(self.ctx.clone(), params.clone()),
-            false => AggregateInjector::<usize>::create(self.ctx.clone(), params.clone()),
-        };
-
+        self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
         Ok(())
     }
 
@@ -246,36 +233,28 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
-
-        let group_cols = &params.group_columns;
-        let schema_before_group_by = params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
-
         let old_inject = self.exchange_injector.clone();
-
         match params.aggregate_functions.is_empty() {
             true => {
                 let input: &PhysicalPlan = &aggregate.input;
                 if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                     self.exchange_injector =
-                        AggregateInjector::<()>::create(self.ctx.clone(), params.clone());
+                        AggregateInjector::create(self.ctx.clone(), params.clone());
                 }
 
                 self.build_pipeline(&aggregate.input)?;
                 self.exchange_injector = old_inject;
-                build_partition_bucket::<()>(&mut self.main_pipeline, params.clone())
+                build_partition_bucket(&mut self.main_pipeline, params.clone())
             }
             false => {
                 let input: &PhysicalPlan = &aggregate.input;
                 if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                     self.exchange_injector =
-                        AggregateInjector::<usize>::create(self.ctx.clone(), params.clone());
+                        AggregateInjector::create(self.ctx.clone(), params.clone());
                 }
                 self.build_pipeline(&aggregate.input)?;
                 self.exchange_injector = old_inject;
-                build_partition_bucket::<usize>(&mut self.main_pipeline, params.clone())
+                build_partition_bucket(&mut self.main_pipeline, params.clone())
             }
         }
     }

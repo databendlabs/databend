@@ -34,7 +34,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::PartitionedPayload;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -55,8 +54,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
@@ -117,7 +114,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 continue;
             }
 
-            match AggregateMeta::<usize>::downcast_from(block.take_meta().unwrap()) {
+            match AggregateMeta::downcast_from(block.take_meta().unwrap()) {
                 None => unreachable!(),
                 Some(AggregateMeta::Spilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
@@ -144,16 +141,16 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
 
                 Some(AggregateMeta::AggregatePayload(p)) => {
                     if index == self.local_pos {
-                        serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
-                            Some(Box::new(AggregateMeta::<usize>::AggregatePayload(p))),
-                        )?));
+                        serialized_blocks.push(FlightSerialized::DataBlock(
+                            block.add_meta(Some(Box::new(AggregateMeta::AggregatePayload(p))))?,
+                        ));
                         continue;
                     }
 
                     let bucket = compute_block_number(p.bucket, p.max_partition_count)?;
                     let stream = SerializeAggregateStream::create(
                         &self.params,
-                        SerializePayload::<usize>::AggregatePayload(p),
+                        SerializePayload::AggregatePayload(p),
                     );
                     let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
 

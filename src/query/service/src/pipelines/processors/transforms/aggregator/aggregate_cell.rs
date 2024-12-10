@@ -13,20 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
-use databend_common_functions::aggregates::StateAddr;
-use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
 
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 
 // Manage unsafe memory usage, free memory when the cell is destroyed.
 pub struct HashTableCell<T: HashMethodBounds, V: Send + Sync + 'static> {
@@ -85,74 +79,4 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
 pub trait HashTableDropper<T: HashMethodBounds, V: Send + Sync + 'static> {
     fn as_any(&self) -> &dyn Any;
     fn destroy(&self, hashtable: &mut T::HashTable<V>);
-}
-
-pub struct GroupByHashTableDropper<T: HashMethodBounds> {
-    _phantom: PhantomData<T>,
-}
-
-impl<T: HashMethodBounds> GroupByHashTableDropper<T> {
-    pub fn create() -> Arc<dyn HashTableDropper<T, ()>> {
-        Arc::new(GroupByHashTableDropper::<T> {
-            _phantom: Default::default(),
-        })
-    }
-}
-
-impl<T: HashMethodBounds> HashTableDropper<T, ()> for GroupByHashTableDropper<T> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn destroy(&self, _: &mut T::HashTable<()>) {
-        // do nothing
-    }
-}
-
-pub struct AggregateHashTableDropper<T: HashMethodBounds> {
-    params: Arc<AggregatorParams>,
-    _phantom: PhantomData<T>,
-}
-
-impl<T: HashMethodBounds> AggregateHashTableDropper<T> {
-    pub fn create(params: Arc<AggregatorParams>) -> Arc<dyn HashTableDropper<T, usize>> {
-        Arc::new(AggregateHashTableDropper::<T> {
-            params,
-            _phantom: Default::default(),
-        })
-    }
-}
-
-impl<T: HashMethodBounds> HashTableDropper<T, usize> for AggregateHashTableDropper<T> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn destroy(&self, hashtable: &mut T::HashTable<usize>) {
-        let aggregator_params = self.params.as_ref();
-        let aggregate_functions = &aggregator_params.aggregate_functions;
-        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
-
-        let functions = aggregate_functions
-            .iter()
-            .filter(|p| p.need_manual_drop_state())
-            .collect::<Vec<_>>();
-
-        let state_offsets = offsets_aggregate_states
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
-            .map(|(_, s)| *s)
-            .collect::<Vec<_>>();
-
-        if !state_offsets.is_empty() {
-            for group_entity in hashtable.iter() {
-                let place = Into::<StateAddr>::into(*group_entity.get());
-
-                for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
-                    unsafe { function.drop_state(place.next(*state_offset)) }
-                }
-            }
-        }
-    }
 }

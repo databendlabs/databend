@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -24,33 +23,23 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_hashtable::FastHash;
-use databend_common_hashtable::HashtableEntryMutRefLike;
-use databend_common_hashtable::HashtableEntryRefLike;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
-use strength_reduce::StrengthReducedU64;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::group_by::Area;
-use crate::pipelines::processors::transforms::group_by::ArenaHolder;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
@@ -59,19 +48,17 @@ use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
 
-struct AggregateExchangeSorting<V: Send + Sync + 'static> {
-    _phantom: PhantomData<V>,
-}
+struct AggregateExchangeSorting {}
 
 pub fn compute_block_number(bucket: isize, max_partition_count: usize) -> Result<isize> {
     Ok(max_partition_count as isize * 1000 + bucket)
 }
 
-impl<V: Send + Sync + 'static> ExchangeSorting for AggregateExchangeSorting<V> {
+impl ExchangeSorting for AggregateExchangeSorting {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
             None => Ok(-1),
-            Some(block_meta_info) => match AggregateMeta::<V>::downcast_ref_from(block_meta_info) {
+            Some(block_meta_info) => match AggregateMeta::downcast_ref_from(block_meta_info) {
                 None => Err(ErrorCode::Internal(format!(
                     "Internal error, AggregateExchangeSorting only recv AggregateMeta {:?}",
                     serde_json::to_string(block_meta_info)
@@ -93,9 +80,8 @@ impl<V: Send + Sync + 'static> ExchangeSorting for AggregateExchangeSorting<V> {
     }
 }
 
-struct HashTableHashScatter<V: Copy + Send + Sync + 'static> {
+struct HashTableHashScatter {
     buckets: usize,
-    _phantom: PhantomData<V>,
 }
 
 fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
@@ -181,10 +167,10 @@ fn scatter_partitioned_payload(
     Ok(buckets)
 }
 
-impl<V: Copy + Send + Sync + 'static> FlightScatter for HashTableHashScatter<V> {
+impl FlightScatter for HashTableHashScatter {
     fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data_block.take_meta() {
-            if let Some(block_meta) = AggregateMeta::<V>::downcast_from(block_meta) {
+            if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
                 let mut blocks = Vec::with_capacity(self.buckets);
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
@@ -196,7 +182,7 @@ impl<V: Copy + Send + Sync + 'static> FlightScatter for HashTableHashScatter<V> 
                             blocks.push(match p.len() == 0 {
                                 true => DataBlock::empty(),
                                 false => DataBlock::empty_with_meta(
-                                    AggregateMeta::<V>::create_agg_spilling(p),
+                                    AggregateMeta::create_agg_spilling(p),
                                 ),
                             });
                         }
@@ -205,13 +191,13 @@ impl<V: Copy + Send + Sync + 'static> FlightScatter for HashTableHashScatter<V> 
                         for payload in scatter_payload(p.payload, self.buckets)? {
                             blocks.push(match payload.len() == 0 {
                                 true => DataBlock::empty(),
-                                false => DataBlock::empty_with_meta(
-                                    AggregateMeta::<V>::create_agg_payload(
+                                false => {
+                                    DataBlock::empty_with_meta(AggregateMeta::create_agg_payload(
                                         p.bucket,
                                         payload,
                                         p.max_partition_count,
-                                    ),
-                                ),
+                                    ))
+                                }
                             });
                         }
                     }
@@ -227,29 +213,27 @@ impl<V: Copy + Send + Sync + 'static> FlightScatter for HashTableHashScatter<V> 
     }
 }
 
-pub struct AggregateInjector<V: Copy + Send + Sync + 'static> {
+pub struct AggregateInjector {
     ctx: Arc<QueryContext>,
     tenant: String,
     aggregator_params: Arc<AggregatorParams>,
-    _phantom: PhantomData<V>,
 }
 
-impl<V: Copy + Send + Sync + 'static> AggregateInjector<V> {
+impl AggregateInjector {
     pub fn create(
         ctx: Arc<QueryContext>,
         params: Arc<AggregatorParams>,
     ) -> Arc<dyn ExchangeInjector> {
         let tenant = ctx.get_tenant();
-        Arc::new(AggregateInjector::<V> {
+        Arc::new(AggregateInjector {
             ctx,
             tenant: tenant.tenant_name().to_string(),
             aggregator_params: params,
-            _phantom: Default::default(),
         })
     }
 }
 
-impl<V: Copy + Send + Sync + 'static> ExchangeInjector for AggregateInjector<V> {
+impl ExchangeInjector for AggregateInjector {
     fn flight_scatter(
         &self,
         _: &Arc<QueryContext>,
@@ -259,18 +243,15 @@ impl<V: Copy + Send + Sync + 'static> ExchangeInjector for AggregateInjector<V> 
             DataExchange::Merge(_) => unreachable!(),
             DataExchange::Broadcast(_) => unreachable!(),
             DataExchange::ShuffleDataExchange(exchange) => {
-                Ok(Arc::new(Box::new(HashTableHashScatter::<V> {
+                Ok(Arc::new(Box::new(HashTableHashScatter {
                     buckets: exchange.destination_ids.len(),
-                    _phantom: Default::default(),
                 })))
             }
         }
     }
 
     fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
-        Some(Arc::new(AggregateExchangeSorting::<V> {
-            _phantom: Default::default(),
-        }))
+        Some(Arc::new(AggregateExchangeSorting {}))
     }
 
     fn apply_merge_serializer(

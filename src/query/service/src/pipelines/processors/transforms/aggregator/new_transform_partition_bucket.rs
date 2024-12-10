@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -29,13 +28,21 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::DataOperator;
+use tokio::sync::Semaphore;
 
 use super::AggregatePayload;
+use super::TransformAggregateSpillReader;
 use super::TransformFinalAggregate;
+use super::TransformFinalGroupBy;
+use super::TransformGroupBySpillReader;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 static MAX_PARTITION_COUNT: usize = 128;
@@ -45,7 +52,7 @@ struct InputPortState {
     bucket: isize,
     max_partition_count: usize,
 }
-pub struct NewTransformPartitionBucket<V: Copy + Send + Sync + 'static> {
+pub struct NewTransformPartitionBucket {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
     params: Arc<AggregatorParams>,
@@ -57,10 +64,9 @@ pub struct NewTransformPartitionBucket<V: Copy + Send + Sync + 'static> {
     flush_state: PayloadFlushState,
     unpartitioned_blocks: Vec<DataBlock>,
     max_partition_count: usize,
-    _phantom: PhantomData<V>,
 }
 
-impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
+impl NewTransformPartitionBucket {
     pub fn create(input_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
@@ -84,7 +90,6 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
             initialized_all_inputs: false,
             all_inputs_init: false,
             max_partition_count: 0,
-            _phantom: Default::default(),
         })
     }
 
@@ -210,7 +215,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
         let (mut bucket, mut partition_count) = (0, 0);
         if let Some(block_meta) = data_block.get_meta() {
-            if let Some(block_meta) = AggregateMeta::<V>::downcast_ref_from(block_meta) {
+            if let Some(block_meta) = AggregateMeta::downcast_ref_from(block_meta) {
                 (bucket, partition_count) = match block_meta {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
@@ -218,7 +223,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
                         let meta = data_block.take_meta().unwrap();
 
                         if let Some(AggregateMeta::BucketSpilled(payload)) =
-                            AggregateMeta::<V>::downcast_from(meta)
+                            AggregateMeta::downcast_from(meta)
                         {
                             let bucket = payload.bucket;
                             let partition_count = payload.max_partition_count;
@@ -226,7 +231,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
                                 self.max_partition_count.max(partition_count);
 
                             let data_block = DataBlock::empty_with_meta(
-                                AggregateMeta::<V>::create_bucket_spilled(payload),
+                                AggregateMeta::create_bucket_spilled(payload),
                             );
                             match self.buckets_blocks.entry(bucket) {
                                 Entry::Vacant(v) => {
@@ -245,7 +250,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
                         let meta = data_block.take_meta().unwrap();
 
                         if let Some(AggregateMeta::Spilled(buckets_payload)) =
-                            AggregateMeta::<V>::downcast_from(meta)
+                            AggregateMeta::downcast_from(meta)
                         {
                             let partition_count = buckets_payload[0].max_partition_count;
                             self.max_partition_count =
@@ -254,7 +259,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
                             for bucket_payload in buckets_payload {
                                 let bucket = bucket_payload.bucket;
                                 let data_block = DataBlock::empty_with_meta(
-                                    AggregateMeta::<V>::create_bucket_spilled(bucket_payload),
+                                    AggregateMeta::create_bucket_spilled(bucket_payload),
                                 );
                                 match self.buckets_blocks.entry(bucket) {
                                     Entry::Vacant(v) => {
@@ -337,7 +342,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
         if payload.max_partition_count == self.max_partition_count {
             let bucket = payload.bucket;
             let data_block =
-                DataBlock::empty_with_meta(Box::new(AggregateMeta::<V>::Serialized(payload)));
+                DataBlock::empty_with_meta(Box::new(AggregateMeta::Serialized(payload)));
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);
@@ -368,7 +373,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
 
         for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
             blocks.push(Some(DataBlock::empty_with_meta(
-                AggregateMeta::<V>::create_agg_payload(
+                AggregateMeta::create_agg_payload(
                     bucket as isize,
                     payload,
                     self.max_partition_count,
@@ -384,7 +389,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
         if payload.max_partition_count == self.max_partition_count {
             let bucket = payload.bucket;
             let data_block =
-                DataBlock::empty_with_meta(Box::new(AggregateMeta::<V>::AggregatePayload(payload)));
+                DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(payload)));
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);
@@ -409,7 +414,7 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
 
         for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
             blocks.push(Some(DataBlock::empty_with_meta(
-                AggregateMeta::<V>::create_agg_payload(
+                AggregateMeta::create_agg_payload(
                     bucket as isize,
                     payload,
                     self.max_partition_count,
@@ -424,18 +429,18 @@ impl<V: Copy + Send + Sync + 'static> NewTransformPartitionBucket<V> {
         let mut data = Vec::with_capacity(data_blocks.len());
         for mut data_block in data_blocks.into_iter() {
             if let Some(block_meta) = data_block.take_meta() {
-                if let Some(block_meta) = AggregateMeta::<V>::downcast_from(block_meta) {
+                if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
                     data.push(block_meta);
                 }
             }
         }
 
-        DataBlock::empty_with_meta(AggregateMeta::<V>::create_partitioned(bucket, data))
+        DataBlock::empty_with_meta(AggregateMeta::create_partitioned(bucket, data))
     }
 }
 
 #[async_trait::async_trait]
-impl<V: Copy + Send + Sync + 'static> Processor for NewTransformPartitionBucket<V> {
+impl Processor for NewTransformPartitionBucket {
     fn name(&self) -> String {
         String::from("TransformPartitionBucket")
     }
@@ -533,7 +538,7 @@ impl<V: Copy + Send + Sync + 'static> Processor for NewTransformPartitionBucket<
             .unpartitioned_blocks
             .pop()
             .and_then(|mut block| block.take_meta())
-            .and_then(AggregateMeta::<V>::downcast_from);
+            .and_then(AggregateMeta::downcast_from);
 
         if let Some(agg_block_meta) = block_meta {
             let data_blocks = match agg_block_meta {
@@ -563,12 +568,12 @@ impl<V: Copy + Send + Sync + 'static> Processor for NewTransformPartitionBucket<
     }
 }
 
-pub fn build_partition_bucket<V: Copy + Send + Sync + 'static>(
+pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
-    let transform = NewTransformPartitionBucket::<V>::create(input_nums, params.clone())?;
+    let transform = NewTransformPartitionBucket::create(input_nums, params.clone())?;
 
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
@@ -586,18 +591,10 @@ pub fn build_partition_bucket<V: Copy + Send + Sync + 'static>(
     pipeline.add_transform(|input, output| {
         let operator = operator.clone();
         match params.aggregate_functions.is_empty() {
-            true => TransformGroupBySpillReader::<Method>::create(
-                input,
-                output,
-                operator,
-                semaphore.clone(),
-            ),
-            false => TransformAggregateSpillReader::<Method>::create(
-                input,
-                output,
-                operator,
-                semaphore.clone(),
-            ),
+            true => TransformGroupBySpillReader::create(input, output, operator, semaphore.clone()),
+            false => {
+                TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())
+            }
         }
     })?;
 

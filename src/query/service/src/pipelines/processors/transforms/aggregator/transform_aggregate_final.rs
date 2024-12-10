@@ -12,35 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::BorrowMut;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
-use databend_common_functions::aggregates::StateAddr;
-use databend_common_hashtable::HashtableEntryMutRefLike;
-use databend_common_hashtable::HashtableEntryRefLike;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::HashTableCell;
-use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 
 pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,
@@ -64,7 +51,7 @@ impl TransformFinalAggregate {
         ))
     }
 
-    fn transform_agg_hashtable(&mut self, meta: AggregateMeta<usize>) -> Result<DataBlock> {
+    fn transform_agg_hashtable(&mut self, meta: AggregateMeta) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             for bucket_data in data {
@@ -140,10 +127,10 @@ impl TransformFinalAggregate {
     }
 }
 
-impl BlockMetaTransform<AggregateMeta<usize>> for TransformFinalAggregate {
+impl BlockMetaTransform<AggregateMeta> for TransformFinalAggregate {
     const NAME: &'static str = "TransformFinalAggregate";
 
-    fn transform(&mut self, meta: AggregateMeta<usize>) -> Result<Vec<DataBlock>> {
-        return Ok(vec![self.transform_agg_hashtable(meta)?]);
+    fn transform(&mut self, meta: AggregateMeta) -> Result<Vec<DataBlock>> {
+        Ok(vec![self.transform_agg_hashtable(meta)?])
     }
 }

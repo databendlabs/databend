@@ -29,21 +29,14 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use log::info;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupByHashTableDropper;
-use crate::pipelines::processors::transforms::aggregator::aggregate_cell::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
@@ -59,7 +52,6 @@ impl Default for HashTable {
 }
 
 struct GroupBySettings {
-    convert_threshold: usize,
     max_memory_usage: usize,
     spilling_bytes_threshold_per_proc: usize,
 }
@@ -70,7 +62,6 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
-        let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let mut memory_ratio = settings.get_aggregate_spilling_memory_ratio()? as f64 / 100_f64;
 
         if memory_ratio > 1_f64 {
@@ -87,7 +78,6 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
 
         Ok(GroupBySettings {
             max_memory_usage,
-            convert_threshold,
             spilling_bytes_threshold_per_proc: match settings
                 .get_aggregate_spilling_bytes_threshold_per_proc()?
             {
@@ -192,7 +182,7 @@ impl AccumulatingTransform for TransformPartialGroupBy {
                         .payload
                         .repartition(1 << config.max_radix_bits, &mut state);
                     let blocks = vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<()>::create_agg_spilling(partitioned_payload),
+                        AggregateMeta::create_agg_spilling(partitioned_payload),
                     )];
 
                     let arena = Arc::new(Bump::new());
@@ -244,7 +234,7 @@ impl AccumulatingTransform for TransformPartialGroupBy {
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<()>::create_agg_payload(
+                            AggregateMeta::create_agg_payload(
                                 bucket as isize,
                                 payload,
                                 partition_count,

@@ -27,7 +27,6 @@ use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -38,8 +37,6 @@ use opendal::Operator;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::sessions::QueryContext;
 
 pub struct TransformGroupBySpillWriter {
@@ -50,7 +47,7 @@ pub struct TransformGroupBySpillWriter {
     operator: Operator,
     location_prefix: String,
     spilled_block: Option<DataBlock>,
-    spilling_meta: Option<AggregateMeta<()>>,
+    spilling_meta: Option<AggregateMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
 }
 
@@ -119,12 +116,12 @@ impl Processor for TransformGroupBySpillWriter {
 
             if let Some(block_meta) = data_block
                 .get_meta()
-                .and_then(AggregateMeta::<()>::downcast_ref_from)
+                .and_then(AggregateMeta::downcast_ref_from)
             {
                 if matches!(block_meta, AggregateMeta::AggregateSpilling(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
-                    self.spilling_meta = AggregateMeta::<()>::downcast_from(block_meta);
+                    self.spilling_meta = AggregateMeta::downcast_from(block_meta);
                     return Ok(Event::Sync);
                 }
             }
@@ -270,8 +267,8 @@ pub fn agg_spilling_group_by_payload(
             instant.elapsed()
         );
 
-        Ok(DataBlock::empty_with_meta(
-            AggregateMeta::<()>::create_spilled(spilled_buckets_payloads),
-        ))
+        Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+            spilled_buckets_payloads,
+        )))
     }))
 }

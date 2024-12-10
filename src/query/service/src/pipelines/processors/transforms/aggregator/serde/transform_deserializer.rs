@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -39,19 +38,17 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
-pub struct TransformDeserializer<V: Send + Sync + 'static> {
+pub struct TransformDeserializer {
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
-    _phantom: PhantomData<V>,
 }
 
-impl<V: Send + Sync + 'static> TransformDeserializer<V> {
+impl TransformDeserializer {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -62,10 +59,9 @@ impl<V: Send + Sync + 'static> TransformDeserializer<V> {
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
-            TransformDeserializer::<V> {
+            TransformDeserializer {
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
-                _phantom: Default::default(),
             },
         )))
     }
@@ -94,7 +90,7 @@ impl<V: Send + Sync + 'static> TransformDeserializer<V> {
                 Some(meta) => {
                     return match meta.typ == BUCKET_TYPE {
                         true => Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::<V>::create_serialized(
+                            AggregateMeta::create_serialized(
                                 meta.bucket,
                                 deserialize_block(
                                     dict,
@@ -151,9 +147,9 @@ impl<V: Send + Sync + 'static> TransformDeserializer<V> {
                                 }
                             }
 
-                            Ok(DataBlock::empty_with_meta(
-                                AggregateMeta::<V>::create_spilled(buckets_payload),
-                            ))
+                            Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+                                buckets_payload,
+                            )))
                         }
                     };
                 }
@@ -167,9 +163,7 @@ impl<V: Send + Sync + 'static> TransformDeserializer<V> {
     }
 }
 
-impl<V> BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer<V>
-where V: Send + Sync + 'static
-{
+impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer {
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformDeserializer";
 
@@ -187,5 +181,5 @@ where V: Send + Sync + 'static
     }
 }
 
-pub type TransformGroupByDeserializer = TransformDeserializer<()>;
-pub type TransformAggregateDeserializer = TransformDeserializer<usize>;
+pub type TransformGroupByDeserializer = TransformDeserializer;
+pub type TransformAggregateDeserializer = TransformDeserializer;

@@ -27,7 +27,6 @@ use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -39,20 +38,18 @@ use opendal::Operator;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::sessions::QueryContext;
 
 pub struct TransformAggregateSpillWriter {
     ctx: Arc<QueryContext>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    params: Arc<AggregatorParams>,
+    _params: Arc<AggregatorParams>,
 
     operator: Operator,
     location_prefix: String,
     spilled_block: Option<DataBlock>,
-    spilling_meta: Option<AggregateMeta<usize>>,
+    spilling_meta: Option<AggregateMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
 }
 
@@ -69,7 +66,7 @@ impl TransformAggregateSpillWriter {
             ctx,
             input,
             output,
-            params,
+            _params: params,
             operator,
             location_prefix,
             spilled_block: None,
@@ -122,12 +119,12 @@ impl Processor for TransformAggregateSpillWriter {
 
             if let Some(block_meta) = data_block
                 .get_meta()
-                .and_then(AggregateMeta::<usize>::downcast_ref_from)
+                .and_then(AggregateMeta::downcast_ref_from)
             {
                 if matches!(block_meta, AggregateMeta::AggregateSpilling(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
-                    self.spilling_meta = AggregateMeta::<usize>::downcast_from(block_meta);
+                    self.spilling_meta = AggregateMeta::downcast_from(block_meta);
                     return Ok(Event::Sync);
                 }
             }
@@ -269,8 +266,8 @@ pub fn agg_spilling_aggregate_payload(
             instant.elapsed()
         );
 
-        Ok(DataBlock::empty_with_meta(
-            AggregateMeta::<usize>::create_spilled(spilled_buckets_payloads),
-        ))
+        Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+            spilled_buckets_payloads,
+        )))
     }))
 }

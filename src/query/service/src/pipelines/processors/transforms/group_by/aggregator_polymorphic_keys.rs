@@ -14,7 +14,6 @@
 
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::time::Instant;
 
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
@@ -36,23 +35,17 @@ use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::DictionaryStringHashMap;
 use databend_common_hashtable::FastHash;
 use databend_common_hashtable::HashMap;
-use databend_common_hashtable::HashtableEntryMutRefLike;
-use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
 use databend_common_hashtable::LookupHashMap;
 use databend_common_hashtable::PartitionedHashMap;
 use databend_common_hashtable::ShortStringHashMap;
 use databend_common_hashtable::StringHashMap;
 use ethnum::U256;
-use log::info;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use super::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::HashTableCell;
-use crate::pipelines::processors::transforms::group_by::Area;
-use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::BinaryKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::DictionaryBinaryKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysColumnIter;

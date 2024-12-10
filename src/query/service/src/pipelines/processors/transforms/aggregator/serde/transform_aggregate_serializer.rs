@@ -14,18 +14,12 @@
 
 use std::any::Any;
 use std::pin::Pin;
-use std::ptr::NonNull;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PayloadFlushState;
-use databend_common_functions::aggregates::StateAddr;
-use databend_common_hashtable::HashtableEntryRefLike;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -33,13 +27,9 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use super::SerializePayload;
-use crate::pipelines::processors::transforms::aggregator::create_state_serializer;
-use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 pub struct TransformAggregateSerializer {
     params: Arc<AggregatorParams>,
 
@@ -127,7 +117,7 @@ impl TransformAggregateSerializer {
     fn transform_input_data(&mut self, mut data_block: DataBlock) -> Result<Event> {
         debug_assert!(data_block.is_empty());
         if let Some(block_meta) = data_block.take_meta() {
-            if let Some(block_meta) = AggregateMeta::<usize>::downcast_from(block_meta) {
+            if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
@@ -137,7 +127,7 @@ impl TransformAggregateSerializer {
                     AggregateMeta::AggregatePayload(p) => {
                         self.input_data = Some(SerializeAggregateStream::create(
                             &self.params,
-                            SerializePayload::<usize>::AggregatePayload(p),
+                            SerializePayload::AggregatePayload(p),
                         ));
                         return Ok(Event::Sync);
                     }
@@ -150,8 +140,8 @@ impl TransformAggregateSerializer {
 }
 
 pub struct SerializeAggregateStream {
-    params: Arc<AggregatorParams>,
-    pub payload: Pin<Box<SerializePayload<usize>>>,
+    _params: Arc<AggregatorParams>,
+    pub payload: Pin<Box<SerializePayload>>,
     flush_state: PayloadFlushState,
     end_iter: bool,
 }
@@ -161,16 +151,14 @@ unsafe impl Send for SerializeAggregateStream {}
 unsafe impl Sync for SerializeAggregateStream {}
 
 impl SerializeAggregateStream {
-    pub fn create(params: &Arc<AggregatorParams>, payload: SerializePayload<usize>) -> Self {
-        unsafe {
-            let payload = Box::pin(payload);
+    pub fn create(params: &Arc<AggregatorParams>, payload: SerializePayload) -> Self {
+        let payload = Box::pin(payload);
 
-            SerializeAggregateStream {
-                payload,
-                flush_state: PayloadFlushState::default(),
-                params: params.clone(),
-                end_iter: false,
-            }
+        SerializeAggregateStream {
+            payload,
+            flush_state: PayloadFlushState::default(),
+            _params: params.clone(),
+            end_iter: false,
         }
     }
 }

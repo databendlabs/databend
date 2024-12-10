@@ -39,23 +39,22 @@ use tokio::sync::Semaphore;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
-type DeserializingMeta<V> = (AggregateMeta<V>, VecDeque<Vec<u8>>);
+type DeserializingMeta = (AggregateMeta, VecDeque<Vec<u8>>);
 
-pub struct TransformSpillReader<V: Send + Sync + 'static> {
+pub struct TransformSpillReader {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     operator: Operator,
     semaphore: Arc<Semaphore>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
-    reading_meta: Option<AggregateMeta<V>>,
-    deserializing_meta: Option<DeserializingMeta<V>>,
+    reading_meta: Option<AggregateMeta>,
+    deserializing_meta: Option<DeserializingMeta>,
 }
 
 #[async_trait::async_trait]
-impl<V: Send + Sync + 'static> Processor for TransformSpillReader<V> {
+impl Processor for TransformSpillReader {
     fn name(&self) -> String {
         String::from("TransformSpillReader")
     }
@@ -96,12 +95,12 @@ impl<V: Send + Sync + 'static> Processor for TransformSpillReader<V> {
 
             if let Some(block_meta) = data_block
                 .get_meta()
-                .and_then(AggregateMeta::<V>::downcast_ref_from)
+                .and_then(AggregateMeta::downcast_ref_from)
             {
                 if matches!(block_meta, AggregateMeta::BucketSpilled(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
-                    self.reading_meta = AggregateMeta::<V>::downcast_from(block_meta);
+                    self.reading_meta = AggregateMeta::downcast_from(block_meta);
                     return Ok(Event::Async);
                 }
 
@@ -112,7 +111,7 @@ impl<V: Send + Sync + 'static> Processor for TransformSpillReader<V> {
                     {
                         self.input.set_not_need_data();
                         let block_meta = data_block.take_meta().unwrap();
-                        self.reading_meta = AggregateMeta::<V>::downcast_from(block_meta);
+                        self.reading_meta = AggregateMeta::downcast_from(block_meta);
                         return Ok(Event::Async);
                     }
                 }
@@ -161,7 +160,7 @@ impl<V: Send + Sync + 'static> Processor for TransformSpillReader<V> {
                     }
 
                     self.deserialized_meta =
-                        Some(AggregateMeta::<V>::create_partitioned(bucket, new_data));
+                        Some(AggregateMeta::create_partitioned(bucket, new_data));
                 }
             }
         }
@@ -277,14 +276,14 @@ impl<V: Send + Sync + 'static> Processor for TransformSpillReader<V> {
     }
 }
 
-impl<V: Send + Sync + 'static> TransformSpillReader<V> {
+impl TransformSpillReader {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
         semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<V> {
+        Ok(ProcessorPtr::create(Box::new(TransformSpillReader {
             input,
             output,
             operator,
@@ -295,7 +294,7 @@ impl<V: Send + Sync + 'static> TransformSpillReader<V> {
         })))
     }
 
-    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta<V> {
+    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta {
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
 
@@ -304,7 +303,7 @@ impl<V: Send + Sync + 'static> TransformSpillReader<V> {
             begin += column_layout as usize;
         }
 
-        AggregateMeta::<V>::Serialized(SerializedPayload {
+        AggregateMeta::Serialized(SerializedPayload {
             bucket: payload.bucket,
             data_block: DataBlock::new_from_columns(columns),
             max_partition_count: payload.max_partition_count,
@@ -312,5 +311,5 @@ impl<V: Send + Sync + 'static> TransformSpillReader<V> {
     }
 }
 
-pub type TransformGroupBySpillReader = TransformSpillReader<()>;
-pub type TransformAggregateSpillReader = TransformSpillReader<usize>;
+pub type TransformGroupBySpillReader = TransformSpillReader;
+pub type TransformAggregateSpillReader = TransformSpillReader;
