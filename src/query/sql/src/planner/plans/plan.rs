@@ -494,6 +494,7 @@ impl Plan {
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
+            Plan::Insert(plan) => plan.schema(),
 
             _ => Arc::new(DataSchema::empty()),
         }

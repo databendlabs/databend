@@ -11,7 +11,6 @@ doctest = false
 test = true
 
 [dependencies]
-async-trait = { workspace = true }
 dashmap = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
@@ -26,7 +25,6 @@ databend-common-storages-random = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-storages-common-index = { workspace = true }
-tokio = { workspace = true }
 
 [lints]
 workspace = true

@@ -106,8 +106,10 @@ async fn do_hook_compact(
             };
 
             // keep the original progress value
-            let progress = ctx.get_write_progress();
-            let progress_value = progress.as_ref().get_values();
+            let write_progress = ctx.get_write_progress();
+            let write_progress_value = write_progress.as_ref().get_values();
+            let scan_progress = ctx.get_scan_progress();
+            let scan_progress_value = scan_progress.as_ref().get_values();
 
             match GlobalIORuntime::instance().block_on({
                 compact_table(ctx, compact_target, compaction_limits, lock_opt)
@@ -119,7 +121,8 @@ async fn do_hook_compact(
             }
 
             // reset the progress value
-            progress.set(&progress_value);
+            write_progress.set(&write_progress_value);
+            scan_progress.set(&scan_progress_value);
             metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
         }
 

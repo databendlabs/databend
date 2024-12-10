@@ -15,9 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -28,6 +32,7 @@ use serde::Serialize;
 
 use super::Plan;
 use crate::plans::CopyIntoTablePlan;
+use crate::INSERT_NAME;
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {
@@ -115,6 +120,13 @@ impl Insert {
         let formatted_plan = StringType::from_data(line_split_result);
         result.push(DataBlock::new_from_columns(vec![formatted_plan]));
         Ok(vec![DataBlock::concat(&result)?])
+    }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![DataField::new(
+            INSERT_NAME,
+            DataType::Number(NumberDataType::UInt64),
+        )])
     }
 }
 

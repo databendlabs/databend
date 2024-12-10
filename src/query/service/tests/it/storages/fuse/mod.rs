@@ -19,6 +19,7 @@ mod io;
 mod meta;
 mod operations;
 mod pruning;
+mod pruning_pipeline;
 mod statistics;
 mod table;
 mod table_functions;
