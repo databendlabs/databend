@@ -145,12 +145,13 @@ impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
     }
-    pub fn try_create_ext(table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
-    }
 
     pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
         Self::do_create_table_ext(table_info, true)
+    }
+
+    pub fn try_create_ext(table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
+        Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
     }
 
     pub fn do_create_table_ext(
@@ -168,10 +169,14 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
                         let operator = init_operator(&sp)?;
-                        let table_type = if !disable_refresh
-                            && Self::is_table_attached(table_meta_options)
-                        {
-                            Self::refresh_table_info(&mut table_info, &operator, &storage_prefix)?;
+                        let table_type = if Self::is_table_attached(table_meta_options) {
+                            if !disable_refresh {
+                                Self::refresh_table_info(
+                                    &mut table_info,
+                                    &operator,
+                                    &storage_prefix,
+                                )?;
+                            }
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
