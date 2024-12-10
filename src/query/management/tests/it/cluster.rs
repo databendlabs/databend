@@ -22,7 +22,6 @@ use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -70,13 +69,17 @@ async fn test_already_exists_add_node() -> Result<()> {
 async fn test_successfully_get_nodes() -> Result<()> {
     let (_, cluster_api) = new_cluster_api().await?;
 
-    let nodes = cluster_api.get_nodes().await?;
+    let nodes = cluster_api
+        .get_nodes("test-cluster-id", "test-cluster-id")
+        .await?;
     assert_eq!(nodes, vec![]);
 
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
 
-    let nodes = cluster_api.get_nodes().await?;
+    let nodes = cluster_api
+        .get_nodes("test-cluster-id", "test-cluster-id")
+        .await?;
     assert_eq!(nodes, vec![node_info]);
     Ok(())
 }
@@ -88,12 +91,16 @@ async fn test_successfully_drop_node() -> Result<()> {
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
 
-    let nodes = cluster_api.get_nodes().await?;
+    let nodes = cluster_api
+        .get_nodes("test-cluster-id", "test-cluster-id")
+        .await?;
     assert_eq!(nodes, vec![node_info.clone()]);
 
-    cluster_api.drop_node(node_info.id, MatchSeq::GE(1)).await?;
+    cluster_api.drop_node(node_info.id).await?;
 
-    let nodes = cluster_api.get_nodes().await?;
+    let nodes = cluster_api
+        .get_nodes("test-cluster-id", "test-cluster-id")
+        .await?;
     assert_eq!(nodes, vec![]);
     Ok(())
 }
@@ -102,10 +109,7 @@ async fn test_successfully_drop_node() -> Result<()> {
 async fn test_unknown_node_drop_node() -> Result<()> {
     let (_, cluster_api) = new_cluster_api().await?;
 
-    match cluster_api
-        .drop_node(String::from("UNKNOWN_ID"), MatchSeq::GE(1))
-        .await
-    {
+    match cluster_api.drop_node(String::from("UNKNOWN_ID")).await {
         Ok(_) => panic!("Unknown node drop node must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2401),
     }
@@ -150,16 +154,14 @@ fn create_test_node_info() -> NodeInfo {
         flight_address: String::from("ip:port"),
         discovery_address: "ip2:port".to_string(),
         binary_version: "binary_version".to_string(),
+        cluster_id: "test-cluster-id".to_string(),
+        warehouse_id: "test-cluster-id".to_string(),
     }
 }
 
 async fn new_cluster_api() -> Result<(MetaStore, ClusterMgr)> {
     let test_api = MetaStore::L(Arc::new(MemMeta::default()));
-    let cluster_manager = ClusterMgr::create(
-        test_api.clone(),
-        "test-tenant-id",
-        "test-cluster-id",
-        Duration::from_secs(60),
-    )?;
+    let cluster_manager =
+        ClusterMgr::create(test_api.clone(), "test-tenant-id", Duration::from_secs(60))?;
     Ok((test_api, cluster_manager))
 }

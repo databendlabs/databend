@@ -82,6 +82,11 @@ pub struct NodeInfo {
     pub flight_address: String,
     pub discovery_address: String,
     pub binary_version: String,
+
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub cluster_id: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub warehouse_id: String,
 }
 
 impl NodeInfo {
@@ -103,6 +108,8 @@ impl NodeInfo {
             flight_address,
             discovery_address,
             binary_version,
+            cluster_id: "".to_string(),
+            warehouse_id: "".to_string(),
         }
     }
 
