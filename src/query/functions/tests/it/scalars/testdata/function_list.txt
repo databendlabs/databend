@@ -2288,6 +2288,8 @@ Functions overloads:
 1 is_string(Variant NULL) :: Boolean NULL
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
+0 jaro_winkler(String, String) :: Float64
+1 jaro_winkler(String NULL, String NULL) :: Float64 NULL
 0 jq FACTORY
 0 json_array FACTORY
 0 json_array_distinct(Variant) :: Variant
