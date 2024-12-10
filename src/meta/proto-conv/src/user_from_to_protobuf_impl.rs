@@ -193,6 +193,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage }) => {
                 Ok(mt::principal::GrantObject::Stage(stage))
             }
+            pb::grant_object::Object::Warehouse(pb::grant_object::GrantWarehouseObject {
+                warehouse,
+            }) => Ok(mt::principal::GrantObject::Warehouse(warehouse)),
         }
     }
 
@@ -233,6 +236,11 @@ impl FromToProto for mt::principal::GrantObject {
             mt::principal::GrantObject::Stage(stage) => Some(pb::grant_object::Object::Stage(
                 pb::grant_object::GrantStageObject {
                     stage: stage.clone(),
+                },
+            )),
+            mt::principal::GrantObject::Warehouse(w) => Some(pb::grant_object::Object::Warehouse(
+                pb::grant_object::GrantWarehouseObject {
+                    warehouse: w.clone(),
                 },
             )),
         };
