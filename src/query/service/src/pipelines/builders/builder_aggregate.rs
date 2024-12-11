@@ -129,7 +129,7 @@ impl PipelineBuilder {
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if !self.is_exchange_neighbor {
+        let partial_agg_config = if self.ctx.get_cluster().is_empty() {
             HashTableConfig::default().with_partial(true, max_threads as usize)
         } else {
             HashTableConfig::default()
