@@ -20,6 +20,7 @@ use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
+use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
@@ -656,6 +657,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
+    #[allow(clippy::bool_assert_comparison)]
     pub async fn kv_transaction<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_transaction() start");
         // first case: get and set one key transaction
@@ -853,64 +855,208 @@ impl kvapi::TestSuite {
 
         // 4th case: get one key by value and set key transaction
         {
+            /// Convert Some(KvMeta{ expire: None }) to None to simplify the comparison
+            fn norm(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
+                vs.into_iter()
+                    .map(|mut v| {
+                        //
+                        match &mut v.response {
+                            Some(Response::Get(TxnGetResponse {
+                                value: Some(pb::SeqV { meta, .. }),
+                                ..
+                            })) => {
+                                if *meta == Some(pb::KvMeta { expire_at: None }) {
+                                    *meta = None;
+                                }
+                            }
+                            Some(Response::Put(TxnPutResponse {
+                                prev_value: Some(pb::SeqV { meta, .. }),
+                                ..
+                            })) => {
+                                if *meta == Some(pb::KvMeta { expire_at: None }) {
+                                    *meta = None;
+                                }
+                            }
+                            _ => {}
+                        }
+                        v
+                    })
+                    .collect()
+            }
+
             let k1 = "txn_4_K1";
-            let val1 = b"v1".to_vec();
-            let val1_new = b"v1_new".to_vec();
 
-            // first insert k1 value
-            kv.upsert_kv(UpsertKV::update(k1, &val1)).await?;
+            kv.upsert_kv(UpsertKV::update(k1, b"v1")).await?;
 
-            // transaction by k1 condition
-            let txn_key1 = k1.to_string();
+            // Test eq value: success = false
 
-            let condition = vec![TxnCondition {
-                key: txn_key1.clone(),
-                expected: ConditionResult::Gt as i32,
-                target: Some(txn_condition::Target::Value(b"v".to_vec())),
-            }];
-
-            let if_then: Vec<TxnOp> = vec![
-                // change k1
-                TxnOp::put(txn_key1.clone(), val1_new.clone()),
-                // get k1
-                TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
-                },
-            ];
-
-            let else_then: Vec<TxnOp> = vec![];
             let txn = TxnRequest {
-                condition,
-                if_then,
-                else_then,
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Eq, b("v10"))],
+                if_then: vec![TxnOp::put(k1, b("v2")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> =
+                vec![TxnOpResponse::get(k1, Some(SeqV::new(8, b("v1"))))];
+
+            assert_eq!(resp.success, false);
+            assert_eq!(resp.responses, expected);
+
+            // Test eq value: success = true
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Eq, b("v1"))],
+                if_then: vec![TxnOp::put(k1, b("v2")), TxnOp::get(k1)],
+                else_then: vec![],
             };
 
             let resp = kv.transaction(txn).await?;
 
             let expected: Vec<TxnOpResponse> = vec![
-                // change k1
-                TxnOpResponse {
-                    response: Some(txn_op_response::Response::Put(TxnPutResponse {
-                        key: txn_key1.clone(),
-                        prev_value: Some(pb::SeqV::from(SeqV::new(8, val1.clone()))),
-                    })),
-                },
-                // get k1
-                TxnOpResponse {
-                    response: Some(txn_op_response::Response::Get(TxnGetResponse {
-                        key: txn_key1.clone(),
-                        value: Some(pb::SeqV::from(SeqV::with_meta(
-                            9,
-                            Some(KVMeta::default()),
-                            val1_new.clone(),
-                        ))),
-                    })),
-                },
+                TxnOpResponse::put(k1, Some(pb::SeqV::new(8, b("v1")))),
+                TxnOpResponse::get(k1, Some(SeqV::new(9, b("v2")))),
             ];
 
-            self.check_transaction_responses(&resp, &expected, true);
+            assert_eq!(resp.success, true);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test less than value: success = false
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Lt, b("v2"))],
+                if_then: vec![TxnOp::put(k1, b("v3")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> =
+                vec![TxnOpResponse::get(k1, Some(SeqV::new(9, b("v2"))))];
+
+            assert_eq!(resp.success, false);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test less than value: success = true
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Lt, b("v3"))],
+                if_then: vec![TxnOp::put(k1, b("v3")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> = vec![
+                TxnOpResponse::put(k1, Some(pb::SeqV::new(9, b("v2")))),
+                TxnOpResponse::get(k1, Some(SeqV::new(10, b("v3")))),
+            ];
+
+            assert_eq!(resp.success, true);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test less equal value: success = false
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Le, b("v0"))],
+                if_then: vec![TxnOp::put(k1, b("v4")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> =
+                vec![TxnOpResponse::get(k1, Some(SeqV::new(10, b("v3"))))];
+
+            assert_eq!(resp.success, false);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test less equal value: success = true
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Le, b("v3"))],
+                if_then: vec![TxnOp::put(k1, b("v4")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> = vec![
+                TxnOpResponse::put(k1, Some(pb::SeqV::new(10, b("v3")))),
+                TxnOpResponse::get(k1, Some(SeqV::new(11, b("v4")))),
+            ];
+
+            assert_eq!(resp.success, true);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test greater than value: success = false
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Gt, b("v5"))],
+                if_then: vec![TxnOp::put(k1, b("v5")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> =
+                vec![TxnOpResponse::get(k1, Some(SeqV::new(11, b("v4"))))];
+
+            assert_eq!(resp.success, false);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test greater than value: success = true
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Gt, b("v3"))],
+                if_then: vec![TxnOp::put(k1, b("v5")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> = vec![
+                TxnOpResponse::put(k1, Some(pb::SeqV::new(11, b("v4")))),
+                TxnOpResponse::get(k1, Some(SeqV::new(12, b("v5")))),
+            ];
+
+            assert_eq!(resp.success, true);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test greater equal value: success = false
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Ge, b("v6"))],
+                if_then: vec![TxnOp::put(k1, b("v6")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> =
+                vec![TxnOpResponse::get(k1, Some(SeqV::new(12, b("v5"))))];
+
+            assert_eq!(resp.success, false);
+            assert_eq!(norm(resp.responses), norm(expected));
+
+            // Test greater equal value: success = true
+
+            let txn = TxnRequest {
+                condition: vec![TxnCondition::match_value(k1, ConditionResult::Ge, b("v5"))],
+                if_then: vec![TxnOp::put(k1, b("v6")), TxnOp::get(k1)],
+                else_then: vec![TxnOp::get(k1)],
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            let expected: Vec<TxnOpResponse> = vec![
+                TxnOpResponse::put(k1, Some(pb::SeqV::new(12, b("v5")))),
+                TxnOpResponse::get(k1, Some(SeqV::new(13, b("v6")))),
+            ];
+
+            assert_eq!(resp.success, true);
+            assert_eq!(norm(resp.responses), norm(expected));
         }
         Ok(())
     }
