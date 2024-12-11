@@ -80,6 +80,7 @@ pub use aggregate_skewness::*;
 pub use aggregate_st_collect::*;
 pub use aggregate_string_agg::*;
 pub use aggregate_sum::*;
+pub use aggregate_udf_script::*;
 pub use aggregate_unary::*;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;

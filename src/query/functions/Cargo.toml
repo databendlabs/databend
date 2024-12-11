@@ -12,6 +12,7 @@ doctest = false
 [dependencies]
 arrow-array = { workspace = true }
 arrow-cast = { workspace = true }
+arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 arrow-udf-js = { workspace = true }

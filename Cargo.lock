@@ -3366,6 +3366,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-cast",
+ "arrow-ipc",
  "arrow-schema",
  "arrow-select",
  "arrow-udf-js",

@@ -57,6 +57,7 @@ use crate::aggregates::aggregate_skewness_function_desc;
 use crate::aggregates::aggregate_st_collect_function_desc;
 use crate::aggregates::aggregate_string_agg_function_desc;
 use crate::aggregates::aggregate_sum_function_desc;
+use crate::aggregates::aggregate_udf_script_function_desc;
 
 pub struct Aggregators;
 
@@ -147,6 +148,8 @@ impl Aggregators {
         factory.register("mode", aggregate_mode_function_desc());
 
         factory.register("st_collect", aggregate_st_collect_function_desc());
+
+        factory.register("udf", aggregate_udf_script_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
