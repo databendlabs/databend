@@ -1042,13 +1042,15 @@ impl Binder {
                     None
                 };
 
-                let s_expr = self.bind_recluster_table(
-                    catalog,
-                    database,
-                    table,
-                    limit.map(|v| v as usize),
-                    filters,
-                ).await?;
+                let s_expr = self
+                    .bind_recluster_table(
+                        catalog,
+                        database,
+                        table,
+                        limit.map(|v| v as usize),
+                        filters,
+                    )
+                    .await?;
                 Ok(Plan::ReclusterTable {
                     s_expr: Box::new(s_expr),
                     is_final: *is_final,
@@ -1112,6 +1114,8 @@ impl Binder {
                 Ok(SExpr::create_leaf(Arc::new(recluster)))
             }
             ClusterType::Hilbert => {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
                 let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
                 let cluster_keys_len = ast_exprs.len();
                 let settings = Settings::create(Tenant::new_literal("dummy"));
@@ -1167,7 +1171,10 @@ impl Binder {
                     unreachable!()
                 };
                 let mut bind_context = BindContext::new();
-                let (s_expr, _) = self.bind_query(&mut bind_context, query)?;
+                let (mut s_expr, _) = self.bind_query(&mut bind_context, query)?;
+                if tbl.change_tracking_enabled() {
+                    s_expr = set_update_stream_columns(&s_expr)?;
+                }
                 let s_expr = SExpr::create_unary(
                     Arc::new(RelOperator::Recluster(Recluster {
                         catalog,
@@ -1823,6 +1830,24 @@ impl Binder {
             .get_settings()
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
+    }
+}
+
+fn set_update_stream_columns(s_expr: &SExpr) -> Result<SExpr> {
+    match s_expr.plan() {
+        RelOperator::Scan(scan) if scan.table_index == 0 => {
+            let mut scan = scan.clone();
+            scan.set_update_stream_columns(true);
+            Ok(SExpr::create_leaf(Arc::new(scan.into())))
+        }
+        _ => {
+            let mut children = Vec::with_capacity(s_expr.arity());
+            for child in s_expr.children() {
+                let child = set_update_stream_columns(child)?;
+                children.push(Arc::new(child));
+            }
+            Ok(s_expr.replace_children(children))
+        }
     }
 }
 

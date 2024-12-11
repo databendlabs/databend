@@ -20,6 +20,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::executor::physical_plans::physical_commit_sink::ReclusterInfoSideCar;
 use crate::executor::physical_plans::CommitSink;
@@ -68,9 +69,12 @@ impl PhysicalPlanBuilder {
             table,
             filters,
             limit,
-            ..
+            cluster_type,
         } = recluster;
 
+        if matches!(cluster_type, ClusterType::Hilbert) {
+            return Err(ErrorCode::Internal("unsupported for hilbert clustering"));
+        }
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;

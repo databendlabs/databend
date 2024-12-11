@@ -143,7 +143,7 @@ impl ReclusterTableInterpreter {
         let start = SystemTime::now();
         let plan: Recluster = self.s_expr.plan().clone().try_into()?;
 
-        // try add lock table.
+        // try to add lock table.
         let lock_guard = self
             .ctx
             .clone()
