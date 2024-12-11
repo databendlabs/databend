@@ -218,6 +218,7 @@ impl Column {
             | Column::Geography(_)
             | Column::Binary(_)
             | Column::String(_)
+            | Column::Interval(_)
             | Column::Bitmap(_) => {
                 Self::concat_use_arrow(columns, first_column.data_type(), capacity)
             }

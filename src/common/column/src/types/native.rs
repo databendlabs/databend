@@ -17,9 +17,15 @@ use std::convert::TryFrom;
 use std::ops::Neg;
 use std::panic::RefUnwindSafe;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use databend_common_base::base::OrderedFloat;
+use num_traits::NumCast;
+use num_traits::ToPrimitive;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
 
 use super::PrimitiveType;
 
@@ -243,16 +249,48 @@ impl NativeType for days_ms {
 }
 
 /// The in-memory representation of the MonthDayNano variant of the "Interval" logical type.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Eq,
+    Hash,
+    Zeroable,
+    Pod,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
-pub struct months_days_ns(pub i32, pub i32, pub i64);
+pub struct months_days_micros(pub i32, pub i32, pub i64);
 
-impl months_days_ns {
-    /// A new [`months_days_ns`].
+impl NumCast for months_days_micros {
+    fn from<T: ToPrimitive>(n: T) -> Option<Self> {
+        n.to_i64().map(|n| Self::new(0, 0, n))
+    }
+}
+
+impl ToPrimitive for months_days_micros {
+    fn to_i64(&self) -> Option<i64> {
+        Some(self.2)
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        self.2.to_u64()
+    }
+}
+
+impl months_days_micros {
+    /// A new [`months_days_micros`].
     #[inline]
-    pub fn new(months: i32, days: i32, nanoseconds: i64) -> Self {
-        Self(months, days, nanoseconds)
+    pub fn new(months: i32, days: i32, micros: i64) -> Self {
+        Self(months, days, micros)
     }
 
     /// The number of months
@@ -267,21 +305,21 @@ impl months_days_ns {
         self.1
     }
 
-    /// The number of nanoseconds
+    /// The number of microseconds
     #[inline]
-    pub fn ns(&self) -> i64 {
+    pub fn micros(&self) -> i64 {
         self.2
     }
 }
 
-impl NativeType for months_days_ns {
+impl NativeType for months_days_micros {
     const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayNano;
     type Bytes = [u8; 16];
     #[inline]
     fn to_le_bytes(&self) -> Self::Bytes {
         let months = self.months().to_le_bytes();
         let days = self.days().to_le_bytes();
-        let ns = self.ns().to_le_bytes();
+        let micros = self.micros().to_le_bytes();
         let mut result = [0; 16];
         result[0] = months[0];
         result[1] = months[1];
@@ -292,7 +330,7 @@ impl NativeType for months_days_ns {
         result[6] = days[2];
         result[7] = days[3];
         (0..8).for_each(|i| {
-            result[8 + i] = ns[i];
+            result[8 + i] = micros[i];
         });
         result
     }
@@ -301,7 +339,7 @@ impl NativeType for months_days_ns {
     fn to_be_bytes(&self) -> Self::Bytes {
         let months = self.months().to_be_bytes();
         let days = self.days().to_be_bytes();
-        let ns = self.ns().to_be_bytes();
+        let micros = self.micros().to_be_bytes();
         let mut result = [0; 16];
         result[0] = months[0];
         result[1] = months[1];
@@ -312,7 +350,7 @@ impl NativeType for months_days_ns {
         result[6] = days[2];
         result[7] = days[3];
         (0..8).for_each(|i| {
-            result[8 + i] = ns[i];
+            result[8 + i] = micros[i];
         });
         result
     }
@@ -329,14 +367,14 @@ impl NativeType for months_days_ns {
         days[1] = bytes[5];
         days[2] = bytes[6];
         days[3] = bytes[7];
-        let mut ns = [0; 8];
+        let mut micros = [0; 8];
         (0..8).for_each(|i| {
-            ns[i] = bytes[8 + i];
+            micros[i] = bytes[8 + i];
         });
         Self(
             i32::from_le_bytes(months),
             i32::from_le_bytes(days),
-            i64::from_le_bytes(ns),
+            i64::from_le_bytes(micros),
         )
     }
 
@@ -352,14 +390,14 @@ impl NativeType for months_days_ns {
         days[1] = bytes[5];
         days[2] = bytes[6];
         days[3] = bytes[7];
-        let mut ns = [0; 8];
+        let mut micros = [0; 8];
         (0..8).for_each(|i| {
-            ns[i] = bytes[8 + i];
+            micros[i] = bytes[8 + i];
         });
         Self(
             i32::from_be_bytes(months),
             i32::from_be_bytes(days),
-            i64::from_be_bytes(ns),
+            i64::from_be_bytes(micros),
         )
     }
 }
@@ -370,9 +408,15 @@ impl std::fmt::Display for days_ms {
     }
 }
 
-impl std::fmt::Display for months_days_ns {
+impl std::fmt::Display for months_days_micros {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}m {}d {}ns", self.months(), self.days(), self.ns())
+        write!(
+            f,
+            "{}m {}d {}micros",
+            self.months(),
+            self.days(),
+            self.micros()
+        )
     }
 }
 
@@ -385,12 +429,12 @@ impl Neg for days_ms {
     }
 }
 
-impl Neg for months_days_ns {
+impl Neg for months_days_micros {
     type Output = Self;
 
     #[inline(always)]
     fn neg(self) -> Self::Output {
-        Self::new(-self.months(), -self.days(), -self.ns())
+        Self::new(-self.months(), -self.days(), -self.micros())
     }
 }
 

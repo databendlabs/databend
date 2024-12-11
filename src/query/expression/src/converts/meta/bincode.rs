@@ -43,6 +43,7 @@ pub enum LegacyScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
+    Interval(Vec<u8>),
     Boolean(bool),
     String(Vec<u8>),
     Array(LegacyColumn),
@@ -99,6 +100,7 @@ impl From<LegacyScalar> for Scalar {
             LegacyScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
             LegacyScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             LegacyScalar::Date(date) => Scalar::Date(date),
+            LegacyScalar::Interval(interval) => Scalar::Interval(interval),
             LegacyScalar::Boolean(b) => Scalar::Boolean(b),
             LegacyScalar::String(s) => Scalar::String(String::from_utf8_lossy(&s).into_owned()),
             LegacyScalar::Array(col) => Scalar::Array(col.into()),
@@ -173,7 +175,10 @@ impl From<Scalar> for LegacyScalar {
             Scalar::Timestamp(ts) => LegacyScalar::Timestamp(ts),
             Scalar::Date(date) => LegacyScalar::Date(date),
             Scalar::Boolean(b) => LegacyScalar::Boolean(b),
-            Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) => unreachable!(),
+            Scalar::Binary(_)
+            | Scalar::Geometry(_)
+            | Scalar::Geography(_)
+            | Scalar::Interval(_) => unreachable!(),
             Scalar::String(string) => LegacyScalar::String(string.as_bytes().to_vec()),
             Scalar::Array(column) => LegacyScalar::Array(column.into()),
             Scalar::Map(column) => LegacyScalar::Map(column.into()),
@@ -193,7 +198,10 @@ impl From<Column> for LegacyColumn {
             Column::Number(num_col) => LegacyColumn::Number(num_col),
             Column::Decimal(dec_col) => LegacyColumn::Decimal(dec_col),
             Column::Boolean(bmp) => LegacyColumn::Boolean(bmp),
-            Column::Binary(_) | Column::Geometry(_) | Column::Geography(_) => unreachable!(),
+            Column::Interval(_)
+            | Column::Binary(_)
+            | Column::Geometry(_)
+            | Column::Geography(_) => unreachable!(),
             Column::String(str_col) => {
                 LegacyColumn::String(LegacyBinaryColumn::from(BinaryColumn::from(str_col)))
             }

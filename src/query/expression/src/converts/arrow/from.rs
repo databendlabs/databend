@@ -23,6 +23,7 @@ use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binview::StringColumn;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -31,6 +32,7 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
+use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::types::ArrayColumn;
@@ -72,6 +74,7 @@ impl TryFrom<&Field> for TableField {
             ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
             ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
             ARROW_EXT_TYPE_GEOGRAPHY => TableDataType::Geography,
+            ARROW_EXT_TYPE_INTERVAL => TableDataType::Interval,
             _ => match arrow_f.data_type() {
                 ArrowDataType::Null => TableDataType::Null,
                 ArrowDataType::Boolean => TableDataType::Boolean,
@@ -328,6 +331,16 @@ impl Column {
             DataType::Bitmap => Column::Bitmap(try_to_binary_column(array)?),
             DataType::Variant => Column::Variant(try_to_binary_column(array)?),
             DataType::Geometry => Column::Geometry(try_to_binary_column(array)?),
+            DataType::Interval => {
+                let array = if !matches!(array.data_type(), ArrowDataType::FixedSizeBinary(16)) {
+                    arrow_cast::cast(array.as_ref(), &ArrowDataType::FixedSizeBinary(16))?
+                } else {
+                    array
+                };
+                let data = array.to_data();
+                let values = data.buffers()[0].clone();
+                Column::Interval(FixedSizeBinaryColumn::new(values.into(), 16))
+            }
             DataType::Geography => Column::Geography(GeographyColumn(try_to_binary_column(array)?)),
             DataType::Generic(_) => unreachable!("Generic type is not supported"),
         };

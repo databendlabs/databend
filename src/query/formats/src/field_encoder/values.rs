@@ -14,10 +14,14 @@
 
 use chrono_tz::Tz;
 use databend_common_base::base::OrderedFloat;
+use databend_common_column::fixedsizebinary::FixedSizeBinaryColumn;
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::NativeType;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::geography::GeographyColumn;
+use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
@@ -41,6 +45,7 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::GeometryDataType;
+use databend_common_io::Interval;
 use geozero::wkb::Ewkb;
 use jiff::tz::TimeZone;
 use lexical_core::ToLexical;
@@ -152,12 +157,12 @@ impl FieldEncoderValues {
             Column::Binary(c) => self.write_binary(c, row_index, out_buf),
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
+            Column::Interval(c) => self.write_interval(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
             Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
-
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
@@ -297,6 +302,29 @@ impl FieldEncoderValues {
     ) {
         let bitmap_result = "<bitmap binary>".as_bytes();
         self.write_string_inner(bitmap_result, out_buf, in_nested);
+    }
+
+    fn write_interval(
+        &self,
+        column: &FixedSizeBinaryColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.index_unchecked(row_index) };
+
+        let interval: [u8; 16] = v
+            .to_vec()
+            .try_into()
+            .expect("Interval should have 16 elements");
+        let v = months_days_micros::from_le_bytes(interval);
+        let s = interval_to_string(Interval {
+            months: v.0,
+            days: v.1,
+            micros: v.2,
+        })
+        .to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
     fn write_variant(
