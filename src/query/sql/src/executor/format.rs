@@ -1083,16 +1083,6 @@ fn aggregate_partial_to_format_tree(
         children.push(FormatTreeNode::new(format!("rank limit: {r}")));
     }
 
-    if !plan.pushdown_filter.is_empty() {
-        let f = plan
-            .pushdown_filter
-            .iter()
-            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .collect::<Vec<_>>()
-            .join(", ");
-        children.push(FormatTreeNode::new(format!("filter: {f}")));
-    }
-
     append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, profs)?);

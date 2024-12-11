@@ -121,7 +121,6 @@ impl RuleNormalizeAggregateOptimizer {
             from_distinct: aggregate.from_distinct,
             rank_limit: aggregate.rank_limit,
             grouping_sets: aggregate.grouping_sets,
-            pushdown_filter: aggregate.pushdown_filter,
         };
 
         let mut new_aggregate = SExpr::create_unary(

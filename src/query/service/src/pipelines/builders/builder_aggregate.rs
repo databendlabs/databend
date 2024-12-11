@@ -16,15 +16,12 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
@@ -105,14 +102,6 @@ impl PipelineBuilder {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
 
-        let predicate = aggregate
-            .pushdown_filter
-            .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
-            .try_reduce(|lhs, rhs| {
-                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-            })?;
-
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
             &aggregate.group_by,
@@ -121,13 +110,11 @@ impl PipelineBuilder {
             self.is_exchange_neighbor,
             max_block_size as usize,
             max_spill_io_requests as usize,
-            predicate,
         )?;
 
         if params.group_columns.is_empty() {
-            let ctx = self.ctx.get_function_context()?;
             return self.main_pipeline.try_add_accumulating_transformer(|| {
-                PartialSingleStateAggregator::try_new(&params, ctx.clone())
+                PartialSingleStateAggregator::try_new(&params)
             });
         }
 
@@ -208,7 +195,6 @@ impl PipelineBuilder {
             self.is_exchange_neighbor,
             max_block_size as usize,
             max_spill_io_requests as usize,
-            None,
         )?;
 
         if params.group_columns.is_empty() {
@@ -242,7 +228,6 @@ impl PipelineBuilder {
         cluster_aggregator: bool,
         max_block_size: usize,
         max_spill_io_requests: usize,
-        pushdown_filter: Option<Expr>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -285,7 +270,6 @@ impl PipelineBuilder {
             cluster_aggregator,
             max_block_size,
             max_spill_io_requests,
-            pushdown_filter,
         )?;
 
         Ok(params)

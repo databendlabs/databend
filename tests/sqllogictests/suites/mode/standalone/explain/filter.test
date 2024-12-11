@@ -48,26 +48,3 @@ Filter
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
     └── estimated rows: 0.00
-
-query T
-explain select sum(number) from numbers(10000) where number % 2 = 0
-----
-AggregateFinal
-├── output columns: [sum(number) (#1)]
-├── group by: []
-├── aggregate functions: [sum(number)]
-├── estimated rows: 1.00
-└── AggregatePartial
-    ├── group by: []
-    ├── aggregate functions: [sum(number)]
-    ├── estimated rows: 1.00
-    ├── filter: numbers.number (#0) % 2 = 0
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── output columns: [number (#0)]
-        ├── read rows: 10000
-        ├── read size: 78.12 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [numbers.number (#0) % 2 = 0], limit: NONE]
-        └── estimated rows: 10000.00

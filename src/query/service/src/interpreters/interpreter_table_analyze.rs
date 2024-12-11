@@ -303,7 +303,6 @@ fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
                         .enable_experimental_aggregate_hashtable,
                     group_by_display: plan.group_by_display,
                     stat_info: plan.stat_info,
-                    pushdown_filter: plan.pushdown_filter,
                 })
             }
             PhysicalPlan::AggregateFinal(plan) => PhysicalPlan::AggregateFinal(AggregateFinal {

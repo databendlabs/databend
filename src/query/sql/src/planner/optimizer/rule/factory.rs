@@ -23,7 +23,6 @@ use super::rewrite::RuleFilterNulls;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleMergeEvalScalar;
 use super::rewrite::RuleMergeFilter;
-use super::rewrite::RuleMergeFilterAggregate;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
@@ -92,7 +91,6 @@ impl RuleFactory {
                 Ok(Box::new(RulePushDownRankLimitAggregate::new()))
             }
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
-            RuleID::MergeFilterAggregate => Ok(Box::new(RuleMergeFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::PushDownFilterWindowTopN => {
                 Ok(Box::new(RulePushDownFilterWindowTopN::new(ctx.metadata)))

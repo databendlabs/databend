@@ -16,7 +16,6 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_column::bitmap::utils::ZipValidity;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
@@ -68,26 +67,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(())
     }
 
-    fn accumulate_keys_with_validity(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        columns: InputColumns,
-        validity: Option<&Bitmap>,
-        input_rows: usize,
-    ) -> Result<()> {
-        if validity.is_some() {
-            for x in ZipValidity::new_with_validity(places.iter().enumerate(), validity) {
-                if let Some((row, place)) = x {
-                    self.accumulate_row(place.next(offset), columns, row)?;
-                }
-            }
-            Ok(())
-        } else {
-            self.accumulate_keys(places, offset, columns, input_rows)
-        }
-    }
-
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, _place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()>;
 
@@ -121,26 +100,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         }
 
         Ok(())
-    }
-
-    fn batch_merge_with_validity(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        column: &Column,
-        validity: Option<&Bitmap>,
-    ) -> Result<()> {
-        if validity.is_some() {
-            let c = column.as_binary().unwrap();
-            for x in ZipValidity::new_with_validity(places.iter().zip(c.iter()), validity) {
-                if let Some((place, mut data)) = x {
-                    self.merge(place.next(offset), &mut data)?;
-                }
-            }
-            Ok(())
-        } else {
-            self.batch_merge(places, offset, column)
-        }
     }
 
     fn batch_merge_single(&self, place: StateAddr, column: &Column) -> Result<()> {
@@ -197,10 +156,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         _arguments: Vec<DataType>,
     ) -> Result<Option<AggregateFunctionRef>> {
         Ok(None)
-    }
-
-    fn ignore_null_values(&self) -> bool {
-        true
     }
 
     fn get_if_condition(&self, _columns: InputColumns) -> Option<Bitmap> {

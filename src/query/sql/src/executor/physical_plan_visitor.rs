@@ -193,7 +193,6 @@ pub trait PhysicalPlanReplacer {
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
             rank_limit: plan.rank_limit.clone(),
-            pushdown_filter: plan.pushdown_filter.clone(),
         }))
     }
 

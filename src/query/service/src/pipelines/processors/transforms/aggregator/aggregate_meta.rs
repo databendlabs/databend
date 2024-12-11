@@ -79,7 +79,6 @@ impl SerializedPayload {
             group_columns,
             &[(&[]).into()],
             agg_states,
-            None,
             rows_num,
         )?;
 

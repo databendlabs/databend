@@ -18,9 +18,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_column::bitmap::utils::ZipValidity;
-use databend_common_column::bitmap::Bitmap;
-use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::Result;
 
 use super::partitioned_payload::PartitionedPayload;
@@ -135,18 +132,10 @@ impl AggregateHashTable {
         group_columns: InputColumns,
         params: &[InputColumns],
         agg_states: InputColumns,
-        validity: Option<Bitmap>,
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_ADD_SIZE {
-            self.add_groups_inner(
-                state,
-                group_columns,
-                params,
-                agg_states,
-                validity,
-                row_count,
-            )
+            self.add_groups_inner(state, group_columns, params, agg_states, row_count)
         } else {
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_ADD_SIZE) {
@@ -165,16 +154,12 @@ impl AggregateHashTable {
                     .iter()
                     .map(|c| c.slice(start..end))
                     .collect::<Vec<_>>();
-                let validity = validity
-                    .as_ref()
-                    .map(|v| v.clone().sliced(start, end - start));
 
                 new_count += self.add_groups_inner(
                     state,
                     (&step_group_columns).into(),
                     &step_params,
                     (&agg_states).into(),
-                    validity,
                     end - start,
                 )?;
             }
@@ -189,33 +174,19 @@ impl AggregateHashTable {
         group_columns: InputColumns,
         params: &[InputColumns],
         agg_states: InputColumns,
-        validity: Option<Bitmap>,
         row_count: usize,
     ) -> Result<usize> {
-        let true_count = if let Some(v) = validity.as_ref() {
-            v.true_count()
-        } else {
-            row_count
-        };
-
-        state.row_count = true_count;
+        state.row_count = row_count;
         group_hash_columns(group_columns, &mut state.group_hashes);
 
         let new_group_count = if self.direct_append {
-            if validity.is_some() {
-                for (i, idx) in TrueIdxIter::new(row_count, validity.as_ref()).enumerate() {
-                    state.empty_vector[i] = idx;
-                }
-            } else {
-                for i in 0..row_count {
-                    state.empty_vector[i] = i;
-                }
+            for idx in 0..row_count {
+                state.empty_vector[idx] = idx;
             }
-
-            self.payload.append_rows(state, true_count, group_columns);
-            true_count
+            self.payload.append_rows(state, row_count, group_columns);
+            row_count
         } else {
-            self.probe_and_create(state, group_columns, validity.as_ref(), row_count)
+            self.probe_and_create(state, group_columns, row_count)
         };
 
         if !self.payload.aggrs.is_empty() {
@@ -237,17 +208,7 @@ impl AggregateHashTable {
                     .zip(params.iter())
                     .zip(self.payload.state_addr_offsets.iter())
                 {
-                    if validity.is_some() {
-                        aggr.accumulate_keys_with_validity(
-                            state_places,
-                            *addr_offset,
-                            *params,
-                            validity.as_ref(),
-                            row_count,
-                        )?;
-                    } else {
-                        aggr.accumulate_keys(state_places, *addr_offset, *params, row_count)?;
-                    }
+                    aggr.accumulate_keys(state_places, *addr_offset, *params, row_count)?;
                 }
             } else {
                 for ((aggr, agg_state), addr_offset) in self
@@ -257,16 +218,7 @@ impl AggregateHashTable {
                     .zip(agg_states.iter())
                     .zip(self.payload.state_addr_offsets.iter())
                 {
-                    if validity.is_some() {
-                        aggr.batch_merge_with_validity(
-                            state_places,
-                            *addr_offset,
-                            agg_state,
-                            validity.as_ref(),
-                        )?;
-                    } else {
-                        aggr.batch_merge(state_places, *addr_offset, agg_state)?;
-                    }
+                    aggr.batch_merge(state_places, *addr_offset, agg_state)?;
                 }
             }
         }
@@ -294,7 +246,6 @@ impl AggregateHashTable {
         &mut self,
         state: &mut ProbeState,
         group_columns: InputColumns,
-        validity: Option<&Bitmap>,
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
@@ -303,34 +254,17 @@ impl AggregateHashTable {
         }
 
         let mut new_group_count = 0;
-        let mut remaining_entries = if let Some(v) = validity {
-            v.true_count()
-        } else {
-            row_count
-        };
+        let mut remaining_entries = row_count;
 
         let entries = &mut self.entries;
 
         let mut group_hashes = new_sel();
         let mut hash_salts = [0_u64; BATCH_SIZE];
         let mask = self.capacity - 1;
-
         for i in 0..row_count {
             group_hashes[i] = state.group_hashes[i] as usize & mask;
             hash_salts[i] = state.group_hashes[i].get_salt();
-            if validity.is_none() {
-                state.no_match_vector[i] = i;
-            }
-        }
-
-        if validity.is_some() {
-            let mut i = 0;
-            for idx in ZipValidity::new_with_validity(0..row_count, validity) {
-                if let Some(idx) = idx {
-                    state.no_match_vector[i] = idx;
-                    i += 1;
-                }
-            }
+            state.no_match_vector[i] = i;
         }
 
         while remaining_entries > 0 {
@@ -460,7 +394,6 @@ impl AggregateHashTable {
             let _ = self.probe_and_create(
                 &mut flush_state.probe_state,
                 (&flush_state.group_columns).into(),
-                None,
                 row_count,
             );
 

@@ -20,7 +20,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_functions::aggregates::get_layout_offsets;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_sql::IndexType;
@@ -43,8 +42,6 @@ pub struct AggregatorParams {
     pub cluster_aggregator: bool,
     pub max_block_size: usize,
     pub max_spill_io_requests: usize,
-    // for inputs is filter, we pushdown the filter into aggregates
-    pub pushdown_filter: Option<Expr>,
 }
 
 impl AggregatorParams {
@@ -58,7 +55,6 @@ impl AggregatorParams {
         cluster_aggregator: bool,
         max_block_size: usize,
         max_spill_io_requests: usize,
-        pushdown_filter: Option<Expr>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
         let mut states_layout = None;
@@ -79,7 +75,6 @@ impl AggregatorParams {
             cluster_aggregator,
             max_block_size,
             max_spill_io_requests,
-            pushdown_filter,
         }))
     }
 
