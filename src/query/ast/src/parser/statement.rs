@@ -3084,9 +3084,31 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let warehouse_privs = map(
+        rule! {
+            USAGE ~ ON ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Warehouse(w.to_string()),
+        },
+    );
+
+    let warehouse_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Warehouse(w.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
+        | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
+        | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3229,11 +3251,16 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
     let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
         AccountMgrLevel::Stage(stage_name.to_string())
     });
+
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        AccountMgrLevel::Warehouse(w.to_string())
+    });
     rule!(
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 

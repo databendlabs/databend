@@ -293,6 +293,7 @@ build_exceptions! {
     // Cluster error codes.
     ClusterUnknownNode(2401),
     ClusterNodeAlreadyExists(2402),
+    InvalidWarehouse(2403),
 
     // Stage error codes.
     UnknownStage(2501),

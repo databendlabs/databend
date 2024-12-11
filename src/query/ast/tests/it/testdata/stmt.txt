@@ -16076,6 +16076,94 @@ Revoke(
 
 
 ---------- Input ----------
+GRANT all ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
 SHOW GRANTS ON TABLE db1.tb1;
 ---------- Output ---------
 SHOW GRANTS ON TABLE db1.tb1 

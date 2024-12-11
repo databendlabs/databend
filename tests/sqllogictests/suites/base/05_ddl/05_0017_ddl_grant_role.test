@@ -222,3 +222,45 @@ show grants for 'u@05_0017';
 
 statement ok
 drop user if exists 'u@05_0017';
+
+statement ok
+drop role if exists role1;
+
+statement ok
+drop role if exists role2;
+
+statement ok
+create role role1;
+
+statement ok
+create role role2;
+
+statement ok
+grant usage on warehouse a to role role1;
+
+statement ok
+grant usage on warehouse b to role role1;
+
+statement error 2217
+grant usage on warehouse a to role role2;
+
+statement ok
+grant usage on warehouse c to role role2;
+
+statement ok
+drop user if exists u1;
+
+statement ok
+create user u1 identified by '123';
+
+statement error 2218
+grant usage on warehouse a to u1;
+
+statement ok
+drop user if exists u1;
+
+statement ok
+drop role if exists role1;
+
+statement ok
+drop role if exists role2;
