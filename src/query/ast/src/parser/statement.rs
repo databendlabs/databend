@@ -3723,6 +3723,10 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
             }
         }),
+        map(
+            rule! { CLUSTER ~ ^BY ~ HILBERT ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" },
+            |(_, _, _, _, exprs, _)| OptimizeTableAction::ClusterBy { exprs },
+        ),
     ))(i)
 }
 

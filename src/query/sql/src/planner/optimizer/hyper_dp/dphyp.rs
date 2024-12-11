@@ -297,6 +297,7 @@ impl DPhpy {
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
             | RelOperator::Recluster(_)
+            | RelOperator::OptimizeClusterBy(_)
             | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

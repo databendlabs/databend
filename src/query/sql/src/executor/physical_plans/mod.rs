@@ -41,6 +41,7 @@ mod physical_mutation_into_organize;
 mod physical_mutation_into_split;
 mod physical_mutation_manipulate;
 mod physical_mutation_source;
+mod physical_optimize_cluster_by;
 mod physical_project_set;
 mod physical_r_cte_scan;
 mod physical_range_join;

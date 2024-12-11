@@ -197,6 +197,7 @@ impl SubqueryRewriter {
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
             | RelOperator::Recluster(_)
+            | RelOperator::OptimizeClusterBy(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }

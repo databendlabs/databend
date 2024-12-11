@@ -128,6 +128,10 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
             RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
+            RelOperator::OptimizeClusterBy(optimize) => {
+                self.build_optimize_cluster_by(s_expr, optimize, required)
+                    .await
+            }
         }
     }
 
