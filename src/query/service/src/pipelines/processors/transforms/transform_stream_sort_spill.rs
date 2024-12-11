@@ -14,6 +14,9 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::mem;
 use std::sync::Arc;
 
@@ -256,14 +259,14 @@ where
                 if finished {
                     self.state = State::Restore;
                 }
+                Ok(())
             }
             State::Restore => {
                 debug_assert!(self.input_data.is_empty());
-                self.on_restore().await?;
+                self.on_restore().await
             }
             _ => unreachable!(),
         }
-        Ok(())
     }
 }
 
@@ -671,9 +674,23 @@ where
 
         Ok(())
     }
+
+    #[allow(unused)]
+    pub fn format_memory_usage(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TransformStreamSortSpill")
+            .field("num_merge", &self.num_merge)
+            .field("batch_rows", &self.batch_rows)
+            .field("input_rows", &self.input_rows())
+            .field("current_memory_rows", &self.current_memory_rows())
+            .field("current", &self.current)
+            .field("subsequent_memory_rows", &self.subsequent_memory_rows())
+            .field("subsequent", &self.subsequent)
+            .field("has_output_merger", &self.output_merger.is_some())
+            .field("cur_bound", &self.cur_bound)
+            .finish()
+    }
 }
 
-#[derive(Debug)]
 struct SpillableBlock {
     data: Option<DataBlock>,
     rows: usize,
@@ -722,18 +739,41 @@ impl SpillableBlock {
     }
 }
 
+impl Debug for SpillableBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpillableBlock")
+            .field("has_data", &self.data.is_some())
+            .field("rows", &self.rows)
+            .field("location", &self.location)
+            .field("domain", &self.domain)
+            .field("processed", &self.processed)
+            .finish()
+    }
+}
+
 fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
     data.get_by_offset(sort_row_offset)
         .value
         .as_column()
         .unwrap()
 }
+
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
 struct BoundBlockStream<R: Rows> {
     blocks: VecDeque<SpillableBlock>,
     bound: Option<R>,
     sort_row_offset: usize,
     spiller: Arc<Spiller>,
+}
+
+impl<R: Rows> Debug for BoundBlockStream<R> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BoundBlockStream")
+            .field("blocks", &self.blocks)
+            .field("bound", &self.bound)
+            .field("sort_row_offset", &self.sort_row_offset)
+            .finish()
+    }
 }
 
 #[async_trait::async_trait]
