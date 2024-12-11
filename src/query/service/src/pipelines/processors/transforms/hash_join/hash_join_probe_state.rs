@@ -121,7 +121,7 @@ impl HashJoinProbeState {
                     .clone()
             })
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(HashJoinProbeState {
             ctx,
             func_ctx,
