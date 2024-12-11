@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_cell;
 mod aggregate_exchange_injector;
 mod aggregate_meta;
 mod aggregator_params;
@@ -24,7 +23,6 @@ mod transform_aggregate_partial;
 mod transform_single_key;
 mod utils;
 
-pub use aggregate_cell::HashTableCell;
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
 pub use aggregator_params::AggregatorParams;

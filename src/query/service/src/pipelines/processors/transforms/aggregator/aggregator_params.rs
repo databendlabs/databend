@@ -22,11 +22,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::get_layout_offsets;
 use databend_common_functions::aggregates::AggregateFunctionRef;
-use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
-
-use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
     pub input_schema: DataSchemaRef,
@@ -79,18 +76,6 @@ impl AggregatorParams {
             max_block_size,
             max_spill_io_requests,
         }))
-    }
-
-    pub fn alloc_layout(&self, area: &mut Area) -> StateAddr {
-        let layout = self.layout.unwrap();
-        let place = Into::<StateAddr>::into(area.alloc_layout(layout));
-
-        for idx in 0..self.offsets_aggregate_states.len() {
-            let aggr_state = self.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            self.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-        place
     }
 
     pub fn has_distinct_combinator(&self) -> bool {

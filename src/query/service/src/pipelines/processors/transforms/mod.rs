@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod aggregator;
-pub mod group_by;
 mod hash_join;
 pub(crate) mod range_join;
 mod transform_add_computed_columns;
