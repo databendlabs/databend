@@ -198,8 +198,10 @@ impl FuseTable {
                 ctx.get_runtime()?.try_spawn(
                     async move {
                         for part in part.partitions {
-                            // ignore the error, the sql may be killed or early stop
-                            let _ = sender.send(Ok(part)).await;
+                            // the sql may be killed or early stop, ignore the error
+                            if let Err(_e) = sender.send(Ok(part)).await {
+                                break;
+                            }
                         }
                     },
                     None,
@@ -230,7 +232,10 @@ impl FuseTable {
                     let segment_pruned_result =
                         pruner.clone().segment_pruning(lazy_init_segments).await?;
                     for segment in segment_pruned_result {
-                        let _ = segment_tx.send(Ok(segment)).await;
+                        // the sql may be killed or early stop, ignore the error
+                        if let Err(_e) = segment_tx.send(Ok(segment)).await {
+                            break;
+                        }
                     }
                     Ok::<_, ErrorCode>(())
                 },
