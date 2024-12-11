@@ -42,8 +42,6 @@ runs:
         taplo check
         taplo fmt --check
 
-
-    TODO: enable it later
     - name: Audit dependencies
       shell: bash
       if: "!contains(github.event.head_commit.message, 'skip audit')"
