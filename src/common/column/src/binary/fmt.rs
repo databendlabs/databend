@@ -39,11 +39,3 @@ impl Debug for BinaryColumn {
             .finish()
     }
 }
-
-// impl Debug for BinaryColumn {
-//     fn fmt(&self, f: &mut Formatter) -> Result {
-//         let writer = |f: &mut Formatter, index| write_value(self, index, f);
-//         write!(f, "BinaryColumn")?;
-//         write_vec(f, writer, None, self.len(), "None", false)
-//     }
-// }

@@ -4118,7 +4118,7 @@ output         : C39FF09F9880E5B1B1
 
 ast            : TRY_CAST(NULL AS BINARY)
 raw expr       : TRY_CAST(NULL AS Binary)
-checked expr   : try_to_binary<String NULL>(CAST(NULL AS String NULL))
+checked expr   : try_to_binary<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Binary NULL
 output domain  : {NULL}
@@ -4229,7 +4229,7 @@ output         : 'ß😀山'
 
 ast            : TRY_CAST(TRY_CAST(NULL AS BINARY) AS STRING)
 raw expr       : TRY_CAST(TRY_CAST(NULL AS Binary) AS String)
-checked expr   : try_to_string<Binary NULL>(try_to_binary<String NULL>(CAST(NULL AS String NULL)))
+checked expr   : try_to_string<Binary NULL>(try_to_binary<Variant NULL>(CAST(NULL AS Variant NULL)))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
