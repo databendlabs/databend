@@ -1,6 +1,7 @@
 SELECT '==TEST GLOBAL SORT==';
-SET max_vacuum_temp_files_after_query=0;
+SET max_vacuum_temp_files_after_query= 0;
 set sort_spilling_bytes_threshold_per_proc = 8;
+set enable_experimental_stream_sort_spilling = 0;
 DROP TABLE if EXISTS t;
 DROP TABLE IF EXISTS temp_files_count;
 
@@ -95,5 +96,6 @@ SELECT '==Test f==';
 INSERT INTO temp_files_count SELECT COUNT() as count, 8 as number FROM system.temp_files;
 
 unset max_vacuum_temp_files_after_query;
+unset enable_experimental_stream_sort_spilling;
 set sort_spilling_bytes_threshold_per_proc = 0;
 SELECT any_if(count, number = 8) - any_if(count, number = 7) FROM temp_files_count;
