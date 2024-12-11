@@ -16,9 +16,16 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::LimitType;
+use databend_common_expression::SortColumnDescription;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;

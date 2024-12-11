@@ -120,15 +120,15 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .as_ref()
             .map(|expr| {
                 let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let res = evaluator
-                    .run(expr)?
-                    .convert_to_full_column(&DataType::Boolean, block.num_rows())
-                    .as_boolean()
-                    .cloned()
-                    .unwrap();
-                Ok::<_, ErrorCode>(res)
+                evaluator.run(expr)
             })
             .transpose()?;
+        let bitmap = match validity {
+            Some(Value::Scalar(Scalar::Boolean(false))) => return Ok(vec![]),
+            Some(Value::Column(Column::Boolean(b))) => Some(b),
+            _ => None,
+        };
+        let validity = bitmap;
         let validity = Bitmap::map_all_sets_to_none(validity);
 
         let block = block.consume_convert_to_full();

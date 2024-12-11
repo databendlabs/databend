@@ -23,25 +23,25 @@ use crate::plans::Aggregate;
 use crate::plans::Filter;
 use crate::plans::RelOp;
 
-/// Input:   Aggregate(without group by)
+/// Input:   Aggregate
 ///           \
 ///            Filter
 ///             \
 ///              *
 ///
 /// Output:
-///       Aggregate with filter (without group by)
+///       Aggregate with filter
 ///           \
 ///            *
 
-/// Input:   Aggregate(without group by)
+/// Input:   Aggregate
 ///           \
 ///            EvalScalar
 ///             \
 ///              Filer
 ///
 /// Output:
-///       Aggregate with filter (without group by)
+///       Aggregate with filter
 ///           \
 ///            EvalScalar
 
@@ -89,9 +89,9 @@ impl Rule for RuleMergeFilterAggregate {
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let mut aggregate: Aggregate = s_expr.plan().clone().try_into()?;
-        if !aggregate.group_items.is_empty() {
-            return Ok(());
-        }
+        // if !aggregate.group_items.is_empty() {
+        //     return Ok(());
+        // }
 
         let child = s_expr.child(0)?;
         let result = match child.plan.as_ref() {

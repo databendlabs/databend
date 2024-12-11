@@ -22,15 +22,22 @@ use databend_common_base::base::convert_number_size;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -99,6 +106,7 @@ pub struct TransformPartialAggregate {
     first_block_start: Option<Instant>,
     processed_bytes: usize,
     processed_rows: usize,
+    func_ctx: FunctionContext,
 }
 
 impl TransformPartialAggregate {
@@ -129,6 +137,7 @@ impl TransformPartialAggregate {
                 }
             }
         };
+        let func_ctx = ctx.get_function_context()?;
 
         Ok(AccumulatingTransformer::create(
             input,
@@ -142,6 +151,7 @@ impl TransformPartialAggregate {
                 first_block_start: None,
                 processed_bytes: 0,
                 processed_rows: 0,
+                func_ctx,
             },
         ))
     }
@@ -203,11 +213,30 @@ impl TransformPartialAggregate {
                         (&[]).into()
                     };
 
+                    let validity = self
+                        .params
+                        .pushdown_filter
+                        .as_ref()
+                        .map(|expr| {
+                            let evaluator =
+                                Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            evaluator.run(expr)
+                        })
+                        .transpose()?;
+
+                    let validity = match validity {
+                        Some(Value::Scalar(Scalar::Boolean(false))) => return Ok(()),
+                        Some(Value::Column(Column::Boolean(b))) => Some(b),
+                        _ => None,
+                    };
+                    let validity = Bitmap::map_all_sets_to_none(validity);
+
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
                         group_columns,
                         &params_columns,
                         agg_states,
+                        validity,
                         rows_num,
                     )?;
                     Ok(())
