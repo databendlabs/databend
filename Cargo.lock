@@ -4130,7 +4130,6 @@ dependencies = [
 name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "dashmap 6.1.0",
  "databend-common-catalog",
  "databend-common-config",
@@ -4145,7 +4144,6 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-storages-common-index",
- "tokio",
 ]
 
 [[package]]
@@ -4531,6 +4529,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
+ "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-types",
@@ -5084,7 +5083,6 @@ dependencies = [
  "sha2",
  "socket2",
  "sqlx",
- "strength_reduce",
  "sysinfo",
  "temp-env",
  "tempfile",
@@ -5123,6 +5121,7 @@ dependencies = [
  "sqllogictest",
  "sqlparser 0.50.0",
  "thiserror",
+ "threadpool",
  "tokio",
  "url",
  "walkdir",

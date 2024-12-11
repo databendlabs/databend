@@ -542,6 +542,7 @@ mysql_common = "0.32.4"
 quickcheck = "1.0"
 sqllogictest = "0.21.0"
 sqlparser = "0.50.0"
+threadpool = "1.8"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"

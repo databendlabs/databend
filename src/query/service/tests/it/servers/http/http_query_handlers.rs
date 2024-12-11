@@ -290,7 +290,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 22, "{:?}", result);
+    assert_eq!(result.schema.len(), 23, "{:?}", result);
 
     // get state
     let uri = result.stats_uri.unwrap();
@@ -710,7 +710,7 @@ async fn test_insert() -> Result<()> {
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0, 0),
-        ("insert into t(a) values (1),(2)", 0, 2),
+        ("insert into t(a) values (1),(2)", 1, 2),
         ("select * from t", 2, 0),
     ];
 
@@ -1323,7 +1323,7 @@ async fn test_func_object_keys() -> Result<()> {
         ),
         (
             "INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));",
-            0,
+            1,
         ),
         (
             "SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;",
@@ -1349,9 +1349,9 @@ async fn test_multi_partition() -> Result<()> {
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
-        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 0),
-        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 0),
-        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 1),
+        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 1),
+        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 1),
         ("select * from tb2;", 6),
     ];
 
@@ -1682,7 +1682,7 @@ async fn test_has_result_set() -> Result<()> {
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
-        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", false),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", true),
         ("select * from tb2;", true),
     ];
 

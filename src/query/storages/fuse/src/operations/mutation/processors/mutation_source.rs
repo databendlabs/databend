@@ -177,7 +177,11 @@ impl Processor for MutationSource {
                     chunks,
                     &self.storage_format,
                 )?;
-                let num_rows = data_block.num_rows();
+                let rows = data_block.num_rows();
+                self.ctx.get_scan_progress().incr(&ProgressValues {
+                    rows,
+                    bytes: data_block.memory_size(),
+                });
 
                 let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                 if let Some(filter) = self.filter.as_ref() {
@@ -195,7 +199,7 @@ impl Processor for MutationSource {
                     let affect_rows = match &predicates {
                         Value::Scalar(v) => {
                             if *v {
-                                num_rows
+                                rows
                             } else {
                                 0
                             }
@@ -208,7 +212,7 @@ impl Processor for MutationSource {
 
                         match self.action {
                             MutationAction::Deletion => {
-                                if affect_rows == num_rows {
+                                if affect_rows == rows {
                                     // all the rows should be removed.
                                     let meta = Box::new(SerializeDataMeta::SerializeBlock(
                                         SerializeBlock::create(
@@ -222,7 +226,7 @@ impl Processor for MutationSource {
                                     );
                                 } else {
                                     if self.block_reader.update_stream_columns {
-                                        let row_num = build_origin_block_row_num(num_rows);
+                                        let row_num = build_origin_block_row_num(rows);
                                         data_block.add_column(row_num);
                                     }
 
@@ -268,7 +272,7 @@ impl Processor for MutationSource {
                         self.state = State::Output(self.ctx.get_partition(), DataBlock::empty());
                     }
                 } else {
-                    self.update_mutation_status(num_rows);
+                    self.update_mutation_status(rows);
                     self.state = State::PerformOperator(data_block, fuse_part.location.clone());
                 }
             }
@@ -286,6 +290,12 @@ impl Processor for MutationSource {
                         chunks,
                         &self.storage_format,
                     )?;
+
+                    // Record the remain memory size, rows has been recorded.
+                    self.ctx.get_scan_progress().incr(&ProgressValues {
+                        rows: 0,
+                        bytes: remain_block.memory_size(),
+                    });
 
                     let remain_block = if let Some(filter) = filter {
                         // for deletion.
@@ -414,12 +424,6 @@ impl Processor for MutationSource {
 
 impl MutationSource {
     fn update_mutation_status(&self, num_rows: usize) {
-        let progress_values = ProgressValues {
-            rows: num_rows,
-            bytes: 0,
-        };
-        self.ctx.get_write_progress().incr(&progress_values);
-
         let (update_rows, deleted_rows) = if self.action == MutationAction::Update {
             (num_rows as u64, 0)
         } else {

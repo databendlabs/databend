@@ -1,10 +1,14 @@
 ==TEST GLOBAL SORT==
+3
+1
 0
 1
 NULL
+1
 ==Test if the spill is activated==
 2
 ==Enable sort_spilling_bytes_threshold_per_proc==
+1
 0
 1
 NULL
@@ -15,11 +19,13 @@ NULL
 2	8
 1	9
 ==Test abc==
+2
 one
 Two
 4
 1
 ==Test xy==
+4
 2	NULL
 2	5
 NULL	6
@@ -32,9 +38,11 @@ NULL	6
 4	8
 NULL	6
 2	5
+1
 ==Test a==
 16
 ==Test b==
+1
 2	NULL
 2	5
 4	8
@@ -56,11 +64,14 @@ NULL	NULL
 2	NULL
 4	8
 ==TEST TOP-N SORT==
+1
 ==Test c==
 0
 ==Test d==
 1
+1
 ==Test e==
+1
 2	NULL
 2	5
 4	8
@@ -71,4 +82,5 @@ NULL	6
 NULL	NULL
 2	5
 ==Test f==
+1
 9
