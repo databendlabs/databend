@@ -188,6 +188,7 @@ pub struct VacuumDropTableOption {
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
     pub limit: Option<usize>,
+    pub force: bool,
 }
 
 #[derive(Debug, Clone)]
