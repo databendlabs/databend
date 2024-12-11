@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use databend_common_base::base::tokio::sync::Semaphore;
-use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
@@ -461,17 +460,6 @@ impl AggregationContext {
             // nothing to be deleted
             return Ok(None);
         }
-
-        let progress_values = ProgressValues {
-            rows: delete_nums,
-            // ignore bytes.
-            bytes: 0,
-        };
-
-        self.block_builder
-            .ctx
-            .get_write_progress()
-            .incr(&progress_values);
 
         // shortcut: whole block deletion
         if delete_nums == block_meta.row_count as usize {

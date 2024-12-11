@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -245,12 +244,7 @@ impl PhysicalPlanBuilder {
                             }
                         };
 
-                        let settings = self.ctx.get_settings();
-                        let efficiently_memory = settings.get_efficiently_memory_group_by()?;
-                        let enable_experimental_aggregate_hashtable =
-                            settings.get_enable_experimental_aggregate_hashtable()?;
-
-                        let keys = if enable_experimental_aggregate_hashtable {
+                        let keys = {
                             let schema = aggregate_partial.output_schema()?;
                             let start = aggregate_partial.agg_funcs.len();
                             let end = schema.num_fields();
@@ -265,23 +259,6 @@ impl PhysicalPlanBuilder {
                                 groups.push(group_key);
                             }
                             groups
-                        } else {
-                            let group_by_key_index =
-                                aggregate_partial.output_schema()?.num_fields() - 1;
-                            let group_by_key_data_type = DataBlock::choose_hash_method_with_types(
-                                &agg.group_items
-                                    .iter()
-                                    .map(|v| v.scalar.data_type())
-                                    .collect::<Result<Vec<_>>>()?,
-                                efficiently_memory,
-                            )?
-                            .data_type();
-                            vec![RemoteExpr::ColumnRef {
-                                span: None,
-                                id: group_by_key_index,
-                                data_type: group_by_key_data_type,
-                                display_name: "_group_by_key".to_string(),
-                            }]
                         };
 
                         PhysicalPlan::Exchange(Exchange {

@@ -17,13 +17,9 @@
 #![allow(unused_parens)]
 #![allow(unused_variables)]
 #![allow(clippy::redundant_closure)]
-use crate::property::Domain;
-use crate::types::nullable::NullableColumn;
-use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 use crate::EvalContext;
-use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionRegistry;
