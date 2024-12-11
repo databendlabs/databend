@@ -138,11 +138,11 @@ impl ClusterHelper for Cluster {
             )))
         }
 
-        let mut futures = Vec::with_capacity(message.len());
+        let mut response = HashMap::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
-            futures.push({
+            let do_action_with_retry = {
                 let config = GlobalConfig::instance();
                 let flight_address = node.flight_address.clone();
                 let node_secret = node.secret.clone();
@@ -161,7 +161,7 @@ impl ClusterHelper for Cluster {
                             )
                             .await
                         {
-                            Ok(result) => return Ok((id, result)),
+                            Ok(result) => return Ok(result),
                             Err(e)
                                 if e.code() == ErrorCode::CANNOT_CONNECT_NODE
                                     && attempt < flight_params.retry_times =>
@@ -175,10 +175,12 @@ impl ClusterHelper for Cluster {
                         }
                     }
                 }
-            });
+            };
+
+            response.insert(id, do_action_with_retry.await?);
         }
-        let responses: Vec<(String, Res)> = futures::future::try_join_all(futures).await?;
-        Ok(responses.into_iter().collect::<HashMap<String, Res>>())
+
+        Ok(response)
     }
 }
 
