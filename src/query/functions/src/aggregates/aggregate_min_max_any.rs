@@ -227,10 +227,10 @@ where
                     self.add(value, function_data)?;
                 }
             } else {
-                TrueIdxIter::new(v.len(), Some(v)).for_each(|idx| {
+                for idx in TrueIdxIter::new(v.len(), Some(v)) {
                     let v = unsafe { T::index_column_unchecked(&other, idx) };
                     self.add(v, function_data)?;
-                });
+                }
             };
         } else {
             let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
