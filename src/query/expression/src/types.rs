@@ -332,7 +332,7 @@ impl DataType {
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
-    type Column: Debug + Clone + PartialEq;
+    type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
     type ColumnBuilder: Debug + Clone;

@@ -143,8 +143,17 @@ impl Spiller {
         self.partition_location.keys().copied().collect()
     }
 
-    /// Spill a [`DataBlock`] to storage.
+    /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
     pub async fn spill(&mut self, data_block: Vec<DataBlock>) -> Result<Location> {
+        let (location, layout) = self.spill_unmanage(data_block).await?;
+
+        // Record columns layout for spilled data.
+        self.columns_layout.insert(location.clone(), layout);
+
+        Ok(location)
+    }
+
+    pub async fn spill_unmanage(&self, data_block: Vec<DataBlock>) -> Result<(Location, Layout)> {
         debug_assert!(!data_block.is_empty());
         let instant = Instant::now();
 
@@ -163,11 +172,9 @@ impl Spiller {
         // Record statistics.
         record_write_profile(&location, &instant, data_size);
 
-        // Record columns layout for spilled data.
-        self.columns_layout
-            .insert(location.clone(), columns_layout.pop().unwrap());
+        let layout = columns_layout.pop().unwrap();
 
-        Ok(location)
+        Ok((location, layout))
     }
 
     #[async_backtrace::framed]
@@ -254,8 +261,15 @@ impl Spiller {
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
-        let columns_layout = self.columns_layout.get(location).unwrap();
+        let layout = self.columns_layout.get(location).unwrap();
+        self.read_unmanage_spilled_file(location, layout).await
+    }
 
+    pub async fn read_unmanage_spilled_file(
+        &self,
+        location: &Location,
+        columns_layout: &Layout,
+    ) -> Result<DataBlock> {
         // Read spilled data from storage.
         let instant = Instant::now();
         let data = match location {
@@ -381,7 +395,7 @@ impl Spiller {
         Ok(deserialize_block(layout, data))
     }
 
-    async fn write_encodes(&mut self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
+    async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
         let location = match &self.temp_dir {
             None => None,
             Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
