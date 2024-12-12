@@ -93,7 +93,7 @@ impl FixedSizeBinaryColumnBuilder {
 
     #[inline]
     pub fn put_str(&mut self, item: &str) {
-        debug_assert!(self.value_length == item.as_bytes().len());
+        debug_assert!(self.value_length == item.len());
         self.data.extend_from_slice(item.as_bytes());
     }
 
