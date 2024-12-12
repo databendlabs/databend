@@ -96,10 +96,8 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         }
 
         if self.output.is_finished() {
-            if !self.called_on_finish {
-                return Ok(Event::Async);
-            }
-            return Ok(Event::Finished);
+            self.is_finish = true;
+            return Ok(Event::Async);
         }
 
         if !self.output.can_push() {
@@ -125,7 +123,7 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if self.is_finish || self.output.is_finished() {
+        if self.is_finish {
             if !self.called_on_finish {
                 self.called_on_finish = true;
                 self.inner.on_finish().await?;
