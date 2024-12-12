@@ -93,6 +93,10 @@ pub async fn validate_grant_object_exists(
                 )));
             }
         }
+        GrantObject::Warehouse(_w) => {
+            // TODO
+            return Ok(());
+        }
         GrantObject::Global => (),
     }
 

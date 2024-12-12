@@ -51,7 +51,6 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
-
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
@@ -164,7 +163,6 @@ serde_urlencoded = { workspace = true }
 sha2 = { workspace = true }
 socket2 = { workspace = true }
 sqlx = { workspace = true }
-strength_reduce = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }

@@ -44,6 +44,22 @@ impl pb::TxnCondition {
             target: Some(pb::txn_condition::Target::Seq(seq)),
         }
     }
+
+    pub fn eq_value(key: impl ToString, value: Vec<u8>) -> Self {
+        Self::match_value(key, pb::txn_condition::ConditionResult::Eq, value)
+    }
+
+    pub fn match_value(
+        key: impl ToString,
+        op: pb::txn_condition::ConditionResult,
+        value: Vec<u8>,
+    ) -> Self {
+        Self {
+            key: key.to_string(),
+            expected: op as i32,
+            target: Some(pb::txn_condition::Target::Value(value)),
+        }
+    }
 }
 
 impl pb::TxnOp {

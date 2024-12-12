@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
@@ -26,7 +25,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
@@ -146,17 +144,12 @@ fn create_test_merger<A: SortAlgorithm>(
         "a",
         DataType::Number(NumberDataType::Int32),
     )]);
-    let sort_desc = Arc::new(vec![SortColumnDescription {
-        offset: 0,
-        asc: true,
-        nulls_first: true,
-    }]);
     let streams = input
         .into_iter()
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::<A>::create(schema, streams, sort_desc, 4, limit)
+    TestMerger::<A>::create(schema, streams, 4, limit)
 }
 
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {

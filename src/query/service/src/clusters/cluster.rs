@@ -42,7 +42,6 @@ use databend_common_management::ClusterApi;
 use databend_common_management::ClusterMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 use databend_common_metrics::cluster::*;
 use futures::future::select;
@@ -139,11 +138,11 @@ impl ClusterHelper for Cluster {
             )))
         }
 
-        let mut futures = Vec::with_capacity(message.len());
+        let mut response = HashMap::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
-            futures.push({
+            let do_action_with_retry = {
                 let config = GlobalConfig::instance();
                 let flight_address = node.flight_address.clone();
                 let node_secret = node.secret.clone();
@@ -162,7 +161,7 @@ impl ClusterHelper for Cluster {
                             )
                             .await
                         {
-                            Ok(result) => return Ok((id, result)),
+                            Ok(result) => return Ok(result),
                             Err(e)
                                 if e.code() == ErrorCode::CANNOT_CONNECT_NODE
                                     && attempt < flight_params.retry_times =>
@@ -176,10 +175,12 @@ impl ClusterHelper for Cluster {
                         }
                     }
                 }
-            });
+            };
+
+            response.insert(id, do_action_with_retry.await?);
         }
-        let responses: Vec<(String, Res)> = futures::future::try_join_all(futures).await?;
-        Ok(responses.into_iter().collect::<HashMap<String, Res>>())
+
+        Ok(response)
     }
 }
 
@@ -237,17 +238,19 @@ impl ClusterDiscovery {
     ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
-        let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager =
-            ClusterMgr::create(metastore, tenant_id.tenant_name(), cluster_id, lift_time)?;
+        let cluster_manager = ClusterMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
     #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        match self.api_provider.get_nodes().await {
+        match self
+            .api_provider
+            .get_nodes(&self.cluster_id, &self.cluster_id)
+            .await
+        {
             Err(cause) => {
                 metric_incr_cluster_error_count(
                     &self.local_id,
@@ -320,7 +323,11 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
-        let current_nodes_info = match self.api_provider.get_nodes().await {
+        let current_nodes_info = match self
+            .api_provider
+            .get_nodes(&node_info.warehouse_id, &node_info.cluster_id)
+            .await
+        {
             Ok(nodes) => nodes,
             Err(cause) => {
                 metric_incr_cluster_error_count(
@@ -338,8 +345,7 @@ impl ClusterDiscovery {
             // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
             // lead to some invalid information
             if before_node.flight_address.eq(&node_info.flight_address) {
-                let drop_invalid_node =
-                    self.api_provider.drop_node(before_node.id, MatchSeq::GE(1));
+                let drop_invalid_node = self.api_provider.drop_node(before_node.id);
                 if let Err(cause) = drop_invalid_node.await {
                     warn!("Drop invalid node failure: {:?}", cause);
                 }
@@ -362,10 +368,7 @@ impl ClusterDiscovery {
 
         let mut mut_signal_pin = signal.as_mut();
         let signal_future = Box::pin(mut_signal_pin.next());
-        let drop_node = Box::pin(
-            self.api_provider
-                .drop_node(self.local_id.clone(), MatchSeq::GE(1)),
-        );
+        let drop_node = Box::pin(self.api_provider.drop_node(self.local_id.clone()));
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
@@ -424,7 +427,7 @@ impl ClusterDiscovery {
             }
         }
 
-        let node_info = NodeInfo::create(
+        let mut node_info = NodeInfo::create(
             self.local_id.clone(),
             self.local_secret.clone(),
             cpus,
@@ -434,6 +437,8 @@ impl ClusterDiscovery {
             DATABEND_COMMIT_VERSION.to_string(),
         );
 
+        node_info.cluster_id = self.cluster_id.clone();
+        node_info.warehouse_id = self.cluster_id.clone();
         self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info.clone()).await {
             Ok(_) => self.start_heartbeat(node_info).await,
