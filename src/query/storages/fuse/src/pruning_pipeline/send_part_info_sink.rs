@@ -189,7 +189,9 @@ impl AsyncSink for SendPartInfoSink {
 
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {
-                        let _ = sender.send(Ok(info)).await;
+                        if let Err(_e) = sender.send(Ok(info)).await {
+                            break;
+                        }
                     }
                 }
 
