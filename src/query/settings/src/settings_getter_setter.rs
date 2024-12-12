@@ -423,6 +423,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_aggregate_hashtable")? == 1)
     }
 
+    pub fn get_min_skip_partial_aggregation_capacity(&self) -> Result<u64> {
+        self.try_get_u64("min_skip_partial_aggregation_capacity")
+    }
+
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
     }

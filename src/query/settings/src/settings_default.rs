@@ -713,6 +713,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("min_skip_partial_aggregation_capacity", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The min size of aggregate hashtable skip partial aggregation capacity",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",

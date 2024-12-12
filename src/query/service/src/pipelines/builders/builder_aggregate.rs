@@ -127,13 +127,22 @@ impl PipelineBuilder {
         let schema_before_group_by = params.input_schema.clone();
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
+        let min_skip_partial_aggregation_capacity =
+            self.settings.get_min_skip_partial_aggregation_capacity()? as usize;
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if self.ctx.get_cluster().is_empty() {
-            HashTableConfig::default().with_partial(true, max_threads as usize)
+        let partial_agg_config = if !self.is_exchange_neighbor {
+            HashTableConfig::default().with_partial(
+                true,
+                max_threads as usize,
+                min_skip_partial_aggregation_capacity,
+            )
         } else {
-            HashTableConfig::default()
-                .cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
+            HashTableConfig::default().cluster_with_partial(
+                true,
+                self.ctx.get_cluster().nodes.len(),
+                min_skip_partial_aggregation_capacity,
+            )
         };
 
         self.main_pipeline.add_transform(|input, output| {

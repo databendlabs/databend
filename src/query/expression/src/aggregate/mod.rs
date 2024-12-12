@@ -89,7 +89,12 @@ impl HashTableConfig {
         self
     }
 
-    pub fn with_partial(mut self, partial_agg: bool, active_threads: usize) -> Self {
+    pub fn with_partial(
+        mut self,
+        partial_agg: bool,
+        active_threads: usize,
+        min_skip_partial_aggregation_capacity: usize,
+    ) -> Self {
         self.partial_agg = partial_agg;
 
         // init max_partial_capacity
@@ -97,16 +102,24 @@ impl HashTableConfig {
         let cache_per_active_thread =
             L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
         let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
-        let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
+        let capacity = (cache_per_active_thread / size_per_entry)
+            .next_power_of_two()
+            .max(min_skip_partial_aggregation_capacity);
         self.max_partial_capacity = capacity;
 
         self
     }
 
-    pub fn cluster_with_partial(mut self, partial_agg: bool, node_nums: usize) -> Self {
+    pub fn cluster_with_partial(
+        mut self,
+        partial_agg: bool,
+        node_nums: usize,
+        min_skip_partial_aggregation_capacity: usize,
+    ) -> Self {
         self.partial_agg = partial_agg;
         self.repartition_radix_bits_incr = 4;
-        self.max_partial_capacity = 131072 * (2 << node_nums);
+        self.max_partial_capacity =
+            (131072 * (2 << node_nums)).max(min_skip_partial_aggregation_capacity);
 
         self
     }
