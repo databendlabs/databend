@@ -11872,9 +11872,9 @@ dependencies = [
 
 [[package]]
 name = "raft-log"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2e7582480ea22f8268d681f4c5f8cf9b626e7f6c917724da68125c24820b055"
+checksum = "71f53e45db5ca60e7ce71737cdd12cd6c466d694eebfe9040de66f09f7bf0682"
 dependencies = [
  "byteorder",
  "clap",
