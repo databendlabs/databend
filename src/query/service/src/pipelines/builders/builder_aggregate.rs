@@ -145,6 +145,12 @@ impl PipelineBuilder {
             )
         };
 
+        log::info!(
+            "[build_aggregate_partial] partial_agg_config: {:?}, {}",
+            partial_agg_config,
+            self.is_exchange_neighbor
+        );
+
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
                 match params.aggregate_functions.is_empty() {
