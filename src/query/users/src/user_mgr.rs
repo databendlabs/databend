@@ -181,6 +181,12 @@ impl UserApiProvider {
                 user.username
             )));
         }
+        if let GrantObject::Warehouse(_) = object {
+            return Err(ErrorCode::IllegalUser(format!(
+                "Cannot grant warehouse privileges to user `{}`",
+                user.username
+            )));
+        }
         let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -202,6 +208,12 @@ impl UserApiProvider {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot revoke privileges from built-in user `{}`",
+                user.username
+            )));
+        }
+        if let GrantObject::Warehouse(_) = object {
+            return Err(ErrorCode::IllegalUser(format!(
+                "Cannot grant warehouse privileges to user `{}`",
                 user.username
             )));
         }

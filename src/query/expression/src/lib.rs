@@ -55,6 +55,7 @@ mod kernels;
 mod property;
 mod register;
 pub mod row;
+pub mod sampler;
 pub mod schema;
 pub mod type_check;
 pub mod types;

@@ -85,8 +85,6 @@ pub struct TransformSortSpill<A: SortAlgorithm> {
     /// If `ummerged_blocks.len()` < `num_merge`,
     /// we can use a final merger to merge the last few sorted streams to reduce IO.
     final_merger: Option<Merger<A, BlockStream>>,
-
-    sort_desc: Arc<Vec<SortColumnDescription>>,
 }
 
 #[inline(always)]
@@ -244,7 +242,7 @@ where
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        _sort_desc: Arc<Vec<SortColumnDescription>>,
         limit: Option<usize>,
         spiller: Spiller,
         output_order_col: bool,
@@ -263,7 +261,6 @@ where
             unmerged_blocks: VecDeque::new(),
             final_merger: None,
             batch_rows: 0,
-            sort_desc,
         }
     }
 
@@ -306,13 +303,7 @@ where
             streams.push(stream);
         }
 
-        Merger::<A, BlockStream>::create(
-            self.schema.clone(),
-            streams,
-            self.sort_desc.clone(),
-            self.batch_rows,
-            self.limit,
-        )
+        Merger::<A, BlockStream>::create(self.schema.clone(), streams, self.batch_rows, self.limit)
     }
 
     /// Do an external merge sort until there is only one sorted stream.

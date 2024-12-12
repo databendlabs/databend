@@ -39,8 +39,9 @@ pub struct SimpleRowsAsc<T: ValueType> {
 impl<T> Rows for SimpleRowsAsc<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord,
+    for<'a> T::ScalarRef<'a>: Ord + Send,
 {
+    const IS_ASC_COLUMN: bool = true;
     type Item<'a>
         = T::ScalarRef<'a>
     where Self: 'a;
@@ -59,14 +60,9 @@ where
         T::upcast_column(self.inner.clone())
     }
 
-    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
+    fn try_from_column(col: &Column) -> Option<Self> {
         let inner = T::try_downcast_column(col)?;
-
-        if desc[0].asc {
-            Some(Self { inner })
-        } else {
-            None
-        }
+        Some(Self { inner })
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
@@ -85,8 +81,9 @@ pub struct SimpleRowsDesc<T: ValueType> {
 impl<T> Rows for SimpleRowsDesc<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord,
+    for<'a> T::ScalarRef<'a>: Ord + Send,
 {
+    const IS_ASC_COLUMN: bool = false;
     type Item<'a>
         = Reverse<T::ScalarRef<'a>>
     where Self: 'a;
@@ -106,14 +103,9 @@ where
         T::upcast_column(self.inner.clone())
     }
 
-    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
+    fn try_from_column(col: &Column) -> Option<Self> {
         let inner = T::try_downcast_column(col)?;
-
-        if !desc[0].asc {
-            Some(Self { inner })
-        } else {
-            None
-        }
+        Some(Self { inner })
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
@@ -132,7 +124,7 @@ pub struct SimpleRowConverter<T> {
 impl<T> RowConverter<SimpleRowsAsc<T>> for SimpleRowConverter<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord,
+    for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     fn create(
         sort_columns_descriptions: &[SortColumnDescription],
@@ -151,7 +143,7 @@ where
 impl<T> RowConverter<SimpleRowsDesc<T>> for SimpleRowConverter<T>
 where
     T: ArgType,
-    for<'a> T::ScalarRef<'a>: Ord,
+    for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     fn create(
         sort_columns_descriptions: &[SortColumnDescription],
@@ -174,6 +166,7 @@ impl<T: ArgType> SimpleRowConverter<T> {
         num_rows: usize,
         asc: bool,
     ) -> Result<R> {
+        assert!(asc == R::IS_ASC_COLUMN);
         assert!(columns.len() == 1);
         let col = &columns[0];
         if col.data_type != T::data_type() {
@@ -192,12 +185,6 @@ impl<T: ArgType> SimpleRowConverter<T> {
             Value::Column(c) => c.clone(),
         };
 
-        let desc = [SortColumnDescription {
-            offset: 0,
-            asc,
-            nulls_first: false,
-        }];
-
-        R::from_column(&col, &desc)
+        R::from_column(&col)
     }
 }

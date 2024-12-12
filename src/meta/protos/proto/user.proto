@@ -77,6 +77,10 @@ message GrantObject {
     string stage = 1;
   }
 
+  message GrantWarehouseObject {
+    string warehouse = 1;
+  }
+
   oneof object {
     GrantGlobalObject global = 1;
     GrantDatabaseObject database = 2;
@@ -85,6 +89,7 @@ message GrantObject {
     GrantStageObject stage = 5;
     GrantDatabaseIdObject databasebyid = 6;
     GrantTableIdObject tablebyid = 7;
+    GrantWarehouseObject warehouse = 8;
   }
 }
 

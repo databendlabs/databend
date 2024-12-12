@@ -142,6 +142,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (110, "2024-09-18: Add: database.proto: DatabaseMeta.gc_in_progress"),
     (111, "2024-11-13: Add: Enable AWS Glue as an Apache Iceberg type when creating a catalog."),
     (112, "2024-11-28: Add: virtual_column add data_types field"),
+    (113, "2024-12-10: Add: GrantWarehouseObject"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
