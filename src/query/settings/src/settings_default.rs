@@ -717,7 +717,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "The min size of aggregate hashtable skip partial aggregation capacity",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=usize::MAX)),
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
