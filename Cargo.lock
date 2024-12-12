@@ -4033,6 +4033,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-hilbert-clustering",
  "databend-storages-common-cache",
  "databend-storages-common-io",
  "databend-storages-common-session",
@@ -4700,8 +4701,12 @@ dependencies = [
 name = "databend-enterprise-hilbert-clustering"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait",
  "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-storages-common-table-meta",
 ]
 
 [[package]]

@@ -11,8 +11,12 @@ doctest = false
 test = true
 
 [dependencies]
+async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 
 [build-dependencies]
 

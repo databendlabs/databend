@@ -15,9 +15,23 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReclusterInfoSideCar;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 #[async_trait::async_trait]
-pub trait HilbertClusteringHandler: Sync + Send {}
+pub trait HilbertClusteringHandler: Sync + Send {
+    async fn do_hilbert_clustering(
+        &self,
+        table: Arc<dyn Table>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+    ) -> Result<Option<(ReclusterInfoSideCar, Arc<TableSnapshot>)>>;
+}
 
 pub struct HilbertClusteringHandlerWrapper {
     handler: Box<dyn HilbertClusteringHandler>,
@@ -26,6 +40,19 @@ pub struct HilbertClusteringHandlerWrapper {
 impl HilbertClusteringHandlerWrapper {
     pub fn new(handler: Box<dyn HilbertClusteringHandler>) -> Self {
         Self { handler }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_hilbert_clustering(
+        &self,
+        table: Arc<dyn Table>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+    ) -> Result<Option<(ReclusterInfoSideCar, Arc<TableSnapshot>)>> {
+        self.handler
+            .do_hilbert_clustering(table, ctx, push_downs, limit)
+            .await
     }
 }
 

@@ -19,7 +19,7 @@ use educe::Educe;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Educe)]
+#[derive(Debug, Clone, PartialEq, Educe)]
 #[educe(Eq, Hash)]
 pub struct Recluster {
     pub catalog: String,

@@ -32,6 +32,7 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
@@ -101,6 +102,7 @@ use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
 
+use crate::bind_table;
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
@@ -151,6 +153,7 @@ use crate::BindContext;
 use crate::NameResolutionContext;
 use crate::Planner;
 use crate::SelectBuilder;
+use crate::TypeChecker;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -1010,51 +1013,15 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let filters = if let Some(expr) = selection {
-                    let (_, mut context) =
-                        self.bind_table_reference(bind_context, table_reference)?;
-
-                    let mut scalar_binder = ScalarBinder::new(
-                        &mut context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        &[],
-                    );
-                    scalar_binder.forbid_udf();
-                    let (scalar, _) = scalar_binder.bind(expr)?;
-
-                    // prepare the filter expression
-                    let filter = cast_expr_to_non_null_boolean(
-                        scalar
-                            .as_expr()?
-                            .project_column_ref(|col| col.column_name.clone()),
-                    )?;
-                    // prepare the inverse filter expression
-                    let inverted_filter =
-                        check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
-
-                    Some(Filters {
-                        filter: filter.as_remote_expr(),
-                        inverted_filter: inverted_filter.as_remote_expr(),
-                    })
-                } else {
-                    None
-                };
-
-                let s_expr = self
-                    .bind_recluster_table(
-                        catalog,
-                        database,
-                        table,
-                        limit.map(|v| v as usize),
-                        filters,
-                    )
-                    .await?;
-                Ok(Plan::ReclusterTable {
-                    s_expr: Box::new(s_expr),
-                    is_final: *is_final,
-                })
+                self.bind_recluster_table(
+                    catalog,
+                    database,
+                    table,
+                    limit.map(|v| v as usize),
+                    selection,
+                    *is_final,
+                )
+                .await
             }
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
@@ -1086,14 +1053,15 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_recluster_table(
+    pub async fn bind_recluster_table(
         &mut self,
         catalog: String,
         database: String,
         table: String,
         limit: Option<usize>,
-        filters: Option<Filters>,
-    ) -> Result<SExpr> {
+        selection: &Option<Expr>,
+        is_final: bool,
+    ) -> Result<Plan> {
         let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
         let Some(cluster_type) = tbl.cluster_type() else {
             return Err(ErrorCode::UnclusteredTable(format!(
@@ -1101,7 +1069,38 @@ impl Binder {
                 database, table,
             )));
         };
-        match cluster_type {
+
+        let filters = if let Some(expr) = selection {
+            let (mut context, metadata) = bind_table(tbl.clone())?;
+            let mut type_checker = TypeChecker::try_create(
+                &mut context,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                metadata,
+                &[],
+                true,
+            )?;
+            let (scalar, _) = *type_checker.resolve(expr)?;
+
+            // prepare the filter expression
+            let filter = cast_expr_to_non_null_boolean(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+            )?;
+            // prepare the inverse filter expression
+            let inverted_filter =
+                check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+            Some(Filters {
+                filter: filter.as_remote_expr(),
+                inverted_filter: inverted_filter.as_remote_expr(),
+            })
+        } else {
+            None
+        };
+
+        let s_expr = match cluster_type {
             ClusterType::Linear => {
                 let recluster = RelOperator::Recluster(Recluster {
                     catalog,
@@ -1111,11 +1110,13 @@ impl Binder {
                     filters,
                     cluster_type: ClusterType::Linear,
                 });
-                Ok(SExpr::create_leaf(Arc::new(recluster)))
+                SExpr::create_leaf(Arc::new(recluster))
             }
             ClusterType::Hilbert => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+                LicenseManagerSwitch::instance().check_enterprise_enabled(
+                    self.ctx.get_license_key(),
+                    Feature::HilbertClustering,
+                )?;
                 let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
                 let cluster_keys_len = ast_exprs.len();
                 let settings = Settings::create(Tenant::new_literal("dummy"));
@@ -1175,7 +1176,7 @@ impl Binder {
                 if tbl.change_tracking_enabled() {
                     s_expr = set_update_stream_columns(&s_expr)?;
                 }
-                let s_expr = SExpr::create_unary(
+                SExpr::create_unary(
                     Arc::new(RelOperator::Recluster(Recluster {
                         catalog,
                         database,
@@ -1185,10 +1186,14 @@ impl Binder {
                         cluster_type: ClusterType::Hilbert,
                     })),
                     Arc::new(s_expr),
-                );
-                Ok(s_expr)
+                )
             }
-        }
+        };
+
+        Ok(Plan::ReclusterTable {
+            s_expr: Box::new(s_expr),
+            is_final,
+        })
     }
 
     #[async_backtrace::framed]
