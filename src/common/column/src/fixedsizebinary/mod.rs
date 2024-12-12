@@ -68,7 +68,7 @@ impl FixedSizeBinaryColumn {
     }
 
     pub fn index(&self, index: usize) -> Option<&[u8]> {
-        if index + 1 < self.len() {
+        if index < self.len() {
             Some(&self.data[index..index + self.value_length])
         } else {
             None

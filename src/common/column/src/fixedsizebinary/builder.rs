@@ -71,15 +71,11 @@ impl FixedSizeBinaryColumnBuilder {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() <= 1
+        self.len() < 1
     }
 
     pub fn memory_size(&self) -> usize {
         self.data.len()
-    }
-
-    pub fn put_u8(&mut self, item: u8) {
-        self.data.push(item);
     }
 
     pub fn push_default(&mut self) {
