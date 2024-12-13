@@ -1132,7 +1132,7 @@ impl DefaultSettings {
                 }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
-                    desc: "Network policy for tenant",
+                    desc: "Network policy for all users in the tenant",
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: None,
