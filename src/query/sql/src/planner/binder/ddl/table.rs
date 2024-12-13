@@ -416,7 +416,7 @@ impl Binder {
     }
 
     async fn as_query_plan(&mut self, query: &Query) -> Result<Plan> {
-        let stmt = Statement::Query(Box::new(*query.clone()));
+        let stmt = Statement::Query(Box::new(query.clone()));
         let mut bind_context = BindContext::new();
         self.bind_statement(&mut bind_context, &stmt).await
     }
