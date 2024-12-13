@@ -1326,7 +1326,7 @@ impl DefaultSettings {
         match matched_mode {
             true => Ok(()),
             false => Err(ErrorCode::Internal(format!(
-                "Variable mode don't matched, expect: {:?}, actual: {:?}",
+                "Variable mode mismatch, expect: {:?}, actual: {:?}",
                 expect, setting_mode
             ))),
         }
@@ -1353,7 +1353,7 @@ impl DefaultSettings {
         match matched_scope {
             true => Ok(()),
             false => Err(ErrorCode::Internal(format!(
-                "Variable scope don't matched, expect: {:?}, actual: {:?}",
+                "Variable scope mismatch, expect: {:?}, actual: {:?}",
                 expect, setting_scope
             ))),
         }
