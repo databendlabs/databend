@@ -3073,17 +3073,17 @@ impl<'a> TypeChecker<'a> {
                     arg_x,
                 ]))
             }
-            ("ifnull" | "nvl", &[arg_x, arg_y]) => {
+            ("ifnull" | "nvl", args) => {
                 if args.len() == 2 {
                     // Rewrite ifnull(x, y) | nvl(x, y) to if(is_null(x), y, x)
                     Some(self.resolve_function(span, "if", vec![], &[
                         &Expr::IsNull {
                             span,
-                            expr: Box::new(arg_x.clone()),
+                            expr: Box::new(args[0].clone()),
                             not: false,
                         },
-                        arg_y,
-                        arg_x,
+                        &args[1],
+                        &args[0],
                     ]))
                 } else {
                     // Rewrite ifnull(args) to coalesce(x, y)
