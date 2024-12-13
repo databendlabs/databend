@@ -503,10 +503,6 @@ impl Settings {
         self.try_get_u64("lazy_read_threshold")
     }
 
-    pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
-        self.try_set_u64("parquet_fast_read_bytes", value)
-    }
-
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
     }
@@ -535,11 +531,6 @@ impl Settings {
     pub unsafe fn get_enterprise_license(&self) -> Result<String> {
         self.unchecked_try_get_string("enterprise_license")
     }
-
-    // /// # Safety
-    // pub unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
-    //     self.unchecked_set_setting("enterprise_license".to_string(), val)
-    // }
 
     /// # Safety
     pub unsafe fn get_deduplicate_label(&self) -> Result<Option<String>> {
