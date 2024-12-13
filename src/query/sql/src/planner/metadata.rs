@@ -495,7 +495,7 @@ impl Metadata {
             }
         }
         table_name
-    }  
+    }
 }
 
 #[derive(Clone)]
