@@ -20,52 +20,52 @@ fn test_interval_from_string() {
         ("1 year 2 months 3 days", Interval {
             months: 14,
             days: 3,
-            nanos: 0,
+            micros: 0,
         }),
         ("-1 year -2 months -3 days", Interval {
             months: -14,
             days: -3,
-            nanos: 0,
+            micros: 0,
         }),
         ("1 year 2 months 3 days ago", Interval {
             months: -14,
             days: -3,
-            nanos: 0,
+            micros: 0,
         }),
         ("1day", Interval {
             months: 0,
             days: 1,
-            nanos: 0,
+            micros: 0,
         }),
         ("1 hour", Interval {
             months: 0,
             days: 0,
-            nanos: 3600000000000,
+            micros: 3600000000,
         }),
         ("1 hours 1 second", Interval {
             months: 0,
             days: 0,
-            nanos: 3601000000000,
+            micros: 3601000000,
         }),
         ("1 day 01:23:45", Interval {
             months: 0,
             days: 1,
-            nanos: 5_025_000_000_000,
+            micros: 5_025_000_000,
         }),
         ("2 hours 30 minutes", Interval {
             months: 0,
             days: 0,
-            nanos: 9_000_000_000_000,
+            micros: 9_000_000_000,
         }),
         ("-1 day 01:23:45", Interval {
             months: 0,
             days: -1,
-            nanos: 5025000000000,
+            micros: 5025000000,
         }),
         ("-1 day -01:23:45", Interval {
             months: 0,
             days: -1,
-            nanos: -5025000000000,
+            micros: -5025000000,
         }),
     ];
 
@@ -82,7 +82,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 14,
                 days: 3,
-                nanos: 0,
+                micros: 0,
             },
             "1 year 2 months 3 days",
         ),
@@ -90,7 +90,7 @@ fn test_string_to_interval() {
             Interval {
                 months: -14,
                 days: -3,
-                nanos: 0,
+                micros: 0,
             },
             "-1 year -2 months -3 days",
         ),
@@ -98,7 +98,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: 1,
-                nanos: 0,
+                micros: 0,
             },
             "1 day",
         ),
@@ -106,7 +106,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: 0,
-                nanos: 3600000000000,
+                micros: 3600000000,
             },
             "1:00:00",
         ),
@@ -114,7 +114,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: 0,
-                nanos: 3601000000000,
+                micros: 3601000000,
             },
             "1:00:01",
         ),
@@ -122,7 +122,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: 1,
-                nanos: 5025000000000,
+                micros: 5025000000,
             },
             "1 day 1:23:45",
         ),
@@ -130,7 +130,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: 0,
-                nanos: 9000000000000,
+                micros: 9000000000,
             },
             "2:30:00",
         ),
@@ -138,7 +138,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: -1,
-                nanos: 5025000000000,
+                micros: 5025000000,
             },
             "-1 day 1:23:45",
         ),
@@ -146,7 +146,7 @@ fn test_string_to_interval() {
             Interval {
                 months: 0,
                 days: -1,
-                nanos: -5025000000000,
+                micros: -5025000000,
             },
             "-1 day -1:23:45",
         ),

@@ -25,7 +25,6 @@ use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkt;
-use databend_common_io::Interval;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;
 use jiff::tz::TimeZone;
@@ -129,12 +128,8 @@ impl Debug for ScalarRef<'_> {
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Interval(i) => {
-                let interval = Interval {
-                    months: i.0,
-                    days: i.1,
-                    nanos: i.2,
-                };
-                write!(f, "{interval:?}")
+                let interval = interval_to_string(i);
+                write!(f, "{interval}")
             }
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
@@ -234,15 +229,7 @@ impl Display for ScalarRef<'_> {
             ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
-            ScalarRef::Interval(interval) => write!(
-                f,
-                "{}",
-                interval_to_string(Interval {
-                    days: interval.1,
-                    nanos: interval.2,
-                    months: interval.0
-                })
-            ),
+            ScalarRef::Interval(interval) => write!(f, "{}", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;

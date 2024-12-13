@@ -22,7 +22,7 @@ use std::sync::LazyLock;
 
 use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -282,7 +282,7 @@ impl FastFieldDecoderValues {
 
     fn read_interval<R: AsRef<[u8]>>(
         &self,
-        column: &mut Vec<months_days_ns>,
+        column: &mut Vec<months_days_micros>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -296,7 +296,7 @@ impl FastFieldDecoderValues {
                 )
             })?;
         let i = Interval::from_string(res)?;
-        column.push(months_days_ns(i.months, i.days, i.nanos));
+        column.push(months_days_micros::new(i.months, i.days, i.micros));
         Ok(())
     }
 

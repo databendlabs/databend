@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use enum_as_inner::EnumAsInner;
 
 use crate::types::boolean::BooleanDomain;
@@ -101,7 +101,7 @@ pub enum Domain {
     String(StringDomain),
     Timestamp(SimpleDomain<i64>),
     Date(SimpleDomain<i32>),
-    Interval(SimpleDomain<months_days_ns>),
+    Interval(SimpleDomain<months_days_micros>),
     Nullable(NullableDomain<AnyType>),
     /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),

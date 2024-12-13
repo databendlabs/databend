@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_io::Interval;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 use jiff::fmt::strtime;
@@ -100,14 +100,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             let dt = DateConverter::to_date(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap()
         }
-        ScalarRef::Interval(v) => {
-            let i = Interval {
-                months: v.0,
-                days: v.1,
-                nanos: v.2,
-            };
-            serde_json::to_value(i.to_string()).unwrap()
-        }
+        ScalarRef::Interval(v) => serde_json::to_value(interval_to_string(&v).to_string()).unwrap(),
         ScalarRef::Timestamp(v) => {
             let dt = DateConverter::to_timestamp(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()

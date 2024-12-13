@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
@@ -24,7 +24,6 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
-use databend_common_io::Interval;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS interval)
@@ -51,17 +50,17 @@ fn register_string_to_interval(registry: &mut FunctionRegistry) {
     ) -> Value<IntervalType> {
         vectorize_with_builder_1_arg::<StringType, IntervalType>(|val, output, ctx| {
             match string_to_interval(val) {
-                Ok(interval) => output.push(months_days_ns(
+                Ok(interval) => output.push(months_days_micros::new(
                     interval.months,
                     interval.days,
-                    interval.nanos,
+                    interval.micros,
                 )),
                 Err(e) => {
                     ctx.set_error(
                         output.len(),
                         format!("cannot parse to type `INTERVAL`. {}", e),
                     );
-                    output.push(months_days_ns(0, 0, 0));
+                    output.push(months_days_micros::new(0, 0, 0));
                 }
             }
         })(val, ctx)
@@ -74,13 +73,7 @@ fn register_interval_to_string(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<IntervalType, NullableType<StringType>>(
             |interval, output, _| {
-                let i = Interval {
-                    months: interval.0,
-                    days: interval.1,
-                    nanos: interval.2,
-                };
-                let res = interval_to_string(i).to_string();
-                println!("interval to string res is {}", res);
+                let res = interval_to_string(&interval).to_string();
                 output.push(&res);
             },
         ),

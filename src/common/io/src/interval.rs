@@ -26,7 +26,7 @@ pub trait BufferReadIntervalExt {
 pub struct Interval {
     pub months: i32,
     pub days: i32,
-    pub nanos: i64,
+    pub micros: i64,
 }
 
 impl Display for Interval {
@@ -72,11 +72,11 @@ impl IntervalToStringCast {
         }
     }
 
-    fn format_nanos(mut nanos: i64, buffer: &mut [u8], length: &mut usize) {
-        if nanos < 0 {
-            nanos = -nanos;
+    fn format_micros(mut micros: i64, buffer: &mut [u8], length: &mut usize) {
+        if micros < 0 {
+            micros = -micros;
         }
-        let s = format!("{:09}", nanos);
+        let s = format!("{:06}", micros);
         let bytes = s.as_bytes();
         buffer[*length..*length + bytes.len()].copy_from_slice(bytes);
         *length += bytes.len();
@@ -97,23 +97,23 @@ impl IntervalToStringCast {
         if interval.days != 0 {
             Self::format_interval_value(interval.days, buffer, &mut length, " day");
         }
-        if interval.nanos != 0 {
+        if interval.micros != 0 {
             if length != 0 {
                 buffer[length] = b' ';
                 length += 1;
             }
-            let mut nanos = interval.nanos;
-            if nanos < 0 {
+            let mut micros = interval.micros;
+            if micros < 0 {
                 buffer[length] = b'-';
                 length += 1;
-                nanos = -nanos;
+                micros = -micros;
             }
-            let hour = nanos / NANO_PER_HOUR;
-            nanos -= hour * NANO_PER_HOUR;
-            let min = nanos / NANO_PER_MINUTE;
-            nanos -= min * NANO_PER_MINUTE;
-            let sec = nanos / NANO_PER_SEC;
-            nanos -= sec * NANO_PER_SEC;
+            let hour = micros / MICROS_PER_HOUR;
+            micros -= hour * MICROS_PER_HOUR;
+            let min = micros / MICROS_PER_MINUTE;
+            micros -= min * MICROS_PER_MINUTE;
+            let sec = micros / MICROS_PER_SEC;
+            micros -= sec * MICROS_PER_SEC;
 
             Self::format_signed_number(hour, buffer, &mut length);
             buffer[length] = b':';
@@ -122,10 +122,10 @@ impl IntervalToStringCast {
             buffer[length] = b':';
             length += 1;
             Self::format_two_digits(sec, buffer, &mut length);
-            if nanos != 0 {
+            if micros != 0 {
                 buffer[length] = b'.';
                 length += 1;
-                Self::format_nanos(nanos, buffer, &mut length);
+                Self::format_micros(micros, buffer, &mut length);
             }
         } else if length == 0 {
             buffer[..8].copy_from_slice(b"00:00:00");
@@ -213,7 +213,7 @@ impl Interval {
                     }
                     result.months = -result.months;
                     result.days = -result.days;
-                    result.nanos = -result.nanos;
+                    result.micros = -result.micros;
                     return Ok(result);
                 }
                 _ => {
@@ -261,13 +261,13 @@ fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
     if pos < bytes.len() && bytes[pos] == b':' {
         let time_bytes = &bytes[pos..];
         let mut time_pos = 0;
-        let mut total_nanos: i64 = number * 60 * 60 * NANO_PER_SEC;
+        let mut total_micros: i64 = number * 60 * 60 * MICROS_PER_SEC;
         let mut colon_count = 0;
 
         while colon_count < 2 && time_bytes.len() > time_pos {
             let (minute, _, next_pos) = parse_time_part(&time_bytes[time_pos..])?;
-            let minute_nanos = minute * 60 * NANO_PER_SEC;
-            total_nanos += minute_nanos;
+            let minute_nanos = minute * 60 * MICROS_PER_SEC;
+            total_micros += minute_nanos;
             time_pos += next_pos;
 
             if time_bytes.len() > time_pos && time_bytes[time_pos] == b':' {
@@ -278,11 +278,11 @@ fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
             }
         }
         if time_bytes.len() > time_pos {
-            let (seconds, nanos, next_pos) = parse_time_part_with_nanos(&time_bytes[time_pos..])?;
-            total_nanos += seconds * NANO_PER_SEC + nanos;
+            let (seconds, micros, next_pos) = parse_time_part_with_micros(&time_bytes[time_pos..])?;
+            total_micros += seconds * MICROS_PER_SEC + micros;
             time_pos += next_pos;
         }
-        return Ok((total_nanos, 0, pos + time_pos));
+        return Ok((total_micros, 0, pos + time_pos));
     }
 
     if pos == 0 {
@@ -305,7 +305,7 @@ fn parse_time_part(bytes: &[u8]) -> Result<(i64, i64, usize)> {
     Ok((number, 0, pos))
 }
 
-fn parse_time_part_with_nanos(bytes: &[u8]) -> Result<(i64, i64, usize)> {
+fn parse_time_part_with_micros(bytes: &[u8]) -> Result<(i64, i64, usize)> {
     let mut number: i64 = 0;
     let mut fraction: i64 = 0;
     let mut pos = 0;
@@ -320,7 +320,7 @@ fn parse_time_part_with_nanos(bytes: &[u8]) -> Result<(i64, i64, usize)> {
 
     if pos < bytes.len() && bytes[pos] == b'.' {
         pos += 1;
-        let mut mult: i64 = 100000000;
+        let mut mult: i64 = 100000;
         while pos < bytes.len() && bytes[pos].is_ascii_digit() {
             if mult > 0 {
                 fraction += (bytes[pos] - b'0') as i64 * mult;
@@ -390,11 +390,10 @@ fn try_get_date_part_specifier(specifier_str: &str) -> Result<DatePartSpecifier>
     }
 }
 
-const NANO_PER_SEC: i64 = 1_000_000_000;
-const NANO_PER_MSEC: i64 = 1_000_000;
-const NANO_PER_MICROS: i64 = 1_000;
-const NANO_PER_MINUTE: i64 = 60 * NANO_PER_SEC;
-const NANO_PER_HOUR: i64 = 60 * NANO_PER_MINUTE;
+const MICROS_PER_SEC: i64 = 1_000_000;
+const MICROS_PER_MSEC: i64 = 1_000;
+const MICROS_PER_MINUTE: i64 = 60 * MICROS_PER_SEC;
+const MICROS_PER_HOUR: i64 = 60 * MICROS_PER_MINUTE;
 const DAYS_PER_WEEK: i32 = 7;
 const MONTHS_PER_QUARTER: i32 = 3;
 const MONTHS_PER_YEAR: i32 = 12;
@@ -409,12 +408,12 @@ fn apply_specifier(
     specifier_str: &str,
 ) -> Result<()> {
     if specifier_str.is_empty() {
-        result.nanos = result
-            .nanos
+        result.micros = result
+            .micros
             .checked_add(number)
             .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
-        result.nanos = result
-            .nanos
+        result.micros = result
+            .micros
             .checked_add(fraction)
             .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         return Ok(());
@@ -515,51 +514,47 @@ fn apply_specifier(
                 .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         }
         DatePartSpecifier::Microseconds => {
-            result.nanos = result
-                .nanos
-                .checked_add(
-                    number
-                        .checked_mul(NANO_PER_MICROS)
-                        .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
-                )
+            result.micros = result
+                .micros
+                .checked_add(number)
                 .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         }
         DatePartSpecifier::Milliseconds => {
-            result.nanos = result
-                .nanos
+            result.micros = result
+                .micros
                 .checked_add(
                     number
-                        .checked_mul(NANO_PER_MSEC)
+                        .checked_mul(MICROS_PER_MSEC)
                         .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
                 )
                 .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         }
         DatePartSpecifier::Second => {
-            result.nanos = result
-                .nanos
+            result.micros = result
+                .micros
                 .checked_add(
                     number
-                        .checked_mul(NANO_PER_SEC)
+                        .checked_mul(MICROS_PER_SEC)
                         .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
                 )
                 .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         }
         DatePartSpecifier::Minute => {
-            result.nanos = result
-                .nanos
+            result.micros = result
+                .micros
                 .checked_add(
                     number
-                        .checked_mul(NANO_PER_MINUTE)
+                        .checked_mul(MICROS_PER_MINUTE)
                         .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
                 )
                 .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         }
         DatePartSpecifier::Hour => {
-            result.nanos = result
-                .nanos
+            result.micros = result
+                .micros
                 .checked_add(
                     number
-                        .checked_mul(NANO_PER_HOUR)
+                        .checked_mul(MICROS_PER_HOUR)
                         .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
                 )
                 .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;

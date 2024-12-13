@@ -14,7 +14,7 @@
 
 use chrono_tz::Tz;
 use databend_common_base::base::OrderedFloat;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
@@ -43,7 +43,6 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::GeometryDataType;
-use databend_common_io::Interval;
 use geozero::wkb::Ewkb;
 use jiff::tz::TimeZone;
 use lexical_core::ToLexical;
@@ -282,18 +281,13 @@ impl FieldEncoderValues {
 
     fn write_interval(
         &self,
-        column: &Buffer<months_days_ns>,
+        column: &Buffer<months_days_micros>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = interval_to_string(Interval {
-            months: v.0,
-            days: v.1,
-            nanos: v.2,
-        })
-        .to_string();
+        let s = interval_to_string(v).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

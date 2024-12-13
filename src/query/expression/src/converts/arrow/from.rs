@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
+use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
-use arrow_schema::IntervalUnit;
 use arrow_schema::Schema;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binview::StringColumn;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -33,6 +33,7 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
+use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::types::ArrayColumn;
@@ -74,6 +75,7 @@ impl TryFrom<&Field> for TableField {
             ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
             ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
             ARROW_EXT_TYPE_GEOGRAPHY => TableDataType::Geography,
+            ARROW_EXT_TYPE_INTERVAL => TableDataType::Interval,
             _ => match arrow_f.data_type() {
                 ArrowDataType::Null => TableDataType::Null,
                 ArrowDataType::Boolean => TableDataType::Boolean,
@@ -109,7 +111,6 @@ impl TryFrom<&Field> for TableField {
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,
                 ArrowDataType::Date64 => TableDataType::Date,
-                ArrowDataType::Interval(IntervalUnit::MonthDayNano) => TableDataType::Interval,
                 ArrowDataType::List(field) => {
                     let inner_type = TableField::try_from(field.as_ref())?;
                     TableDataType::Array(Box::new(inner_type.data_type))
@@ -262,11 +263,9 @@ impl Column {
                 Column::Date(buffer)
             }
             DataType::Interval => {
-                let array = arrow_cast::cast(
-                    array.as_ref(),
-                    &ArrowDataType::Interval(IntervalUnit::MonthDayNano),
-                )?;
-                let buffer: Buffer<months_days_ns> = array.to_data().buffers()[0].clone().into();
+                let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Decimal128(38, 0))?;
+                let buffer: Buffer<months_days_micros> =
+                    array.to_data().buffers()[0].clone().into();
                 Column::Interval(buffer)
             }
             DataType::Nullable(_) => {

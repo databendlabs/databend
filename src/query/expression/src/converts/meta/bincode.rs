@@ -17,7 +17,7 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -44,7 +44,7 @@ pub enum LegacyScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
-    Interval(months_days_ns),
+    Interval(months_days_micros),
     Boolean(bool),
     String(Vec<u8>),
     Array(LegacyColumn),
@@ -65,7 +65,7 @@ pub enum LegacyColumn {
     String(LegacyBinaryColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
-    Interval(Buffer<months_days_ns>),
+    Interval(Buffer<months_days_micros>),
     Array(Box<LegacyArrayColumn>),
     Map(Box<LegacyArrayColumn>),
     Bitmap(LegacyBinaryColumn),

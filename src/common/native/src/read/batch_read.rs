@@ -92,6 +92,16 @@ pub fn read_nested_column<R: NativeReadBuf>(
                 page_metas.pop().unwrap(),
             )?
         }
+        Interval => {
+            init.push(InitNested::Primitive(is_nullable));
+
+            read_nested_interval::<_>(
+                &mut readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
         Timestamp => {
             init.push(InitNested::Primitive(is_nullable));
             read_nested_integer::<TimestampType, _, _>(

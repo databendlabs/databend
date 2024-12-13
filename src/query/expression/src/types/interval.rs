@@ -17,7 +17,7 @@ use std::fmt::Display;
 use std::ops::Range;
 
 use databend_common_column::buffer::Buffer;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_io::Interval;
 
 use super::number::SimpleDomain;
@@ -37,15 +37,15 @@ use crate::ScalarRef;
 pub struct IntervalType;
 
 impl ValueType for IntervalType {
-    type Scalar = months_days_ns;
-    type ScalarRef<'a> = months_days_ns;
-    type Column = Buffer<months_days_ns>;
-    type Domain = SimpleDomain<months_days_ns>;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, months_days_ns>>;
-    type ColumnBuilder = Vec<months_days_ns>;
+    type Scalar = months_days_micros;
+    type ScalarRef<'a> = months_days_micros;
+    type Column = Buffer<months_days_micros>;
+    type Domain = SimpleDomain<months_days_micros>;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, months_days_micros>>;
+    type ColumnBuilder = Vec<months_days_micros>;
 
     #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: months_days_ns) -> months_days_ns {
+    fn upcast_gat<'short, 'long: 'short>(long: months_days_micros) -> months_days_micros {
         long
     }
 
@@ -71,7 +71,7 @@ impl ValueType for IntervalType {
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<months_days_ns>> {
+    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<months_days_micros>> {
         domain.as_interval().cloned()
     }
 
@@ -104,7 +104,7 @@ impl ValueType for IntervalType {
         Column::Interval(col)
     }
 
-    fn upcast_domain(domain: SimpleDomain<months_days_ns>) -> Domain {
+    fn upcast_domain(domain: SimpleDomain<months_days_micros>) -> Domain {
         Domain::Interval(domain)
     }
 
@@ -166,13 +166,7 @@ impl ValueType for IntervalType {
 
     #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        if lhs.0 != rhs.0 {
-            lhs.0.cmp(&rhs.0)
-        } else if lhs.1 != rhs.1 {
-            lhs.1.cmp(&rhs.1)
-        } else {
-            lhs.2.cmp(&rhs.2)
-        }
+        lhs.0.cmp(&rhs.0)
     }
 
     #[inline(always)]
@@ -191,13 +185,13 @@ impl ValueType for IntervalType {
     }
 
     #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left < right
     }
 
     #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left >= right
     }
 
     #[inline(always)]
@@ -213,8 +207,8 @@ impl ArgType for IntervalType {
 
     fn full_domain() -> Self::Domain {
         SimpleDomain {
-            min: months_days_ns(-12 * 200, -365 * 200, -7200000000000000000),
-            max: months_days_ns(12 * 200, 365 * 200, 7200000000000000000),
+            min: months_days_micros::new(-12 * 200, -365 * 200, -7200000000000000000),
+            max: months_days_micros::new(12 * 200, 365 * 200, 7200000000000000000),
         }
     }
 
@@ -244,6 +238,11 @@ pub fn string_to_interval(interval_str: &str) -> databend_common_exception::Resu
 }
 
 #[inline]
-pub fn interval_to_string(interval: Interval) -> impl Display {
+pub fn interval_to_string(i: &months_days_micros) -> impl Display {
+    let interval = Interval {
+        months: i.months(),
+        days: i.days(),
+        micros: i.microseconds(),
+    };
     interval.to_string()
 }

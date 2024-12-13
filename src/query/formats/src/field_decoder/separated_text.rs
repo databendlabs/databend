@@ -16,7 +16,7 @@ use std::any::Any;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use databend_common_column::types::months_days_ns;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -263,7 +263,7 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
-    fn read_interval(&self, column: &mut Vec<months_days_ns>, data: &[u8]) -> Result<()> {
+    fn read_interval(&self, column: &mut Vec<months_days_micros>, data: &[u8]) -> Result<()> {
         let res = std::str::from_utf8(data).map_err_to_code(ErrorCode::BadBytes, || {
             format!(
                 "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
@@ -271,7 +271,7 @@ impl SeparatedTextDecoder {
             )
         })?;
         let i = Interval::from_string(res)?;
-        column.push(months_days_ns(i.months, i.days, i.nanos));
+        column.push(months_days_micros::new(i.months, i.days, i.micros));
         Ok(())
     }
 
