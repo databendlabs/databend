@@ -53,7 +53,6 @@ impl<'a, A, I: Iterator<Item = A>> ProjectionIter<'a, A, I> {
     /// # Panics
     /// iff `projection` is empty
     pub fn new(projection: &'a [usize], iter: I) -> Self {
-        assert!(!projection.is_empty(), "projection cannot be empty");
         Self {
             projection: &projection[1..],
             iter,
@@ -114,11 +113,6 @@ pub fn read_record_batch<R: Read + Seek>(
         .buffers()
         .map_err(|err| Error::from(OutOfSpecKind::InvalidFlatbufferBuffers(err)))?
         .ok_or_else(|| Error::from(OutOfSpecKind::MissingMessageBuffers))?;
-    let mut variadic_buffer_counts = batch
-        .variadic_buffer_counts()
-        .map_err(|err| Error::from(OutOfSpecKind::InvalidFlatbufferRecordBatches(err)))?
-        .map(|v| v.iter().map(|v| v as usize).collect::<VecDeque<usize>>())
-        .unwrap_or_else(VecDeque::new);
     let mut buffers: VecDeque<arrow_format::ipc::BufferRef> = buffers.iter().collect();
 
     // check that the sum of the sizes of all buffers is <= than the size of the file
@@ -153,7 +147,6 @@ pub fn read_record_batch<R: Read + Seek>(
             .map(|maybe_field| match maybe_field {
                 ProjectionResult::Selected((field, ipc_field)) => Ok(Some(read(
                     &mut field_nodes,
-                    &mut variadic_buffer_counts,
                     field,
                     ipc_field,
                     &mut buffers,
@@ -182,7 +175,6 @@ pub fn read_record_batch<R: Read + Seek>(
             .map(|(field, ipc_field)| {
                 read(
                     &mut field_nodes,
-                    &mut variadic_buffer_counts,
                     field,
                     ipc_field,
                     &mut buffers,

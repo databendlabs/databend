@@ -36,7 +36,6 @@ use crate::arrow::error::Result;
 #[allow(clippy::too_many_arguments)]
 pub fn read_union<R: Read + Seek>(
     field_nodes: &mut VecDeque<Node>,
-    variadic_buffer_counts: &mut VecDeque<usize>,
     data_type: DataType,
     ipc_field: &IpcField,
     buffers: &mut VecDeque<IpcBuffer>,
@@ -103,7 +102,6 @@ pub fn read_union<R: Read + Seek>(
         .map(|(field, ipc_field)| {
             read(
                 field_nodes,
-                variadic_buffer_counts,
                 field,
                 ipc_field,
                 buffers,
