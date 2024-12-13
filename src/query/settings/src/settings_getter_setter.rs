@@ -836,7 +836,7 @@ impl Settings {
         self.try_get_u64("flight_connection_retry_interval")
     }
 
-    pub fn get_network_policy(&self) -> Result<Option<String>> {
-        self.try_get_string("network_policy").map(Some)
+    pub fn get_network_policy(&self) -> Result<String> {
+        self.try_get_string("network_policy")
     }
 }
