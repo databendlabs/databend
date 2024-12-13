@@ -2955,6 +2955,83 @@ CreateCatalog(
 
 
 ---------- Input ----------
+select current_catalog();
+---------- Output ---------
+SELECT current_catalog()
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..24,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..24,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..24,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..22,
+                                    ),
+                                    name: "current_catalog",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+use catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            12..15,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
@@ -9526,6 +9603,7 @@ Query(
                                 "tsv",
                             ),
                             connection: {},
+                            case_sensitive: None,
                         },
                         alias: None,
                     },
@@ -12938,6 +13016,7 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
+            force: false,
         },
     },
 )
@@ -12957,6 +13036,7 @@ VacuumDropTable(
                 false,
             ),
             limit: None,
+            force: false,
         },
     },
 )
@@ -12976,6 +13056,7 @@ VacuumDropTable(
                 true,
             ),
             limit: None,
+            force: false,
         },
     },
 )
@@ -13002,6 +13083,7 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
+            force: false,
         },
     },
 )
@@ -13030,6 +13112,7 @@ VacuumDropTable(
             limit: Some(
                 10,
             ),
+            force: false,
         },
     },
 )
@@ -13853,7 +13936,7 @@ COPY INTO mytable
     FROM '@~/mybucket/my data.csv'
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@~/mybucket/my data.csv'  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13895,6 +13978,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -13911,7 +13995,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13966,6 +14050,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -13983,7 +14068,7 @@ COPY INTO mytable
     size_limit=10
     max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14046,6 +14131,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14063,7 +14149,7 @@ COPY INTO mytable
     size_limit=10
     max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14126,6 +14212,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14145,7 +14232,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14210,6 +14297,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14229,7 +14317,7 @@ COPY INTO mytable
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14294,6 +14382,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14303,7 +14392,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 'https://127.0.0.1:9900/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14353,6 +14442,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14362,7 +14452,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 'https://127.0.0.1/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14412,6 +14502,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14429,7 +14520,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14487,6 +14578,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14682,7 +14774,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14748,6 +14840,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14764,7 +14857,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14819,6 +14912,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14835,7 +14929,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14890,6 +14984,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14906,7 +15001,7 @@ COPY INTO mytable
     )
     force=true;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14961,6 +15056,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -14978,7 +15074,7 @@ COPY INTO mytable
     size_limit=10
     disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -15041,6 +15137,7 @@ CopyIntoTable(
             disable_variant_check: true,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -15056,7 +15153,7 @@ COPY INTO books FROM 's3://databend/books.csv'
     )
     FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -15115,6 +15212,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             validation_mode: "",
+            column_match_mode: None,
         },
     },
 )
@@ -15977,6 +16075,94 @@ Revoke(
                 username: "test-grant",
                 hostname: "%",
             },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
         ),
     },
 )
@@ -16893,6 +17079,7 @@ Query(
                             pattern: None,
                             file_format: None,
                             connection: {},
+                            case_sensitive: None,
                         },
                         alias: None,
                     },
@@ -16985,6 +17172,7 @@ Query(
                                 "PARQUET",
                             ),
                             connection: {},
+                            case_sensitive: None,
                         },
                         alias: Some(
                             TableAlias {
@@ -17128,6 +17316,7 @@ Query(
                                         "parquet",
                                     ),
                                     connection: {},
+                                    case_sensitive: None,
                                 },
                                 alias: Some(
                                     TableAlias {
@@ -17252,6 +17441,7 @@ Query(
                             connection: {
                                 "endpoint_url": "xxx",
                             },
+                            case_sensitive: None,
                         },
                         alias: Some(
                             TableAlias {
@@ -17356,6 +17546,227 @@ DropFileFormat {
     if_exists: false,
     name: "my_csv",
 }
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY all
+---------- Output ---------
+SELECT * FROM t GROUP BY ALL
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..28,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..28,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    All,
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY a, b, c, d
+---------- Output ---------
+SELECT * FROM t GROUP BY a, b, c, d
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..35,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..35,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Normal(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    25..26,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                25..26,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    28..29,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                28..29,
+                                            ),
+                                            name: "b",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    31..32,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                31..32,
+                                            ),
+                                            name: "c",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            name: "d",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
 
 
 ---------- Input ----------
@@ -18248,6 +18659,328 @@ Query(
                                     ),
                                 },
                             },
+                        ],
+                    ),
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY a, ROLLUP (b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY a, ROLLUP (b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..41,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Combined(
+                        [
+                            Normal(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            25..26,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        25..26,
+                                                    ),
+                                                    name: "a",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                            Rollup(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            36..37,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        36..37,
+                                                    ),
+                                                    name: "b",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                    ColumnRef {
+                                        span: Some(
+                                            39..40,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        39..40,
+                                                    ),
+                                                    name: "c",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                        ],
+                    ),
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..65,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..65,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Combined(
+                        [
+                            GroupingSets(
+                                [
+                                    [
+                                        ColumnRef {
+                                            span: Some(
+                                                41..42,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            41..42,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        ColumnRef {
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            44..45,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                ],
+                            ),
+                            Normal(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        49..50,
+                                                    ),
+                                                    name: "a",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                            Rollup(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            60..61,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        60..61,
+                                                    ),
+                                                    name: "b",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                    ColumnRef {
+                                        span: Some(
+                                            63..64,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        63..64,
+                                                    ),
+                                                    name: "c",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
                         ],
                     ),
                 ),
@@ -20080,7 +20813,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET)  PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -20102,7 +20835,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false",
+            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET)  PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false",
         ),
     },
 )
@@ -20893,7 +21626,7 @@ ShowLocks(
 ---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV')  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -20944,6 +21677,7 @@ CreatePipe(
                 disable_variant_check: false,
                 return_failed_only: false,
                 validation_mode: "",
+                column_match_mode: None,
             },
         },
     },
@@ -20953,7 +21687,7 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -21009,6 +21743,7 @@ CreatePipe(
                 disable_variant_check: false,
                 return_failed_only: false,
                 validation_mode: "",
+                column_match_mode: None,
             },
         },
     },

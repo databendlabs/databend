@@ -177,7 +177,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
+        debug_assert!(index < col.len(), "index: {} len: {}", index, col.len());
 
         *col.get_unchecked(index)
     }

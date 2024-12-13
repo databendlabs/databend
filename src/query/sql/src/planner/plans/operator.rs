@@ -24,13 +24,11 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
-use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
-use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
@@ -98,7 +96,6 @@ pub trait Operator {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOp {
     Scan,
-    CteScan,
     Join,
     EvalScalar,
     Filter,
@@ -110,7 +107,6 @@ pub enum RelOp {
     DummyTableScan,
     Window,
     ProjectSet,
-    MaterializedCte,
     ConstantTableScan,
     ExpressionScan,
     CacheScan,
@@ -130,7 +126,6 @@ pub enum RelOp {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOperator {
     Scan(Scan),
-    CteScan(CteScan),
     Join(Join),
     EvalScalar(EvalScalar),
     Filter(Filter),
@@ -142,7 +137,6 @@ pub enum RelOperator {
     DummyTableScan(DummyTableScan),
     Window(Window),
     ProjectSet(ProjectSet),
-    MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
@@ -170,8 +164,6 @@ impl Operator for RelOperator {
             RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::ProjectSet(rel_op) => rel_op.rel_op(),
             RelOperator::Window(rel_op) => rel_op.rel_op(),
-            RelOperator::CteScan(rel_op) => rel_op.rel_op(),
-            RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::ExpressionScan(rel_op) => rel_op.rel_op(),
             RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
@@ -188,7 +180,6 @@ impl Operator for RelOperator {
     fn arity(&self) -> usize {
         match self {
             RelOperator::Scan(rel_op) => rel_op.arity(),
-            RelOperator::CteScan(rel_op) => rel_op.arity(),
             RelOperator::Join(rel_op) => rel_op.arity(),
             RelOperator::EvalScalar(rel_op) => rel_op.arity(),
             RelOperator::Filter(rel_op) => rel_op.arity(),
@@ -200,7 +191,6 @@ impl Operator for RelOperator {
             RelOperator::DummyTableScan(rel_op) => rel_op.arity(),
             RelOperator::Window(rel_op) => rel_op.arity(),
             RelOperator::ProjectSet(rel_op) => rel_op.arity(),
-            RelOperator::MaterializedCte(rel_op) => rel_op.arity(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.arity(),
             RelOperator::ExpressionScan(rel_op) => rel_op.arity(),
             RelOperator::CacheScan(rel_op) => rel_op.arity(),
@@ -228,8 +218,6 @@ impl Operator for RelOperator {
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::CteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -257,8 +245,6 @@ impl Operator for RelOperator {
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::CteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -286,8 +272,6 @@ impl Operator for RelOperator {
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::CteScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::MaterializedCte(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
@@ -345,12 +329,6 @@ impl Operator for RelOperator {
             RelOperator::ProjectSet(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
-            RelOperator::CteScan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::MaterializedCte(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
             RelOperator::ConstantTableScan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
@@ -394,9 +372,6 @@ impl Operator for RelOperator {
             RelOperator::Scan(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
-            RelOperator::CteScan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
             RelOperator::Join(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
@@ -428,9 +403,6 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::ProjectSet(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::MaterializedCte(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::ConstantTableScan(rel_op) => {
@@ -482,48 +454,6 @@ impl TryFrom<RelOperator> for Scan {
         } else {
             Err(ErrorCode::Internal(format!(
                 "Cannot downcast {:?} to Scan",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<CteScan> for RelOperator {
-    fn from(value: CteScan) -> Self {
-        Self::CteScan(value)
-    }
-}
-
-impl TryFrom<RelOperator> for CteScan {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::CteScan(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to CteScan",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<MaterializedCte> for RelOperator {
-    fn from(value: MaterializedCte) -> Self {
-        Self::MaterializedCte(value)
-    }
-}
-
-impl TryFrom<RelOperator> for MaterializedCte {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::MaterializedCte(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to MaterializedCte",
                 value.rel_op()
             )))
         }

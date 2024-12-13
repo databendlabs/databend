@@ -22,11 +22,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
+use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_base::base::tokio;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
@@ -46,6 +49,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -90,6 +94,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -134,43 +139,32 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    pub(crate) pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
+
+type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
+
+// default schema refreshing timeout is 5 seconds.
+const DEFAULT_SCHEMA_REFRESHING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create(table_info)?)
+        Ok(Self::do_create_table_ext(table_info, false)?)
     }
 
-    pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
-        // check if table is AttachedReadOnly in a lighter way
-        let need_refresh_schema = match table_info.db_type {
-            DatabaseType::NormalDB => {
-                table_info.meta.storage_params.is_some()
-                    && Self::is_table_attached(&table_info.meta.options)
-            }
-        };
-
-        if need_refresh_schema {
-            info!("refreshing table schema {}", table_info.desc);
-            let table = Self::do_create(table_info.as_ref().clone())?;
-            let snapshot = table.read_table_snapshot().await?;
-            let schema = snapshot
-                .ok_or_else(|| {
-                    ErrorCode::ShareStorageError(
-                        "Failed to load snapshot of read_only attach table".to_string(),
-                    )
-                })?
-                .schema
-                .clone();
-            let mut table_info = table_info.as_ref().clone();
-            table_info.meta.schema = Arc::new(schema);
-            Ok(Arc::new(table_info))
-        } else {
-            Ok(table_info)
-        }
+    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
+        Self::do_create_table_ext(table_info, true)
     }
 
-    pub fn do_create(mut table_info: TableInfo) -> Result<Box<FuseTable>> {
+    pub fn try_create_ext(table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
+        Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
+    }
+
+    pub fn do_create_table_ext(
+        mut table_info: TableInfo,
+        disable_refresh: bool,
+    ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
@@ -183,11 +177,13 @@ impl FuseTable {
                         let table_meta_options = &table_info.meta.options;
                         let operator = init_operator(&sp)?;
                         let table_type = if Self::is_table_attached(table_meta_options) {
-                            Self::tweak_attach_table_snapshot_location(
-                                &mut table_info,
-                                &operator,
-                                &storage_prefix,
-                            )?;
+                            if !disable_refresh {
+                                Self::refresh_table_info(
+                                    &mut table_info,
+                                    &operator,
+                                    &storage_prefix,
+                                )?;
+                            }
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
@@ -244,6 +240,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -325,24 +322,28 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        self.read_table_snapshot_with_reader(reader).await
+        let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        Self::read_table_snapshot_with_reader(reader, loc, ver).await
     }
 
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
-        self.read_table_snapshot_with_reader(reader).await
+        let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        Self::read_table_snapshot_with_reader(reader, loc, ver).await
     }
 
     async fn read_table_snapshot_with_reader(
-        &self,
         reader: TableSnapshotReader,
+        snapshot_location: Option<String>,
+        ver: u64,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc() {
-            let ver = self.snapshot_format_version(Some(loc.clone()))?;
+        if let Some(location) = snapshot_location {
             let params = LoadParams {
-                location: loc,
+                location,
                 len_hint: None,
                 ver,
                 put_cache: true,
@@ -461,11 +462,12 @@ impl FuseTable {
         self.meta_location_generator.prefix()
     }
 
-    fn load_snapshot_location_from_hint(
+    fn refresh_schema_from_hint(
         operator: &Operator,
         storage_prefix: &str,
-    ) -> Result<Option<String>> {
-        GlobalIORuntime::instance().block_on(async {
+        table_description: &str,
+    ) -> Result<Option<(String, TableSchema)>> {
+        let refresh_task = async {
             let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
             let begin_load_hint = Instant::now();
             let maybe_hint_content = operator.read(&hint_file_path).await;
@@ -480,9 +482,30 @@ impl FuseTable {
                     let hint_content = buf.to_vec();
                     let snapshot_full_path = String::from_utf8(hint_content)?;
                     let operator_info = operator.info();
-                    Ok::<_, ErrorCode>(Some(
+
+                    let loc = snapshot_full_path[operator_info.root().len()..].to_string();
+
+                    // refresh table schema by loading the snapshot
+                    let begin = Instant::now();
+                    let reader = MetaReaders::table_snapshot_reader_without_cache(operator.clone());
+                    let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
+                    let snapshot =
+                        Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
+                    info!("table snapshot refreshed, time used {:?}", begin.elapsed());
+
+                    let schema = snapshot
+                        .ok_or_else(|| {
+                            ErrorCode::ShareStorageError(
+                                "Failed to load snapshot of read_only attach table".to_string(),
+                            )
+                        })?
+                        .schema
+                        .clone();
+
+                    Ok::<_, ErrorCode>(Some((
                         snapshot_full_path[operator_info.root().len()..].to_string(),
-                    ))
+                        schema,
+                    )))
                 }
                 Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
                     // Table be attached has not last snapshot hint file, treat it as empty table
@@ -490,10 +513,29 @@ impl FuseTable {
                 }
                 Err(e) => Err(e.into()),
             }
-        })
+        };
+
+        let refresh_task_with_timeout = async {
+            tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT, refresh_task)
+                .await
+                .map_err(|_e| {
+                    ErrorCode::RefreshTableInfoFailure(format!(
+                        "failed to refresh table info {} in time",
+                        table_description
+                    ))
+                })
+                .map_err(|e| {
+                    ErrorCode::RefreshTableInfoFailure(format!(
+                        "failed to refresh table info {} : {}",
+                        table_description, e
+                    ))
+                })?
+        };
+
+        GlobalIORuntime::instance().block_on(refresh_task_with_timeout)
     }
 
-    fn tweak_attach_table_snapshot_location(
+    fn refresh_table_info(
         table_info: &mut TableInfo,
         operator: &Operator,
         storage_prefix: &str,
@@ -507,22 +549,26 @@ impl FuseTable {
             return Ok(());
         }
 
-        let location = Self::load_snapshot_location_from_hint(operator, storage_prefix)?;
+        let refreshed = Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-            location, table_info.desc, table_info.ident
+            refreshed.as_ref().map(|(location, _)| location),
+            table_info.desc,
+            table_info.ident
         );
 
         // Adjust snapshot location to the values extracted from the last snapshot hint
-        match location {
+        match refreshed {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
-            Some(location) => {
+            Some((location, schema)) => {
                 table_info
                     .options_mut()
                     .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+
+                table_info.meta.schema = Arc::new(schema);
             }
         }
 
@@ -565,6 +611,10 @@ impl Table for FuseTable {
     }
 
     fn support_column_projection(&self) -> bool {
+        true
+    }
+
+    fn support_distributed_insert(&self) -> bool {
         true
     }
 
@@ -771,6 +821,15 @@ impl Table for FuseTable {
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        source_pipeline: &mut Pipeline,
+    ) -> Result<Option<Pipeline>> {
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
+    }
+
     fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.do_append_data(ctx, pipeline)
     }
@@ -820,7 +879,11 @@ impl Table for FuseTable {
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
+                if dry_run {
+                    Ok(Some(vec![]))
+                } else {
+                    Ok(None)
+                }
             }
             Err(e) => Err(e),
         }

@@ -143,7 +143,7 @@ impl HashJoinBuildState {
                     .remove_nullable()
             })
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         let mut enable_bloom_runtime_filter = false;
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
@@ -415,7 +415,6 @@ impl HashJoinBuildState {
                     }),
                     std::mem::size_of::<RawEntry<U256>>(),
                 ),
-                HashMethodKind::DictionarySerializer(_) => unimplemented!(),
             };
             self.entry_size.store(entry_size, Ordering::Release);
             let hash_table = unsafe { &mut *self.hash_join_state.hash_table.get() };
@@ -967,7 +966,7 @@ impl HashJoinBuildState {
             // Generate bloom filter using build column
             let data_type = build_key.data_type();
             let num_rows = build_key_column.len();
-            let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
+            let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
             let mut hashes = HashSet::with_capacity(num_rows);
             let key_columns = &[build_key_column];
             hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;

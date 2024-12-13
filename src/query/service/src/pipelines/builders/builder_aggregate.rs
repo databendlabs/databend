@@ -16,12 +16,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::with_hash_method;
-use databend_common_expression::with_mappedhash_method;
 use databend_common_expression::AggregateFunctionRef;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
@@ -45,9 +41,7 @@ use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggreg
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
-use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::pipelines::processors::transforms::aggregator::TransformPartialGroupBy;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -124,12 +118,7 @@ impl PipelineBuilder {
             });
         }
 
-        let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
-
-        let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by.clone());
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
         let partial_agg_config = if !self.is_exchange_neighbor {
@@ -161,30 +150,13 @@ impl PipelineBuilder {
         }
 
         self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
-                            self.ctx.clone(),
-                            method,
-                            input,
-                            output,
-                            params.clone(),
-                            partial_agg_config.clone()
-                        ),
-                    }),
-                    false => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformPartialAggregate::try_create(
-                            self.ctx.clone(),
-                            method,
-                            input,
-                            output,
-                            params.clone(),
-                            partial_agg_config.clone()
-                        ),
-                    }),
-                }?,
-            ))
+            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
+                self.ctx.clone(),
+                input,
+                output,
+                params.clone(),
+                partial_agg_config.clone(),
+            )?))
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
@@ -193,45 +165,18 @@ impl PipelineBuilder {
             let location_prefix =
                 query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
             self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    match params.aggregate_functions.is_empty() {
-                        true => with_mappedhash_method!(|T| match method.clone() {
-                            HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
-                                self.ctx.clone(),
-                                input,
-                                output,
-                                method,
-                                operator.clone(),
-                                location_prefix.clone()
-                            ),
-                        }),
-                        false => with_mappedhash_method!(|T| match method.clone() {
-                            HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
-                                self.ctx.clone(),
-                                input,
-                                output,
-                                method,
-                                operator.clone(),
-                                params.clone(),
-                                location_prefix.clone()
-                            ),
-                        }),
-                    },
-                ))
+                Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    operator.clone(),
+                    params.clone(),
+                    location_prefix.clone(),
+                )))
             })?;
         }
 
-        self.exchange_injector = match params.aggregate_functions.is_empty() {
-            true => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) =>
-                    AggregateInjector::<_, ()>::create(self.ctx.clone(), method, params.clone()),
-            }),
-            false => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) =>
-                    AggregateInjector::<_, usize>::create(self.ctx.clone(), method, params.clone()),
-            }),
-        };
-
+        self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
         Ok(())
     }
 
@@ -264,48 +209,15 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
-
-        let group_cols = &params.group_columns;
-        let schema_before_group_by = params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
-
         let old_inject = self.exchange_injector.clone();
 
-        match params.aggregate_functions.is_empty() {
-            true => with_hash_method!(|T| match method {
-                HashMethodKind::T(v) => {
-                    let input: &PhysicalPlan = &aggregate.input;
-                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector = AggregateInjector::<_, ()>::create(
-                            self.ctx.clone(),
-                            v.clone(),
-                            params.clone(),
-                        );
-                    }
-
-                    self.build_pipeline(&aggregate.input)?;
-                    self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
-                }
-            }),
-            false => with_hash_method!(|T| match method {
-                HashMethodKind::T(v) => {
-                    let input: &PhysicalPlan = &aggregate.input;
-                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector = AggregateInjector::<_, usize>::create(
-                            self.ctx.clone(),
-                            v.clone(),
-                            params.clone(),
-                        );
-                    }
-                    self.build_pipeline(&aggregate.input)?;
-                    self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
-                }
-            }),
+        let input: &PhysicalPlan = &aggregate.input;
+        if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+            self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
         }
+        self.build_pipeline(&aggregate.input)?;
+        self.exchange_injector = old_inject;
+        build_partition_bucket(&mut self.main_pipeline, params.clone())
     }
 
     pub fn build_aggregator_params(

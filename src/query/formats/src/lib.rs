@@ -14,7 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
-#![feature(cursor_remaining)]
+#![feature(cursor_split)]
 
 mod binary;
 mod clickhouse;

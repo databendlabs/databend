@@ -33,7 +33,7 @@ use itertools::Itertools;
 use super::prune_by_children;
 use super::ExprContext;
 use super::Finder;
-use crate::binder::project_set::SetReturningRewriter;
+use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -349,13 +349,6 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
-        if !bind_context.srf_info.srfs.is_empty() {
-            // Rewrite the Set-returning functions in Aggregate function as columns.
-            let mut srf_rewriter = SetReturningRewriter::new(bind_context, true);
-            for item in select_list.items.iter_mut() {
-                srf_rewriter.visit(&mut item.scalar)?;
-            }
-        }
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
             rewriter.visit(&mut item.scalar)?;
@@ -393,7 +386,9 @@ impl Binder {
 
         let original_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::GroupClaue);
-        match group_by {
+
+        let group_by = Self::expand_group(group_by.clone())?;
+        match &group_by {
             GroupBy::Normal(exprs) => self.resolve_group_items(
                 bind_context,
                 select_list,
@@ -416,25 +411,83 @@ impl Binder {
             GroupBy::GroupingSets(sets) => {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)?;
             }
-            // TODO: avoid too many clones.
-            GroupBy::Rollup(exprs) => {
-                // ROLLUP (a,b,c) => GROUPING SETS ((a,b,c), (a,b), (a), ())
-                let mut sets = Vec::with_capacity(exprs.len() + 1);
-                for i in (0..=exprs.len()).rev() {
-                    sets.push(exprs[0..i].to_vec());
-                }
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
-            }
-            GroupBy::Cube(exprs) => {
-                // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
-                let sets = (0..=exprs.len())
-                    .flat_map(|count| exprs.clone().into_iter().combinations(count))
-                    .collect::<Vec<_>>();
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
-            }
+            _ => unreachable!(),
         }
         bind_context.set_expr_context(original_context);
         Ok(())
+    }
+
+    pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {
+        match group_by {
+            GroupBy::Normal(_) | GroupBy::All | GroupBy::GroupingSets(_) => Ok(group_by),
+            GroupBy::Cube(exprs) => {
+                // Expand CUBE to GroupingSets
+                let sets = Self::generate_cube_sets(exprs);
+                Ok(GroupBy::GroupingSets(sets))
+            }
+            GroupBy::Rollup(exprs) => {
+                // Expand ROLLUP to GroupingSets
+                let sets = Self::generate_rollup_sets(exprs);
+                Ok(GroupBy::GroupingSets(sets))
+            }
+            GroupBy::Combined(groups) => {
+                // Flatten and expand all nested GroupBy variants
+                let mut combined_sets = Vec::new();
+                for group in groups {
+                    match Self::expand_group(group)? {
+                        GroupBy::Normal(exprs) => {
+                            combined_sets = Self::cartesian_product(combined_sets, vec![exprs]);
+                        }
+                        GroupBy::GroupingSets(sets) => {
+                            combined_sets = Self::cartesian_product(combined_sets, sets);
+                        }
+                        other => {
+                            return Err(ErrorCode::SyntaxException(format!(
+                                "COMBINED GROUP BY does not support {other:?}"
+                            )));
+                        }
+                    }
+                }
+                Ok(GroupBy::GroupingSets(combined_sets))
+            }
+        }
+    }
+
+    /// Generate GroupingSets from CUBE (expr1, expr2, ...)
+    fn generate_cube_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+        (0..=exprs.len())
+            .flat_map(|count| exprs.clone().into_iter().combinations(count))
+            .collect::<Vec<_>>()
+    }
+
+    /// Generate GroupingSets from ROLLUP (expr1, expr2, ...)
+    fn generate_rollup_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+        let mut result = Vec::new();
+        for i in (0..=exprs.len()).rev() {
+            result.push(exprs[..i].to_vec());
+        }
+        result
+    }
+
+    /// Perform Cartesian product of two sets of grouping sets
+    fn cartesian_product(set1: Vec<Vec<Expr>>, set2: Vec<Vec<Expr>>) -> Vec<Vec<Expr>> {
+        if set1.is_empty() {
+            return set2;
+        }
+
+        if set2.is_empty() {
+            return set1;
+        }
+
+        let mut result = Vec::new();
+        for s1 in set1 {
+            for s2 in &set2 {
+                let mut combined = s1.clone();
+                combined.extend(s2.clone());
+                result.push(combined);
+            }
+        }
+        result
     }
 
     pub fn bind_aggregate(
@@ -525,6 +578,11 @@ impl Binder {
                 set
             })
             .collect::<Vec<_>>();
+
+        // Because we are not using union all to implement grouping sets
+        // We will remove the duplicated grouping sets here.
+        // For example: SELECT  brand, segment,  SUM (quantity) FROM     sales GROUP BY  GROUPING sets(brand, segment),  GROUPING sets(brand, segment);
+        // brand X segment will not appear twice in the result, the results are not standard but acceptable.
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         let mut dup_group_items = Vec::with_capacity(agg_info.group_items.len());
         for (i, item) in agg_info.group_items.iter().enumerate() {
@@ -649,6 +707,9 @@ impl Binder {
                 .bind(expr)
                 .or_else(|e| self.resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
+            let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
+            analyzer.visit(&mut scalar_expr)?;
+
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
@@ -660,11 +721,6 @@ impl Binder {
             {
                 // The group key is duplicated
                 continue;
-            }
-
-            if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-                srf_rewriter.visit(&mut scalar_expr)?;
             }
 
             let group_item_name = format!("{:#}", expr);
@@ -812,12 +868,7 @@ impl Binder {
                     .set_span(expr.span()),
             )
         } else {
-            let (alias, mut scalar) = available_aliases[result[0]].clone();
-
-            if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-                srf_rewriter.visit(&mut scalar)?;
-            }
+            let (alias, scalar) = available_aliases[result[0]].clone();
 
             // check scalar first, avoid duplicate create column.
             let mut scalar_column_index = None;

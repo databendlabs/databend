@@ -151,7 +151,7 @@ impl PrivilegeAccess {
             GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
-            GrantObject::Global => return Ok(None),
+            GrantObject::Global | GrantObject::Warehouse(_) => return Ok(None),
         };
 
         Ok(Some(object))
@@ -225,7 +225,7 @@ impl PrivilegeAccess {
 
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
-                                Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
                                 privileges,
                                 catalog_name,
                                 db_name,
@@ -441,7 +441,7 @@ impl PrivilegeAccess {
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
             | GrantObject::TableById(_, _, _) => true,
-            GrantObject::Global => false,
+            GrantObject::Global | GrantObject::Warehouse(_) => false,
         };
 
         if verify_ownership
@@ -490,11 +490,12 @@ impl PrivilegeAccess {
                     GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::Global
                     | GrantObject::UDF(_)
+                    | GrantObject::Warehouse(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -1182,6 +1183,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
+            | Plan::UseCatalog(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)

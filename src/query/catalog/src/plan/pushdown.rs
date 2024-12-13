@@ -60,6 +60,8 @@ pub struct VirtualColumnField {
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: Scalar,
+    /// optional cast function name, used to cast value to other type.
+    pub cast_func_name: Option<String>,
     /// Virtual column data type.
     pub data_type: Box<TableDataType>,
     /// Is the virtual column is created,
@@ -222,21 +224,17 @@ impl PushDownInfo {
                 if !TopK::support_type(data_type) {
                     return None;
                 }
-
                 let leaf_fields = schema.leaf_fields();
-                let (leaf_id, f) = leaf_fields
+                leaf_fields
                     .iter()
                     .enumerate()
                     .find(|&(_, p)| p.name() == id)
-                    .unwrap();
-
-                let top_k = TopK {
-                    limit: self.limit.unwrap(),
-                    field: f.clone(),
-                    asc: order.1,
-                    leaf_id,
-                };
-                Some(top_k)
+                    .map(|(leaf_id, f)| TopK {
+                        limit: self.limit.unwrap(),
+                        field: f.clone(),
+                        asc: order.1,
+                        leaf_id,
+                    })
             } else {
                 None
             }

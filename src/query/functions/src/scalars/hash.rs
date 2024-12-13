@@ -319,14 +319,14 @@ impl DFHash for F64 {
     }
 }
 
-impl<'a> DFHash for &'a [u8] {
+impl DFHash for &[u8] {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash_slice(self, state);
     }
 }
 
-impl<'a> DFHash for &'a str {
+impl DFHash for &str {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash_slice(self.as_bytes(), state);

@@ -54,6 +54,7 @@ use crate::aggregates::aggregate_quantile_tdigest_function_desc;
 use crate::aggregates::aggregate_quantile_tdigest_weighted_function_desc;
 use crate::aggregates::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_skewness_function_desc;
+use crate::aggregates::aggregate_st_collect_function_desc;
 use crate::aggregates::aggregate_string_agg_function_desc;
 use crate::aggregates::aggregate_sum_function_desc;
 
@@ -144,6 +145,8 @@ impl Aggregators {
         factory.register("histogram", aggregate_histogram_function_desc());
 
         factory.register("mode", aggregate_mode_function_desc());
+
+        factory.register("st_collect", aggregate_st_collect_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

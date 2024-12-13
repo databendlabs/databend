@@ -108,3 +108,6 @@ mod v107_geography_datatype;
 mod v108_procedure;
 mod v109_procedure_with_args;
 mod v110_database_meta_gc_in_progress;
+mod v111_add_glue_as_iceberg_catalog_option;
+mod v112_virtual_column;
+mod v113_warehouse_grantobject;

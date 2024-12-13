@@ -52,6 +52,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -90,6 +91,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
@@ -97,6 +99,7 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
@@ -158,8 +161,11 @@ use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::MetadataRef;
+use crate::TableEntry;
+use crate::Visibility;
 
 /// A helper for type checking.
 ///
@@ -795,8 +801,8 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
                     let window = window.as_ref().unwrap();
-                    let rank_window = ["first_value", "first", "last_value", "last", "nth_value"];
-                    if !rank_window.contains(&func_name) && window.ignore_nulls.is_some() {
+                    if !RANK_WINDOW_FUNCTIONS.contains(&func_name) && window.ignore_nulls.is_some()
+                    {
                         return Err(ErrorCode::SemanticError(format!(
                             "window function {func_name} not support IGNORE/RESPECT NULLS option"
                         ))
@@ -1386,7 +1392,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve general window function call.
-
     fn resolve_general_window_function(
         &mut self,
         span: Span,
@@ -2588,12 +2593,6 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
-        if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-            return Err(ErrorCode::SemanticError(
-                "set-returning functions can only be used in SELECT".to_string(),
-            )
-            .set_span(span));
-        }
 
         let original_context = self.bind_context.expr_context.clone();
         self.bind_context
@@ -3123,6 +3122,7 @@ impl<'a> TypeChecker<'a> {
 
     pub fn all_sugar_functions() -> &'static [&'static str] {
         &[
+            "current_catalog",
             "database",
             "currentdatabase",
             "current_database",
@@ -3160,6 +3160,10 @@ impl<'a> TypeChecker<'a> {
         args: &[&Expr],
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         match (func_name.to_lowercase().as_str(), args) {
+            ("current_catalog", &[]) => Some(self.resolve(&Expr::Literal {
+                span,
+                value: Literal::String(self.ctx.get_current_catalog()),
+            })),
             ("database" | "currentdatabase" | "current_database", &[]) => {
                 Some(self.resolve(&Expr::Literal {
                     span,
@@ -4524,6 +4528,178 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
+    async fn get_virtual_columns(
+        &self,
+        table_entry: &TableEntry,
+        table: Arc<dyn Table>,
+    ) -> Result<Option<HashMap<String, TableDataType>>> {
+        let table_id = table.get_id();
+        let req = ListVirtualColumnsReq::new(self.ctx.get_tenant(), Some(table_id));
+        let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
+
+        if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
+            if !virtual_column_metas.is_empty() {
+                let mut virtual_column_name_map =
+                    HashMap::with_capacity(virtual_column_metas[0].virtual_columns.len());
+                for (name, typ) in virtual_column_metas[0].virtual_columns.iter() {
+                    virtual_column_name_map.insert(name.clone(), typ.clone());
+                }
+                return Ok(Some(virtual_column_name_map));
+            }
+        }
+        Ok(None)
+    }
+
+    fn try_rewrite_virtual_column(
+        &mut self,
+        base_column: &BaseTableColumn,
+        keypaths: &KeyPaths,
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        if !self.bind_context.virtual_column_context.allow_pushdown {
+            return Ok(None);
+        }
+
+        let metadata = self.metadata.read().clone();
+        let table_entry = metadata.table(base_column.table_index);
+
+        let table = table_entry.table();
+        // Ignore tables that do not support virtual columns
+        if !table.support_virtual_columns() {
+            return Ok(None);
+        }
+        let schema = table.schema();
+
+        if !self
+            .bind_context
+            .virtual_column_context
+            .table_indices
+            .contains(&base_column.table_index)
+        {
+            let virtual_column_name_map = databend_common_base::runtime::block_on(
+                self.get_virtual_columns(table_entry, table),
+            )?;
+            self.bind_context
+                .virtual_column_context
+                .table_indices
+                .insert(base_column.table_index);
+            if let Some(virtual_column_name_map) = virtual_column_name_map {
+                self.bind_context
+                    .virtual_column_context
+                    .virtual_column_names
+                    .insert(base_column.table_index, virtual_column_name_map);
+                self.bind_context
+                    .virtual_column_context
+                    .next_column_ids
+                    .insert(base_column.table_index, schema.next_column_id);
+            }
+        }
+
+        if let Some(virtual_column_name_map) = self
+            .bind_context
+            .virtual_column_context
+            .virtual_column_names
+            .get(&base_column.table_index)
+        {
+            let mut name = String::new();
+            name.push_str(&base_column.column_name);
+            for path in &keypaths.paths {
+                name.push('[');
+                match path {
+                    KeyPath::Index(idx) => {
+                        name.push_str(&idx.to_string());
+                    }
+                    KeyPath::QuotedName(field) | KeyPath::Name(field) => {
+                        name.push('\'');
+                        name.push_str(field.as_ref());
+                        name.push('\'');
+                    }
+                }
+                name.push(']');
+            }
+
+            let virtual_type = virtual_column_name_map.get(&name);
+            let is_created = virtual_type.is_some();
+
+            let mut index = 0;
+            // Check for duplicate virtual columns
+            for table_column in metadata.virtual_columns_by_table_index(base_column.table_index) {
+                if table_column.name() == name {
+                    index = table_column.index();
+                    break;
+                }
+            }
+
+            let table_data_type = if let Some(virtual_type) = virtual_type {
+                virtual_type.wrap_nullable()
+            } else {
+                TableDataType::Nullable(Box::new(TableDataType::Variant))
+            };
+
+            if index == 0 {
+                let column_id = self
+                    .bind_context
+                    .virtual_column_context
+                    .next_column_ids
+                    .get(&base_column.table_index)
+                    .unwrap();
+
+                let keypaths_str = format!("{}", keypaths);
+                let keypaths_value = Scalar::String(keypaths_str);
+
+                index = self.metadata.write().add_virtual_column(
+                    base_column,
+                    *column_id,
+                    name.clone(),
+                    table_data_type.clone(),
+                    keypaths_value.clone(),
+                    None,
+                    is_created,
+                );
+
+                // Increments the column id of the virtual column.
+                let column_id = self
+                    .bind_context
+                    .virtual_column_context
+                    .next_column_ids
+                    .get_mut(&base_column.table_index)
+                    .unwrap();
+                *column_id += 1;
+            }
+
+            if let Some(indices) = self
+                .bind_context
+                .virtual_column_context
+                .virtual_column_indices
+                .get_mut(&base_column.table_index)
+            {
+                indices.push(index);
+            } else {
+                self.bind_context
+                    .virtual_column_context
+                    .virtual_column_indices
+                    .insert(base_column.table_index, vec![index]);
+            }
+
+            let data_type = DataType::from(&table_data_type);
+            let column_binding = ColumnBindingBuilder::new(
+                name,
+                index,
+                Box::new(data_type.clone()),
+                Visibility::InVisible,
+            )
+            .table_index(Some(base_column.table_index))
+            .build();
+
+            let virtual_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: column_binding,
+            });
+            Ok(Some(Box::new((virtual_column, data_type))))
+        } else {
+            Ok(None)
+        }
+    }
+
     // Rewrite variant map access as `get_by_keypath` function
     fn resolve_variant_map_access(
         &mut self,
@@ -4550,7 +4726,22 @@ impl<'a> TypeChecker<'a> {
             };
             key_paths.push(key_path);
         }
+
         let keypaths = KeyPaths { paths: key_paths };
+
+        // try rewrite as virtual column and pushdown to storage layer.
+        if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
+            if column.index < self.metadata.read().columns().len() {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
+                    if let Some(box (scalar, data_type)) =
+                        self.try_rewrite_virtual_column(&base_column, &keypaths)?
+                    {
+                        return Ok(Box::new((scalar, data_type)));
+                    }
+                }
+            }
+        }
 
         let keypaths_str = format!("{}", keypaths);
         let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {

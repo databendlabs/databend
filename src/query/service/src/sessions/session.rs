@@ -200,6 +200,10 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session_ctx.set_current_catalog(catalog_name)
+    }
+
     pub fn get_current_tenant(&self) -> Tenant {
         self.session_ctx.get_current_tenant()
     }
@@ -278,6 +282,16 @@ impl Session {
     #[async_backtrace::framed]
     pub async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         self.privilege_mgr().get_all_effective_roles().await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn set_current_warehouse(&self, w: Option<String>) -> Result<()> {
+        self.privilege_mgr().set_current_warehouse(w).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_current_warehouse(&self) -> Option<String> {
+        self.session_ctx.get_current_warehouse()
     }
 
     #[async_backtrace::framed]

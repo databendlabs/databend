@@ -75,10 +75,11 @@ impl RowGroupReaderForCopy {
         output_schema: TableSchemaRef,
         default_values: Option<Vec<RemoteExpr>>,
         missing_as: &NullAs,
+        case_sensitive: bool,
     ) -> Result<RowGroupReaderForCopy> {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
-        let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema)?);
+        let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema, case_sensitive)?);
 
         let (mut output_projection, mut pushdown_columns) = project_columnar(
             &parquet_table_schema,
@@ -86,6 +87,7 @@ impl RowGroupReaderForCopy {
             missing_as,
             &default_values,
             location,
+            case_sensitive,
         )?;
         pushdown_columns.sort();
         let mapping = pushdown_columns

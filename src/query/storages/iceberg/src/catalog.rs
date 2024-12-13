@@ -494,7 +494,6 @@ impl Catalog for IcebergCatalog {
     }
 
     // Table index
-
     #[async_backtrace::framed]
     async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
         unimplemented!()
@@ -534,7 +533,6 @@ impl Catalog for IcebergCatalog {
     }
 
     // Virtual column
-
     #[async_backtrace::framed]
     async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
@@ -559,7 +557,6 @@ impl Catalog for IcebergCatalog {
     }
 
     /// Table function
-
     // Get function by name.
     fn get_table_function(
         &self,

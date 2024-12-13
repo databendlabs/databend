@@ -64,8 +64,8 @@ impl DistinctToGroupBy {
                     return;
                 }
                 let sub_query_name = "_distinct_group_by_subquery";
-                if ((name.name.to_ascii_lowercase() == "count" && *distinct)
-                    || name.name.to_ascii_lowercase() == "count_distinct")
+                if ((name.name.eq_ignore_ascii_case("count") && *distinct)
+                    || name.name.eq_ignore_ascii_case("count_distinct"))
                     && args.iter().all(|arg| !matches!(arg, Expr::Literal { .. }))
                 {
                     let subquery = Query {

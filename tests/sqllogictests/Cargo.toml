@@ -32,6 +32,7 @@ serde_json = { workspace = true }
 sqllogictest = { workspace = true }
 sqlparser = { workspace = true }
 thiserror = { workspace = true }
+threadpool = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
 walkdir = { workspace = true }

@@ -22,7 +22,6 @@ use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float32Type;
@@ -31,7 +30,7 @@ use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::F64;
-use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -230,16 +229,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         "gen_random_uuid",
         |_| FunctionDomain::Full,
         |ctx| {
-            let mut builder = BinaryColumnBuilder::with_capacity(ctx.num_rows, 0);
+            let mut builder = StringColumnBuilder::with_capacity(ctx.num_rows);
 
             for _ in 0..ctx.num_rows {
                 let value = Uuid::now_v7();
-                write!(&mut builder.data, "{}", value).unwrap();
+                write!(&mut builder.row_buffer, "{}", value).unwrap();
                 builder.commit_row();
             }
 
-            let col = StringColumn::try_from(builder.build()).unwrap();
-            Value::Column(col)
+            Value::Column(builder.build())
         },
     );
 

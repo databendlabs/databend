@@ -290,7 +290,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 22, "{:?}", result);
+    assert_eq!(result.schema.len(), 23, "{:?}", result);
 
     // get state
     let uri = result.stats_uri.unwrap();
@@ -710,7 +710,7 @@ async fn test_insert() -> Result<()> {
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0, 0),
-        ("insert into t(a) values (1),(2)", 0, 2),
+        ("insert into t(a) values (1),(2)", 1, 2),
         ("select * from t", 2, 0),
     ];
 
@@ -1323,7 +1323,7 @@ async fn test_func_object_keys() -> Result<()> {
         ),
         (
             "INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));",
-            0,
+            1,
         ),
         (
             "SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;",
@@ -1349,9 +1349,9 @@ async fn test_multi_partition() -> Result<()> {
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
-        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 0),
-        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 0),
-        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 1),
+        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 1),
+        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 1),
         ("select * from tb2;", 6),
     ];
 
@@ -1384,6 +1384,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1409,6 +1410,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1429,6 +1431,7 @@ async fn test_affect() -> Result<()> {
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1451,6 +1454,7 @@ async fn test_affect() -> Result<()> {
                 name: "db2".to_string(),
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("db2".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1475,6 +1479,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![true],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1524,13 +1529,11 @@ async fn test_session_secondary_roles() -> Result<()> {
     let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
     assert!(result.error.is_some());
-    assert!(
-        result
-            .error
-            .unwrap()
-            .message
-            .contains("only ALL or NONE is allowed on setting secondary roles")
-    );
+    assert!(result
+        .error
+        .unwrap()
+        .message
+        .contains("only ALL or NONE is allowed on setting secondary roles"));
     assert_eq!(result.state, ExecuteStateKind::Failed);
 
     let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public", "secondary_roles": Vec::<String>::new()}});
@@ -1679,7 +1682,7 @@ async fn test_has_result_set() -> Result<()> {
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
-        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", false),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", true),
         ("select * from tb2;", true),
     ];
 

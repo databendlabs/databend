@@ -142,6 +142,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             TableSchemaRefExt::create(vec![
                 TableField::new("catalog", TableDataType::String),
                 TableField::new("database", TableDataType::String),
+                TableField::new("database_id", TableDataType::Number(NumberDataType::UInt64)),
                 TableField::new("name", TableDataType::String),
                 TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
                 TableField::new(
@@ -206,6 +207,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             TableSchemaRefExt::create(vec![
                 TableField::new("catalog", TableDataType::String),
                 TableField::new("database", TableDataType::String),
+                TableField::new("database_id", TableDataType::Number(NumberDataType::UInt64)),
                 TableField::new("name", TableDataType::String),
                 TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
                 TableField::new("engine", TableDataType::String),
@@ -243,6 +245,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         let mut catalogs = vec![];
         let mut databases = vec![];
+        let mut databases_ids = vec![];
 
         let mut database_tables = vec![];
         let mut owner: Vec<Option<String>> = Vec::new();
@@ -382,6 +385,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 ) {
                                     catalogs.push(ctl_name.as_str());
                                     databases.push(db.name().to_owned());
+                                    databases_ids.push(db.get_db_info().database_id.db_id);
                                     database_tables.push(t);
                                     owner.push(role);
                                 } else if let Some(role) = role {
@@ -389,6 +393,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                     if roles.iter().any(|r| r.name == role) {
                                         catalogs.push(ctl_name.as_str());
                                         databases.push(db.name().to_owned());
+                                        databases_ids.push(db.get_db_info().database_id.db_id);
                                         database_tables.push(t);
                                         owner.push(Some(role));
                                     }
@@ -600,6 +605,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             // decrease information_schema.tables union.
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
+                            databases_ids.push(db.get_db_info().database_id.db_id);
                             database_tables.push(table);
                             if ownership.is_empty() {
                                 owner.push(None);
@@ -759,6 +765,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
+                UInt64Type::from_data(databases_ids),
                 StringType::from_data(names),
                 UInt64Type::from_data(table_id),
                 UInt64Type::from_data(total_columns),
@@ -784,6 +791,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
+                UInt64Type::from_data(databases_ids),
                 StringType::from_data(names),
                 UInt64Type::from_data(table_id),
                 StringType::from_data(engines),

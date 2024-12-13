@@ -69,7 +69,7 @@ impl<T> ReadBytesExt for Cursor<T>
 where T: AsRef<[u8]>
 {
     fn peek(&self) -> Option<char> {
-        let buf = self.remaining_slice();
+        let buf = Cursor::split(self).1;
         if buf.is_empty() {
             None
         } else {
@@ -78,15 +78,19 @@ where T: AsRef<[u8]>
     }
 
     fn peek_byte(&self) -> Option<u8> {
-        let buf = self.remaining_slice();
-        if buf.is_empty() { None } else { Some(buf[0]) }
+        let buf = Cursor::split(self).1;
+        if buf.is_empty() {
+            None
+        } else {
+            Some(buf[0])
+        }
     }
 
     fn eof(&mut self) -> bool {
-        self.remaining_slice().is_empty()
+        Cursor::split(self).1.is_empty()
     }
     fn must_eof(&mut self) -> Result<()> {
-        if !self.remaining_slice().is_empty() {
+        if !Cursor::split(self).1.is_empty() {
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
                 "Must reach the buffer end",
@@ -96,7 +100,7 @@ where T: AsRef<[u8]>
     }
 
     fn ignore(&mut self, f: impl Fn(u8) -> bool) -> bool {
-        let available = self.remaining_slice();
+        let available = Cursor::split(self).1;
         if available.is_empty() {
             false
         } else if f(available[0]) {
@@ -108,7 +112,7 @@ where T: AsRef<[u8]>
     }
 
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> usize {
-        let available = self.remaining_slice();
+        let available = Cursor::split(self).1;
         if available.is_empty() {
             return 0;
         }
@@ -128,7 +132,7 @@ where T: AsRef<[u8]>
     }
 
     fn ignore_bytes(&mut self, bs: &[u8]) -> bool {
-        let available = self.remaining_slice();
+        let available = Cursor::split(self).1;
         let len = bs.len();
         if available.len() < len {
             return false;
@@ -156,7 +160,7 @@ where T: AsRef<[u8]>
     }
 
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> bool {
-        let available = self.remaining_slice();
+        let available = Cursor::split(self).1;
         let len = bs.len();
         if available.len() < len {
             return false;
@@ -180,7 +184,7 @@ where T: AsRef<[u8]>
     }
 
     fn ignore_comment(&mut self) -> bool {
-        let remaining_slice = self.remaining_slice();
+        let remaining_slice = Cursor::split(self).1;
         if remaining_slice.len() < 2 {
             return false;
         }
@@ -201,7 +205,7 @@ where T: AsRef<[u8]>
     }
 
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> usize {
-        let remaining_slice = self.remaining_slice();
+        let remaining_slice = Cursor::split(self).1;
         let to_read = memchr(delim, remaining_slice).map_or(buf.len(), |n| n + 1);
         buf.extend_from_slice(&remaining_slice[..to_read]);
         self.consume(to_read);
@@ -209,7 +213,7 @@ where T: AsRef<[u8]>
     }
 
     fn keep_read(&mut self, buf: &mut Vec<u8>, f: impl Fn(u8) -> bool) -> usize {
-        let remaining_slice = self.remaining_slice();
+        let remaining_slice = Cursor::split(self).1;
         let mut to_read = remaining_slice.len();
         for (i, b) in remaining_slice.iter().enumerate() {
             if !f(*b) {

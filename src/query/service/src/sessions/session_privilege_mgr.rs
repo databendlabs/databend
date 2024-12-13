@@ -81,6 +81,7 @@ pub trait SessionPrivilegeManager {
     ) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
+    async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()>;
 }
 
 pub struct SessionPrivilegeManagerImpl<'a> {
@@ -136,7 +137,7 @@ impl<'a> SessionPrivilegeManagerImpl<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
+impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will overwrite the current user's granted roles, and
@@ -223,6 +224,30 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
         let tenant = self.session_ctx.get_current_tenant();
         let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
         Ok(effective_roles)
+    }
+
+    async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()> {
+        let warehouse = match &warehouse {
+            Some(warehouse) => {
+                let effective_roles = self.get_all_effective_roles().await?;
+                effective_roles.iter().find_map(|role| {
+                    role.grants.entries().iter().find_map(|grant| {
+                        if let GrantObject::Warehouse(rw) = grant.object() {
+                            if warehouse == rw {
+                                Some(warehouse.to_string())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                })
+            }
+            None => None,
+        };
+        self.session_ctx.set_current_warehouse(warehouse);
+        Ok(())
     }
 
     // Returns all the roles the current session has. If the user have been granted auth_role,

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -25,8 +27,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -208,6 +212,20 @@ impl ScalarExpr {
         }
 
         impl<'a> Visitor<'a> for EvaluableVisitor {
+            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    self.evaluable = false;
+                } else {
+                    for expr in &func.arguments {
+                        self.visit(expr)?;
+                    }
+                }
+                Ok(())
+            }
             fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
                 self.evaluable = false;
                 Ok(())
@@ -808,6 +826,23 @@ pub struct RedisSource {
     pub db_index: Option<i64>,
 }
 
+impl Display for RedisSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "redis://")?;
+        if let Some(username) = &self.username {
+            write!(f, "{}:", username)?
+        }
+        if let Some(password) = &self.password {
+            write!(f, "{}@", password)?;
+        }
+        write!(f, "{}:{}", self.host, self.port)?;
+        if let Some(db_index) = &self.db_index {
+            write!(f, "/{}", db_index)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SqlSource {
@@ -818,7 +853,7 @@ pub struct SqlSource {
     pub value_field: String,
 }
 
-#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Educe, EnumAsInner, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub enum DictionarySource {
     Mysql(SqlSource),

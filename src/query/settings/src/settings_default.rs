@@ -528,6 +528,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
+                ("enable_experimental_stream_sort_spilling", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable experimental stream sort spilling",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
@@ -952,6 +958,30 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_prune_pipeline", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable pruning pipeline",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("persist_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0), // 0 for in-memory, 1 for disk
+                    desc: "Decides if materialized CTEs should be persisted to disk.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("flight_connection_max_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum retry count for cluster flight. Disable if 0.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=10)),
+                }),
+                ("flight_connection_retry_interval", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "The retry interval of cluster flight is in seconds.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=10)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -1094,7 +1124,7 @@ impl DefaultSettings {
                 // If not a valid u64, try parsing as f64
                 match v.parse::<f64>() {
                     Ok(f) if f.fract() == 0.0 && f >= 0.0 && f <= u64::MAX as f64 => {
-                        Ok(f.trunc() as u64) /* Convert to u64 if no fractional part, non-negative, and within u64 range */
+                        Ok(f.trunc() as u64) // Convert to u64 if no fractional part, non-negative, and within u64 range
                     }
                     _ => Err(ErrorCode::WrongValueForVariable(format!(
                         "{} is not a valid integer value",

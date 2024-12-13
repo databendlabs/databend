@@ -262,5 +262,9 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { CONNECTION ~ ^"=>" ~ ^#connection_options },
             |(_, _, file_format)| SelectStageOption::Connection(file_format),
         ),
+        map(
+            rule! { CASE_SENSITIVE ~ ^"=>" ~ ^#literal_bool },
+            |(_, _, case_sensitive)| SelectStageOption::CaseSensitive(case_sensitive),
+        ),
     ))(i)
 }
