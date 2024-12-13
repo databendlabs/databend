@@ -97,6 +97,11 @@ impl AuthMgr {
         need_user_info: bool,
     ) -> Result<(String, Option<String>)> {
         let user_api = UserApiProvider::instance();
+        // TODO: verify network policy
+        let _network_policy = session
+            .get_settings()
+            .get_network_policy()
+            .unwrap_or_default();
         match credential {
             Credential::NoNeed => Ok(("".to_string(), None)),
             Credential::DatabendToken { token } => {

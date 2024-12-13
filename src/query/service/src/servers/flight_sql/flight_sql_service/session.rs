@@ -98,7 +98,11 @@ impl FlightSqlServiceImpl {
         let session = session_manager.register_session(session)?;
 
         let tenant = session.get_current_tenant();
-        let settings = session.get_settings();
+        // TODO: verify network policy
+        let _network_policy = session
+            .get_settings()
+            .get_network_policy()
+            .unwrap_or_default();
 
         let identity = UserIdentity::new(&user, "%");
         let mut user = UserApiProvider::instance()
