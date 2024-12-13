@@ -3082,8 +3082,8 @@ impl<'a> TypeChecker<'a> {
                             expr: Box::new(args[0].clone()),
                             not: false,
                         },
-                        &args[1],
-                        &args[0],
+                        args[1],
+                        args[0],
                     ]))
                 } else {
                     // Rewrite ifnull(args) to coalesce(x, y)
