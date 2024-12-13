@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::fmt;
 use std::io;
 use std::ops::Deref;
@@ -54,8 +55,12 @@ where T: serde::Serialize
     fn encode<W: io::Write>(&self, mut w: W) -> Result<usize, io::Error> {
         let mut ow = OffsetWriter::new(&mut w);
 
-        rmp_serde::encode::write_named(&mut ow, &self.0)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        rmp_serde::encode::write_named(&mut ow, &self.0).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{e}; when:(encode: {})", type_name::<T>()),
+            )
+        })?;
 
         let n = ow.offset();
 
@@ -68,8 +73,12 @@ where T: DeserializeOwned
 {
     fn decode<R: io::Read>(r: R) -> Result<Self, io::Error> {
         // rmp_serde::decode::from_read returns when a value is successfully decoded.
-        let d = rmp_serde::decode::from_read(r)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let d = rmp_serde::decode::from_read(r).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{e}; when:(decode: {})", type_name::<T>()),
+            )
+        })?;
 
         Ok(Cw(d))
     }
