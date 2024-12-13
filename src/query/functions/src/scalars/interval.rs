@@ -60,7 +60,6 @@ fn register_string_to_interval(registry: &mut FunctionRegistry) {
                     ctx.set_error(0, format!("cannot parse to type `INTERVAL`. {}", e));
                 }
             }
-            output.commit_row();
         })(val, ctx)
     }
 }

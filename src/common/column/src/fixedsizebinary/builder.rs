@@ -78,41 +78,9 @@ impl FixedSizeBinaryColumnBuilder {
         self.data.len()
     }
 
-    pub fn push_default(&mut self) {
-        self.data.extend_from_slice(&vec![0; self.value_length]);
-    }
-
-    pub fn put_char(&mut self, item: char) {
-        self.data
-            .extend_from_slice(item.encode_utf8(&mut [0; 4]).as_bytes());
-    }
-
-    #[inline]
-    pub fn put_str(&mut self, item: &str) {
-        debug_assert!(self.value_length == item.len());
-        self.data.extend_from_slice(item.as_bytes());
-    }
-
     #[inline]
     pub fn put_slice(&mut self, item: &[u8]) {
         debug_assert!(self.value_length == item.len());
-        self.data.extend_from_slice(item);
-    }
-
-    #[inline]
-    pub fn commit_row(&mut self) {
-        self.data.reserve(self.data.capacity());
-    }
-
-    pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
-        for c in iter {
-            let mut buf = [0; 4];
-            let result = c.encode_utf8(&mut buf);
-            self.data.extend_from_slice(result.as_bytes());
-        }
-    }
-
-    pub fn put(&mut self, item: &[u8]) {
         self.data.extend_from_slice(item);
     }
 
@@ -175,7 +143,6 @@ impl FixedSizeBinaryColumnBuilder {
     {
         for item in iterator {
             self.put_slice(item.as_ref());
-            self.commit_row();
         }
     }
 }

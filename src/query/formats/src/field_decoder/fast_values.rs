@@ -522,7 +522,6 @@ impl FastFieldDecoderValues {
                 .to_le_bytes()
                 .as_bytes(),
         );
-        column.commit_row();
         Ok(())
     }
 

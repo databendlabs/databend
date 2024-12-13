@@ -818,7 +818,6 @@ impl Column {
                 builder.put_slice(
                     col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize),
                 );
-                builder.commit_row();
             }
         }
         builder.build()

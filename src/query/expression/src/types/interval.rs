@@ -135,7 +135,6 @@ impl ValueType for IntervalType {
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
         builder.put_slice(item);
-        builder.commit_row();
     }
 
     fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
@@ -143,8 +142,7 @@ impl ValueType for IntervalType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push_default();
-        builder.commit_row();
+        builder.put_slice(&vec![0; builder.value_length]);
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {

@@ -2006,7 +2006,7 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::Geometry(builder) => builder.commit_row(),
-            ColumnBuilder::Interval(builder) => builder.push_default(),
+            ColumnBuilder::Interval(builder) => builder.put_slice(&vec![0; builder.value_length]),
             ColumnBuilder::Geography(builder) => builder.commit_row(),
         }
     }
@@ -2147,7 +2147,6 @@ impl ColumnBuilder {
                 for row in 0..rows {
                     let reader = &reader[step * row..];
                     builder.put_slice(reader);
-                    builder.commit_row();
                 }
             }
             ColumnBuilder::Binary(builder)

@@ -339,7 +339,6 @@ impl Payload {
                     as usize as *const u8;
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
                 fixed_size_binary_builder.put_slice(scalar);
-                fixed_size_binary_builder.commit_row();
             }
         }
         fixed_size_binary_builder.build()
