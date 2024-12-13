@@ -141,6 +141,7 @@ impl Binder {
             false,
             true,
             false,
+            None,
         );
 
         let (s_expr, mut bind_context) =
@@ -193,6 +194,7 @@ impl Binder {
 
         new_bind_context.cte_context.cte_name = Some(table_name.to_string());
 
+        dbg!("&cte_info.query = {:?}", &cte_info.query);
         let (s_expr, mut res_bind_context) =
             self.bind_query(&mut new_bind_context, &cte_info.query)?;
         let mut cols_alias = cte_info.columns_alias.clone();

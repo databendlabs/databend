@@ -179,15 +179,17 @@ impl Binder {
         ))
     }
 
-    // The return value is temp_table name`
     fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<()> {
         let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
             Engine::Fuse
         } else {
             Engine::Memory
         };
+        let query_id = self.ctx.get_id();
         let database = self.ctx.get_current_database();
-        let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
+        let mut table_identifier = cte.alias.name.clone();
+        table_identifier.name = format!("{}_{}", table_identifier.name, query_id.replace("-", "_"));
+        let table_name = normalize_identifier(&table_identifier, &self.name_resolution_ctx).name;
         if self
             .ctx
             .is_temp_table(CATALOG_DEFAULT, &database, &table_name)
@@ -201,7 +203,7 @@ impl Binder {
             create_option: CreateOption::Create,
             catalog: Some(Identifier::from_name(Span::None, CATALOG_DEFAULT)),
             database: Some(Identifier::from_name(Span::None, database.clone())),
-            table: cte.alias.name.clone(),
+            table: table_identifier,
             source: None,
             engine: Some(engine),
             uri_location: None,
