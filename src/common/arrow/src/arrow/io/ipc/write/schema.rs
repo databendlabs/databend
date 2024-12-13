@@ -274,8 +274,7 @@ fn serialize_type(data_type: &DataType) -> arrow_format::ipc::Type {
         Struct(_) => ipc::Type::Struct(Box::new(ipc::Struct {})),
         Dictionary(_, v, _) => serialize_type(v),
         Extension(_, v, _) => serialize_type(v),
-        Utf8View => ipc::Type::Utf8View(Box::new(ipc::Utf8View {})),
-        BinaryView => ipc::Type::BinaryView(Box::new(ipc::BinaryView {})),
+        BinaryView | Utf8View => unimplemented!("BinaryView and Utf8View are not supported"),
     }
 }
 
@@ -307,8 +306,6 @@ fn serialize_children(data_type: &DataType, ipc_field: &IpcField) -> Vec<arrow_f
         | LargeBinary
         | Utf8
         | LargeUtf8
-        | Utf8View
-        | BinaryView
         | Decimal(_, _)
         | Decimal256(_, _) => vec![],
         FixedSizeList(inner, _) | LargeList(inner) | List(inner) | Map(inner, _) => {
@@ -321,6 +318,7 @@ fn serialize_children(data_type: &DataType, ipc_field: &IpcField) -> Vec<arrow_f
             .collect(),
         Dictionary(_, inner, _) => serialize_children(inner, ipc_field),
         Extension(_, inner, _) => serialize_children(inner, ipc_field),
+        BinaryView | Utf8View => unimplemented!("BinaryView and Utf8View are not supported"),
     }
 }
 

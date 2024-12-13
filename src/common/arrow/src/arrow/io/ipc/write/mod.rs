@@ -31,6 +31,8 @@ pub use writer::FileWriter;
 
 pub(crate) mod common_sync;
 
+mod common_async;
+
 use super::IpcField;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::datatypes::Field;

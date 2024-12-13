@@ -35,8 +35,5 @@ mod dictionary;
 pub use dictionary::*;
 mod union;
 pub use union::*;
-mod binview;
-pub use binview::*;
 mod map;
-
 pub use map::*;

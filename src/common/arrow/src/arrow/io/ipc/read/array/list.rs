@@ -38,7 +38,6 @@ use crate::arrow::offset::Offset;
 #[allow(clippy::too_many_arguments)]
 pub fn read_list<O: Offset, R: Read + Seek>(
     field_nodes: &mut VecDeque<Node>,
-    variadic_buffer_counts: &mut VecDeque<usize>,
     data_type: DataType,
     ipc_field: &IpcField,
     buffers: &mut VecDeque<IpcBuffer>,
@@ -95,7 +94,6 @@ where
 
     let values = read(
         field_nodes,
-        variadic_buffer_counts,
         field,
         &ipc_field.fields[0],
         buffers,
