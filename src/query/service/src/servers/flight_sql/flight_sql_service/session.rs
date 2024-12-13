@@ -98,6 +98,7 @@ impl FlightSqlServiceImpl {
         let session = session_manager.register_session(session)?;
 
         let tenant = session.get_current_tenant();
+        let settings = session.get_settings();
 
         let identity = UserIdentity::new(&user, "%");
         let mut user = UserApiProvider::instance()
