@@ -70,11 +70,11 @@ impl Binder {
         };
 
         // Check and bind common table expression
-        let mut is_materialized_cte_table = false;
+        let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                is_materialized_cte_table = true;
+                cte_suffix_name = Some(self.ctx.get_id().replace("-", "_"));
             } else {
                 if self
                     .metadata
@@ -101,12 +101,6 @@ impl Binder {
         }
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
-
-        let cte_suffix_name = if is_materialized_cte_table {
-            Some(self.ctx.get_id().replace("-", "_"))
-        } else {
-            None
-        };
 
         // Resolve table with catalog
         let table_meta = {
@@ -271,11 +265,6 @@ impl Binder {
                 }
             }
             _ => {
-                let cte_suffix_name = if is_materialized_cte_table {
-                    Some(self.ctx.get_id().replace("-", "_"))
-                } else {
-                    None
-                };
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
