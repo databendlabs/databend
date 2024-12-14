@@ -28,10 +28,7 @@ iceberg = { workspace = true }
 iceberg-catalog-glue = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
-match-template = { workspace = true }
-ordered-float = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true }
 typetag = { workspace = true }
 serde_json = { workspace = true }
 

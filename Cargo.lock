@@ -4278,11 +4278,8 @@ dependencies = [
  "iceberg-catalog-glue",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
- "match-template",
- "ordered-float 4.5.0",
  "serde",
  "serde_json",
- "tokio",
  "typetag",
 ]
 
