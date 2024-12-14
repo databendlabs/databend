@@ -33,6 +33,7 @@ ordered-float = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

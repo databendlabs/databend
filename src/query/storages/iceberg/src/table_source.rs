@@ -136,7 +136,7 @@ impl Processor for IcebergTableSource {
         } else if let Some(part) = self.ctx.get_partition() {
             let part = IcebergPartInfo::from_part(&part)?;
             // TODO: enable row filter?
-            let reader = self.table.table().await?.reader_builder().build();
+            let reader = self.table.table.reader_builder().build();
             // TODO: don't use stream here.
             let stream = reader
                 .read(Box::pin(stream::iter([Ok(part.to_task())])))
