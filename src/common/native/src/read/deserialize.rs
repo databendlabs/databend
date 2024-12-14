@@ -151,6 +151,14 @@ where
                 init,
             ))
         }
+        TableDataType::Interval => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(IntervalNestedIter::<_>::new(
+                readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+            ))
+        }
         TableDataType::Decimal(t) if t.precision() > MAX_DECIMAL128_PRECISION => {
             init.push(InitNested::Primitive(is_nullable));
             DynIter::new(DecimalNestedIter::<

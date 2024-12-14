@@ -21,7 +21,7 @@ column-default = [
 ]
 
 [dependencies]
-
+borsh = { workspace = true, features = ["derive"] }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 

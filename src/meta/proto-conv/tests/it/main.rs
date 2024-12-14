@@ -111,3 +111,4 @@ mod v110_database_meta_gc_in_progress;
 mod v111_add_glue_as_iceberg_catalog_option;
 mod v112_virtual_column;
 mod v113_warehouse_grantobject;
+mod v114_interval_datatype;
