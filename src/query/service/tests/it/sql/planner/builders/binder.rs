@@ -26,3 +26,40 @@ async fn test_query_kind() -> Result<()> {
     assert_eq!(kind, QueryKind::CopyIntoTable);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_xxx() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+
+    fixture.execute_command("CREATE FUNCTION weighted_avg (Int32 NULL, Int32 NULL) RETURNS Float32 NULL LANGUAGE javascript HANDLER = 'fake_name' AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$").await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql("SELECT weighted_avg(number + 1, number + 2), weighted_avg(number + 1, number + 2) FROM numbers(5)").await?;
+
+    println!("{:?}", plan);
+
+    Ok(())
+}

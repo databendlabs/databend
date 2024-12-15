@@ -47,6 +47,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::WindowFuncType;
@@ -180,12 +181,13 @@ impl SubqueryRewriter {
                 Arc::new(self.rewrite(s_expr.child(1)?)?),
             )),
 
-            RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
-                Ok(SExpr::create_unary(
-                    Arc::new(s_expr.plan().clone()),
-                    Arc::new(self.rewrite(s_expr.child(0)?)?),
-                ))
-            }
+            RelOperator::Limit(_)
+            | RelOperator::Udf(_)
+            // | RelOperator::Udaf(_)// todo check
+            | RelOperator::AsyncFunction(_) => Ok(SExpr::create_unary(
+                Arc::new(s_expr.plan().clone()),
+                Arc::new(self.rewrite(s_expr.child(0)?)?),
+            )),
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
@@ -399,7 +401,6 @@ impl SubqueryRewriter {
 
                 Ok((expr, s_expr))
             }
-
             ScalarExpr::UDFLambdaCall(udf) => {
                 let mut s_expr = s_expr.clone();
                 let res = self.try_rewrite_subquery(&udf.scalar, &s_expr, false)?;
@@ -409,6 +410,28 @@ impl SubqueryRewriter {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
                     scalar: Box::new(res.0),
+                }
+                .into();
+
+                Ok((expr, s_expr))
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                let mut args = vec![];
+                let mut s_expr = s_expr.clone();
+                for arg in udaf.arguments.iter() {
+                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
+                    s_expr = res.1;
+                    args.push(res.0);
+                }
+
+                let expr: ScalarExpr = UDAFCall {
+                    span: udaf.span,
+                    name: udaf.name.clone(),
+                    display_name: udaf.display_name.clone(),
+                    udf_type: udaf.udf_type.clone(),
+                    arg_types: udaf.arg_types.clone(),
+                    return_type: udaf.return_type.clone(),
+                    arguments: args,
                 }
                 .into();
 

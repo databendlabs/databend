@@ -42,6 +42,7 @@ mod builder_row_fetch;
 mod builder_scalar;
 mod builder_scan;
 mod builder_sort;
+mod builder_udaf;
 mod builder_udf;
 mod builder_union_all;
 mod builder_window;

@@ -252,6 +252,7 @@ impl DPhpy {
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
             | RelOperator::Udf(_)
+            // | RelOperator::Udaf(_)
             | RelOperator::Filter(_) => {
                 if join_child {
                     // If plan is filter, save it

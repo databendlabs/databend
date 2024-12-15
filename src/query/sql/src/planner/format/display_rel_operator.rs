@@ -113,6 +113,17 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::UDFLambdaCall(udf) => {
             format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
         }
+        ScalarExpr::UDAFCall(udaf) => {
+            format!(
+                "{}({})",
+                &udaf.name,
+                udaf.arguments
+                    .iter()
+                    .map(format_scalar)
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
         ScalarExpr::AsyncFunctionCall(async_func) => async_func.display_name.clone(),
     }
 }

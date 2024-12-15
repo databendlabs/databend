@@ -175,6 +175,7 @@ impl PipelineBuilder {
             }
             PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Udf(udf) => self.build_udf(udf),
+            // PhysicalPlan::Udaf(udaf) => self.build_udaf(udaf),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),

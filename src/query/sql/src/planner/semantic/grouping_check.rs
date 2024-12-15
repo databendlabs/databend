@@ -137,6 +137,31 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
 
                 return Err(ErrorCode::Internal("Invalid aggregate function"));
             }
+            ScalarExpr::UDAFCall(udaf) => {
+                let Some(column) = self
+                    .bind_context
+                    .aggregate_info
+                    .aggregate_functions_map
+                    .get(&udaf.display_name)
+                else {
+                    return Err(ErrorCode::Internal("Invalid udaf function"));
+                };
+
+                let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
+                let column_binding = ColumnBindingBuilder::new(
+                    udaf.display_name.clone(),
+                    agg_func.index,
+                    Box::new(agg_func.scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }
+                .into();
+                return Ok(());
+            }
             ScalarExpr::BoundColumnRef(column_ref) => {
                 if let Some(index) = self
                     .bind_context

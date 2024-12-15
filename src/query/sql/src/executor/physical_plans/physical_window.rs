@@ -262,6 +262,8 @@ impl PhysicalPlanBuilder {
             WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
                 sig: AggregateFunctionSignature {
                     name: agg.func_name.clone(),
+                    udf_type: None,
+                    return_type: *agg.return_type.clone(),
                     args: agg
                         .args
                         .iter()

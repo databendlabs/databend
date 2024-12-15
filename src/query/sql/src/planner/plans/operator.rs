@@ -111,6 +111,7 @@ pub enum RelOp {
     ExpressionScan,
     CacheScan,
     Udf,
+    Udaf,
     AsyncFunction,
     RecursiveCteScan,
     MergeInto,
@@ -141,6 +142,7 @@ pub enum RelOperator {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    // Udaf(Udaf),
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
     Mutation(Mutation),
@@ -168,6 +170,7 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.rel_op(),
             RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
+            // RelOperator::Udaf(rel_op) => rel_op.rel_op(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
             RelOperator::Mutation(rel_op) => rel_op.rel_op(),
@@ -195,6 +198,7 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.arity(),
             RelOperator::CacheScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
+            // RelOperator::Udaf(rel_op) => rel_op.arity(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
             RelOperator::Mutation(rel_op) => rel_op.arity(),
@@ -222,6 +226,7 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            // RelOperator::Udaf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Mutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -249,6 +254,7 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            // RelOperator::Udaf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Mutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -276,6 +282,7 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
+            // RelOperator::Udaf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Mutation(rel_op) => rel_op.derive_stats(rel_expr),
@@ -341,6 +348,9 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            // RelOperator::Udaf(rel_op) => {
+            //     rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            // }
             RelOperator::RecursiveCteScan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
@@ -417,6 +427,9 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
+            // RelOperator::Udaf(rel_op) => {
+            //     rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            // }
             RelOperator::RecursiveCteScan(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }

@@ -21,6 +21,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_functions::aggregates::create_aggregate_udf_function;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
@@ -31,6 +32,7 @@ use databend_common_sql::executor::physical_plans::AggregateFinal;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregatePartial;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::UDFType;
 use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 
@@ -246,17 +248,26 @@ impl PipelineBuilder {
                 let args = agg_func
                     .arg_indices
                     .iter()
-                    .map(|i| {
-                        let index = input_schema.index_of(&i.to_string())?;
-                        Ok(index)
-                    })
+                    .map(|i| input_schema.index_of(&i.to_string()))
                     .collect::<Result<Vec<_>>>()?;
                 agg_args.push(args);
-                AggregateFunctionFactory::instance().get(
-                    agg_func.sig.name.as_str(),
-                    agg_func.sig.params.clone(),
-                    agg_func.sig.args.clone(),
-                )
+
+                match &agg_func.sig.udf_type {
+                    Some(UDFType::Script((lang, _, code))) => {
+                        create_aggregate_udf_function_from_js(
+                            &agg_func.sig.name,
+                            lang,
+                            agg_func.sig.return_type.clone(),
+                            code,
+                        )
+                    }
+                    None => AggregateFunctionFactory::instance().get(
+                        agg_func.sig.name.as_str(),
+                        agg_func.sig.params.clone(),
+                        agg_func.sig.args.clone(),
+                    ),
+                    _ => todo!(),
+                }
             })
             .collect::<Result<_>>()?;
 
@@ -274,4 +285,31 @@ impl PipelineBuilder {
 
         Ok(params)
     }
+}
+
+fn create_aggregate_udf_function_from_js(
+    name: &str,
+    lang: &str,
+    return_type: databend_common_expression::types::DataType,
+    code: &[u8],
+) -> Result<AggregateFunctionRef> {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::DataField;
+
+    let code = String::from_utf8(code.to_vec()).unwrap();
+    create_aggregate_udf_function(
+        name,
+        lang,
+        vec![
+            DataField::new("sum", DataType::Number(NumberDataType::Int32)),
+            DataField::new("weight", DataType::Number(NumberDataType::Int32)),
+        ],
+        vec![
+            DataField::new("sum", DataType::Number(NumberDataType::Int32)),
+            DataField::new("weight", DataType::Number(NumberDataType::Int32)),
+        ],
+        return_type,
+        &code,
+    )
 }

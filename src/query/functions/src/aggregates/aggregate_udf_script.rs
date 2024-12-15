@@ -13,6 +13,8 @@
 // limitations under the License.
 use std::alloc::Layout;
 use std::fmt;
+use std::io::BufRead;
+use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_array::Array;
@@ -29,15 +31,15 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
-use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::TableField;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::AggregateFunction;
 
 pub struct AggregateUdfScript {
     runtime: arrow_udf_js::Runtime,
     argument_schema: DataSchema,
+    return_type: DataType,
 }
 
 impl AggregateFunction for AggregateUdfScript {
@@ -46,7 +48,7 @@ impl AggregateFunction for AggregateUdfScript {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Number(NumberDataType::Float32))
+        Ok(self.return_type.clone())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -92,8 +94,13 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()> {
-        todo!()
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        let state = place.get::<UdfAggState>();
+        let rhs = UdfAggState::deserialize(reader).unwrap();
+        let states = arrow_select::concat::concat(&[&state.0, &rhs.0]).unwrap(); // todo
+        let state = self.runtime.merge(self.agg_name(), &states).unwrap();
+        place.write_state(UdfAggState(state));
+        Ok(())
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
@@ -125,6 +132,7 @@ impl AggregateUdfScript {
         "weighted_avg"
     }
 
+    #[allow(dead_code)]
     fn check_columns(&self, columns: InputColumns) {
         let fields = self.argument_schema.fields();
         assert_eq!(columns.len(), fields.len());
@@ -174,81 +182,73 @@ pub struct UdfAggState(Arc<dyn Array>);
 
 impl UdfAggState {
     fn serialize(&self, writer: &mut Vec<u8>) -> std::result::Result<(), ArrowError> {
-        use arrow_ipc::writer::FileWriter;
-        use arrow_ipc::writer::IpcWriteOptions;
-
         let schema = arrow_schema::Schema::new(vec![arrow_schema::Field::new(
             "state",
             self.0.data_type().clone(),
             true,
         )]);
-        let mut writer =
-            FileWriter::try_new_with_options(writer, &schema, IpcWriteOptions::default())?;
+        let mut writer = arrow_ipc::writer::FileWriter::try_new_with_options(
+            writer,
+            &schema,
+            arrow_ipc::writer::IpcWriteOptions::default(),
+        )?;
         let batch = RecordBatch::try_new(Arc::new(schema), vec![self.0.clone()])?;
         writer.write(&batch)?;
         writer.finish()
     }
-}
 
-pub fn aggregate_udf_script_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(create_aggregate_udf_function))
+    fn deserialize(bytes: &mut &[u8]) -> std::result::Result<Self, ArrowError> {
+        let mut cursor = Cursor::new(&bytes);
+        let mut reader = arrow_ipc::reader::FileReaderBuilder::new().build(&mut cursor)?;
+        let array = reader
+            .next()
+            .ok_or(ArrowError::ComputeError(
+                "expected one arrow array".to_string(),
+            ))??
+            .remove_column(0);
+        bytes.consume(cursor.position() as usize);
+        Ok(Self(array))
+    }
 }
 
 pub fn create_aggregate_udf_function(
-    display_name: &str,
-    _params: Vec<Scalar>,
-    argument_types: Vec<DataType>,
+    name: &str,
+    _lang: &str,
+    state_fields: Vec<DataField>,
+    arguments: Vec<DataField>,
+    return_type: DataType,
+    code: &str,
 ) -> Result<Arc<dyn AggregateFunction>> {
     use arrow_schema::DataType as ArrowType;
     use arrow_schema::Field;
     use arrow_udf_js::CallMode;
     let mut runtime = arrow_udf_js::Runtime::new().unwrap();
+
+    let state_type = ArrowType::Struct(
+        state_fields
+            .iter()
+            .map(|f| {
+                let table_field: TableField = f.into();
+                (&table_field).into()
+            })
+            .collect::<Vec<Field>>()
+            .into(),
+    );
+
     runtime
         .add_aggregate(
-            "weighted_avg",
-            ArrowType::Struct(
-                vec![
-                    Field::new("sum", ArrowType::Int32, false),
-                    Field::new("weight", ArrowType::Int32, false),
-                ]
-                .into(),
-            ),
+            name,
+            state_type,
             ArrowType::Float32,
-            CallMode::ReturnNullOnNullInput,
-            r#"
-                export function create_state() {
-                    return {sum: 0, weight: 0};
-                }
-                export function accumulate(state, value, weight) {
-                    state.sum += value * weight;
-                    state.weight += weight;
-                    return state;
-                }
-                export function retract(state, value, weight) {
-                    state.sum -= value * weight;
-                    state.weight -= weight;
-                    return state;
-                }
-                export function merge(state1, state2) {
-                    state1.sum += state2.sum;
-                    state1.weight += state2.weight;
-                    return state1;
-                }
-                export function finish(state) {
-                    return state.sum / state.weight;
-                }
-    "#,
+            CallMode::CalledOnNullInput,
+            code,
         )
         .unwrap();
 
-    let argument_schema = DataSchema::new(vec![
-        DataField::new("sum", DataType::Number(NumberDataType::Int32)),
-        DataField::new("weight", DataType::Number(NumberDataType::Int32)),
-    ]);
-
     Ok(Arc::new(AggregateUdfScript {
         runtime,
-        argument_schema,
+        argument_schema: DataSchema::new(arguments),
+        return_type,
     }))
 }
 

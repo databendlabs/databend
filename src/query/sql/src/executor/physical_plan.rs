@@ -68,6 +68,7 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
+// use crate::executor::physical_plans::Udaf;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
@@ -96,6 +97,7 @@ pub enum PhysicalPlan {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    // Udaf(Udaf),
     RecursiveCteScan(RecursiveCteScan),
 
     /// For insert into ... select ... in cluster
@@ -261,6 +263,11 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            // PhysicalPlan::Udaf(plan) => {
+            //     plan.plan_id = *next_id;
+            //     *next_id += 1;
+            //     plan.input.adjust_plan_id(next_id);
+            // }
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -423,6 +430,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(v) => v.plan_id,
             PhysicalPlan::CacheScan(v) => v.plan_id,
             PhysicalPlan::Udf(v) => v.plan_id,
+            // PhysicalPlan::Udaf(v) => v.plan_id,
             PhysicalPlan::MutationSource(v) => v.plan_id,
             PhysicalPlan::ColumnMutation(v) => v.plan_id,
             PhysicalPlan::Mutation(v) => v.plan_id,
@@ -479,6 +487,7 @@ impl PhysicalPlan {
             PhysicalPlan::CacheScan(plan) => plan.output_schema(),
             PhysicalPlan::RecursiveCteScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
+            // PhysicalPlan::Udaf(plan) => plan.output_schema(),
             PhysicalPlan::MutationSource(plan) => plan.output_schema(),
             PhysicalPlan::MutationSplit(plan) => plan.output_schema(),
             PhysicalPlan::MutationManipulate(plan) => plan.output_schema(),
@@ -553,6 +562,7 @@ impl PhysicalPlan {
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
             PhysicalPlan::Recluster(_) => "Recluster".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
+            // PhysicalPlan::Udaf(_) => "Udaf".to_string(),
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
             PhysicalPlan::ChunkFilter(_) => "Filter".to_string(),
@@ -616,6 +626,7 @@ impl PhysicalPlan {
             PhysicalPlan::MutationOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            // PhysicalPlan::Udaf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AsyncFunction(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -652,6 +663,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
+            // PhysicalPlan::Udaf(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::AsyncFunction(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)

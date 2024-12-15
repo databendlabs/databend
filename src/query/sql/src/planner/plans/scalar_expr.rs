@@ -57,6 +57,7 @@ pub enum ScalarExpr {
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
     UDFCall(UDFCall),
+    UDAFCall(UDAFCall),
     UDFLambdaCall(UDFLambdaCall),
     AsyncFunctionCall(AsyncFunctionCall),
 }
@@ -75,6 +76,7 @@ impl Clone for ScalarExpr {
             ScalarExpr::SubqueryExpr(v) => ScalarExpr::SubqueryExpr(v.clone()),
             ScalarExpr::UDFCall(v) => ScalarExpr::UDFCall(v.clone()),
             ScalarExpr::UDFLambdaCall(v) => ScalarExpr::UDFLambdaCall(v.clone()),
+            ScalarExpr::UDAFCall(v) => ScalarExpr::UDAFCall(v.clone()),
             ScalarExpr::AsyncFunctionCall(v) => ScalarExpr::AsyncFunctionCall(v.clone()),
         }
     }
@@ -98,6 +100,7 @@ impl PartialEq for ScalarExpr {
             (ScalarExpr::SubqueryExpr(l), ScalarExpr::SubqueryExpr(r)) => l.eq(r),
             (ScalarExpr::UDFCall(l), ScalarExpr::UDFCall(r)) => l.eq(r),
             (ScalarExpr::UDFLambdaCall(l), ScalarExpr::UDFLambdaCall(r)) => l.eq(r),
+            (ScalarExpr::UDAFCall(l), ScalarExpr::UDAFCall(r)) => l.eq(r),
             (ScalarExpr::AsyncFunctionCall(l), ScalarExpr::AsyncFunctionCall(r)) => l.eq(r),
             _ => false,
         }
@@ -121,6 +124,7 @@ impl Hash for ScalarExpr {
             ScalarExpr::SubqueryExpr(v) => v.hash(state),
             ScalarExpr::UDFCall(v) => v.hash(state),
             ScalarExpr::UDFLambdaCall(v) => v.hash(state),
+            ScalarExpr::UDAFCall(v) => v.hash(state),
             ScalarExpr::AsyncFunctionCall(v) => v.hash(state),
         }
     }
@@ -201,6 +205,7 @@ impl ScalarExpr {
             ScalarExpr::SubqueryExpr(expr) => expr.span,
             ScalarExpr::UDFCall(expr) => expr.span,
             ScalarExpr::UDFLambdaCall(expr) => expr.span,
+            ScalarExpr::UDAFCall(expr) => expr.span,
             ScalarExpr::AsyncFunctionCall(expr) => expr.span,
         }
     }
@@ -517,6 +522,23 @@ impl TryFrom<ScalarExpr> for UDFLambdaCall {
     }
 }
 
+impl From<UDAFCall> for ScalarExpr {
+    fn from(v: UDAFCall) -> Self {
+        Self::UDAFCall(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for UDAFCall {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::UDAFCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast Scalar to UDAFCall"))
+        }
+    }
+}
+
 impl From<AsyncFunctionCall> for ScalarExpr {
     fn from(v: AsyncFunctionCall) -> Self {
         Self::AsyncFunctionCall(v)
@@ -779,6 +801,19 @@ pub struct UDFCall {
     pub udf_type: UDFType,
 }
 
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct UDAFCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub name: String, // name in meta
+    pub display_name: String,
+    pub arg_types: Vec<DataType>,
+    pub return_type: Box<DataType>,
+    pub arguments: Vec<ScalarExpr>,
+    pub udf_type: UDFType,
+}
+
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
     Server(String),                    // server_addr
@@ -952,6 +987,13 @@ pub trait Visitor<'a>: Sized {
         self.visit(&udf.scalar)
     }
 
+    fn visit_udaf_call(&mut self, udaf: &'a UDAFCall) -> Result<()> {
+        for expr in &udaf.arguments {
+            self.visit(expr)?;
+        }
+        Ok(())
+    }
+
     fn visit_async_function_call(&mut self, async_func: &'a AsyncFunctionCall) -> Result<()> {
         for expr in &async_func.arguments {
             self.visit(expr)?;
@@ -972,6 +1014,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::UDAFCall(expr) => visitor.visit_udaf_call(expr),
         ScalarExpr::AsyncFunctionCall(expr) => visitor.visit_async_function_call(expr),
     }
 }
@@ -1054,6 +1097,13 @@ pub trait VisitorMut<'a>: Sized {
         self.visit(&mut udf.scalar)
     }
 
+    fn visit_udaf_call(&mut self, udaf: &'a mut UDAFCall) -> Result<()> {
+        for expr in &mut udaf.arguments {
+            self.visit(expr)?;
+        }
+        Ok(())
+    }
+
     fn visit_async_function_call(&mut self, async_func: &'a mut AsyncFunctionCall) -> Result<()> {
         for expr in &mut async_func.arguments {
             self.visit(expr)?;
@@ -1077,6 +1127,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::UDAFCall(expr) => visitor.visit_udaf_call(expr),
         ScalarExpr::AsyncFunctionCall(expr) => visitor.visit_async_function_call(expr),
     }
 }

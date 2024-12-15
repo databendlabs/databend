@@ -54,6 +54,7 @@ impl Binder {
             RelOperator::ProjectSet(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::Udf(_)
+            // | RelOperator::Udaf(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Filter(_) => {
                 self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;

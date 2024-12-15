@@ -59,6 +59,7 @@ use crate::executor::physical_plans::RangeJoinType;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
+// use crate::executor::physical_plans::Udaf;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
@@ -354,6 +355,7 @@ fn to_format_tree(
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
+        // PhysicalPlan::Udaf(plan) => udaf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
         PhysicalPlan::CopyIntoLocation(plan) => copy_into_location(plan),
@@ -1744,6 +1746,40 @@ fn udf_to_format_tree(
 
     Ok(FormatTreeNode::with_children("Udf".to_string(), children))
 }
+
+// fn udaf_to_format_tree(
+//     plan: &Udaf,
+//     metadata: &Metadata,
+//     profs: &HashMap<u32, PlanProfile>,
+// ) -> Result<FormatTreeNode<String>> {
+//     let mut children = vec![FormatTreeNode::new(format!(
+//         "output columns: [{}]",
+//         format_output_columns(plan.output_schema()?, metadata, true)
+//     ))];
+
+//     if let Some(info) = &plan.stat_info {
+//         let items = plan_stats_info_to_format_tree(info);
+//         children.extend(items);
+//     }
+
+//     append_profile_info(&mut children, profs, plan.plan_id);
+
+//     children.extend(vec![FormatTreeNode::new(format!(
+//         "udaf functions: {}",
+//         plan.udf_funcs
+//             .iter()
+//             .map(|func| {
+//                 let arg_exprs = func.arg_exprs.join(", ");
+//                 format!("{}({})", func.func_name, arg_exprs)
+//             })
+//             .collect::<Vec<_>>()
+//             .join(", ")
+//     ))]);
+
+//     children.extend(vec![to_format_tree(&plan.input, metadata, profs)?]);
+
+//     Ok(FormatTreeNode::with_children("Udaf".to_string(), children))
+// }
 
 fn format_output_columns(
     output_schema: DataSchemaRef,

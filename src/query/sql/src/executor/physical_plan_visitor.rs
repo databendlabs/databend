@@ -61,6 +61,7 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
+// use crate::executor::physical_plans::Udaf;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
@@ -108,6 +109,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
+            // PhysicalPlan::Udaf(plan) => self.replace_udaf(plan),
             PhysicalPlan::AsyncFunction(plan) => self.replace_async_function(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
             PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
@@ -530,6 +532,17 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    // fn replace_udaf(&mut self, plan: &Udaf) -> Result<PhysicalPlan> {
+    //     let input = self.replace(&plan.input)?;
+    //     Ok(PhysicalPlan::Udaf(Udaf {
+    //         plan_id: plan.plan_id,
+    //         input: Box::new(input),
+    //         udf_funcs: plan.udf_funcs.clone(),
+    //         stat_info: plan.stat_info.clone(),
+    //         script_udf: plan.script_udf,
+    //     }))
+    // }
+
     fn replace_async_function(&mut self, plan: &AsyncFunction) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::AsyncFunction(AsyncFunction {
@@ -737,6 +750,9 @@ impl PhysicalPlan {
                 PhysicalPlan::Udf(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
+                // PhysicalPlan::Udaf(plan) => {
+                //     Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                // }
                 PhysicalPlan::AsyncFunction(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

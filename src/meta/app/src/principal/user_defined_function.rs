@@ -49,10 +49,12 @@ pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
     UDFScript(UDFScript),
+    // UDAFScript(UDAFScript),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UserDefinedFunction {
+    // todo: aggregate udf
     pub name: String,
     pub description: String,
     pub definition: UDFDefinition,

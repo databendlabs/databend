@@ -148,6 +148,7 @@ use crate::plans::ScalarItem;
 use crate::plans::SqlSource;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFType;
@@ -730,45 +731,50 @@ impl<'a> TypeChecker<'a> {
                 if !is_builtin_function(func_name)
                     && !Self::all_sugar_functions().contains(&func_name)
                 {
+                    // todo udaf flag
+                    if let Some(udaf) = self.resolve_udaf(*span, func_name, args)? {
+                        return Ok(udaf);
+                    }
+
                     if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
                         return Ok(udf);
+                    }
+
+                    // Function not found, try to find and suggest similar function name.
+                    let all_funcs = BUILTIN_FUNCTIONS
+                        .all_function_names()
+                        .into_iter()
+                        .chain(AggregateFunctionFactory::instance().registered_names())
+                        .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
+                        .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
+                        .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
+                        .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
+                        .chain(
+                            Self::all_sugar_functions()
+                                .iter()
+                                .cloned()
+                                .map(str::to_string),
+                        );
+                    let mut engine: SimSearch<String> = SimSearch::new();
+                    for func_name in all_funcs {
+                        engine.insert(func_name.clone(), &func_name);
+                    }
+                    let possible_funcs = engine
+                        .search(func_name)
+                        .iter()
+                        .map(|name| format!("'{name}'"))
+                        .collect::<Vec<_>>();
+                    if possible_funcs.is_empty() {
+                        return Err(ErrorCode::UnknownFunction(format!(
+                            "no function matches the given name: {func_name}"
+                        ))
+                        .set_span(*span));
                     } else {
-                        // Function not found, try to find and suggest similar function name.
-                        let all_funcs = BUILTIN_FUNCTIONS
-                            .all_function_names()
-                            .into_iter()
-                            .chain(AggregateFunctionFactory::instance().registered_names())
-                            .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(
-                                Self::all_sugar_functions()
-                                    .iter()
-                                    .cloned()
-                                    .map(str::to_string),
-                            );
-                        let mut engine: SimSearch<String> = SimSearch::new();
-                        for func_name in all_funcs {
-                            engine.insert(func_name.clone(), &func_name);
-                        }
-                        let possible_funcs = engine
-                            .search(func_name)
-                            .iter()
-                            .map(|name| format!("'{name}'"))
-                            .collect::<Vec<_>>();
-                        if possible_funcs.is_empty() {
-                            return Err(ErrorCode::UnknownFunction(format!(
-                                "no function matches the given name: {func_name}"
-                            ))
-                            .set_span(*span));
-                        } else {
-                            return Err(ErrorCode::UnknownFunction(format!(
-                                "no function matches the given name: '{func_name}', do you mean {}?",
-                                possible_funcs.join(", ")
-                            ))
-                                .set_span(*span));
-                        }
+                        return Err(ErrorCode::UnknownFunction(format!(
+                            "no function matches the given name: '{func_name}', do you mean {}?",
+                            possible_funcs.join(", ")
+                        ))
+                        .set_span(*span));
                     }
                 }
 
@@ -3703,6 +3709,66 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udf_script(span, name, arguments, udf_def)?,
             )),
         }
+    }
+
+    fn resolve_udaf(
+        &mut self,
+        span: Span,
+        udf_name: &str,
+        arguments: &[Expr],
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        if self.forbid_udf {
+            return Ok(None);
+        }
+
+        if udf_name != "weighted_avg" {
+            return Ok(None);
+        }
+
+        let Some(udf) = databend_common_base::runtime::block_on({
+            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name)
+        })?
+        else {
+            return Ok(None);
+        };
+
+        let UDFDefinition::UDFScript(udf_definition): UDFDefinition = udf.definition else {
+            return Ok(None);
+        };
+
+        let mut args = Vec::with_capacity(arguments.len());
+        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument)?;
+            if ty != *dest_type {
+                args.push(wrap_cast(&arg, dest_type));
+            } else {
+                args.push(arg);
+            }
+        }
+
+        let const_udf_type =
+            databend_common_base::runtime::block_on(self.resolve_udf_with_stage(&udf_definition))?;
+
+        let display_name = format!(
+            "{udf_name}({})",
+            arguments.iter().map(|arg| format!("{arg}")).join(", ")
+        );
+
+        self.bind_context.have_udf_script = true;
+        self.ctx.set_cacheable(false);
+        Ok(Some(Box::new((
+            UDAFCall {
+                span,
+                name: udf_name.to_string(),
+                display_name,
+                arg_types: udf_definition.arg_types,
+                return_type: Box::new(udf_definition.return_type.clone()),
+                udf_type: const_udf_type,
+                arguments: args,
+            }
+            .into(),
+            udf_definition.return_type.clone(),
+        ))))
     }
 
     fn resolve_udf_server(
