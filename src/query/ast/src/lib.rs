@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(let_chains)]
+#![feature(stmt_expr_attributes)]
 
 // TODO(xuanwo): Add crate level documents here.
 pub mod ast;

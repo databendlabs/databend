@@ -45,11 +45,21 @@ pub struct UDFScript {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UDAFScript {
+    pub code: String,
+    pub language: String,
+    pub arg_types: Vec<DataType>,
+    pub state_types: Vec<DataType>,
+    pub return_type: DataType,
+    pub runtime_version: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
     UDFScript(UDFScript),
-    // UDAFScript(UDAFScript),
+    UDAFScript(UDAFScript),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -162,7 +172,6 @@ impl Display for UDFDefinition {
                     ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
                 )?;
             }
-
             UDFDefinition::UDFScript(UDFScript {
                 code,
                 arg_types,
@@ -181,6 +190,29 @@ impl Display for UDFDefinition {
                     f,
                     ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
+            }
+            UDFDefinition::UDAFScript(UDAFScript {
+                code,
+                arg_types,
+                state_types,
+                return_type,
+                language,
+                runtime_version,
+            }) => {
+                for (i, item) in arg_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, " STATE (")?;
+                for (i, item) in state_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
             }
         }
         Ok(())

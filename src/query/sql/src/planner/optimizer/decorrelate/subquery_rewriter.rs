@@ -430,6 +430,7 @@ impl SubqueryRewriter {
                     display_name: udaf.display_name.clone(),
                     udf_type: udaf.udf_type.clone(),
                     arg_types: udaf.arg_types.clone(),
+                    state_types: udaf.state_types.clone(),
                     return_type: udaf.return_type.clone(),
                     arguments: args,
                 }

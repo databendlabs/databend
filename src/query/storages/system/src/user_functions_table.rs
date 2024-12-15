@@ -107,6 +107,8 @@ pub struct UserFunctionArguments {
     return_type: Option<String>,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
     parameters: Vec<String>,
+    #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
+    states: Vec<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -159,12 +161,18 @@ impl UserFunctionsTable {
             .into_iter()
             .map(|user_function| UserFunction {
                 name: user_function.name,
-                is_aggregate: false,
+                is_aggregate: match user_function.definition {
+                    UDFDefinition::LambdaUDF(_)
+                    | UDFDefinition::UDFServer(_)
+                    | UDFDefinition::UDFScript(_) => false,
+                    UDFDefinition::UDAFScript(_) => true,
+                },
                 description: user_function.description,
                 language: match &user_function.definition {
                     UDFDefinition::LambdaUDF(_) => String::from("SQL"),
                     UDFDefinition::UDFServer(x) => x.language.clone(),
                     UDFDefinition::UDFScript(x) => x.language.clone(),
+                    UDFDefinition::UDAFScript(x) => x.language.clone(),
                 },
                 definition: user_function.definition.to_string(),
                 created_on: user_function.created_on,
@@ -173,16 +181,25 @@ impl UserFunctionsTable {
                         return_type: None,
                         arg_types: vec![],
                         parameters: x.parameters.clone(),
+                        states: vec![],
                     },
                     UDFDefinition::UDFServer(x) => UserFunctionArguments {
                         parameters: vec![],
                         return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
+                        states: vec![],
                     },
                     UDFDefinition::UDFScript(x) => UserFunctionArguments {
                         parameters: vec![],
                         return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
+                        states: vec![],
+                    },
+                    UDFDefinition::UDAFScript(x) => UserFunctionArguments {
+                        parameters: vec![],
+                        return_type: Some(x.return_type.to_string()),
+                        arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
+                        states: x.state_types.iter().map(ToString::to_string).collect(),
                     },
                 },
             })

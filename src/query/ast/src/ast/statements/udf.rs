@@ -37,7 +37,6 @@ pub enum UDFDefinition {
         handler: String,
         language: String,
     },
-
     UDFScript {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
@@ -46,6 +45,30 @@ pub enum UDFDefinition {
         language: String,
         runtime_version: String,
     },
+    UDAFServer {
+        arg_types: Vec<TypeName>,
+        state_types: Vec<TypeName>,
+        return_type: TypeName,
+        address: String,
+        language: String,
+    },
+    UDAFScript {
+        arg_types: Vec<TypeName>,
+        state_types: Vec<TypeName>,
+        return_type: TypeName,
+        code: String,
+        language: String,
+        runtime_version: String,
+    },
+}
+
+impl UDFDefinition {
+    fn is_aggregate(&self) -> bool {
+        matches!(
+            self,
+            UDFDefinition::UDAFServer { .. } | UDFDefinition::UDAFScript { .. }
+        )
+    }
 }
 
 impl Display for UDFDefinition {
@@ -88,6 +111,39 @@ impl Display for UDFDefinition {
                     ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $$\n{code}\n$$"
                 )?;
             }
+            UDFDefinition::UDAFServer {
+                arg_types,
+                state_types,
+                return_type,
+                address,
+                language,
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(f, ") STATE (")?;
+                write_comma_separated_list(f, state_types)?;
+                write!(
+                    f,
+                    ") RETURNS {return_type} LANGUAGE {language} ADDRESS = '{address}'"
+                )?;
+            }
+            UDFDefinition::UDAFScript {
+                arg_types,
+                state_types,
+                return_type,
+                code,
+                language,
+                runtime_version: _,
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(f, ") STATE (")?;
+                write_comma_separated_list(f, state_types)?;
+                write!(
+                    f,
+                    ") RETURNS {return_type} LANGUAGE {language} AS $$\n{code}\n$$"
+                )?;
+            }
         }
         Ok(())
     }
@@ -107,7 +163,11 @@ impl Display for CreateUDFStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, " OR REPLACE")?;
         }
-        write!(f, " FUNCTION")?;
+        if self.definition.is_aggregate() {
+            write!(f, " AGGREGATE FUNCTION")?;
+        } else {
+            write!(f, " FUNCTION")?;
+        }
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -128,7 +188,12 @@ pub struct AlterUDFStmt {
 
 impl Display for AlterUDFStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ALTER FUNCTION")?;
+        write!(f, "ALTER")?;
+        if self.definition.is_aggregate() {
+            write!(f, " AGGREGATE FUNCTION")?;
+        } else {
+            write!(f, " FUNCTION")?;
+        }
         write!(f, " {} {}", self.udf_name, self.definition)?;
         if let Some(description) = &self.description {
             write!(f, " DESC = '{description}'")?;

@@ -29,6 +29,7 @@ pub struct AggregateFunctionSignature {
     pub return_type: DataType,
     pub params: Vec<Scalar>,
     pub args: Vec<DataType>,
+    pub state_types: Vec<DataType>,
 }
 
 impl AggregateFunctionSignature {

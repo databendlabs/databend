@@ -24,7 +24,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -214,10 +213,11 @@ impl UdfAggState {
 pub fn create_aggregate_udf_function(
     name: &str,
     _lang: &str,
+    _runtime_version: &str,
     state_fields: Vec<DataField>,
     arguments: Vec<DataField>,
     return_type: DataType,
-    code: &str,
+    code: &[u8],
 ) -> Result<Arc<dyn AggregateFunction>> {
     use arrow_schema::DataType as ArrowType;
     use arrow_schema::Field;
@@ -235,13 +235,14 @@ pub fn create_aggregate_udf_function(
             .into(),
     );
 
+    let code = String::from_utf8(code.to_vec())?;
     runtime
         .add_aggregate(
             name,
             state_type,
             ArrowType::Float32,
             CallMode::CalledOnNullInput,
-            code,
+            &code,
         )
         .unwrap();
 

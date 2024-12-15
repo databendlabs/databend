@@ -270,6 +270,7 @@ impl PhysicalPlanBuilder {
                         .map(|s| s.data_type())
                         .collect::<Result<_>>()?,
                     params: agg.params.clone(),
+                    state_types: vec![],
                 },
                 output_column: w.index,
                 arg_indices: agg

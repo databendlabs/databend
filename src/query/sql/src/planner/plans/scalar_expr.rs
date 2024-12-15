@@ -809,6 +809,7 @@ pub struct UDAFCall {
     pub name: String, // name in meta
     pub display_name: String,
     pub arg_types: Vec<DataType>,
+    pub state_types: Vec<DataType>,
     pub return_type: Box<DataType>,
     pub arguments: Vec<ScalarExpr>,
     pub udf_type: UDFType,
@@ -816,8 +817,8 @@ pub struct UDAFCall {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                    // server_addr
-    Script((String, String, Vec<u8>)), // Lang, Version, Code
+    Server(String),                           // server_addr
+    Script((String, String, Arc<Box<[u8]>>)), // Lang, Version, Code
 }
 
 impl UDFType {

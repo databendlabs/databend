@@ -269,7 +269,7 @@ impl TransformUdfScript {
         let start = std::time::Instant::now();
         for func in funcs {
             let (lang, code_opt) = match &func.udf_type {
-                UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref())),
+                UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref().as_ref())),
                 _ => continue,
             };
 

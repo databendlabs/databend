@@ -1298,10 +1298,14 @@ pub enum TokenKind {
     WRITE,
     #[token("UDF", ignore(ascii_case))]
     UDF,
+    #[token("AGGREGATE", ignore(ascii_case))]
+    AGGREGATE,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
+    #[token("STATE", ignore(ascii_case))]
+    STATE,
     #[token("TASK", ignore(ascii_case))]
     TASK,
     #[token("TASKS", ignore(ascii_case))]

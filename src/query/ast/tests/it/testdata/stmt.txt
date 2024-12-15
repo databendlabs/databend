@@ -23286,6 +23286,39 @@ CreateUDF(
 
 
 ---------- Input ----------
+ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+ALTER FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+AlterUDF(
+    AlterUDFStmt {
+        udf_name: Identifier {
+            span: Some(
+                15..29,
+            ),
+            name: "binary_reverse",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Nullable(
+                    Binary,
+                ),
+            ],
+            return_type: Nullable(
+                Binary,
+            ),
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
@@ -23525,6 +23558,125 @@ DropUDF {
         ident_type: None,
     },
 }
+
+
+---------- Input ----------
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (Int32 NULL) STATE (STRING NULL) RETURNS BOOLEAN NULL LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                40..46,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFServer {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            state_types: [
+                Nullable(
+                    String,
+                ),
+            ],
+            return_type: Nullable(
+                Boolean,
+            ),
+            address: "http://0.0.0.0:8815",
+            language: "javascript",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (Int32 NULL) STATE (STRING NULL) RETURNS BOOLEAN NULL LANGUAGE javascript AS $$
+some code
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                40..46,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            state_types: [
+                Nullable(
+                    String,
+                ),
+            ],
+            return_type: Nullable(
+                Boolean,
+            ),
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER AGGREGATE FUNCTION my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+ALTER AGGREGATE FUNCTION my_agg (Int32 NULL) STATE (STRING NULL) RETURNS BOOLEAN NULL LANGUAGE javascript AS $$
+some code
+$$
+---------- AST ------------
+AlterUDF(
+    AlterUDFStmt {
+        udf_name: Identifier {
+            span: Some(
+                25..31,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            state_types: [
+                Nullable(
+                    String,
+                ),
+            ],
+            return_type: Nullable(
+                Boolean,
+            ),
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
 
 
 ---------- Input ----------

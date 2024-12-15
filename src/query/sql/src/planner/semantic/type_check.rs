@@ -93,6 +93,7 @@ use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -731,11 +732,6 @@ impl<'a> TypeChecker<'a> {
                 if !is_builtin_function(func_name)
                     && !Self::all_sugar_functions().contains(&func_name)
                 {
-                    // todo udaf flag
-                    if let Some(udaf) = self.resolve_udaf(*span, func_name, args)? {
-                        return Ok(udaf);
-                    }
-
                     if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
                         return Ok(udf);
                     }
@@ -3708,67 +3704,10 @@ impl<'a> TypeChecker<'a> {
             UDFDefinition::UDFScript(udf_def) => Ok(Some(
                 self.resolve_udf_script(span, name, arguments, udf_def)?,
             )),
+            UDFDefinition::UDAFScript(udf_def) => Ok(Some(
+                self.resolve_udaf_script(span, name, arguments, udf_def)?,
+            )),
         }
-    }
-
-    fn resolve_udaf(
-        &mut self,
-        span: Span,
-        udf_name: &str,
-        arguments: &[Expr],
-    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
-        if self.forbid_udf {
-            return Ok(None);
-        }
-
-        if udf_name != "weighted_avg" {
-            return Ok(None);
-        }
-
-        let Some(udf) = databend_common_base::runtime::block_on({
-            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name)
-        })?
-        else {
-            return Ok(None);
-        };
-
-        let UDFDefinition::UDFScript(udf_definition): UDFDefinition = udf.definition else {
-            return Ok(None);
-        };
-
-        let mut args = Vec::with_capacity(arguments.len());
-        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
-            let box (arg, ty) = self.resolve(argument)?;
-            if ty != *dest_type {
-                args.push(wrap_cast(&arg, dest_type));
-            } else {
-                args.push(arg);
-            }
-        }
-
-        let const_udf_type =
-            databend_common_base::runtime::block_on(self.resolve_udf_with_stage(&udf_definition))?;
-
-        let display_name = format!(
-            "{udf_name}({})",
-            arguments.iter().map(|arg| format!("{arg}")).join(", ")
-        );
-
-        self.bind_context.have_udf_script = true;
-        self.ctx.set_cacheable(false);
-        Ok(Some(Box::new((
-            UDAFCall {
-                span,
-                name: udf_name.to_string(),
-                display_name,
-                arg_types: udf_definition.arg_types,
-                return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: const_udf_type,
-                arguments: args,
-            }
-            .into(),
-            udf_definition.return_type.clone(),
-        ))))
     }
 
     fn resolve_udf_server(
@@ -3819,21 +3758,17 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
-    async fn resolve_udf_with_stage(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
-        let file_location = match udf_definition.code.strip_prefix('@') {
+    async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
+        let file_location = match code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
             None => {
-                let uri = UriLocation::from_uri(udf_definition.code.clone(), BTreeMap::default());
+                let uri = UriLocation::from_uri(code.clone(), BTreeMap::default());
 
                 match uri {
                     Ok(uri) => FileLocation::Uri(uri),
                     Err(_) => {
                         // fallback to use the code as real code
-                        return Ok(UDFType::Script((
-                            udf_definition.language.clone(),
-                            udf_definition.runtime_version.clone(),
-                            udf_definition.code.clone().into(),
-                        )));
+                        return Ok(code.into());
                     }
                 }
             }
@@ -3844,7 +3779,7 @@ impl<'a> TypeChecker<'a> {
             .map_err(|err| {
                 ErrorCode::SemanticError(format!(
                     "Failed to resolve code location {:?}: {}",
-                    &udf_definition.code, err
+                    code, err
                 ))
             })?;
 
@@ -3880,11 +3815,7 @@ impl<'a> TypeChecker<'a> {
             None => code_blob,
         };
 
-        Ok(UDFType::Script((
-            udf_definition.language.clone(),
-            udf_definition.runtime_version.clone(),
-            code_blob,
-        )))
+        Ok(code_blob)
     }
 
     fn resolve_udf_script(
@@ -3894,8 +3825,16 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         udf_definition: UDFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let UDFScript {
+            code,
+            handler,
+            language,
+            arg_types,
+            return_type,
+            runtime_version,
+        } = udf_definition;
         let mut args = Vec::with_capacity(arguments.len());
-        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+        for (argument, dest_type) in arguments.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
             if ty != *dest_type {
                 args.push(wrap_cast(&arg, dest_type));
@@ -3904,11 +3843,12 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        let const_udf_type =
-            databend_common_base::runtime::block_on(self.resolve_udf_with_stage(&udf_definition))?;
+        let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
+            .into_boxed_slice();
+        let udf_type = UDFType::Script((language, runtime_version, code_blob.into()));
 
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
-        let display_name = format!("{}({})", udf_definition.handler, arg_names);
+        let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
         self.ctx.set_cacheable(false);
@@ -3916,15 +3856,68 @@ impl<'a> TypeChecker<'a> {
             UDFCall {
                 span,
                 name,
-                func_name: udf_definition.handler,
+                func_name: handler,
                 display_name,
-                arg_types: udf_definition.arg_types,
-                return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: const_udf_type,
+                arg_types,
+                return_type: Box::new(return_type.clone()),
+                udf_type,
                 arguments: args,
             }
             .into(),
-            udf_definition.return_type.clone(),
+            return_type,
+        )))
+    }
+
+    fn resolve_udaf_script(
+        &mut self,
+        span: Span,
+        name: String,
+        arguments: &[Expr],
+        udf_definition: UDAFScript,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let UDAFScript {
+            code,
+            language,
+            arg_types,
+            state_types,
+            return_type,
+            runtime_version,
+        } = udf_definition;
+
+        let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
+            .into_boxed_slice();
+        let udf_type = UDFType::Script((language, runtime_version, code_blob.into()));
+
+        let mut args = Vec::with_capacity(arg_types.len());
+        for (argument, dest_type) in arguments.iter().zip(arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument)?;
+            if ty != *dest_type {
+                args.push(wrap_cast(&arg, dest_type));
+            } else {
+                args.push(arg);
+            }
+        }
+
+        let display_name = format!(
+            "{name}({})",
+            arg_types.iter().map(|arg| format!("{arg}")).join(", ")
+        );
+
+        self.bind_context.have_udf_script = true;
+        self.ctx.set_cacheable(false);
+        Ok(Box::new((
+            UDAFCall {
+                span,
+                name,
+                display_name,
+                arg_types,
+                state_types,
+                return_type: Box::new(return_type.clone()),
+                udf_type,
+                arguments: args,
+            }
+            .into(),
+            return_type,
         )))
     }
 
