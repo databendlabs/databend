@@ -38,8 +38,8 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
-use databend_common_management::ClusterApi;
-use databend_common_management::ClusterMgr;
+use databend_common_management::WarehouseApi;
+use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
@@ -64,7 +64,7 @@ pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
     heartbeat: Mutex<ClusterHeartbeat>,
-    api_provider: Arc<dyn ClusterApi>,
+    api_provider: Arc<dyn WarehouseApi>,
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
@@ -235,11 +235,11 @@ impl ClusterDiscovery {
     fn create_provider(
         cfg: &InnerConfig,
         metastore: MetaStore,
-    ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
+    ) -> Result<(Duration, Arc<dyn WarehouseApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = ClusterMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
+        let cluster_manager = WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
@@ -441,15 +441,15 @@ impl ClusterDiscovery {
         node_info.warehouse_id = self.cluster_id.clone();
         self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info.clone()).await {
-            Ok(_) => self.start_heartbeat(node_info).await,
+            Ok(seq) => self.start_heartbeat(node_info, seq).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
 
     #[async_backtrace::framed]
-    async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo) -> Result<()> {
+    async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo, seq: u64) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
-        heartbeat.start(node_info);
+        heartbeat.start(node_info, seq);
         Ok(())
     }
 }
@@ -458,7 +458,7 @@ struct ClusterHeartbeat {
     timeout: Duration,
     shutdown: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
-    cluster_api: Arc<dyn ClusterApi>,
+    cluster_api: Arc<dyn WarehouseApi>,
     shutdown_handler: Option<JoinHandle<()>>,
     cluster_id: String,
     tenant_id: String,
@@ -467,7 +467,7 @@ struct ClusterHeartbeat {
 impl ClusterHeartbeat {
     pub fn create(
         timeout: Duration,
-        cluster_api: Arc<dyn ClusterApi>,
+        cluster_api: Arc<dyn WarehouseApi>,
         cluster_id: String,
         tenant_id: String,
     ) -> ClusterHeartbeat {
@@ -482,7 +482,7 @@ impl ClusterHeartbeat {
         }
     }
 
-    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output = ()> + 'static {
+    fn heartbeat_loop(&self, mut node: NodeInfo, seq: u64) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();
@@ -493,6 +493,7 @@ impl ClusterHeartbeat {
         async move {
             let mut shutdown_notified = Box::pin(shutdown_notify.notified());
 
+            let mut match_seq = seq;
             while !shutdown.load(Ordering::Relaxed) {
                 let mills = {
                     let mut rng = thread_rng();
@@ -507,16 +508,21 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = cluster_api.heartbeat(&node);
-                        if let Err(failure) = heartbeat.await {
-                            metric_incr_cluster_heartbeat_count(
-                                &node.id,
-                                &node.flight_address,
-                                &cluster_id,
-                                &tenant_id,
-                                "failure",
-                            );
-                            error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                        let heartbeat = cluster_api.heartbeat(&mut node, match_seq);
+                        match heartbeat.await {
+                            Ok(new_match_seq) => {
+                                match_seq = new_match_seq;
+                            }
+                            Err(failure) => {
+                                metric_incr_cluster_heartbeat_count(
+                                    &node.id,
+                                    &node.flight_address,
+                                    &cluster_id,
+                                    &tenant_id,
+                                    "failure",
+                                );
+                                error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                            }
                         }
                     }
                 }
@@ -528,9 +534,9 @@ impl ClusterHeartbeat {
         (duration / 3).as_millis()..=((duration / 3) * 2).as_millis()
     }
 
-    pub fn start(&mut self, node_info: NodeInfo) {
+    pub fn start(&mut self, node_info: NodeInfo, seq: u64) {
         self.shutdown_handler = Some(databend_common_base::runtime::spawn(
-            self.heartbeat_loop(node_info),
+            self.heartbeat_loop(node_info, seq),
         ));
     }
 

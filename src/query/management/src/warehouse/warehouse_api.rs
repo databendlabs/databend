@@ -15,14 +15,33 @@
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub enum SelectedNode {
+    Random(Option<String>),
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct WarehouseInfo {
+    pub id: String,
+    pub status: String,
+    pub display_name: String,
+    pub clusters: Vec<Vec<SelectedNode>>,
+}
+
 /// Databend-query cluster management API
 #[async_trait::async_trait]
-pub trait ClusterApi: Sync + Send {
+pub trait WarehouseApi: Sync + Send {
     /// Add a new node.
-    async fn add_node(&self, node: NodeInfo) -> Result<()>;
+    async fn add_node(&self, node: NodeInfo) -> Result<u64>;
 
     /// Keep the tenant's cluster node alive.
-    async fn heartbeat(&self, node: &NodeInfo) -> Result<()>;
+    async fn heartbeat(&self, node: &mut NodeInfo, seq: u64) -> Result<u64>;
+
+    async fn drop_warehouse(&self, warehouse: String) -> Result<()>;
+
+    async fn create_warehouse(&self, warehouse: String, nodes: Vec<SelectedNode>) -> Result<()>;
+
+    // async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
 
     /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>>;
@@ -31,4 +50,6 @@ pub trait ClusterApi: Sync + Send {
     async fn drop_node(&self, node_id: String) -> Result<()>;
 
     async fn get_local_addr(&self) -> Result<Option<String>>;
+
+    async fn get_node_info(&self, node_id: &str) -> Result<NodeInfo>;
 }

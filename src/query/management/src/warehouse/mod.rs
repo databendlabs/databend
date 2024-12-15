@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster_api;
-mod cluster_mgr;
+mod warehouse_api;
+mod warehouse_mgr;
 
-pub use cluster_api::ClusterApi;
-pub use cluster_mgr::ClusterMgr;
+pub use warehouse_api::SelectedNode;
+pub use warehouse_api::WarehouseApi;
+pub use warehouse_mgr::WarehouseMgr;

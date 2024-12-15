@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalUniqName;
 use databend_common_exception::Result;
 use databend_common_management::*;
 use databend_common_meta_embedded::MemMeta;
@@ -27,7 +28,7 @@ use databend_common_meta_types::NodeInfo;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_add_node() -> Result<()> {
     let now_ms = SeqV::<()>::now_ms();
-    let (kv_api, cluster_api) = new_cluster_api().await?;
+    let (kv_api, cluster_api) = new_cluster_api(Duration::from_secs(60)).await?;
 
     let mut node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
@@ -66,7 +67,7 @@ async fn test_successfully_add_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_already_exists_add_node() -> Result<()> {
-    let (_, cluster_api) = new_cluster_api().await?;
+    let (_, cluster_api) = new_cluster_api(Duration::from_secs(60)).await?;
 
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
@@ -81,7 +82,7 @@ async fn test_already_exists_add_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_get_nodes() -> Result<()> {
-    let (_, cluster_api) = new_cluster_api().await?;
+    let (_, cluster_api) = new_cluster_api(Duration::from_secs(60)).await?;
 
     let nodes = cluster_api
         .get_nodes("test-cluster-id", "test-cluster-id")
@@ -100,7 +101,7 @@ async fn test_successfully_get_nodes() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_drop_node() -> Result<()> {
-    let (_, cluster_api) = new_cluster_api().await?;
+    let (_, cluster_api) = new_cluster_api(Duration::from_secs(60)).await?;
 
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
@@ -121,7 +122,7 @@ async fn test_successfully_drop_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_unknown_node_drop_node() -> Result<()> {
-    let (_, cluster_api) = new_cluster_api().await?;
+    let (_, cluster_api) = new_cluster_api(Duration::from_secs(60)).await?;
 
     match cluster_api.drop_node(String::from("UNKNOWN_ID")).await {
         Ok(_) => { /*panic!("Unknown node drop node must be return Err.")*/ }
@@ -134,10 +135,10 @@ async fn test_unknown_node_drop_node() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_heartbeat_node() -> Result<()> {
     let now_ms = SeqV::<()>::now_ms();
-    let (kv_api, cluster_api) = new_cluster_api().await?;
+    let (kv_api, cluster_api) = new_cluster_api(Duration::from_secs(60)).await?;
 
-    let node_info = create_test_node_info();
-    cluster_api.add_node(node_info.clone()).await?;
+    let mut node_info = create_test_node_info();
+    let res = cluster_api.add_node(node_info.clone()).await?;
 
     for key in [
         "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node",
@@ -150,7 +151,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     }
 
     let now_ms = SeqV::<()>::now_ms();
-    cluster_api.heartbeat(&node_info).await?;
+    cluster_api.heartbeat(&mut node_info, res).await?;
 
     for key in [
         "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node",
@@ -161,6 +162,104 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_successfully_create_warehouse() -> Result<()> {
+    let (_, cluster_mgr, nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let create_warehouse = cluster_mgr.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+    ]);
+
+    create_warehouse.await?;
+
+    let get_warehouse_nodes = cluster_mgr.get_nodes("test_warehouse", "test_warehouse");
+
+    let warehouse_nodes = get_warehouse_nodes.await?;
+
+    assert_eq!(warehouse_nodes.len(), 2);
+    assert_eq!(warehouse_nodes.last().map(|x| &x.id), nodes.last());
+    assert_eq!(warehouse_nodes.first().map(|x| &x.id), nodes.first());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_duplicated_warehouse() -> Result<()> {
+    let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse("test_warehouse".to_string(), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse("test_warehouse".to_string(), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    let res = create_warehouse.await;
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().code(), 2405);
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse("test_warehouse_2".to_string(), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_warehouse_with_no_resources() -> Result<()> {
+    let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse("test_warehouse_1".to_string(), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse("test_warehouse_2".to_string(), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse("test_warehouse_3".to_string(), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    let res = create_warehouse.await;
+
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().code(), 2404);
+
+    Ok(())
+}
+
+fn empty_node(id: &str) -> NodeInfo {
+    NodeInfo {
+        id: id.to_string(),
+        secret: "".to_string(),
+        cpu_nums: 0,
+        version: 0,
+        http_address: "".to_string(),
+        flight_address: "".to_string(),
+        discovery_address: "".to_string(),
+        binary_version: "".to_string(),
+        cluster_id: "".to_string(),
+        warehouse_id: "".to_string(),
+    }
 }
 
 fn create_test_node_info() -> NodeInfo {
@@ -178,9 +277,21 @@ fn create_test_node_info() -> NodeInfo {
     }
 }
 
-async fn new_cluster_api() -> Result<(MetaStore, ClusterMgr)> {
+async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, Vec<String>)> {
+    let (kv_api, cluster_manager) = new_cluster_api(lift).await?;
+
+    let mut nodes = Vec::with_capacity(size);
+    for _index in 0..size {
+        let name = GlobalUniqName::unique();
+        cluster_manager.add_node(empty_node(&name)).await?;
+        nodes.push(name);
+    }
+
+    Ok((kv_api, cluster_manager, nodes))
+}
+
+async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
     let test_api = MetaStore::L(Arc::new(MemMeta::default()));
-    let cluster_manager =
-        ClusterMgr::create(test_api.clone(), "test-tenant-id", Duration::from_secs(60))?;
+    let cluster_manager = WarehouseMgr::create(test_api.clone(), "test-tenant-id", lift)?;
     Ok((test_api, cluster_manager))
 }

@@ -50,5 +50,6 @@ pub use stage::StageApi;
 pub use stage::StageMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
-pub use warehouse::ClusterApi;
-pub use warehouse::ClusterMgr;
+pub use warehouse::SelectedNode;
+pub use warehouse::WarehouseApi;
+pub use warehouse::WarehouseMgr;
