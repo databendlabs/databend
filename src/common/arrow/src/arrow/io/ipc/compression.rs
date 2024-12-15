@@ -19,8 +19,8 @@ use crate::arrow::error::Result;
 #[cfg_attr(docsrs, doc(cfg(feature = "io_ipc_compression")))]
 pub fn decompress_lz4(input_buf: &[u8], output_buf: &mut [u8]) -> Result<()> {
     use std::io::Read;
-    let mut decoder = lz4::Decoder::new(input_buf)?;
-    decoder.read_exact(output_buf).map_err(|e| e.into())
+    let _ = lz4_flex::frame::FrameDecoder::new(input_buf).read(output_buf)?;
+    Ok(())
 }
 
 #[cfg(feature = "io_ipc_compression")]
@@ -49,11 +49,13 @@ pub fn compress_lz4(input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
     use std::io::Write;
 
     use crate::arrow::error::Error;
-    let mut encoder = lz4::EncoderBuilder::new()
-        .build(output_buf)
-        .map_err(Error::from)?;
+
+    let mut encoder = lz4_flex::frame::FrameEncoder::new(output_buf);
     encoder.write_all(input_buf)?;
-    encoder.finish().1.map_err(|e| e.into())
+    encoder
+        .finish()
+        .map_err(|e| Error::External("lz4_compress".to_string(), Box::new(e)))?;
+    Ok(())
 }
 
 #[cfg(feature = "io_ipc_compression")]
