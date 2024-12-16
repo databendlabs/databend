@@ -171,7 +171,7 @@ impl IcebergTable {
                 ))
             })?;
 
-        Ok(iceberg::table::Table::builder()
+        iceberg::table::Table::builder()
             .identifier(identifier)
             .metadata(metadata)
             .metadata_location(metadata_location)
@@ -179,7 +179,7 @@ impl IcebergTable {
             .build()
             .map_err(|err| {
                 ErrorCode::ReadTableDataError(format!("Rebuild iceberg table failed: {err:?}"))
-            })?)
+            })
     }
 
     /// create a new table on the table directory
