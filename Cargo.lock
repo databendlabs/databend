@@ -3203,6 +3203,7 @@ dependencies = [
  "lexical-core",
  "log",
  "lz4",
+ "lz4_flex",
  "num",
  "num-traits",
  "opendal 0.50.1",
