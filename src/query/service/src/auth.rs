@@ -26,7 +26,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
-use opentelemetry::global;
 
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
@@ -175,7 +174,7 @@ impl AuthMgr {
                 };
 
                 // check global network policy if user is not account admin
-                if !user.grants.roles().contains("account_admin") {
+                if !user.is_account_admin() {
                     if !global_network_policy.is_empty() {
                         user_api
                             .enforce_network_policy(
@@ -202,7 +201,7 @@ impl AuthMgr {
                     .await?;
 
                 // check global network policy if user is not account admin
-                if !user.grants.roles().contains("account_admin") {
+                if !user.is_account_admin() {
                     if !global_network_policy.is_empty() {
                         user_api
                             .enforce_network_policy(

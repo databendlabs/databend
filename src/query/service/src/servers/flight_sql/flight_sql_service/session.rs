@@ -107,7 +107,7 @@ impl FlightSqlServiceImpl {
             .map_err(|e| status!("get_user fail {}", e))?;
 
         // check global network policy if user is not account admin
-        if !user.grants.roles().contains("account_admin") {
+        if !user.is_account_admin() {
             let global_network_policy = session
                 .get_settings()
                 .get_network_policy()
