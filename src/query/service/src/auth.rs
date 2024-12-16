@@ -174,12 +174,9 @@ impl AuthMgr {
                     }
                 };
 
-                // check global network policy if user is not super
-                if !global_network_policy.is_empty() {
-                    if !user
-                        .grants
-                        .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-                    {
+                // check global network policy if user is not account admin
+                if !user.grants.roles().contains("account_admin") {
+                    if !global_network_policy.is_empty() {
                         user_api
                             .enforce_network_policy(
                                 &tenant,
@@ -203,12 +200,10 @@ impl AuthMgr {
                 let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
-                // check global network policy if user is not super
-                if !global_network_policy.is_empty() {
-                    if !user
-                        .grants
-                        .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-                    {
+
+                // check global network policy if user is not account admin
+                if !user.grants.roles().contains("account_admin") {
+                    if !global_network_policy.is_empty() {
                         user_api
                             .enforce_network_policy(
                                 &tenant,

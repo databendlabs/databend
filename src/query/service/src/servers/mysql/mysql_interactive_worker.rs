@@ -278,11 +278,8 @@ impl InteractiveWorkerBase {
             .get_user_with_client_ip(&tenant, identity.clone(), Some(client_ip))
             .await?;
 
-        // check global network policy if user is not super
-        if !user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-        {
+        // check global network policy if user is not account admin
+        if !user.grants.roles().contains("account_admin") {
             let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
             if !global_network_policy.is_empty() {
                 user_api

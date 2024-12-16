@@ -106,15 +106,12 @@ impl FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("get_user fail {}", e))?;
 
-        if !user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-        {
+        // check global network policy if user is not account admin
+        if !user.grants.roles().contains("account_admin") {
             let global_network_policy = session
                 .get_settings()
                 .get_network_policy()
                 .unwrap_or_default();
-            // check global network policy if user is not super
             if !global_network_policy.is_empty() {
                 user_api
                     .enforce_network_policy(&tenant, &global_network_policy, client_ip.as_deref())
