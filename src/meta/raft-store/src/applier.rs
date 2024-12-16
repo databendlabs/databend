@@ -18,6 +18,8 @@ use std::time::Duration;
 
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
+use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
@@ -50,6 +52,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
+use futures_util::future::BoxFuture;
 use futures_util::StreamExt;
 use log::debug;
 use log::error;
@@ -247,19 +250,39 @@ where SM: StateMachineApi + 'static
     pub(crate) async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
         debug!(txn :% =(req); "apply txn cmd");
 
+        // 1. Evaluate conditional operations one by one.
+        //    Once one of them is successful, execute the corresponding operations and retrun.
+        //    Otherwise, try next.
+        for (i, conditional) in req.operations.iter().enumerate() {
+            let success = if let Some(predicate) = &conditional.predicate {
+                self.eval_bool_expression(predicate).await?
+            } else {
+                true
+            };
+
+            if success {
+                let mut resp: TxnReply = TxnReply::new(format!("operation:{i}"));
+
+                for op in &conditional.operations {
+                    self.txn_execute_operation(op, &mut resp).await?;
+                }
+
+                return Ok(AppliedState::TxnReply(resp));
+            }
+        }
+
+        // 2. For backward compatibility, evaluate the `condition` as the last conditional-operation.
+        //    If success, execute the `if_then` operations
+
         let success = self.eval_txn_conditions(&req.condition).await?;
 
-        let ops = if success {
-            &req.if_then
+        let (ops, path) = if success {
+            (&req.if_then, "then")
         } else {
-            &req.else_then
+            (&req.else_then, "else")
         };
 
-        let mut resp: TxnReply = TxnReply {
-            success,
-            error: "".to_string(),
-            responses: vec![],
-        };
+        let mut resp: TxnReply = TxnReply::new(path);
 
         for op in ops {
             self.txn_execute_operation(op, &mut resp).await?;
@@ -282,6 +305,47 @@ where SM: StateMachineApi + 'static
         }
 
         Ok(true)
+    }
+
+    fn eval_bool_expression<'x>(
+        &'x mut self,
+        tree: &'x BooleanExpression,
+    ) -> BoxFuture<'x, Result<bool, io::Error>> {
+        let op = tree.operator();
+
+        let fu = async move {
+            match op {
+                CombiningOperator::And => {
+                    for expr in tree.sub_expressions.iter() {
+                        if !self.eval_bool_expression(expr).await? {
+                            return Ok(false);
+                        }
+                    }
+
+                    for cond in tree.conditions.iter() {
+                        if !self.eval_one_condition(cond).await? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                CombiningOperator::Or => {
+                    for expr in tree.sub_expressions.iter() {
+                        if self.eval_bool_expression(expr).await? {
+                            return Ok(true);
+                        }
+                    }
+
+                    for cond in tree.conditions.iter() {
+                        if self.eval_one_condition(cond).await? {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+            Ok(true)
+        };
+
+        Box::pin(fu)
     }
 
     #[fastrace::trace]

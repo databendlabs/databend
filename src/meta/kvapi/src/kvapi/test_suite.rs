@@ -14,7 +14,10 @@
 
 use std::time::Duration;
 
+use databend_common_base::display::display_option::DisplayOptionExt;
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
@@ -93,6 +96,8 @@ impl kvapi::TestSuite {
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
             .await?;
         self.kv_transaction_condition_keys_with_prefix(&builder.build().await)
+            .await?;
+        self.kv_transaction_complex_conditions(&builder.build().await)
             .await?;
         self.kv_transaction_delete_match_seq_some_not_match(&builder.build().await)
             .await?;
@@ -508,13 +513,7 @@ impl kvapi::TestSuite {
 
         let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
 
-        let else_then: Vec<TxnOp> = vec![];
-
-        let txn = TxnRequest {
-            condition: conditions,
-            if_then,
-            else_then,
-        };
+        let txn = TxnRequest::new(conditions, if_then);
 
         let resp = kv.transaction(txn).await?;
 
@@ -567,12 +566,7 @@ impl kvapi::TestSuite {
                 })),
             }];
 
-            let else_then: Vec<TxnOp> = vec![];
-            let txn = TxnRequest {
-                condition,
-                if_then,
-                else_then,
-            };
+            let txn = TxnRequest::new(condition, if_then);
 
             let resp = kv.transaction(txn).await?;
 
@@ -607,18 +601,12 @@ impl kvapi::TestSuite {
                 target: Some(txn_condition::Target::Seq(0)),
             }];
 
-            let if_then: Vec<TxnOp> = vec![];
-
             let else_then: Vec<TxnOp> = vec![TxnOp {
                 request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
                     prefix: unmatch_prefix.clone(),
                 })),
             }];
-            let txn = TxnRequest {
-                condition,
-                if_then,
-                else_then,
-            };
+            let txn = TxnRequest::new(condition, vec![]).with_else(else_then);
 
             let resp = kv.transaction(txn).await?;
 
@@ -663,12 +651,7 @@ impl kvapi::TestSuite {
 
             let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
 
-            let else_then: Vec<TxnOp> = vec![];
-            let txn = TxnRequest {
-                condition,
-                if_then,
-                else_then,
-            };
+            let txn = TxnRequest::new(condition, if_then);
 
             let resp = kv.transaction(txn).await?;
 
@@ -708,12 +691,7 @@ impl kvapi::TestSuite {
 
             let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key1.clone(), b("new_v1"))];
 
-            let else_then: Vec<TxnOp> = vec![];
-            let txn = TxnRequest {
-                condition,
-                if_then,
-                else_then,
-            };
+            let txn = TxnRequest::new(condition, if_then);
 
             let resp = kv.transaction(txn).await?;
 
@@ -779,12 +757,7 @@ impl kvapi::TestSuite {
                 },
             ];
 
-            let else_then: Vec<TxnOp> = vec![];
-            let txn = TxnRequest {
-                condition,
-                if_then,
-                else_then,
-            };
+            let txn = TxnRequest::new(condition, if_then);
 
             let resp = kv.transaction(txn).await?;
 
@@ -875,11 +848,11 @@ impl kvapi::TestSuite {
 
             // Test eq value: success = false
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Eq, b("v10"))],
-                if_then: vec![TxnOp::put(k1, b("v2")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(vec![TxnCondition::eq_value(k1, b("v10"))], vec![
+                TxnOp::put(k1, b("v2")),
+                TxnOp::get(k1),
+            ])
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -891,11 +864,10 @@ impl kvapi::TestSuite {
 
             // Test eq value: success = true
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Eq, b("v1"))],
-                if_then: vec![TxnOp::put(k1, b("v2")), TxnOp::get(k1)],
-                else_then: vec![],
-            };
+            let txn = TxnRequest::new(vec![TxnCondition::eq_value(k1, b("v1"))], vec![
+                TxnOp::put(k1, b("v2")),
+                TxnOp::get(k1),
+            ]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -909,11 +881,11 @@ impl kvapi::TestSuite {
 
             // Test less than value: success = false
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Lt, b("v2"))],
-                if_then: vec![TxnOp::put(k1, b("v3")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Lt, b("v2"))],
+                vec![TxnOp::put(k1, b("v3")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -925,11 +897,11 @@ impl kvapi::TestSuite {
 
             // Test less than value: success = true
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Lt, b("v3"))],
-                if_then: vec![TxnOp::put(k1, b("v3")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Lt, b("v3"))],
+                vec![TxnOp::put(k1, b("v3")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -943,11 +915,11 @@ impl kvapi::TestSuite {
 
             // Test less equal value: success = false
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Le, b("v0"))],
-                if_then: vec![TxnOp::put(k1, b("v4")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Le, b("v0"))],
+                vec![TxnOp::put(k1, b("v4")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -959,11 +931,11 @@ impl kvapi::TestSuite {
 
             // Test less equal value: success = true
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Le, b("v3"))],
-                if_then: vec![TxnOp::put(k1, b("v4")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Le, b("v3"))],
+                vec![TxnOp::put(k1, b("v4")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -977,11 +949,11 @@ impl kvapi::TestSuite {
 
             // Test greater than value: success = false
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Gt, b("v5"))],
-                if_then: vec![TxnOp::put(k1, b("v5")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Gt, b("v5"))],
+                vec![TxnOp::put(k1, b("v5")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -993,11 +965,11 @@ impl kvapi::TestSuite {
 
             // Test greater than value: success = true
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Gt, b("v3"))],
-                if_then: vec![TxnOp::put(k1, b("v5")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Gt, b("v3"))],
+                vec![TxnOp::put(k1, b("v5")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -1011,11 +983,11 @@ impl kvapi::TestSuite {
 
             // Test greater equal value: success = false
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Ge, b("v6"))],
-                if_then: vec![TxnOp::put(k1, b("v6")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Ge, b("v6"))],
+                vec![TxnOp::put(k1, b("v6")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -1027,11 +999,11 @@ impl kvapi::TestSuite {
 
             // Test greater equal value: success = true
 
-            let txn = TxnRequest {
-                condition: vec![TxnCondition::match_value(k1, ConditionResult::Ge, b("v5"))],
-                if_then: vec![TxnOp::put(k1, b("v6")), TxnOp::get(k1)],
-                else_then: vec![TxnOp::get(k1)],
-            };
+            let txn = TxnRequest::new(
+                vec![TxnCondition::match_value(k1, ConditionResult::Ge, b("v5"))],
+                vec![TxnOp::put(k1, b("v6")), TxnOp::get(k1)],
+            )
+            .with_else(vec![TxnOp::get(k1)]);
 
             let resp = kv.transaction(txn).await?;
 
@@ -1052,15 +1024,11 @@ impl kvapi::TestSuite {
 
         info!("--- {}", func_path!());
 
-        let txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![TxnOp::put_with_ttl(
-                "k1",
-                b("v1"),
-                Some(Duration::from_millis(2_000)),
-            )],
-            else_then: vec![],
-        };
+        let txn = TxnRequest::new(vec![], vec![TxnOp::put_with_ttl(
+            "k1",
+            b("v1"),
+            Some(Duration::from_millis(2_000)),
+        )]);
 
         let _resp = kv.transaction(txn).await?;
 
@@ -1101,14 +1069,16 @@ impl kvapi::TestSuite {
 
         // A transaction that set positive key if succeeded,
         // otherwise set the negative key.
-        let txn = |op: ConditionResult, n: u64| TxnRequest {
-            condition: vec![TxnCondition::match_keys_with_prefix(
-                &sample_keys_prefix,
-                op,
-                n,
-            )],
-            if_then: vec![TxnOp::put(&positive, b(format!("{op:?}")))],
-            else_then: vec![TxnOp::put(&negative, b(format!("{op:?}")))],
+        let txn = |op: ConditionResult, n: u64| {
+            TxnRequest::new(
+                vec![TxnCondition::match_keys_with_prefix(
+                    &sample_keys_prefix,
+                    op,
+                    n,
+                )],
+                vec![TxnOp::put(&positive, b(format!("{op:?}")))],
+            )
+            .with_else(vec![TxnOp::put(&negative, b(format!("{op:?}")))])
         };
 
         for (op, n, expected) in [
@@ -1152,6 +1122,134 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
+    pub async fn kv_transaction_complex_conditions<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        let prefix = func_name!();
+
+        let sample = |suffix: &str| format!("{}/{}", prefix, suffix);
+        let result = format!("{prefix}/result");
+
+        kv.upsert_kv(UpsertKV::update(sample("a"), &b("a"))).await?;
+        kv.upsert_kv(UpsertKV::update(sample("b"), &b("b"))).await?;
+        kv.upsert_kv(UpsertKV::update(sample("c"), &b("c"))).await?;
+
+        // Build a simple equal-value condition
+        let eq = |key: &str, val: &str| TxnCondition::eq_value(sample(key), b(val));
+
+        let txn = |bools: Vec<Option<BooleanExpression>>, conditions: Vec<TxnCondition>| {
+            let mut txn = TxnRequest::default();
+            for (i, cond) in bools.into_iter().enumerate() {
+                txn = txn.push_branch(cond, vec![pb::TxnOp::put(
+                    &result,
+                    b(format!("operation:{}", i)),
+                )]);
+            }
+
+            txn.push_if_then(conditions, vec![pb::TxnOp::put(&result, b("then"))])
+                .with_else(vec![pb::TxnOp::put(&result, b("else"))])
+        };
+
+        for (bools, condition, expected, index) in [
+            (
+                vec![],
+                // empty condition is always true
+                vec![],
+                "then",
+                None,
+            ),
+            (vec![], vec![eq("a", "a")], "then", None),
+            (vec![], vec![eq("a", "b")], "else", None),
+            (vec![], vec![eq("a", "a"), eq("b", "b")], "then", None),
+            (vec![], vec![eq("a", "a"), eq("b", "c")], "else", None),
+            (
+                vec![
+                    Some(eq("a", "a").and(eq("b", "b"))),
+                    Some(eq("b", "b").or(eq("c", "c"))),
+                ],
+                vec![eq("a", "a")],
+                "operation:0",
+                Some(0),
+            ),
+            (
+                vec![
+                    Some(eq("a", "a").and(eq("b", "c"))),
+                    Some(eq("b", "b").and(eq("c", "c"))),
+                ],
+                vec![eq("a", "a")],
+                "operation:1",
+                Some(1),
+            ),
+            (
+                vec![
+                    Some(eq("a", "a").and(eq("b", "c"))),
+                    Some(eq("b", "b").and(eq("x", "x"))),
+                ],
+                vec![eq("a", "a")],
+                "then",
+                None,
+            ),
+            (
+                vec![
+                    Some(eq("a", "a").and(eq("b", "c"))),
+                    Some(eq("b", "b").and(eq("x", "x"))),
+                ],
+                // empty condition is always true
+                vec![],
+                "then",
+                None,
+            ),
+            (
+                vec![
+                    Some(eq("a", "a").and(eq("b", "c"))),
+                    // None condition is always true
+                    None,
+                ],
+                vec![eq("a", "a")],
+                "operation:1",
+                Some(1),
+            ),
+            (
+                vec![Some(
+                    eq("a", "a")
+                        .or(eq("x", "x"))
+                        .and(eq("b", "b").or(eq("y", "y"))),
+                )],
+                vec![eq("a", "b")],
+                "operation:0",
+                Some(0),
+            ),
+        ] {
+            kv.upsert_kv(UpsertKV::update(&result, &b(""))).await?;
+
+            let resp = kv
+                .transaction(txn(bools.clone(), condition.clone()))
+                .await?;
+
+            let message = format!(
+                "case: {} {}, expected: {expected}",
+                bools
+                    .into_iter()
+                    .map(|b| b.display().to_string())
+                    .collect::<Vec<_>>()
+                    .display(),
+                condition.display()
+            );
+
+            let want_success = expected != "else";
+
+            assert_eq!(resp.success, want_success, "{}", message);
+            assert_eq!(resp.execution_path, expected, "{}", message);
+            assert_eq!(resp.executed_branch_index().unwrap(), index, "{}", message);
+
+            let got = kv.get_kv(&result).await?.unwrap().data;
+            assert_eq!(got, b(expected), "{}", message);
+        }
+
+        Ok(())
+    }
+
     /// If `TxnDeleteRequest.match_seq` is not set,
     /// the delete operation will always be executed.
     pub async fn kv_transaction_delete_match_seq_none<KV: kvapi::KVApi>(
@@ -1164,11 +1262,7 @@ impl kvapi::TestSuite {
 
         kv.upsert_kv(UpsertKV::update(key(), &val())).await?;
 
-        let txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![TxnOp::delete(key())],
-            else_then: vec![],
-        };
+        let txn = TxnRequest::new(vec![], vec![TxnOp::delete(key())]);
 
         let resp = kv.transaction(txn).await?;
 
@@ -1198,11 +1292,7 @@ impl kvapi::TestSuite {
 
         kv.upsert_kv(UpsertKV::update(key(), &val())).await?;
 
-        let txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![TxnOp::delete_exact(key(), Some(100))],
-            else_then: vec![],
-        };
+        let txn = TxnRequest::new(vec![], vec![TxnOp::delete_exact(key(), Some(100))]);
 
         let resp = kv.transaction(txn).await?;
 
@@ -1236,11 +1326,7 @@ impl kvapi::TestSuite {
 
         kv.upsert_kv(UpsertKV::update(key(), &val())).await?;
 
-        let txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![TxnOp::delete_exact(key(), Some(1))],
-            else_then: vec![],
-        };
+        let txn = TxnRequest::new(vec![], vec![TxnOp::delete_exact(key(), Some(1))]);
 
         let resp = kv.transaction(txn).await?;
 

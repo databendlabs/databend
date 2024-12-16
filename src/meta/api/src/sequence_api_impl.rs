@@ -142,11 +142,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                 txn_op_put_pb(&ident, &sequence_meta, None)?, // name -> meta
             ];
 
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
+            let txn_req = TxnRequest::new(condition, if_then);
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
