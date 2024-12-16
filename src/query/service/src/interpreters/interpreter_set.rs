@@ -93,7 +93,7 @@ impl SetInterpreter {
                         .map_err(|e| {
                             if e.code() == ErrorCode::UnknownNetworkPolicy {
                                 ErrorCode::UnknownNetworkPolicy(format!(
-                                    "Unknown network policy: {}",
+                                    "Unknown NetworkPolicy: {}",
                                     scalar
                                 ))
                             } else {
