@@ -89,17 +89,7 @@ impl SetInterpreter {
                     let tenant = self.ctx.get_tenant();
                     let _ = UserApiProvider::instance()
                         .get_network_policy(&tenant, &scalar)
-                        .await
-                        .map_err(|e| {
-                            if e.code() == ErrorCode::UnknownNetworkPolicy {
-                                ErrorCode::UnknownNetworkPolicy(format!(
-                                    "Unknown NetworkPolicy: {}",
-                                    scalar
-                                ))
-                            } else {
-                                e
-                            }
-                        })?;
+                        .await?;
                     self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;
                     true
