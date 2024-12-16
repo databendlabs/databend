@@ -54,6 +54,14 @@ impl Interpreter for DropNetworkPolicyInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
 
+        let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
+        if global_network_policy == plan.name {
+            return Err(ErrorCode::NetworkPolicyIsUsedByUser(format!(
+                "network policy `{}` is global policy, cannot be dropped",
+                name,
+            )));
+        }
+
         let user_mgr = UserApiProvider::instance();
         user_mgr
             .drop_network_policy(&tenant, plan.name.as_str(), plan.if_exists)
