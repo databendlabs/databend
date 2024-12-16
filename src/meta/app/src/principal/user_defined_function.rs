@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
@@ -49,7 +50,7 @@ pub struct UDAFScript {
     pub code: String,
     pub language: String,
     pub arg_types: Vec<DataType>,
-    pub state_types: Vec<DataType>,
+    pub state_fields: Vec<DataField>,
     pub return_type: DataType,
     pub runtime_version: String,
 }
@@ -194,7 +195,7 @@ impl Display for UDFDefinition {
             UDFDefinition::UDAFScript(UDAFScript {
                 code,
                 arg_types,
-                state_types,
+                state_fields,
                 return_type,
                 language,
                 runtime_version,
@@ -205,14 +206,14 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{item}")?;
                 }
-                write!(f, " STATE (")?;
-                for (i, item) in state_types.iter().enumerate() {
+                write!(f, " STATE {{ ")?;
+                for (i, item) in state_fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{item}")?;
+                    write!(f, "{} {}", item.name(), item.data_type())?;
                 }
-                write!(f, ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
+                write!(f, " }} RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
             }
         }
         Ok(())

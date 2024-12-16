@@ -2370,8 +2370,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #create_udaf : "`CREATE [OR REPLACE] AGGREGATE FUNCTION [IF NOT EXISTS] <name> (<parameter>, ...) STATE (<state_type>, ...) RETURNS <return_type> LANGUAGE <language> STATE (<state_type>, ...) AS <definition_expr> [DESC = <description>]`"
-            | #alter_udaf : "`ALTER AGGREGATE FUNCTION <udf_name> (<parameter>, ...) STATE (<state_type>, ...) RETURNS <return_type> LANGUAGE <language> STATE (<state_type>, ...) AS <definition_expr> [DESC = <description>]`"
+            | #create_udaf : "`CREATE [OR REPLACE] AGGREGATE FUNCTION [IF NOT EXISTS] <name> (<parameter>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> AS <definition_expr> [DESC = <description>]`"
+            | #alter_udaf : "`ALTER AGGREGATE FUNCTION <udf_name> (<parameter>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> AS <definition_expr> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
@@ -4342,15 +4342,14 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     })(i)
 }
 
-pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
+pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     map(
         rule! {
-            #type_name
+            #ident
+            ~ #type_name
+            : "`<state name> <type>`"
         },
-        |type_name| match type_name {
-            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
-            _ => type_name.wrap_nullable(),
-        },
+        |(name, type_name)| UDAFStateField { name, type_name },
     )(i)
 }
 
@@ -4368,8 +4367,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
     let udf_server = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ADDRESS ~ ^"=" ~ ^#literal_string
@@ -4387,8 +4386,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
     let udf_script = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ AS ~ ^(#code_string | #literal_string)
@@ -4417,9 +4416,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 pub fn udaf_definition(i: Input) -> IResult<UDFDefinition> {
     let udaf_server = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ STATE ~ "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ ADDRESS ~ ^"=" ~ ^#literal_string
         },
@@ -4433,7 +4432,7 @@ pub fn udaf_definition(i: Input) -> IResult<UDFDefinition> {
         )| {
             UDFDefinition::UDAFServer {
                 arg_types,
-                state_types,
+                state_fields: state_types,
                 return_type,
                 address,
                 language: language.to_string(),
@@ -4443,9 +4442,9 @@ pub fn udaf_definition(i: Input) -> IResult<UDFDefinition> {
 
     let udaf_script = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ STATE ~ "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ AS ~ ^(#code_string | #literal_string)
         },
@@ -4458,7 +4457,7 @@ pub fn udaf_definition(i: Input) -> IResult<UDFDefinition> {
             _, code)| {
             UDFDefinition::UDAFScript {
                 arg_types,
-                state_types,
+                state_fields: state_types,
                 return_type,
                 code,
                 language: language.to_string(),
@@ -4470,8 +4469,8 @@ pub fn udaf_definition(i: Input) -> IResult<UDFDefinition> {
     );
 
     rule!(
-        #udaf_server: "(<arg_type>, ...) STATE (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> ADDRESS=<udf_server_address>"
-        | #udaf_script: "(<arg_type>, ...) STATE (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> AS <language_codes>"
+        #udaf_server: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> ADDRESS=<udf_server_address>"
+        | #udaf_script: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> AS <language_codes>"
     )(i)
 }
 

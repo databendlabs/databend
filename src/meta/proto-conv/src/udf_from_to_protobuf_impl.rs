@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
 use databend_common_expression::TableDataType;
 use databend_common_meta_app::principal as mt;
 use databend_common_protos::pb;
@@ -178,10 +179,16 @@ impl FromToProto for mt::UDAFScript {
             .map(|arg_type| Ok(DataType::from(&TableDataType::from_pb(arg_type)?)))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let state_types = p
-            .state_types
-            .into_iter()
-            .map(|state_type| Ok(DataType::from(&TableDataType::from_pb(state_type)?)))
+        let state_fields = p
+            .state_names
+            .iter()
+            .zip(p.state_types.into_iter())
+            .map(|(name, data_type)| {
+                Ok(DataField::new(
+                    name,
+                    DataType::from(&TableDataType::from_pb(data_type)?),
+                ))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
@@ -196,7 +203,7 @@ impl FromToProto for mt::UDAFScript {
             return_type,
             language: p.language,
             runtime_version: p.runtime_version,
-            state_types,
+            state_fields,
         })
     }
 
@@ -210,14 +217,20 @@ impl FromToProto for mt::UDAFScript {
                 .to_pb()?;
             arg_types.push(arg_type);
         }
-        let mut state_types = Vec::with_capacity(self.state_types.len());
-        for state_type in self.state_types.iter() {
-            let state_type = infer_schema_type(state_type)
-                .map_err(|e| Incompatible {
-                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
-                })?
-                .to_pb()?;
-            state_types.push(state_type);
+        let mut state_names = Vec::with_capacity(self.state_fields.len());
+        let mut state_types = Vec::with_capacity(self.state_fields.len());
+        for field in self.state_fields.iter() {
+            state_names.push(field.name().clone());
+            state_types.push(
+                infer_schema_type(field.data_type())
+                    .map_err(|e| Incompatible {
+                        reason: format!(
+                            "Convert DataType to TableDataType failed: {}",
+                            e.message()
+                        ),
+                    })?
+                    .to_pb()?,
+            );
         }
         let return_type = infer_schema_type(&self.return_type)
             .map_err(|e| Incompatible {
@@ -230,10 +243,11 @@ impl FromToProto for mt::UDAFScript {
             min_reader_ver: MIN_READER_VER,
             code: self.code.clone(),
             language: self.language.clone(),
-            arg_types,
-            return_type: Some(return_type),
             runtime_version: self.runtime_version.clone(),
+            arg_types,
+            state_names,
             state_types,
+            return_type: Some(return_type),
         })
     }
 }

@@ -809,10 +809,17 @@ pub struct UDAFCall {
     pub name: String, // name in meta
     pub display_name: String,
     pub arg_types: Vec<DataType>,
-    pub state_types: Vec<DataType>,
+    pub state_fields: Vec<UDFField>,
     pub return_type: Box<DataType>,
     pub arguments: Vec<ScalarExpr>,
     pub udf_type: UDFType,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct UDFField {
+    pub name: String,
+    pub data_type: DataType,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]

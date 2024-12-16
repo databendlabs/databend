@@ -400,7 +400,7 @@ impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
             name: udaf.name.clone(),
             display_name: udaf.display_name.clone(),
             arg_types: udaf.arg_types.clone(),
-            state_types: udaf.state_types.clone(),
+            state_fields: udaf.state_fields.clone(),
             return_type: udaf.return_type.clone(),
             arguments: replaced_args,
             udf_type: udaf.udf_type.clone(),

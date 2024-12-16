@@ -23254,7 +23254,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -23270,13 +23270,9 @@ CreateUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
-            ),
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -23288,7 +23284,7 @@ CreateUDF(
 ---------- Input ----------
 ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-ALTER FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+ALTER FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 AlterUDF(
     AlterUDFStmt {
@@ -23303,13 +23299,9 @@ AlterUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
-            ),
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -23321,7 +23313,7 @@ AlterUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+CREATE OR REPLACE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -23337,13 +23329,9 @@ CreateUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
-            ),
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -23448,7 +23436,7 @@ def addone_py(i):
 return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
 return i+1
 $$
@@ -23467,13 +23455,9 @@ CreateUDF(
         description: None,
         definition: UDFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
-            ],
-            return_type: Nullable(
                 Int32,
-            ),
+            ],
+            return_type: Int32,
             code: "def addone_py(i):\nreturn i+1",
             handler: "addone_py",
             language: "python",
@@ -23490,7 +23474,7 @@ language python
 handler = 'addone_py'
 as '@data/abc/a.py';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 @data/abc/a.py
 $$
 ---------- AST ------------
@@ -23508,13 +23492,9 @@ CreateUDF(
         description: None,
         definition: UDFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
-            ],
-            return_type: Nullable(
                 Int32,
-            ),
+            ],
+            return_type: Int32,
             code: "@data/abc/a.py",
             handler: "addone_py",
             language: "python",
@@ -23561,9 +23541,9 @@ DropUDF {
 
 
 ---------- Input ----------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (Int32 NULL) STATE (STRING NULL) RETURNS BOOLEAN NULL LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -23579,18 +23559,22 @@ CreateUDF(
         description: None,
         definition: UDAFServer {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
+                Int32,
             ],
             state_types: [
-                Nullable(
-                    String,
-                ),
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            61..62,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
             ],
-            return_type: Nullable(
-                Boolean,
-            ),
+            return_type: Boolean,
             address: "http://0.0.0.0:8815",
             language: "javascript",
         },
@@ -23599,9 +23583,9 @@ CreateUDF(
 
 
 ---------- Input ----------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (Int32 NULL) STATE (STRING NULL) RETURNS BOOLEAN NULL LANGUAGE javascript AS $$
+CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
 some code
 $$
 ---------- AST ------------
@@ -23619,18 +23603,35 @@ CreateUDF(
         description: None,
         definition: UDAFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
+                Int32,
             ],
             state_types: [
-                Nullable(
-                    String,
-                ),
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            61..62,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            71..72,
+                        ),
+                        name: "i",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: NotNull(
+                        Int32,
+                    ),
+                },
             ],
-            return_type: Nullable(
-                Boolean,
-            ),
+            return_type: Boolean,
             code: "some code",
             language: "javascript",
             runtime_version: "",
@@ -23640,9 +23641,9 @@ CreateUDF(
 
 
 ---------- Input ----------
-ALTER AGGREGATE FUNCTION my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+ALTER AGGREGATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-ALTER AGGREGATE FUNCTION my_agg (Int32 NULL) STATE (STRING NULL) RETURNS BOOLEAN NULL LANGUAGE javascript AS $$
+ALTER AGGREGATE FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
 some code
 $$
 ---------- AST ------------
@@ -23659,18 +23660,22 @@ AlterUDF(
         description: None,
         definition: UDAFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
+                Int32,
             ],
             state_types: [
-                Nullable(
-                    String,
-                ),
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            46..47,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
             ],
-            return_type: Nullable(
-                Boolean,
-            ),
+            return_type: Boolean,
             code: "some code",
             language: "javascript",
             runtime_version: "",

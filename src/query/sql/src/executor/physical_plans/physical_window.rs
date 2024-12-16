@@ -262,7 +262,7 @@ impl PhysicalPlanBuilder {
             WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
                 sig: AggregateFunctionSignature {
                     name: agg.func_name.clone(),
-                    udf_type: None,
+                    udaf: None,
                     return_type: *agg.return_type.clone(),
                     args: agg
                         .args
@@ -270,7 +270,6 @@ impl PhysicalPlanBuilder {
                         .map(|s| s.data_type())
                         .collect::<Result<_>>()?,
                     params: agg.params.clone(),
-                    state_types: vec![],
                 },
                 output_column: w.index,
                 arg_indices: agg

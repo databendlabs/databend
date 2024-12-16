@@ -81,6 +81,7 @@ fn run_parser_with_dialect<P, O>(
     }
 }
 
+// UPDATE_GOLDENFILES=1 cargo test --package databend-common-ast --test it -- parser::test_statement
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
@@ -798,9 +799,9 @@ fn test_statement() {
         "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
-        r#"CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
-        r#"CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
-        r#"ALTER AGGREGATE FUNCTION my_agg (INT) STATE (STRING) RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"ALTER AGGREGATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"
             EXECUTE IMMEDIATE
             $$

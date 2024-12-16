@@ -253,20 +253,15 @@ impl PipelineBuilder {
                     .collect::<Result<Vec<_>>>()?;
                 agg_args.push(args);
 
-                match &agg_func.sig.udf_type {
-                    Some(UDFType::Script((lang, runtime_version, code))) => {
+                match &agg_func.sig.udaf {
+                    Some((state_fields, UDFType::Script((lang, runtime_version, code)))) => {
                         create_aggregate_udf_function(
                             &agg_func.sig.name,
                             lang,
                             runtime_version,
-                            agg_func
-                                .sig
-                                .state_types
+                            state_fields
                                 .iter()
-                                .enumerate()
-                                .map(|(i, data_type)| {
-                                    DataField::new(&format!("state_{}", i), data_type.clone())
-                                })
+                                .map(|f| DataField::new(&f.name, f.data_type.clone()))
                                 .collect(),
                             agg_func
                                 .sig

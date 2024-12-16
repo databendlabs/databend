@@ -19,17 +19,17 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 
+use crate::plans::UDFField;
 use crate::plans::UDFType;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
     pub name: String,
-    pub udf_type: Option<UDFType>,
+    pub udaf: Option<(Vec<UDFField>, UDFType)>,
     pub return_type: DataType,
     pub params: Vec<Scalar>,
     pub args: Vec<DataType>,
-    pub state_types: Vec<DataType>,
 }
 
 impl AggregateFunctionSignature {

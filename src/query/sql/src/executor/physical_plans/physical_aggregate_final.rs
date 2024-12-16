@@ -151,11 +151,10 @@ impl PhysicalPlanBuilder {
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: agg.func_name.clone(),
-                                    udf_type: None,
+                                    udaf: None,
                                     return_type: *agg.return_type.clone(),
                                     args,
                                     params: agg.params.clone(),
-                                    state_types: vec![],
                                 },
                                 output_column: v.index,
                                 arg_indices,
@@ -190,11 +189,10 @@ impl PhysicalPlanBuilder {
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: udaf.name.clone(),
-                                    udf_type: Some(udaf.udf_type.clone()),
+                                    udaf: Some((udaf.state_fields.clone(), udaf.udf_type.clone())),
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
-                                    state_types: udaf.state_types.clone(),
                                 },
                                 output_column: v.index,
                                 arg_indices,
@@ -387,11 +385,10 @@ impl PhysicalPlanBuilder {
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: agg.func_name.clone(),
-                                    udf_type: None,
+                                    udaf: None,
                                     return_type: *agg.return_type.clone(),
                                     args,
                                     params: agg.params.clone(),
-                                    state_types: vec![],
                                 },
                                 output_column: v.index,
                                 arg_indices,
@@ -426,11 +423,10 @@ impl PhysicalPlanBuilder {
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: udaf.name.clone(),
-                                    udf_type: Some(udaf.udf_type.clone()),
+                                    udaf: Some((udaf.state_fields.clone(), udaf.udf_type.clone())),
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
-                                    state_types: udaf.state_types.clone(),
                                 },
                                 output_column: v.index,
                                 arg_indices,

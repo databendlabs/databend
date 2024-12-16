@@ -151,6 +151,7 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
+use crate::plans::UDFField;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFType;
 use crate::plans::Visitor as ScalarVisitor;
@@ -3879,7 +3880,7 @@ impl<'a> TypeChecker<'a> {
             code,
             language,
             arg_types,
-            state_types,
+            state_fields,
             return_type,
             runtime_version,
         } = udf_definition;
@@ -3911,7 +3912,13 @@ impl<'a> TypeChecker<'a> {
                 name,
                 display_name,
                 arg_types,
-                state_types,
+                state_fields: state_fields
+                    .iter()
+                    .map(|f| UDFField {
+                        name: f.name().to_string(),
+                        data_type: f.data_type().clone(),
+                    })
+                    .collect(),
                 return_type: Box::new(return_type.clone()),
                 udf_type,
                 arguments: args,

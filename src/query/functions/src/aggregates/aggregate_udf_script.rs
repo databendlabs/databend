@@ -20,6 +20,7 @@ use std::sync::Arc;
 use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
+use arrow_schema::DataType as ArrowType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
@@ -31,11 +32,11 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
 use databend_common_expression::StateAddr;
-use databend_common_expression::TableField;
 
 use crate::aggregates::AggregateFunction;
 
 pub struct AggregateUdfScript {
+    name: String,
     runtime: arrow_udf_js::Runtime,
     argument_schema: DataSchema,
     return_type: DataType,
@@ -43,7 +44,7 @@ pub struct AggregateUdfScript {
 
 impl AggregateFunction for AggregateUdfScript {
     fn name(&self) -> &str {
-        "udf" // todo
+        &self.name
     }
 
     fn return_type(&self) -> Result<DataType> {
@@ -52,6 +53,7 @@ impl AggregateFunction for AggregateUdfScript {
 
     fn init_state(&self, place: StateAddr) {
         let state = self.runtime.create_state(self.agg_name()).unwrap(); // todo
+        log::info!("init_state: {:?}", state);
         place.write_state(UdfAggState(state));
     }
 
@@ -72,6 +74,7 @@ impl AggregateFunction for AggregateUdfScript {
             .runtime
             .accumulate(self.agg_name(), &state.0, &input_batch)
             .unwrap();
+        log::info!("accumulate: {:?}", state);
         place.write_state(UdfAggState(state));
         Ok(())
     }
@@ -83,6 +86,7 @@ impl AggregateFunction for AggregateUdfScript {
             .runtime
             .accumulate(self.agg_name(), &state.0, &input_batch)
             .unwrap();
+        log::info!("accumulate_row: {:?}", state);
         place.write_state(UdfAggState(state));
         Ok(())
     }
@@ -98,6 +102,7 @@ impl AggregateFunction for AggregateUdfScript {
         let rhs = UdfAggState::deserialize(reader).unwrap();
         let states = arrow_select::concat::concat(&[&state.0, &rhs.0]).unwrap(); // todo
         let state = self.runtime.merge(self.agg_name(), &states).unwrap();
+        log::info!("merge: {:?}", state);
         place.write_state(UdfAggState(state));
         Ok(())
     }
@@ -107,6 +112,7 @@ impl AggregateFunction for AggregateUdfScript {
         let other = rhs.get::<UdfAggState>();
         let states = arrow_select::concat::concat(&[&state.0, &other.0]).unwrap(); // todo
         let state = self.runtime.merge(self.agg_name(), &states).unwrap();
+        log::info!("merge_states: {:?}", state);
         place.write_state(UdfAggState(state));
         Ok(())
     }
@@ -114,6 +120,7 @@ impl AggregateFunction for AggregateUdfScript {
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let array = self.runtime.finish(self.agg_name(), &state.0).unwrap();
+        log::info!("merge_result: {:?}", array);
         let result = Column::from_arrow_rs(array, &self.return_type()?)?;
         builder.append_column(&result);
         Ok(())
@@ -122,16 +129,16 @@ impl AggregateFunction for AggregateUdfScript {
 
 impl fmt::Display for AggregateUdfScript {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "udf")
+        write!(f, "{}", self.name) // todo
     }
 }
 
 impl AggregateUdfScript {
     fn agg_name(&self) -> &str {
-        "weighted_avg"
+        &self.name
     }
 
-    #[allow(dead_code)]
+    #[cfg(debug_assertions)]
     fn check_columns(&self, columns: InputColumns) {
         let fields = self.argument_schema.fields();
         assert_eq!(columns.len(), fields.len());
@@ -145,6 +152,9 @@ impl AggregateUdfScript {
         columns: InputColumns,
         validity: Option<&Bitmap>,
     ) -> Result<RecordBatch> {
+        #[cfg(debug_assertions)]
+        self.check_columns(columns);
+
         let num_columns = columns.len();
 
         let columns = columns.iter().cloned().collect();
@@ -162,6 +172,9 @@ impl AggregateUdfScript {
     }
 
     fn create_input_batch_row(&self, columns: InputColumns, row: usize) -> Result<RecordBatch> {
+        #[cfg(debug_assertions)]
+        self.check_columns(columns);
+
         let num_columns = columns.len();
 
         let columns = columns.iter().cloned().collect();
@@ -219,34 +232,32 @@ pub fn create_aggregate_udf_function(
     return_type: DataType,
     code: &[u8],
 ) -> Result<Arc<dyn AggregateFunction>> {
-    use arrow_schema::DataType as ArrowType;
-    use arrow_schema::Field;
-    use arrow_udf_js::CallMode;
     let mut runtime = arrow_udf_js::Runtime::new().unwrap();
 
     let state_type = ArrowType::Struct(
         state_fields
             .iter()
-            .map(|f| {
-                let table_field: TableField = f.into();
-                (&table_field).into()
-            })
-            .collect::<Vec<Field>>()
+            .map(|f| f.into())
+            .collect::<Vec<arrow_schema::Field>>()
             .into(),
     );
 
+    log::info!("state_type: {:?}", state_type);
+
     let code = String::from_utf8(code.to_vec())?;
+    let output_type: ArrowType = (&return_type).into();
     runtime
         .add_aggregate(
             name,
             state_type,
-            ArrowType::Float32,
-            CallMode::CalledOnNullInput,
+            output_type,
+            arrow_udf_js::CallMode::CalledOnNullInput,
             &code,
         )
         .unwrap();
 
     Ok(Arc::new(AggregateUdfScript {
+        name: name.to_string(),
         runtime,
         argument_schema: DataSchema::new(arguments),
         return_type,
@@ -274,13 +285,13 @@ mod tests {
                 "weighted_avg",
                 DataType::Struct(
                     vec![
-                        Field::new("sum", DataType::Int32, false),
-                        Field::new("weight", DataType::Int32, false),
+                        Field::new("state_0", DataType::Int32, true),
+                        Field::new("state_1", DataType::Int32, true),
                     ]
                     .into(),
                 ),
                 DataType::Float32,
-                CallMode::ReturnNullOnNullInput,
+                CallMode::CalledOnNullInput,
                 r#"
                 export function create_state() {
                     return {sum: 0, weight: 0};
@@ -365,5 +376,10 @@ mod tests {
             expect,
             &pretty_format_columns("array", actual).unwrap().to_string(),
         );
+    }
+
+    #[test]
+    fn test_serialize() {
+        // todo
     }
 }

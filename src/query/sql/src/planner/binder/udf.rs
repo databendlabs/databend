@@ -19,11 +19,13 @@ use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::UDAFStateField;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_expression::DataField;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
@@ -151,7 +153,7 @@ impl Binder {
             }
             UDFDefinition::UDAFScript {
                 arg_types,
-                state_types,
+                state_fields,
                 return_type,
                 code,
                 language,
@@ -159,7 +161,7 @@ impl Binder {
             } => {
                 let definition = create_udf_definition_script(
                     arg_types,
-                    Some(state_types),
+                    Some(state_fields),
                     return_type,
                     runtime_version,
                     "",
@@ -237,7 +239,7 @@ impl Binder {
 
 fn create_udf_definition_script(
     arg_types: &[TypeName],
-    state_types: Option<&[TypeName]>,
+    state_fields: Option<&[UDAFStateField]>,
     return_type: &TypeName,
     runtime_version: &str,
     handler: &str,
@@ -252,26 +254,42 @@ fn create_udf_definition_script(
 
     let arg_types = arg_types
         .iter()
-        .map(|arg_type| Ok(DataType::from(&resolve_type_name(arg_type, true)?)))
+        .map(|arg_type| Ok(DataType::from(&resolve_type_name(arg_type, false)?)))
         .collect::<Result<Vec<_>>>()?;
 
-    let return_type = DataType::from(&resolve_type_name(return_type, true)?);
+    let return_type = DataType::from(&resolve_type_name(return_type, false)?);
 
     let mut runtime_version = runtime_version.to_string();
     if runtime_version.is_empty() && language.to_lowercase() == "python" {
         runtime_version = "3.12.2".to_string();
     }
 
-    match state_types {
-        Some(state_types) => {
-            let state_types = state_types
+    match state_fields {
+        Some(fields) => {
+            let state_fields = fields
                 .iter()
-                .map(|state_type| Ok(DataType::from(&resolve_type_name(state_type, true)?)))
+                .map(|field| {
+                    Ok(DataField::new(
+                        &field.name.name,
+                        DataType::from(&resolve_type_name(&field.type_name, false)?),
+                    ))
+                })
                 .collect::<Result<Vec<_>>>()?;
+
+            let state_field_names = state_fields
+                .iter()
+                .map(|f| f.name())
+                .collect::<HashSet<_>>();
+            if state_field_names.len() != state_fields.len() {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Duplicate state field name in UDAF script"
+                )));
+            }
+
             Ok(PlanUDFDefinition::UDAFScript(UDAFScript {
                 code: code.to_string(),
                 arg_types,
-                state_types,
+                state_fields,
                 return_type,
                 language: language.to_string(),
                 runtime_version,

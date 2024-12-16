@@ -55,10 +55,11 @@ message UDAFScript {
 
   string code = 1;
   string language = 2;
-  repeated DataType arg_types = 3;
-  repeated DataType state_types = 4;
-  DataType return_type = 5;
-  string runtime_version = 6;
+  string runtime_version = 3;
+  DataType return_type = 4;
+  repeated DataType arg_types = 5;
+  repeated string state_names = 6;
+  repeated DataType state_types = 7;
 }
 
 message UserDefinedFunction {
