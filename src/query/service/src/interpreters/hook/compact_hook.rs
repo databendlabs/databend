@@ -204,6 +204,8 @@ async fn compact_table(
                     filters: None,
                     limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                     cluster_type: ClusterType::Linear,
+                    metadata: Default::default(),
+                    bind_context: Default::default(),
                 });
                 let s_expr = SExpr::create_leaf(Arc::new(recluster));
                 let recluster_interpreter =

@@ -1109,6 +1109,8 @@ impl Binder {
                     limit,
                     filters,
                     cluster_type: ClusterType::Linear,
+                    metadata: self.metadata.clone(),
+                    bind_context: Default::default(),
                 });
                 SExpr::create_leaf(Arc::new(recluster))
             }
@@ -1172,7 +1174,7 @@ impl Binder {
                     unreachable!()
                 };
                 let mut bind_context = BindContext::new();
-                let (mut s_expr, _) = self.bind_query(&mut bind_context, query)?;
+                let (mut s_expr, new_bind_context) = self.bind_query(&mut bind_context, query)?;
                 if tbl.change_tracking_enabled() {
                     s_expr = set_update_stream_columns(&s_expr)?;
                 }
@@ -1184,6 +1186,8 @@ impl Binder {
                         limit,
                         filters,
                         cluster_type: ClusterType::Hilbert,
+                        metadata: self.metadata.clone(),
+                        bind_context: Box::new(new_bind_context),
                     })),
                     Arc::new(s_expr),
                 )

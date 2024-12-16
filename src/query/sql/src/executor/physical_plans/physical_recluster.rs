@@ -55,6 +55,7 @@ impl PhysicalPlanBuilder {
             filters,
             limit,
             cluster_type,
+            ..
         } = recluster;
 
         let tenant = self.ctx.get_tenant();

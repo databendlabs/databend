@@ -150,8 +150,8 @@ impl ReclusterTableInterpreter {
             .acquire_table_lock(&plan.catalog, &plan.database, &plan.table, &self.lock_opt)
             .await?;
 
-        let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-        let physical_plan = match builder.build(&self.s_expr, HashSet::new()).await {
+        let mut builder = PhysicalPlanBuilder::new(plan.metadata.clone(), self.ctx.clone(), false);
+        let physical_plan = match builder.build(&self.s_expr, plan.bind_context.column_set()).await {
             Ok(res) => res,
             Err(e) => {
                 return if e.code() == ErrorCode::NO_NEED_TO_RECLUSTER {
