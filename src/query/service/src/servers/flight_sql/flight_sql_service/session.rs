@@ -89,6 +89,7 @@ impl FlightSqlServiceImpl {
         password: String,
         client_ip: Option<&str>,
     ) -> Result<Arc<Session>, Status> {
+        let user_api = UserApiProvider::instance();
         let session_manager = SessionManager::instance();
         let session = session_manager
             .create_session(SessionType::FlightSQL)
@@ -98,19 +99,31 @@ impl FlightSqlServiceImpl {
         let session = session_manager.register_session(session)?;
 
         let tenant = session.get_current_tenant();
-        // TODO: verify network policy
-        let _network_policy = session
-            .get_settings()
-            .get_network_policy()
-            .unwrap_or_default();
 
         let identity = UserIdentity::new(&user, "%");
-        let mut user = UserApiProvider::instance()
+        let mut user = user_api
             .get_user_with_client_ip(&tenant, identity.clone(), client_ip)
             .await
             .map_err(|e| status!("get_user fail {}", e))?;
+
+        if !user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+        {
+            let global_network_policy = session
+                .get_settings()
+                .get_network_policy()
+                .unwrap_or_default();
+            // check global network policy if user is not super
+            if !global_network_policy.is_empty() {
+                user_api
+                    .enforce_network_policy(&tenant, &global_network_policy, client_ip.as_deref())
+                    .await?;
+            }
+        }
+
         // Check password policy for login
-        let need_change = UserApiProvider::instance()
+        let need_change = user_api
             .check_login_password(&tenant, identity.clone(), &user)
             .await
             .map_err(|e| status!("not compliant with password policy {}", e))?;
@@ -141,7 +154,7 @@ impl FlightSqlServiceImpl {
             _ => Err(Status::unauthenticated("wrong auth type")),
         };
 
-        UserApiProvider::instance()
+        user_api
             .update_user_login_result(tenant, identity, authed.is_ok(), &user)
             .await?;
         authed?;
