@@ -24,7 +24,6 @@ use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
@@ -259,7 +258,7 @@ impl ExchangeInjector for AggregateInjector {
         let params = self.aggregator_params.clone();
 
         let operator = DataOperator::instance().operator();
-        let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
+        let location_prefix = self.ctx.query_id_spill_prefix();
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
@@ -285,7 +284,7 @@ impl ExchangeInjector for AggregateInjector {
     ) -> Result<()> {
         let params = self.aggregator_params.clone();
         let operator = DataOperator::instance().operator();
-        let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
+        let location_prefix = self.ctx.query_id_spill_prefix();
 
         let schema = shuffle_params.schema.clone();
         let local_id = &shuffle_params.executor_id;

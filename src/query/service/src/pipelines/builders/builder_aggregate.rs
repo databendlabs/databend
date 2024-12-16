@@ -23,7 +23,6 @@ use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::executor::physical_plans::AggregateExpand;
@@ -162,8 +161,8 @@ impl PipelineBuilder {
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if !self.is_exchange_neighbor {
             let operator = DataOperator::instance().operator();
-            let location_prefix =
-                query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
+            let location_prefix = ctx.query_id_spill_prefix();
+
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
                     self.ctx.clone(),

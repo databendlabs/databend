@@ -232,7 +232,7 @@ async fn plan_sql(
     let mut planner = Planner::new_with_query_executor(
         ctx.clone(),
         Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
-            ctx.clone(),
+            ctx.as_ref(),
         ))),
     );
 

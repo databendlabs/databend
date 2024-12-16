@@ -965,7 +965,7 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            let pipeline_ctx = QueryContext::create_from(ctx.clone());
+            let pipeline_ctx = QueryContext::create_from(ctx.as_ref());
 
             unsafe {
                 pipeline_ctx

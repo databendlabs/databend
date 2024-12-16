@@ -33,8 +33,10 @@ use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
@@ -140,7 +142,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
-#[derive(Clone)]
 pub struct QueryContext {
     version: String,
     mysql_version: String,
@@ -155,13 +156,14 @@ pub struct QueryContext {
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
+    spilled_files: Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
 }
 
 impl QueryContext {
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details
-    pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
+    pub fn create_from(other: &QueryContext) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
 
@@ -181,6 +183,7 @@ impl QueryContext {
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
             m_cte_temp_table: Arc::new(Default::default()),
+            spilled_files: Arc::new(Default::default()),
         })
     }
 
@@ -355,6 +358,38 @@ impl QueryContext {
 
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
+    }
+
+    pub fn add_spill_file(
+        &self,
+        location: crate::spillers::Location,
+        layout: crate::spillers::Layout,
+    ) {
+        let mut w = self.spilled_files.write();
+        w.insert(location, layout);
+    }
+
+    pub fn get_spill_layout(
+        &self,
+        location: &crate::spillers::Location,
+    ) -> Option<crate::spillers::Layout> {
+        let r = self.spilled_files.read();
+        r.get(location).cloned()
+    }
+
+    pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
+        let r = self.spilled_files.read();
+        r.keys().cloned().collect()
+    }
+
+    pub fn query_tenant_spill_prefix(&self) -> String {
+        let tenant = self.get_tenant().tenant_name();
+        format!("_query_spill/{}", tenant)
+    }
+
+    pub fn query_id_spill_prefix(&self) -> String {
+        let tenant = self.get_tenant().tenant_name();
+        format!("_query_spill/{}/{}", tenant, self.get_id())
     }
 
     #[async_backtrace::framed]
@@ -1533,6 +1568,39 @@ impl TrySpawn for QueryContext {
 impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
+    }
+}
+
+impl Drop for QueryContext {
+    fn drop(&mut self) {
+        drop_guard(move || {
+            let r = self.spilled_files.read();
+
+            let remote_spill_files = r
+                .iter()
+                .map(|(k, _)| k)
+                .filter_map(|l| match l {
+                    crate::spillers::Location::Remote(r) => Some(r),
+                    _ => None,
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+
+            if !remote_spill_files.is_empty() {
+                let joined_contents = remote_spill_files.join("\n");
+                let path = "xxx";
+
+                let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
+                let op = DataOperator::instance().operator();
+
+                if let Err(e) = GlobalIORuntime::instance().block_on(async move {
+                    op.write(path, joined_contents).await?;
+                    Ok(())
+                }) {
+                    log::error!("create spill meta file error: {}", e);
+                }
+            }
+        })
     }
 }
 
