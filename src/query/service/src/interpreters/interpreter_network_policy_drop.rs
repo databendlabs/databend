@@ -62,8 +62,8 @@ impl Interpreter for DropNetworkPolicyInterpreter {
             .unwrap_or_default();
         if global_network_policy == plan.name {
             return Err(ErrorCode::NetworkPolicyIsUsedByUser(format!(
-                "network policy `{}` is global policy, cannot be dropped",
-                name,
+                "network policy `{}` is global applied, cannot be dropped",
+                global_network_policy,
             )));
         }
 
