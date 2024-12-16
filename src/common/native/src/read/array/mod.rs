@@ -31,5 +31,7 @@ mod struct_;
 pub use struct_::*;
 mod list;
 pub use list::*;
+mod interval;
 mod map;
+pub use interval::*;
 pub use map::*;

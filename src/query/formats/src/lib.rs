@@ -16,6 +16,8 @@
 #![feature(box_patterns)]
 #![feature(cursor_split)]
 
+extern crate core;
+
 mod binary;
 mod clickhouse;
 mod common_settings;

@@ -54,14 +54,19 @@ fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> Data
     DataType::Binary
 }
 
+pub fn has_order_field(schema: &DataSchema) -> bool {
+    schema
+        .fields
+        .last()
+        .is_some_and(|f| f.name() == ORDER_COL_NAME)
+}
+
 #[inline(always)]
 pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) -> DataSchemaRef {
-    if let Some(f) = schema.fields.last()
-        && f.name() == ORDER_COL_NAME
-    {
+    if has_order_field(&schema) {
         schema
     } else {
-        let mut fields = schema.fields().clone();
+        let mut fields = schema.fields.clone();
         fields.push(DataField::new(
             ORDER_COL_NAME,
             order_field_type(&schema, desc),

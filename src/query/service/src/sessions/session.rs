@@ -285,6 +285,16 @@ impl Session {
     }
 
     #[async_backtrace::framed]
+    pub async fn set_current_warehouse(&self, w: Option<String>) -> Result<()> {
+        self.privilege_mgr().set_current_warehouse(w).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_current_warehouse(&self) -> Option<String> {
+        self.session_ctx.get_current_warehouse()
+    }
+
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         &self,
         object: &GrantObject,

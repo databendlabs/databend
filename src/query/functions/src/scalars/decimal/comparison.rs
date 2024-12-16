@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
-use databend_common_expression::vectorize_2_arg;
+use databend_common_expression::vectorize_cmp_2_arg;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -290,7 +290,7 @@ where
 {
     let a = a.try_downcast().unwrap();
     let b = b.try_downcast().unwrap();
-    let value = vectorize_2_arg::<DecimalType<T>, DecimalType<T>, BooleanType>(f)(a, b, ctx);
+    let value = vectorize_cmp_2_arg::<DecimalType<T>, DecimalType<T>>(f)(a, b, ctx);
     value.upcast()
 }
 

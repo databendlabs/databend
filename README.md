@@ -59,31 +59,29 @@
 
 ![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
 
+
 ## 🚀 Why Databend
 
-- **Cloud-Native**: Integrates with AWS S3, Azure Blob, Google Cloud, and more.
+- **Full Control—Cloud + On-Prem**: Deploy on cloud or on-prem to suit your needs and maintain full control.  
 
-- **High Performance**: Rust-built, with cutting-edge, high-speed vectorized execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top).
+- **Blazing-Fast Performance**: Built with Rust for efficient, high-speed vectorized query execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top)  
 
-- **Cost-Effective**: Designed for scalable storage and computation, reducing costs while enhancing performance. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch).
+- **Cost-Effective**: Scalable architecture that optimizes performance while reducing storage and compute costs. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch)  
 
-- **AI-Powered Analytics**: Enables advanced analytics with [AI Functions](https://docs.databend.com/guides/ai-functions/).
+- **AI-Enhanced Analytics**: Leverage built-in [AI Functions](https://docs.databend.com/guides/ai-functions/) for smarter data insights.  
 
-- **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
+- **Simplified ETL**: Direct data ingestion without the need for external ETL tools, streamlining the process. 👉 [Data Loading](https://docs.databend.com/guides/load-data/)  
 
-- **Real-Time CDC**: Supports real-time incremental data updates to keep data current and accurate. 👉 [Stream](https://docs.databend.com/guides/load-data/continuous-data-pipelines/stream)
+- **Real-Time Data Updates**: Keep your analytics up-to-date with real-time incremental data updates. 👉 [Stream](https://docs.databend.com/guides/load-data/continuous-data-pipelines/stream)  
 
-- **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, GEO, and more.
+- **Advanced Indexing**: Boost query performance with [Virtual Column](https://docs.databend.com/guides/performance/virtual-column), [Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index), and [Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index).  
 
-- **ACID Transactions**: Ensures data integrity with atomic, consistent, isolated, and durable operations.
+- **ACID Compliance + Version Control**: Ensure reliable transactions with full ACID compliance and Git-like versioning.  
 
-- **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
+- **Schema Flexibility**: Effortlessly handle semi-structured data with the flexible [VARIANT](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) data type.  
 
-- **Schemaless**: [VARIANT data type](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) enabling schemaless data storage and flexible data modeling.
+- **Community-Driven Growth**: Open-source and continuously evolving with contributions from a global community.
 
-- **Flexible Indexing**: [Virtual Column](https://docs.databend.com/guides/performance/virtual-column), [Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index), and [Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index), for faster data retrieval.
-
-- **Community-Driven**: Join a welcoming community for a user-friendly cloud analytics experience.
 
 ## 📐 Architecture
 

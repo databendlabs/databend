@@ -279,18 +279,3 @@ select salary, dict_get(mysql_dic_salary, 'id', salary), dict_get(mysql_dic_sala
 1000.2 3 Lily 41 1
 3000.55 4 Tom 55 0
 NULL NULL NULL NULL NULL
-
-# There may be multiple rows per active value in the `user` table. So the result is nondeterminity. It could also be:
-# 1 3 Lily 41 1000.2
-# 0 4 Tom 55 3000.55
-# 1 3 Lily 41 1000.2
-# 0 4 Tom 55 3000.55
-# NULL NULL NULL NULL NULL
-query TITIF
-select active, dict_get(mysql_dic_active, 'id', active), dict_get(mysql_dic_active, 'name', active), dict_get(mysql_dic_active, 'age', active), dict_get(mysql_dic_active, 'salary', active) from mysql_t
-----
-1 1 Alice 24 100.0
-0 2 Bob 35 200.1
-1 1 Alice 24 100.0
-0 2 Bob 35 200.1
-NULL NULL NULL NULL NULL

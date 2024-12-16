@@ -220,6 +220,7 @@ pub enum AccountMgrLevel {
     Table(Option<String>, String),
     UDF(String),
     Stage(String),
+    Warehouse(String),
 }
 
 impl Display for AccountMgrLevel {
@@ -242,6 +243,7 @@ impl Display for AccountMgrLevel {
             }
             AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}"),
             AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}"),
+            AccountMgrLevel::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
         }
     }
 }

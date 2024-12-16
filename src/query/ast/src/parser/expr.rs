@@ -1698,6 +1698,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });
+    let ty_interval = value(TypeName::Interval, rule! { INTERVAL });
     let ty_datetime = map(
         rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
         |(_, _)| TypeName::Timestamp,
@@ -1738,6 +1739,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             rule! {
             ( #ty_date
             | #ty_datetime
+            | #ty_interval
             | #ty_binary
             | #ty_string
             | #ty_variant

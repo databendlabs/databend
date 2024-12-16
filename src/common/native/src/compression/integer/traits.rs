@@ -12,21 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::hash::Hash;
 
 use databend_common_column::types::i256;
+use databend_common_column::types::months_days_micros;
 use databend_common_column::types::NativeType;
 
 pub trait IntegerType: NativeType + PartialOrd + Hash + Eq {
-    fn as_i64(&self) -> i64;
+    fn compare_i64(&self, i: i64) -> Ordering;
+    const USE_COMMON_COMPRESSION: bool;
 }
 
 macro_rules! integer_type {
     ($type:ty) => {
         impl IntegerType for $type {
-            fn as_i64(&self) -> i64 {
-                *self as i64
+            fn compare_i64(&self, i: i64) -> Ordering {
+                (*self as i64).cmp(&i)
             }
+            const USE_COMMON_COMPRESSION: bool = false;
         }
     };
 }
@@ -39,14 +43,19 @@ integer_type!(i8);
 integer_type!(i16);
 integer_type!(i32);
 integer_type!(i64);
+integer_type!(i128);
 
-impl IntegerType for i128 {
-    fn as_i64(&self) -> i64 {
-        *self as i64
-    }
-}
 impl IntegerType for i256 {
-    fn as_i64(&self) -> i64 {
-        self.0.as_i64()
+    fn compare_i64(&self, i: i64) -> Ordering {
+        self.0.as_i64().cmp(&i)
     }
+    const USE_COMMON_COMPRESSION: bool = false;
+}
+
+// pub struct months_days_micros(pub i128);
+impl IntegerType for months_days_micros {
+    fn compare_i64(&self, i: i64) -> Ordering {
+        (self.0 as i64).cmp(&i)
+    }
+    const USE_COMMON_COMPRESSION: bool = true;
 }

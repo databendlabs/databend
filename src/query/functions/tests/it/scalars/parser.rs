@@ -608,6 +608,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::String => DataType::String,
         databend_common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
         databend_common_ast::ast::TypeName::Date => DataType::Date,
+        databend_common_ast::ast::TypeName::Interval => DataType::Interval,
         databend_common_ast::ast::TypeName::Array(item_type) => {
             DataType::Array(Box::new(transform_data_type(*item_type)))
         }

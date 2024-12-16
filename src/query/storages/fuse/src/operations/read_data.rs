@@ -219,8 +219,10 @@ impl FuseTable {
                         {
                             Ok((_, partitions)) => {
                                 for part in partitions.partitions {
-                                    // ignore the error, the sql may be killed or early stop
-                                    let _ = tx.send(Ok(part)).await;
+                                    // the sql may be killed or early stop, ignore the error
+                                    if let Err(_e) = tx.send(Ok(part)).await {
+                                        break;
+                                    }
                                 }
                             }
                             Err(err) => {

@@ -117,6 +117,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         let validity = column_merge_validity(col, validity.cloned());
         let not_null_column = &[col.remove_nullable()];
         let not_null_column = not_null_column.into();
+        let validity = Bitmap::map_all_sets_to_none(validity);
+
         self.nested
             .accumulate(place, not_null_column, validity.as_ref(), input_rows)?;
 

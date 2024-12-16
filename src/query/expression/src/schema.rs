@@ -207,6 +207,7 @@ pub enum TableDataType {
     Variant,
     Geometry,
     Geography,
+    Interval,
 }
 
 impl DataSchema {
@@ -1178,6 +1179,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Boolean => DataType::Boolean,
             TableDataType::Binary => DataType::Binary,
             TableDataType::String => DataType::String,
+            TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
             TableDataType::Decimal(ty) => DataType::Decimal(*ty),
             TableDataType::Timestamp => DataType::Timestamp,
@@ -1430,6 +1432,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Timestamp => Ok(TableDataType::Timestamp),
         DataType::Decimal(x) => Ok(TableDataType::Decimal(*x)),
         DataType::Date => Ok(TableDataType::Date),
+        DataType::Interval => Ok(TableDataType::Interval),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
             inner_type,
         )?))),

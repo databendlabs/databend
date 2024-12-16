@@ -187,6 +187,7 @@ impl Binder {
             }
             AccountMgrLevel::UDF(udf) => Ok(GrantObject::UDF(udf.clone())),
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
+            AccountMgrLevel::Warehouse(w) => Ok(GrantObject::Warehouse(w.clone())),
         }
     }
 
@@ -247,6 +248,7 @@ impl Binder {
             }
             AccountMgrLevel::UDF(udf) => Ok(vec![GrantObject::UDF(udf.clone())]),
             AccountMgrLevel::Stage(stage) => Ok(vec![GrantObject::Stage(stage.clone())]),
+            AccountMgrLevel::Warehouse(w) => Ok(vec![GrantObject::Warehouse(w.clone())]),
         }
     }
 

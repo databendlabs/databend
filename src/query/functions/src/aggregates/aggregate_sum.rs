@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use boolean::TrueIdxIter;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
@@ -28,6 +29,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
 use super::assert_unary_arguments;
@@ -89,14 +91,19 @@ where
     TSum: Number + std::ops::AddAssign,
 {
     match validity {
-        Some(v) if v.null_count() > 0 => {
+        Some(v) => {
             let mut sum = TSum::default();
-            inner.iter().zip(v.iter()).for_each(|(t, b)| {
-                if b {
-                    sum += t.as_();
-                }
-            });
-
+            if v.true_count() as f64 / v.len() as f64 >= SELECTIVITY_THRESHOLD {
+                inner.iter().zip(v.iter()).for_each(|(t, b)| {
+                    if b {
+                        sum += t.as_();
+                    }
+                });
+            } else {
+                TrueIdxIter::new(v.len(), Some(v)).for_each(|idx| {
+                    sum += unsafe { inner.get_unchecked(idx).as_() };
+                });
+            }
             sum
         }
         _ => {

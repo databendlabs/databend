@@ -36,7 +36,7 @@ use enumflags2::BitFlags;
     num_derive::FromPrimitive,
 )]
 pub enum UserPrivilegeType {
-    // UsagePrivilege is a synonym for “no privileges”, if object is udf, means can use this udf
+    // UsagePrivilege is a synonym for “no privileges”, if object is udf/warehouse, means can use this udf/warehouse
     Usage = 1 << 0,
     // Privilege to select rows from tables in a database.
     Select = 1 << 2,
@@ -199,10 +199,12 @@ impl UserPrivilegeSet {
         let database_privs = Self::available_privileges_on_database(false);
         let stage_privs_without_ownership = Self::available_privileges_on_stage(false);
         let udf_privs_without_ownership = Self::available_privileges_on_udf(false);
+        let wh_privs_without_ownership = Self::available_privileges_on_warehouse();
         let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
+            | wh_privs_without_ownership.privileges
             | udf_privs_without_ownership.privileges)
             .into()
     }
@@ -230,6 +232,10 @@ impl UserPrivilegeSet {
         } else {
             make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
         }
+    }
+
+    pub fn available_privileges_on_warehouse() -> Self {
+        make_bitflags!(UserPrivilegeType::{  Usage }).into()
     }
 
     pub fn available_privileges_on_udf(available_ownership: bool) -> Self {

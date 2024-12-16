@@ -33,6 +33,7 @@ fn test_binary() {
     for is_try in [false, true] {
         test_from_base64(file, is_try);
         test_from_hex(file, is_try);
+        test_to_binary(file, is_try);
     }
 }
 
@@ -90,4 +91,43 @@ fn test_from_base64(file: &mut impl Write, is_try: bool) {
         StringType::from_data(vec!["QWJj", "MTIz"]),
     )]);
     run_ast(file, format!("{prefix}from_base64('!@#')"), &[]);
+}
+
+fn test_to_binary(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(
+        file,
+        format!("{prefix}to_binary(parse_json('{{\"k1\":\"val\",\"k2\":100}}'))"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}to_binary(parse_json('10'))"), &[]);
+    run_ast(file, format!("{prefix}to_binary(parse_json('123456'))"), &[
+    ]);
+    run_ast(
+        file,
+        format!("{prefix}to_binary(parse_json('\"abcd\"'))"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}to_binary(to_bitmap('1,2,3'))"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}to_binary(to_bitmap('100,25,50,700'))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))"),
+        &[],
+    );
 }

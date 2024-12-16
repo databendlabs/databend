@@ -528,6 +528,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
+                ("enable_experimental_stream_sort_spilling", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable experimental stream sort spilling",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
@@ -965,16 +971,16 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("flight_connection_max_retry_times", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(3),
+                    value: UserSettingValue::UInt64(0),
                     desc: "The maximum retry count for cluster flight. Disable if 0.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=10)),
                 }),
                 ("flight_connection_retry_interval", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(3),
+                    value: UserSettingValue::UInt64(1),
                     desc: "The retry interval of cluster flight is in seconds.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=30)),
+                    range: Some(SettingRange::Numeric(0..=10)),
                 }),
             ]);
 

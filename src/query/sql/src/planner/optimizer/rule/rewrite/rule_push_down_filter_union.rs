@@ -72,6 +72,11 @@ impl Rule for RulePushDownFilterUnion {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let union_s_expr = s_expr.child(0)?;
         let union: UnionAll = union_s_expr.plan().clone().try_into()?;
+        if !union.cte_scan_names.is_empty() {
+            // If the union has cte scan names, it's not allowed to push down filter.
+            state.add_result(s_expr.clone());
+            return Ok(());
+        }
 
         // Create a filter which matches union's right child.
         let index_pairs: HashMap<IndexType, IndexType> = union

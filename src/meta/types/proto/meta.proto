@@ -111,10 +111,17 @@ message TxnCondition {
   string key = 1;
 
   oneof target {
-    // used when compare value
+    // Compare the stored value of `key` against the given value.
     bytes value = 2;
-    // used when compare seq
+
+    // Compare the stored seq of `key` against the given seq.
     uint64 seq = 3;
+
+    // Compare the count of keys having the prefix `key` against the given value.
+    //
+    // Usually when using this option, append a slash `/` to the end of the prefix `key`.
+    // For example, if you want to count the keys with prefix `foo`, you should use `foo/` as the `key`.
+    uint64 keys_with_prefix = 5;
   }
 
   // the expected result of condition, if `expected` match the condition result,

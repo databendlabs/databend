@@ -190,6 +190,10 @@ impl Bitmap {
         self.unset_bits
     }
 
+    pub fn true_count(&self) -> usize {
+        self.len() - self.unset_bits
+    }
+
     /// Slices `self`, offsetting by `offset` and truncating up to `length` bits.
     /// # Panic
     /// Panics iff `offset + length > self.length`, i.e. if the offset and `length`
@@ -460,25 +464,13 @@ impl Bitmap {
         MutableBitmap::from_trusted_len_iter(iterator).into()
     }
 
-    /// Creates a new [`Bitmap`] from a fallible iterator of booleans.
+    /// Invokes `f` with values `0..len` collecting the boolean results into a new `MutableBuffer`
+    ///
+    /// This is similar to `from_trusted_len_iter`, however, can be significantly faster
+    /// as it eliminates the conditional `Iterator::next`
     #[inline]
-    pub fn try_from_trusted_len_iter<E, I: TrustedLen<Item = std::result::Result<bool, E>>>(
-        iterator: I,
-    ) -> std::result::Result<Self, E> {
-        Ok(MutableBitmap::try_from_trusted_len_iter(iterator)?.into())
-    }
-
-    /// Creates a new [`Bitmap`] from a fallible iterator of booleans.
-    /// # Safety
-    /// The iterator must report an accurate length.
-    #[inline]
-    pub unsafe fn try_from_trusted_len_iter_unchecked<
-        E,
-        I: Iterator<Item = std::result::Result<bool, E>>,
-    >(
-        iterator: I,
-    ) -> std::result::Result<Self, E> {
-        Ok(MutableBitmap::try_from_trusted_len_iter_unchecked(iterator)?.into())
+    pub fn collect_bool<F: FnMut(usize) -> bool>(len: usize, f: F) -> Self {
+        MutableBitmap::collect_bool(len, f).into()
     }
 
     /// Create a new [`Bitmap`] from an arrow [`NullBuffer`]
@@ -498,6 +490,14 @@ impl Bitmap {
 
     pub fn into_array_data(&self) -> ArrayData {
         ArrayData::from(self)
+    }
+
+    pub fn map_all_sets_to_none(v: Option<Bitmap>) -> Option<Bitmap> {
+        match v {
+            Some(v) if v.unset_bits == 0 => None,
+            None => None,
+            other => other,
+        }
     }
 }
 

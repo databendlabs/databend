@@ -78,3 +78,82 @@ impl fmt::Display for Cmd {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::Endpoint;
+    use crate::TxnCondition;
+    use crate::TxnOp;
+    use crate::TxnRequest;
+    use crate::UpsertKV;
+
+    #[test]
+    fn test_serde() -> anyhow::Result<()> {
+        // AddNode, override = true
+        let cmd = super::Cmd::AddNode {
+            node_id: 1,
+            node: super::Node::new("n1", Endpoint::new("e1", 12)),
+            overriding: true,
+        };
+
+        let want = r#"{"AddNode":{"node_id":1,"node":{"name":"n1","endpoint":{"addr":"e1","port":12},"grpc_api_advertise_address":null},"overriding":true}}"#;
+
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // AddNode, override = false
+        let cmd = super::Cmd::AddNode {
+            node_id: 1,
+            node: super::Node::new("n1", Endpoint::new("e1", 12)),
+            overriding: false,
+        };
+
+        let want = r#"{"AddNode":{"node_id":1,"node":{"name":"n1","endpoint":{"addr":"e1","port":12},"grpc_api_advertise_address":null},"overriding":false}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // Decode from absent override field
+        let want = r#"{"AddNode":{"node_id":1,"node":{"name":"n1","endpoint":{"addr":"e1","port":12},"grpc_api_advertise_address":null}}}"#;
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // RemoveNode
+        let cmd = super::Cmd::RemoveNode { node_id: 1 };
+        let want = r#"{"RemoveNode":{"node_id":1}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // UpsertKV
+        let cmd = super::Cmd::UpsertKV(UpsertKV::insert("k", b"v"));
+        let want = r#"{"UpsertKV":{"key":"k","seq":{"Exact":0},"value":{"Update":[118]},"value_meta":null}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // Transaction
+        let cmd = super::Cmd::Transaction(TxnRequest {
+            condition: vec![TxnCondition::eq_value("k", b("v"))],
+            if_then: vec![TxnOp::put_with_ttl(
+                "k",
+                b("v"),
+                Some(Duration::from_millis(100)),
+            )],
+            else_then: vec![],
+        });
+        let want = concat!(
+            r#"{"Transaction":{"#,
+            r#""condition":[{"key":"k","expected":0,"target":{"Value":[118]}}],"#,
+            r#""if_then":[{"request":{"Put":{"key":"k","value":[118],"prev_value":true,"expire_at":null,"ttl_ms":100}}}],"#,
+            r#""else_then":[]"#,
+            r#"}}"#
+        );
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        Ok(())
+    }
+
+    fn b(x: impl ToString) -> Vec<u8> {
+        x.to_string().into_bytes()
+    }
+}

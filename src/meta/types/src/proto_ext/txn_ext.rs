@@ -14,6 +14,9 @@
 
 use std::time::Duration;
 
+use pb::txn_condition::ConditionResult;
+use pb::txn_condition::Target;
+
 use crate::protobuf as pb;
 use crate::seq_value::SeqV;
 use crate::TxnRequest;
@@ -33,15 +36,45 @@ impl TxnRequest {
 impl pb::TxnCondition {
     /// Create a txn condition that checks if the `seq` matches.
     pub fn eq_seq(key: impl ToString, seq: u64) -> Self {
-        Self::match_seq(key, pb::txn_condition::ConditionResult::Eq, seq)
+        Self::match_seq(key, ConditionResult::Eq, seq)
     }
 
     /// Create a txn condition that checks if the `seq` match.
-    pub fn match_seq(key: impl ToString, op: pb::txn_condition::ConditionResult, seq: u64) -> Self {
+    pub fn match_seq(key: impl ToString, op: ConditionResult, seq: u64) -> Self {
         Self {
             key: key.to_string(),
             expected: op as i32,
-            target: Some(pb::txn_condition::Target::Seq(seq)),
+            target: Some(Target::Seq(seq)),
+        }
+    }
+
+    pub fn eq_value(key: impl ToString, value: Vec<u8>) -> Self {
+        Self::match_value(key, ConditionResult::Eq, value)
+    }
+
+    pub fn match_value(key: impl ToString, op: ConditionResult, value: Vec<u8>) -> Self {
+        Self {
+            key: key.to_string(),
+            expected: op as i32,
+            target: Some(Target::Value(value)),
+        }
+    }
+
+    /// Assert that there are exact `n` keys with the given prefix.
+    ///
+    /// Usually, the prefix should end with a slash `/`.
+    pub fn keys_with_prefix(prefix: impl ToString, n: u64) -> Self {
+        Self::match_keys_with_prefix(prefix, ConditionResult::Eq, n)
+    }
+
+    /// Compare the number of keys with the given prefix against the given `count`.
+    ///
+    /// Usually, the prefix should end with a slash `/`.
+    pub fn match_keys_with_prefix(prefix: impl ToString, op: ConditionResult, count: u64) -> Self {
+        Self {
+            key: prefix.to_string(),
+            expected: op as i32,
+            target: Some(Target::KeysWithPrefix(count)),
         }
     }
 }

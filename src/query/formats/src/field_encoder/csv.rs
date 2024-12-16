@@ -137,7 +137,11 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(buf.as_bytes(), out_buf);
             }
 
-            Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) | Column::Variant(..) => {
+            Column::Date(..)
+            | Column::Timestamp(..)
+            | Column::Bitmap(..)
+            | Column::Variant(..)
+            | Column::Interval(_) => {
                 let mut buf = Vec::new();
                 self.simple.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);

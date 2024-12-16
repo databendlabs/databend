@@ -13016,6 +13016,7 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
+            force: false,
         },
     },
 )
@@ -13035,6 +13036,7 @@ VacuumDropTable(
                 false,
             ),
             limit: None,
+            force: false,
         },
     },
 )
@@ -13054,6 +13056,7 @@ VacuumDropTable(
                 true,
             ),
             limit: None,
+            force: false,
         },
     },
 )
@@ -13080,6 +13083,7 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
+            force: false,
         },
     },
 )
@@ -13108,6 +13112,7 @@ VacuumDropTable(
             limit: Some(
                 10,
             ),
+            force: false,
         },
     },
 )
@@ -16070,6 +16075,94 @@ Revoke(
                 username: "test-grant",
                 hostname: "%",
             },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
         ),
     },
 )

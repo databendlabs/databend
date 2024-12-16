@@ -19,6 +19,8 @@ use std::iter::TrustedLen;
 use std::ops::Range;
 use std::sync::Arc;
 
+use databend_common_base::vec_ext::VecExt;
+
 use super::utils::count_zeros;
 use super::utils::fmt;
 use super::utils::get_bit;
@@ -266,7 +268,7 @@ impl MutableBitmap {
     #[inline]
     pub unsafe fn push_unchecked(&mut self, value: bool) {
         if self.length % 8 == 0 {
-            self.buffer.push(0);
+            self.buffer.push_unchecked(0);
         }
         let byte = self.buffer.as_mut_slice().last_mut().unwrap();
         *byte = set(*byte, self.length % 8, value);
@@ -467,24 +469,11 @@ impl FromIterator<bool> for MutableBitmap {
 /// The iterator must be trustedLen and its len must be least `len`.
 #[inline]
 unsafe fn get_chunk_unchecked(iterator: &mut impl Iterator<Item = bool>) -> u64 {
-    let mut byte = 0u64;
-    let mut mask;
-    for i in 0..8 {
-        mask = 1u64 << (8 * i);
-        for _ in 0..8 {
-            let value = match iterator.next() {
-                Some(value) => value,
-                None => unsafe { unreachable_unchecked() },
-            };
-
-            byte |= match value {
-                true => mask,
-                false => 0,
-            };
-            mask <<= 1;
-        }
+    let mut packed = 0;
+    for bit_idx in 0..64 {
+        packed |= (iterator.next().unwrap() as u64) << bit_idx;
     }
-    byte
+    packed
 }
 
 /// # Safety
@@ -521,7 +510,7 @@ unsafe fn extend_aligned_trusted_iter_unchecked(
     let remainder = additional_bits % 64;
 
     let additional = (additional_bits + 7) / 8;
-    assert_eq!(
+    debug_assert_eq!(
         additional,
         // a hint of how the following calculation will be done
         chunks * 8 + remainder / 8 + (remainder % 8 > 0) as usize
@@ -531,20 +520,20 @@ unsafe fn extend_aligned_trusted_iter_unchecked(
     // chunks of 64 bits
     for _ in 0..chunks {
         let chunk = get_chunk_unchecked(&mut iterator);
-        buffer.extend_from_slice(&chunk.to_le_bytes());
+        buffer.extend_from_slice_unchecked(&chunk.to_le_bytes());
     }
 
     // remaining complete bytes
     for _ in 0..(remainder / 8) {
         let byte = unsafe { get_byte_unchecked(8, &mut iterator) };
-        buffer.push(byte)
+        buffer.push_unchecked(byte)
     }
 
     // remaining bits
     let remainder = remainder % 8;
     if remainder > 0 {
         let byte = unsafe { get_byte_unchecked(remainder, &mut iterator) };
-        buffer.push(byte)
+        buffer.push_unchecked(byte)
     }
     additional_bits
 }
@@ -624,45 +613,6 @@ impl MutableBitmap {
     where I: TrustedLen<Item = bool> {
         // Safety: Iterator is `TrustedLen`
         unsafe { Self::from_trusted_len_iter_unchecked(iterator) }
-    }
-
-    /// Creates a new [`MutableBitmap`] from an iterator of booleans.
-    pub fn try_from_trusted_len_iter<E, I>(iterator: I) -> std::result::Result<Self, E>
-    where I: TrustedLen<Item = std::result::Result<bool, E>> {
-        unsafe { Self::try_from_trusted_len_iter_unchecked(iterator) }
-    }
-
-    /// Creates a new [`MutableBitmap`] from an falible iterator of booleans.
-    /// # Safety
-    /// The caller must guarantee that the iterator is `TrustedLen`.
-    pub unsafe fn try_from_trusted_len_iter_unchecked<E, I>(
-        mut iterator: I,
-    ) -> std::result::Result<Self, E>
-    where I: Iterator<Item = std::result::Result<bool, E>> {
-        let length = iterator.size_hint().1.unwrap();
-
-        let mut buffer = vec![0u8; (length + 7) / 8];
-
-        let chunks = length / 8;
-        let reminder = length % 8;
-
-        let data = buffer.as_mut_slice();
-        data[..chunks].iter_mut().try_for_each(|byte| {
-            (0..8).try_for_each(|i| {
-                *byte = set(*byte, i, iterator.next().unwrap()?);
-                Ok(())
-            })
-        })?;
-
-        if reminder != 0 {
-            let last = &mut data[chunks];
-            iterator.enumerate().try_for_each(|(i, value)| {
-                *last = set(*last, i, value?);
-                Ok(())
-            })?;
-        }
-
-        Ok(Self { buffer, length })
     }
 
     fn extend_unaligned(&mut self, slice: &[u8], offset: usize, length: usize) {
@@ -761,6 +711,45 @@ impl MutableBitmap {
         // safety: bitmap.as_slice adheres to the invariant
         unsafe {
             self.extend_from_slice_unchecked(slice, offset, length);
+        }
+    }
+
+    /// Invokes `f` with values `0..len` collecting the boolean results into a new `MutableBuffer`
+    ///
+    /// This is similar to `from_trusted_len_iter`, however, can be significantly faster
+    /// as it eliminates the conditional `Iterator::next`
+    #[inline]
+    pub fn collect_bool<F: FnMut(usize) -> bool>(len: usize, mut f: F) -> Self {
+        let mut buffer = Vec::with_capacity(len.div_ceil(64) * 8);
+
+        let chunks = len / 64;
+        let remainder = len % 64;
+        for chunk in 0..chunks {
+            let mut packed = 0;
+            for bit_idx in 0..64 {
+                let i = bit_idx + chunk * 64;
+                packed |= (f(i) as u64) << bit_idx;
+            }
+
+            // SAFETY: Already allocated sufficient capacity
+            unsafe { buffer.extend_from_slice_unchecked(&packed.to_le_bytes()) }
+        }
+
+        if remainder != 0 {
+            let mut packed = 0;
+            for bit_idx in 0..remainder {
+                let i = bit_idx + chunks * 64;
+                packed |= (f(i) as u64) << bit_idx;
+            }
+
+            // SAFETY: Already allocated sufficient capacity
+            unsafe { buffer.extend_from_slice_unchecked(&packed.to_le_bytes()) }
+        }
+
+        buffer.truncate(len.div_ceil(8));
+        Self {
+            buffer,
+            length: len,
         }
     }
 
