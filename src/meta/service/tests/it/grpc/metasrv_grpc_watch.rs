@@ -307,13 +307,7 @@ async fn test_watch() -> anyhow::Result<()> {
             },
         ];
 
-        let else_then: Vec<TxnOp> = vec![];
-
-        let txn = TxnRequest {
-            condition: conditions,
-            if_then,
-            else_then,
-        };
+        let txn = TxnRequest::new(conditions, if_then);
 
         seq = 7;
 
@@ -361,11 +355,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     {
         let client = make_client(&addr)?;
 
-        let mut txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![],
-            else_then: vec![],
-        };
+        let mut txn = TxnRequest::new(vec![], vec![]);
 
         // Every apply() will clean all expired keys.
         for i in 0..(32 + 1) {
@@ -405,19 +395,15 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 
     info!("--- apply another txn in another thread to override keys");
     {
-        let txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![
-                TxnOp::put("w_b1", b("w_b1_override")),
-                TxnOp::delete("w_b2"),
-                TxnOp {
-                    request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
-                        prefix: s("w_b3"),
-                    })),
-                },
-            ],
-            else_then: vec![],
-        };
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put("w_b1", b("w_b1_override")),
+            TxnOp::delete("w_b2"),
+            TxnOp {
+                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                    prefix: s("w_b3"),
+                })),
+            },
+        ]);
 
         let client = make_client(&addr)?;
         let _h = databend_common_base::runtime::spawn(async move {
