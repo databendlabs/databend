@@ -45,6 +45,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
+use crate::types::interval::interval_to_string;
 use crate::types::map::KvPair;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
@@ -126,6 +127,10 @@ impl Debug for ScalarRef<'_> {
             ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
+            ScalarRef::Interval(i) => {
+                let interval = interval_to_string(i);
+                write!(f, "{interval}")
+            }
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -193,6 +198,7 @@ impl Debug for Column {
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
+            Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Bitmap(col) => write!(f, "{col:?}"),
@@ -223,6 +229,7 @@ impl Display for ScalarRef<'_> {
             ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
+            ScalarRef::Interval(interval) => write!(f, "{}", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -484,6 +491,7 @@ impl Display for DataType {
             DataType::Decimal(decimal) => write!(f, "{decimal}"),
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Date => write!(f, "Date"),
+            DataType::Interval => write!(f, "Interval"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -559,6 +567,7 @@ impl Display for TableDataType {
                 write!(f, ")")
             }
             TableDataType::Variant => write!(f, "Variant"),
+            TableDataType::Interval => write!(f, "Interval"),
             TableDataType::Geometry => write!(f, "Geometry"),
             TableDataType::Geography => write!(f, "Geography"),
         }
@@ -1016,6 +1025,7 @@ impl Display for Domain {
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
+            Domain::Interval(domain) => write!(f, "{:?}", domain),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),

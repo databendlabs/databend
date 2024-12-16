@@ -19,7 +19,7 @@
 use super::days_ms;
 use super::f16;
 use super::i256;
-use super::months_days_ns;
+use super::months_days_micros;
 use super::BitChunk;
 use super::BitChunkIter;
 use super::NativeType;
@@ -151,7 +151,7 @@ pub(super) use native_simd;
 // of how they are represented in the different channels.
 native_simd!(f16x32, f16, 32, u32);
 native_simd!(days_msx8, days_ms, 8, u8);
-native_simd!(months_days_nsx8, months_days_ns, 8, u8);
+native_simd!(months_days_microsx8, months_days_micros, 8, u8);
 native_simd!(i128x8, i128, 8, u8);
 native_simd!(i256x8, i256, 8, u8);
 
@@ -185,4 +185,4 @@ native!(f64, f64x8);
 native!(i128, i128x8);
 native!(i256, i256x8);
 native!(days_ms, days_msx8);
-native!(months_days_ns, months_days_nsx8);
+native!(months_days_micros, months_days_microsx8);

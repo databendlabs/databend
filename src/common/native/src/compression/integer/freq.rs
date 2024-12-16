@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::io::BufRead;
 use std::io::Read;
 
@@ -145,7 +146,12 @@ impl<T: IntegerType> IntegerCompression<T> for Freq {
             }
         }
 
-        if max_count as f64 / stats.tuple_count as f64 >= 0.9 && stats.max.as_i64() >= (1 << 8) {
+        if max_count as f64 / stats.tuple_count as f64 >= 0.9
+            && match stats.max.compare_i64(1 << 8) {
+                Ordering::Greater | Ordering::Equal => true,
+                Ordering::Less => false,
+            }
+        {
             return (stats.tuple_count - 1) as f64;
         }
 

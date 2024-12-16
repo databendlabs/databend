@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::io::BufRead;
 
 use bitpacking::BitPacker;
@@ -94,8 +95,10 @@ impl<T: IntegerType> IntegerCompression<T> for DeltaBitpacking {
     }
 
     fn compress_ratio(&self, stats: &IntegerStats<T>) -> f64 {
-        if stats.min.as_i64() < 0
-            || std::mem::size_of::<T>() != 4
+        if match stats.min.compare_i64(0) {
+            Ordering::Greater | Ordering::Equal => false,
+            Ordering::Less => true,
+        } || std::mem::size_of::<T>() != 4
             || stats.src.len() % BitPacker4x::BLOCK_LEN != 0
             || !stats.is_sorted
             || stats.null_count > 0
