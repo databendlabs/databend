@@ -140,6 +140,7 @@ impl Processor for IcebergTableSource {
             // TODO: don't use stream here.
             let stream = reader
                 .read(Box::pin(stream::iter([Ok(part.to_task())])))
+                .await
                 .map_err(|err| ErrorCode::Internal(format!("iceberg data stream read: {err:?}")))?;
             self.stream = Some(stream);
         } else {
