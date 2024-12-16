@@ -114,7 +114,7 @@ impl FlightSqlServiceImpl {
                 .unwrap_or_default();
             if !global_network_policy.is_empty() {
                 user_api
-                    .enforce_network_policy(&tenant, &global_network_policy, client_ip.as_deref())
+                    .enforce_network_policy(&tenant, &global_network_policy, client_ip)
                     .await?;
             }
         }

@@ -88,7 +88,7 @@ impl SetInterpreter {
                     // check if the network policy exists
                     let tenant = self.ctx.get_tenant();
                     let _ = UserApiProvider::instance()
-                        .get_network_policy(&tenant, &scalar)
+                        .get_network_policy(&tenant, scalar)
                         .await?;
                     self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;
