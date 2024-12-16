@@ -13,6 +13,7 @@ test = true
 [dependencies]
 
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }

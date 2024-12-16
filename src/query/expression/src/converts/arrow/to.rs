@@ -33,6 +33,7 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
+use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
@@ -187,6 +188,13 @@ impl From<&TableField> for Field {
                 );
                 ArrowDataType::LargeBinary
             }
+            TableDataType::Interval => {
+                metadata.insert(
+                    EXTENSION_KEY.to_string(),
+                    ARROW_EXT_TYPE_INTERVAL.to_string(),
+                );
+                ArrowDataType::Decimal128(38, 0)
+            }
         };
 
         Field::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
@@ -293,6 +301,7 @@ impl From<&Column> for ArrayData {
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
+            Column::Interval(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Array(col) => {
                 let child_data = ArrayData::from(&col.values);
                 let builder = ArrayDataBuilder::new(arrow_type)

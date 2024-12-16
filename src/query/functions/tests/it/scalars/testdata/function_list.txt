@@ -4009,6 +4009,8 @@ Functions overloads:
 23 to_int8(Float64 NULL) :: Int8 NULL
 24 to_int8(Boolean) :: Int8
 25 to_int8(Boolean NULL) :: Int8 NULL
+0 to_interval(String) :: Interval
+1 to_interval(String NULL) :: Interval NULL
 0 to_last_of_month(Date) :: Date
 1 to_last_of_month(Date NULL) :: Date NULL
 2 to_last_of_month(Timestamp) :: Date
@@ -4174,6 +4176,8 @@ Functions overloads:
 34 to_string(Bitmap NULL) :: String NULL
 35 to_string(Geometry) :: String
 36 to_string(Geometry NULL) :: String NULL
+37 to_string(Interval) :: String NULL
+38 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -4604,6 +4608,8 @@ Functions overloads:
 23 try_to_int8(Float64 NULL) :: Int8 NULL
 24 try_to_int8(Boolean) :: Int8 NULL
 25 try_to_int8(Boolean NULL) :: Int8 NULL
+0 try_to_interval(String) :: Interval NULL
+1 try_to_interval(String NULL) :: Interval NULL
 0 try_to_string(Variant) :: String NULL
 1 try_to_string(Variant NULL) :: String NULL
 2 try_to_string(UInt8) :: String NULL
