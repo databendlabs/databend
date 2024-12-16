@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropNetworkPolicyPlan;
 use databend_common_users::UserApiProvider;
@@ -54,7 +55,11 @@ impl Interpreter for DropNetworkPolicyInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
 
-        let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
+        let global_network_policy = self
+            .ctx
+            .get_settings()
+            .get_network_policy()
+            .unwrap_or_default();
         if global_network_policy == plan.name {
             return Err(ErrorCode::NetworkPolicyIsUsedByUser(format!(
                 "network policy `{}` is global policy, cannot be dropped",
