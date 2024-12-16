@@ -19,7 +19,7 @@ use crate::arrow::error::Result;
 #[cfg_attr(docsrs, doc(cfg(feature = "io_ipc_compression")))]
 pub fn decompress_lz4(input_buf: &[u8], output_buf: &mut [u8]) -> Result<()> {
     use std::io::Read;
-    let _ = lz4_flex::frame::FrameDecoder::new(input_buf).read(output_buf)?;
+    lz4_flex::frame::FrameDecoder::new(input_buf).read_exact(output_buf)?;
     Ok(())
 }
 
