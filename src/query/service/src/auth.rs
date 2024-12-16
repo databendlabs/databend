@@ -174,16 +174,14 @@ impl AuthMgr {
                 };
 
                 // check global network policy if user is not account admin
-                if !user.is_account_admin() {
-                    if !global_network_policy.is_empty() {
-                        user_api
-                            .enforce_network_policy(
-                                &tenant,
-                                &global_network_policy,
-                                client_ip.as_deref(),
-                            )
-                            .await?;
-                    }
+                if !user.is_account_admin() && !global_network_policy.is_empty() {
+                    user_api
+                        .enforce_network_policy(
+                            &tenant,
+                            &global_network_policy,
+                            client_ip.as_deref(),
+                        )
+                        .await?;
                 }
 
                 session.set_authed_user(user, jwt.custom.role).await?;
@@ -201,16 +199,14 @@ impl AuthMgr {
                     .await?;
 
                 // check global network policy if user is not account admin
-                if !user.is_account_admin() {
-                    if !global_network_policy.is_empty() {
-                        user_api
-                            .enforce_network_policy(
-                                &tenant,
-                                &global_network_policy,
-                                client_ip.as_deref(),
-                            )
-                            .await?;
-                    }
+                if !user.is_account_admin() && !global_network_policy.is_empty() {
+                    user_api
+                        .enforce_network_policy(
+                            &tenant,
+                            &global_network_policy,
+                            client_ip.as_deref(),
+                        )
+                        .await?;
                 }
 
                 // Check password policy for login
