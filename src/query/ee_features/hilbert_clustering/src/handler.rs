@@ -29,7 +29,6 @@ pub trait HilbertClusteringHandler: Sync + Send {
         table: Arc<dyn Table>,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
     ) -> Result<Option<(ReclusterInfoSideCar, Arc<TableSnapshot>)>>;
 }
 
@@ -48,10 +47,9 @@ impl HilbertClusteringHandlerWrapper {
         table: Arc<dyn Table>,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
     ) -> Result<Option<(ReclusterInfoSideCar, Arc<TableSnapshot>)>> {
         self.handler
-            .do_hilbert_clustering(table, ctx, push_downs, limit)
+            .do_hilbert_clustering(table, ctx, push_downs)
             .await
     }
 }

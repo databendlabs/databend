@@ -72,7 +72,7 @@ impl PhysicalPlanBuilder {
             ClusterType::Hilbert => {
                 let handler = get_hilbert_clustering_handler();
                 let Some((recluster_info, snapshot)) = handler
-                    .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs, *limit)
+                    .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs)
                     .await?
                 else {
                     return Err(ErrorCode::NoNeedToRecluster(format!(

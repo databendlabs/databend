@@ -20,10 +20,15 @@ use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_storages_fuse::FuseTable;
+use databend_common_expression::BlockThresholds;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
+use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_enterprise_hilbert_clustering::HilbertClusteringHandler;
 use databend_enterprise_hilbert_clustering::HilbertClusteringHandlerWrapper;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 pub struct RealHilbertClusteringHandler {}
@@ -36,23 +41,118 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         table: Arc<dyn Table>,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
     ) -> Result<Option<(ReclusterInfoSideCar, Arc<TableSnapshot>)>> {
-        if table.cluster_key_meta().is_none() {
+        let Some((cluster_key_id, _)) = table.cluster_key_meta() else {
             return Ok(None);
-        }
-        
+        };
+
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
             // no snapshot, no recluster.
             return Ok(None);
         };
 
+        let block_per_seg =
+            fuse_table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+        let block_thresholds = fuse_table.get_block_thresholds();
+        let thresholds = BlockThresholds {
+            max_rows_per_block: block_per_seg * block_thresholds.max_rows_per_block,
+            min_rows_per_block: block_per_seg * block_thresholds.min_rows_per_block,
+            max_bytes_per_block: block_per_seg * block_thresholds.max_bytes_per_block,
+        };
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
-        
-        
-        todo!()
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let chunk_size = max_threads * 4;
+        let mut target_segments = vec![];
+        let mut total_rows = 0;
+        let mut total_size = 0;
+        'FOR: for chunk in segment_locations.chunks(chunk_size) {
+            // read segments.
+            let compact_segments = FuseTable::segment_pruning(
+                &ctx,
+                fuse_table.schema_with_stream(),
+                fuse_table.get_operator(),
+                &push_downs,
+                fuse_table.get_storage_format(),
+                chunk.to_vec(),
+            )
+            .await?;
+
+            if compact_segments.is_empty() {
+                continue;
+            }
+
+            for (location, segment) in compact_segments.into_iter() {
+                total_rows += segment.summary.row_count as usize;
+                total_size += segment.summary.uncompressed_byte_size as usize;
+                let (unchanged, need_take) =
+                    if !thresholds.check_large_enough(total_rows, total_size) {
+                        // totals < N
+                        target_segments.push((location.segment_idx, segment.clone()));
+                        (false, false)
+                    } else if thresholds.check_for_compact(total_rows, total_size) {
+                        // N <= totals < 2N
+                        target_segments.push((location.segment_idx, segment.clone()));
+                        (false, true)
+                    } else {
+                        // totals >= 2N
+                        (true, !target_segments.is_empty())
+                    };
+
+                if unchanged
+                    && segment
+                        .summary
+                        .cluster_stats
+                        .as_ref()
+                        .is_none_or(|v| v.cluster_key_id != cluster_key_id || v.level != -1)
+                {
+                    target_segments = vec![(location.segment_idx, segment)];
+                    break 'FOR;
+                }
+
+                if need_take {
+                    if target_segments.len() == 1
+                        && target_segments[0]
+                            .1
+                            .summary
+                            .cluster_stats
+                            .as_ref()
+                            .is_none_or(|v| v.cluster_key_id != cluster_key_id)
+                        || target_segments.len() > 1
+                    {
+                        break 'FOR;
+                    }
+                    target_segments.clear();
+                    total_rows = 0;
+                    total_size = 0;
+                }
+            }
+        }
+
+        if target_segments.is_empty() {
+            return Ok(None);
+        }
+
+        let mut removed_statistics = Statistics::default();
+        let mut removed_segment_indexes = Vec::with_capacity(target_segments.len());
+        for (segment_idx, segment) in target_segments {
+            removed_segment_indexes.push(segment_idx);
+            merge_statistics_mut(
+                &mut removed_statistics,
+                &segment.summary,
+                Some(cluster_key_id),
+            );
+            ctx.add_target_segment(segment);
+        }
+
+        let recluster_info = ReclusterInfoSideCar {
+            merged_blocks: vec![],
+            removed_segment_indexes,
+            removed_statistics,
+        };
+        Ok(Some((recluster_info, snapshot)))
     }
 }
 

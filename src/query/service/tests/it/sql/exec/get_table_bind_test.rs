@@ -843,15 +843,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
+    fn add_inserted_segment_location(&self, _segment_loc: Location) -> Result<()> {
         todo!()
     }
 
-    fn clear_segment_locations(&self) -> Result<()> {
+    fn clear_inserted_segment_locations(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_inserted_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
 

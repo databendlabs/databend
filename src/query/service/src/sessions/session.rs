@@ -63,7 +63,7 @@ impl Session {
         session_ctx: Box<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Session> {
-        let status = Arc::new(Default::default());
+        let status = Default::default();
         Ok(Session {
             id,
             typ: RwLock::new(typ),
