@@ -70,7 +70,10 @@ impl FieldEncoderJSON {
                 self.write_string(buf.as_bytes(), out_buf);
             }
 
-            Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) => {
+            Column::Date(..)
+            | Column::Timestamp(..)
+            | Column::Bitmap(..)
+            | Column::Interval(..) => {
                 let mut buf = Vec::new();
                 self.simple.write_field(column, row_index, &mut buf, false);
                 self.write_string(&buf, out_buf);

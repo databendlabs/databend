@@ -23,4 +23,5 @@ mod bincode_serialization;
 mod borsh_serialization;
 mod cursor_ext;
 mod escape;
+mod interval;
 mod serialization_format_compatability;

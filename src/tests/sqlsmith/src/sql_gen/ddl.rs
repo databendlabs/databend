@@ -301,5 +301,9 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             value: Literal::Null,
         },
         TypeName::NotNull(box ty) => gen_default_expr(ty),
+        TypeName::Interval => Expr::Literal {
+            span: None,
+            value: Literal::String("1 month 1 hour".to_string()),
+        },
     }
 }

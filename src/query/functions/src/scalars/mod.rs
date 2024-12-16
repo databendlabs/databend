@@ -30,6 +30,7 @@ mod geography;
 mod geometry;
 mod hash;
 mod hilbert;
+mod interval;
 mod map;
 mod math;
 mod other;
@@ -66,4 +67,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     geometry::register(registry);
     geography::register(registry);
     hilbert::register(registry);
+    interval::register(registry);
 }
