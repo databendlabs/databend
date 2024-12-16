@@ -18,6 +18,7 @@ use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::ExprReplacer;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SetExpr;
@@ -179,7 +180,7 @@ impl Binder {
         ))
     }
 
-    fn m_cte_to_temp_table(&self, cte: &CTE) -> Result<()> {
+    fn m_cte_to_temp_table(&mut self, cte: &CTE) -> Result<()> {
         let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
             Engine::Fuse
         } else {
@@ -190,6 +191,10 @@ impl Binder {
         let mut table_identifier = cte.alias.name.clone();
         table_identifier.name = format!("{}_{}", table_identifier.name, query_id.replace("-", "_"));
         let table_name = normalize_identifier(&table_identifier, &self.name_resolution_ctx).name;
+        self.m_cte_table_name.insert(
+            normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name,
+            table_name.clone(),
+        );
         if self
             .ctx
             .is_temp_table(CATALOG_DEFAULT, &database, &table_name)
@@ -199,6 +204,11 @@ impl Binder {
                 table_name
             )));
         }
+
+        let expr_replacer = ExprReplacer::new(database.clone(), self.m_cte_table_name.clone());
+        let mut as_query = cte.query.clone();
+        expr_replacer.replace_query(&mut as_query);
+
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::Create,
             catalog: Some(Identifier::from_name(Span::None, CATALOG_DEFAULT)),
@@ -209,7 +219,7 @@ impl Binder {
             uri_location: None,
             cluster_by: None,
             table_options: Default::default(),
-            as_query: Some(cte.query.clone()),
+            as_query: Some(as_query),
             table_type: TableType::Temporary,
         };
 
