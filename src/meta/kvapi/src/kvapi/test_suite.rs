@@ -92,6 +92,8 @@ impl kvapi::TestSuite {
         self.kv_transaction_with_ttl(&builder.build().await).await?;
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
             .await?;
+        self.kv_transaction_condition_keys_with_prefix(&builder.build().await)
+            .await?;
         self.kv_transaction_delete_match_seq_some_not_match(&builder.build().await)
             .await?;
         self.kv_transaction_delete_match_seq_some_match(&builder.build().await)
@@ -1078,6 +1080,78 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
+    /// A transaction that checks the number of keys with given prefix.
+    pub async fn kv_transaction_condition_keys_with_prefix<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        let prefix = func_name!();
+
+        let sample_keys_prefix = format!("{}/xxx", prefix);
+
+        let sample = |suffix| format!("{}/{}", sample_keys_prefix, suffix);
+        let positive = format!("{prefix}/positive");
+        let negative = format!("{prefix}/negative");
+
+        kv.upsert_kv(UpsertKV::update(sample("a"), &b("a"))).await?;
+        kv.upsert_kv(UpsertKV::update(sample("b"), &b("b"))).await?;
+        kv.upsert_kv(UpsertKV::update(sample("c"), &b("c"))).await?;
+
+        use ConditionResult::*;
+
+        // A transaction that set positive key if succeeded,
+        // otherwise set the negative key.
+        let txn = |op: ConditionResult, n: u64| TxnRequest {
+            condition: vec![TxnCondition::match_keys_with_prefix(
+                &sample_keys_prefix,
+                op,
+                n,
+            )],
+            if_then: vec![TxnOp::put(&positive, b(format!("{op:?}")))],
+            else_then: vec![TxnOp::put(&negative, b(format!("{op:?}")))],
+        };
+
+        for (op, n, expected) in [
+            (Eq, 2, false),
+            (Eq, 3, true),
+            (Eq, 4, false),
+            (Ne, 2, true),
+            (Ne, 3, false),
+            (Ne, 4, true),
+            (Lt, 3, false),
+            (Lt, 4, true),
+            (Lt, 5, true),
+            (Le, 2, false),
+            (Le, 3, true),
+            (Le, 4, true),
+            (Gt, 2, true),
+            (Gt, 3, false),
+            (Gt, 4, false),
+            (Ge, 2, true),
+            (Ge, 3, true),
+            (Ge, 4, false),
+        ] {
+            kv.upsert_kv(UpsertKV::update(&positive, &b(""))).await?;
+            kv.upsert_kv(UpsertKV::update(&negative, &b(""))).await?;
+
+            let resp = kv.transaction(txn(op, n)).await?;
+            assert_eq!(
+                resp.success, expected,
+                "case: {op:?} {n}, expected: {expected}"
+            );
+
+            let expected_key = if expected { &positive } else { &negative };
+            let got = kv.get_kv(expected_key).await?.unwrap().data;
+            assert_eq!(
+                got,
+                b(format!("{op:?}")),
+                "case: {op:?} {n}, expected: {expected}"
+            );
+        }
+
+        Ok(())
+    }
+
     /// If `TxnDeleteRequest.match_seq` is not set,
     /// the delete operation will always be executed.
     pub async fn kv_transaction_delete_match_seq_none<KV: kvapi::KVApi>(
@@ -1250,6 +1324,6 @@ impl kvapi::TestSuite {
     }
 }
 
-fn b(s: &str) -> Vec<u8> {
-    s.as_bytes().to_vec()
+fn b(x: impl ToString) -> Vec<u8> {
+    x.to_string().as_bytes().to_vec()
 }
