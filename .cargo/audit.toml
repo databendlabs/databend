@@ -51,4 +51,6 @@ ignore = [
     "RUSTSEC-2024-0376",
     #rustls network-reachable panic in `Acceptor::accept`
     "RUSTSEC-2024-0399",
+    # `idna` accepts Punycode labels that do not produce any non-ASCII when decoded
+    "RUSTSEC-2024-0421",
 ]
