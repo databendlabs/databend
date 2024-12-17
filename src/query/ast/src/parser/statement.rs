@@ -1532,23 +1532,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }))
         },
     );
-    let create_udaf = map_res(
-        rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ AGGREGATE ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident ~ #udaf_definition
-            ~ ( DESC ~ ^"=" ~ ^#literal_string )?
-        },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, udf_name, definition, opt_description)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateUDF(CreateUDFStmt {
-                create_option,
-                udf_name,
-                description: opt_description.map(|(_, _, description)| description),
-                definition,
-            }))
-        },
-    );
     let drop_udf = map(
         rule! {
             DROP ~ FUNCTION ~ ( IF ~ ^EXISTS )? ~ #ident
@@ -1565,20 +1548,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
         |(_, _, udf_name, definition, opt_description)| {
-            Statement::AlterUDF(AlterUDFStmt {
-                udf_name,
-                description: opt_description.map(|(_, _, description)| description),
-                definition,
-            })
-        },
-    );
-    let alter_udaf = map(
-        rule! {
-            ALTER ~ AGGREGATE ~ FUNCTION
-            ~ #ident ~ #udaf_definition
-            ~ ( DESC ~ ^"=" ~ ^#literal_string )?
-        },
-        |(_, _, _, udf_name, definition, opt_description)| {
             Statement::AlterUDF(AlterUDFStmt {
                 udf_name,
                 description: opt_description.map(|(_, _, description)| description),
@@ -2367,11 +2336,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #create_udaf : "`CREATE [OR REPLACE] AGGREGATE FUNCTION [IF NOT EXISTS] <name> (<parameter>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> AS <definition_expr> [DESC = <description>]`"
-            | #alter_udaf : "`ALTER AGGREGATE FUNCTION <udf_name> (<parameter>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> AS <definition_expr> [DESC = <description>]`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
@@ -4353,6 +4320,27 @@ pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     )(i)
 }
 
+pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
+    let script = map(
+        rule! {
+            AS ~ ^(#code_string | #literal_string)
+        },
+        |(_, code)| (code, true),
+    );
+
+    let address = map(
+        rule! {
+            ADDRESS ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, address)| (address, false),
+    );
+
+    rule!(
+        #script: "AS <language_codes>"
+        | #address: "ADDRESS=<udf_server_address>"
+    )(i)
+}
+
 pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     let lambda_udf = map(
         rule! {
@@ -4365,112 +4353,75 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udf_server = map(
+    let udf = map(
         rule! {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ ADDRESS ~ ^"=" ~ ^#literal_string
+            ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, _, address)| {
-            UDFDefinition::UDFServer {
-                arg_types,
-                return_type,
-                address,
-                handler,
-                language: language.to_string(),
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, address_or_code)| {
+            if address_or_code.1 {
+                UDFDefinition::UDFScript {
+                    arg_types,
+                    return_type,
+                    code: address_or_code.0,
+                    handler,
+                    language: language.to_string(),
+                    // TODO inject runtime_version by user
+                    // Now we use fixed runtime version
+                    runtime_version: "".to_string(),
+                }
+            } else {
+                UDFDefinition::UDFServer {
+                    arg_types,
+                    return_type,
+                    address: address_or_code.0,
+                    handler,
+                    language: language.to_string(),
+                }
             }
         },
     );
 
-    let udf_script = map(
-        rule! {
-            "(" ~ #comma_separated_list0(type_name) ~ ")"
-            ~ RETURNS ~ #type_name
-            ~ LANGUAGE ~ #ident
-            ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^(#code_string | #literal_string)
-        },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
-            UDFDefinition::UDFScript {
-                arg_types,
-                return_type,
-                code,
-                handler,
-                language: language.to_string(),
-                // TODO inject runtime_version by user
-                // Now we use fixed runtime version
-                runtime_version: "".to_string(),
-            }
-        },
-    );
-
-    rule!(
-        #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
-        | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
-        | #udf_script: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
-    )(i)
-}
-
-pub fn udaf_definition(i: Input) -> IResult<UDFDefinition> {
-    let udaf_server = map(
+    let udaf = map(
         rule! {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
             ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
-            ~ ADDRESS ~ ^"=" ~ ^#literal_string
+            ~ #udf_script_or_address
         },
-        #[rustfmt::skip]
-        |(
-            _, arg_types, _,
-            _, _, state_types, _,
-            _, return_type,
-            _, language,
-            _, _, address,
-        )| {
-            UDFDefinition::UDAFServer {
-                arg_types,
-                state_fields: state_types,
-                return_type,
-                address,
-                language: language.to_string(),
-            }
-        },
-    );
-
-    let udaf_script = map(
-        rule! {
-            "(" ~ #comma_separated_list0(type_name) ~ ")"
-            ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
-            ~ RETURNS ~ #type_name
-            ~ LANGUAGE ~ #ident
-            ~ AS ~ ^(#code_string | #literal_string)
-        },
-        #[rustfmt::skip]
-        |(
-            _, arg_types, _,
-            _, _, state_types, _,
-            _, return_type,
-            _, language,
-            _, code)| {
-            UDFDefinition::UDAFScript {
-                arg_types,
-                state_fields: state_types,
-                return_type,
-                code,
-                language: language.to_string(),
-                // TODO inject runtime_version by user
-                // Now we use fixed runtime version
-                runtime_version: "".to_string(),
+        |(_, arg_types, _, _, _, state_types, _, _, return_type, _, language, address_or_code)| {
+            if address_or_code.1 {
+                UDFDefinition::UDAFScript {
+                    arg_types,
+                    state_fields: state_types,
+                    return_type,
+                    code: address_or_code.0,
+                    language: language.to_string(),
+                    // TODO inject runtime_version by user
+                    // Now we use fixed runtime version
+                    runtime_version: "".to_string(),
+                }
+            } else {
+                UDFDefinition::UDAFServer {
+                    arg_types,
+                    state_fields: state_types,
+                    return_type,
+                    address: address_or_code.0,
+                    language: language.to_string(),
+                }
             }
         },
     );
 
     rule!(
-        #udaf_server: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> ADDRESS=<udf_server_address>"
-        | #udaf_script: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> AS <language_codes>"
+        #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
+        | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+
     )(i)
 }
 

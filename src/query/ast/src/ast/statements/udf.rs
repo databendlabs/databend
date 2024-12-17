@@ -62,15 +62,6 @@ pub enum UDFDefinition {
     },
 }
 
-impl UDFDefinition {
-    fn is_aggregate(&self) -> bool {
-        matches!(
-            self,
-            UDFDefinition::UDAFServer { .. } | UDFDefinition::UDAFScript { .. }
-        )
-    }
-}
-
 impl Display for UDFDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -176,11 +167,7 @@ impl Display for CreateUDFStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, " OR REPLACE")?;
         }
-        if self.definition.is_aggregate() {
-            write!(f, " AGGREGATE FUNCTION")?;
-        } else {
-            write!(f, " FUNCTION")?;
-        }
+        write!(f, " FUNCTION")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -201,12 +188,7 @@ pub struct AlterUDFStmt {
 
 impl Display for AlterUDFStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ALTER")?;
-        if self.definition.is_aggregate() {
-            write!(f, " AGGREGATE FUNCTION")?;
-        } else {
-            write!(f, " FUNCTION")?;
-        }
+        write!(f, "ALTER FUNCTION")?;
         write!(f, " {} {}", self.udf_name, self.definition)?;
         if let Some(description) = &self.description {
             write!(f, " DESC = '{description}'")?;

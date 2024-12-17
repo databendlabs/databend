@@ -23541,16 +23541,16 @@ DropUDF {
 
 
 ---------- Input ----------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
         create_option: CreateIfNotExists,
         udf_name: Identifier {
             span: Some(
-                40..46,
+                30..36,
             ),
             name: "my_agg",
             quote: None,
@@ -23561,11 +23561,11 @@ CreateUDF(
             arg_types: [
                 Int32,
             ],
-            state_types: [
+            state_fields: [
                 UDAFStateField {
                     name: Identifier {
                         span: Some(
-                            61..62,
+                            51..52,
                         ),
                         name: "s",
                         quote: None,
@@ -23583,9 +23583,9 @@ CreateUDF(
 
 
 ---------- Input ----------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-CREATE AGGREGATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
 some code
 $$
 ---------- AST ------------
@@ -23594,7 +23594,7 @@ CreateUDF(
         create_option: CreateIfNotExists,
         udf_name: Identifier {
             span: Some(
-                40..46,
+                30..36,
             ),
             name: "my_agg",
             quote: None,
@@ -23605,11 +23605,11 @@ CreateUDF(
             arg_types: [
                 Int32,
             ],
-            state_types: [
+            state_fields: [
                 UDAFStateField {
                     name: Identifier {
                         span: Some(
-                            61..62,
+                            51..52,
                         ),
                         name: "s",
                         quote: None,
@@ -23620,7 +23620,7 @@ CreateUDF(
                 UDAFStateField {
                     name: Identifier {
                         span: Some(
-                            71..72,
+                            61..62,
                         ),
                         name: "i",
                         quote: None,
@@ -23641,9 +23641,9 @@ CreateUDF(
 
 
 ---------- Input ----------
-ALTER AGGREGATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-ALTER AGGREGATE FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
+ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
 some code
 $$
 ---------- AST ------------
@@ -23651,7 +23651,7 @@ AlterUDF(
     AlterUDFStmt {
         udf_name: Identifier {
             span: Some(
-                25..31,
+                15..21,
             ),
             name: "my_agg",
             quote: None,
@@ -23662,11 +23662,11 @@ AlterUDF(
             arg_types: [
                 Int32,
             ],
-            state_types: [
+            state_fields: [
                 UDAFStateField {
                     name: Identifier {
                         span: Some(
-                            46..47,
+                            36..37,
                         ),
                         name: "s",
                         quote: None,
