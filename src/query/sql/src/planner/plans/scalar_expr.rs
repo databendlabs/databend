@@ -793,7 +793,7 @@ pub struct UDFCall {
     // name in meta
     pub name: String,
     // name in handler
-    pub func_name: String,
+    pub handler: String,
     pub display_name: String,
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,

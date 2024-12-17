@@ -102,7 +102,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
-                &udf.func_name,
+                &udf.handler,
                 udf.arguments
                     .iter()
                     .map(format_scalar)

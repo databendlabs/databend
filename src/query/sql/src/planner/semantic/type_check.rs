@@ -3747,7 +3747,7 @@ impl<'a> TypeChecker<'a> {
             UDFCall {
                 span,
                 name,
-                func_name: udf_definition.handler,
+                handler: udf_definition.handler,
                 display_name,
                 udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types: udf_definition.arg_types,
@@ -3823,7 +3823,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         name: String,
-        arguments: &[Expr],
+        args: &[Expr],
         udf_definition: UDFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let UDFScript {
@@ -3834,13 +3834,13 @@ impl<'a> TypeChecker<'a> {
             return_type,
             runtime_version,
         } = udf_definition;
-        let mut args = Vec::with_capacity(arguments.len());
-        for (argument, dest_type) in arguments.iter().zip(arg_types.iter()) {
+        let mut arguments = Vec::with_capacity(args.len());
+        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
             if ty != *dest_type {
-                args.push(wrap_cast(&arg, dest_type));
+                arguments.push(wrap_cast(&arg, dest_type));
             } else {
-                args.push(arg);
+                arguments.push(arg);
             }
         }
 
@@ -3848,7 +3848,7 @@ impl<'a> TypeChecker<'a> {
             .into_boxed_slice();
         let udf_type = UDFType::Script((language, runtime_version, code_blob.into()));
 
-        let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
+        let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
@@ -3857,12 +3857,12 @@ impl<'a> TypeChecker<'a> {
             UDFCall {
                 span,
                 name,
-                func_name: handler,
+                handler,
                 display_name,
                 arg_types,
                 return_type: Box::new(return_type.clone()),
                 udf_type,
-                arguments: args,
+                arguments,
             }
             .into(),
             return_type,
@@ -3873,7 +3873,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         name: String,
-        arguments: &[Expr],
+        args: &[Expr],
         udf_definition: UDAFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let UDAFScript {
@@ -3889,13 +3889,13 @@ impl<'a> TypeChecker<'a> {
             .into_boxed_slice();
         let udf_type = UDFType::Script((language, runtime_version, code_blob.into()));
 
-        let mut args = Vec::with_capacity(arg_types.len());
-        for (argument, dest_type) in arguments.iter().zip(arg_types.iter()) {
+        let mut arguments = Vec::with_capacity(arg_types.len());
+        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
             if ty != *dest_type {
-                args.push(wrap_cast(&arg, dest_type));
+                arguments.push(wrap_cast(&arg, dest_type));
             } else {
-                args.push(arg);
+                arguments.push(arg);
             }
         }
 
@@ -3921,7 +3921,7 @@ impl<'a> TypeChecker<'a> {
                     .collect(),
                 return_type: Box::new(return_type.clone()),
                 udf_type,
-                arguments: args,
+                arguments,
             }
             .into(),
             return_type,
