@@ -97,6 +97,10 @@ impl AuthMgr {
         need_user_info: bool,
     ) -> Result<(String, Option<String>)> {
         let user_api = UserApiProvider::instance();
+        let global_network_policy = session
+            .get_settings()
+            .get_network_policy()
+            .unwrap_or_default();
         match credential {
             Credential::NoNeed => Ok(("".to_string(), None)),
             Credential::DatabendToken { token } => {
@@ -169,6 +173,17 @@ impl AuthMgr {
                     }
                 };
 
+                // check global network policy if user is not account admin
+                if !user.is_account_admin() && !global_network_policy.is_empty() {
+                    user_api
+                        .enforce_network_policy(
+                            &tenant,
+                            &global_network_policy,
+                            client_ip.as_deref(),
+                        )
+                        .await?;
+                }
+
                 session.set_authed_user(user, jwt.custom.role).await?;
                 Ok((user_name, None))
             }
@@ -182,6 +197,18 @@ impl AuthMgr {
                 let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
+
+                // check global network policy if user is not account admin
+                if !user.is_account_admin() && !global_network_policy.is_empty() {
+                    user_api
+                        .enforce_network_policy(
+                            &tenant,
+                            &global_network_policy,
+                            client_ip.as_deref(),
+                        )
+                        .await?;
+                }
+
                 // Check password policy for login
                 let need_change = UserApiProvider::instance()
                     .check_login_password(&tenant, identity.clone(), &user)
