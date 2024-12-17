@@ -92,23 +92,23 @@ impl UserApiProvider {
         client_ip: Option<&str>,
     ) -> Result<()> {
         let ip_addr: Ipv4Addr = match client_ip {
-            Some(client_ip) => client_ip.parse().unwrap(),
+            Some(client_ip) => client_ip.parse()?,
             None => {
                 return Err(ErrorCode::AuthenticateFailure("Unknown client ip"));
             }
         };
 
         let whitelist = &GlobalConfig::instance().query.network_policy_whitelist;
-        for cidr in whitelist {
-            let whitelist_cidr: Ipv4Cidr = cidr.parse().unwrap();
-            if whitelist_cidr.contains(&ip_addr) {
+        for whitelist_ip in whitelist {
+            let cidr: Ipv4Cidr = whitelist_ip.parse()?;
+            if cidr.contains(&ip_addr) {
                 return Ok(());
             }
         }
 
         let network_policy = self.get_network_policy(tenant, policy).await?;
         for blocked_ip in network_policy.blocked_ip_list {
-            let blocked_cidr: Ipv4Cidr = blocked_ip.parse().unwrap();
+            let blocked_cidr: Ipv4Cidr = blocked_ip.parse()?;
             if blocked_cidr.contains(&ip_addr) {
                 return Err(ErrorCode::AuthenticateFailure(format!(
                     "client ip `{}` is blocked",
@@ -118,7 +118,7 @@ impl UserApiProvider {
         }
         let mut allow = false;
         for allowed_ip in network_policy.allowed_ip_list {
-            let allowed_cidr: Ipv4Cidr = allowed_ip.parse().unwrap();
+            let allowed_cidr: Ipv4Cidr = allowed_ip.parse()?;
             if allowed_cidr.contains(&ip_addr) {
                 allow = true;
                 break;
