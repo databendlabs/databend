@@ -452,23 +452,26 @@ impl SignalListener {
 
                 let stack_trace = StackTrace::from_ips(&frames);
 
-                eprintln!("{:#^80}", " Crash fault info ");
-                eprintln!("PID: {}", std::process::id());
-                eprintln!("Version: {}", crash_version);
-                eprintln!("Timestamp(UTC): {}", chrono::Utc::now());
-                eprintln!("Timestamp(Local): {}", chrono::Local::now());
-                eprintln!("QueryId: {:?}", crash_query_id);
-                eprintln!("{}", signal_message(sig, si_code, si_addr as usize));
-                eprintln!("Backtrace:\n {:?}", stack_trace);
-
-                log::error!("{:#^80}", " Crash fault info ");
-                log::error!("PID: {}", std::process::id());
-                log::error!("Version: {}", crash_version);
-                log::error!("Timestamp(UTC): {}", chrono::Utc::now());
-                log::error!("Timestamp(Local): {}", chrono::Local::now());
-                log::error!("QueryId: {:?}", crash_query_id);
-                log::error!("{}", signal_message(sig, si_code, si_addr as usize));
-                log::error!("Backtrace:\n {:?}", stack_trace);
+                let log_message = format!(
+                    "{:#^80}\n\
+                    PID: {}\n\
+                    Version: {}\n\
+                    Timestamp(UTC): {}\n\
+                    Timestamp(Local): {}\n\
+                    QueryId: {:?}\n\
+                    Signal Message: {}\n\
+                    Backtrace:\n{:?}",
+                    " Crash fault info ",
+                    std::process::id(),
+                    crash_version,
+                    chrono::Utc::now(),
+                    chrono::Local::now(),
+                    crash_query_id,
+                    signal_message(sig, si_code, si_addr as usize),
+                    stack_trace
+                );
+                eprintln!("{}", log_message);
+                log::error!("{}", log_message);
             }
         });
     }
