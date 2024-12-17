@@ -106,6 +106,7 @@ pub struct Binder {
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+    pub m_cte_table_name: HashMap<String, String>,
 
     pub enable_result_cache: bool,
 
@@ -132,6 +133,7 @@ impl<'a> Binder {
             metadata,
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            m_cte_table_name: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
         }
