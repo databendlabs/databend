@@ -450,9 +450,11 @@ impl SignalListener {
                     pos = new_pos;
                 }
 
+                let id = std::process::id();
+                let signal_mess = signal_message(sig, si_code, si_addr as usize);
                 let stack_trace = StackTrace::from_ips(&frames);
 
-                let log_message = format!(
+                eprintln!(
                     "{:#^80}\n\
                     PID: {}\n\
                     Version: {}\n\
@@ -462,16 +464,32 @@ impl SignalListener {
                     Signal Message: {}\n\
                     Backtrace:\n{:?}",
                     " Crash fault info ",
-                    std::process::id(),
+                    id,
                     crash_version,
                     chrono::Utc::now(),
                     chrono::Local::now(),
                     crash_query_id,
-                    signal_message(sig, si_code, si_addr as usize),
+                    signal_mess,
                     stack_trace
                 );
-                eprintln!("{}", log_message);
-                log::error!("{}", log_message);
+                log::error!(
+                    "{:#^80}\n\
+                    PID: {}\n\
+                    Version: {}\n\
+                    Timestamp(UTC): {}\n\
+                    Timestamp(Local): {}\n\
+                    QueryId: {:?}\n\
+                    Signal Message: {}\n\
+                    Backtrace:\n{:?}",
+                    " Crash fault info ",
+                    id,
+                    crash_version,
+                    chrono::Utc::now(),
+                    chrono::Local::now(),
+                    crash_query_id,
+                    signal_mess,
+                    stack_trace
+                );
             }
         });
     }
