@@ -15,9 +15,11 @@
 use databend_common_catalog::plan::Filters;
 use databend_storages_common_table_meta::table::ClusterType;
 use educe::Educe;
-use crate::{BindContext, MetadataRef};
+
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::BindContext;
+use crate::MetadataRef;
 
 #[derive(Debug, Clone, Educe)]
 #[educe(Eq, PartialEq, Hash)]

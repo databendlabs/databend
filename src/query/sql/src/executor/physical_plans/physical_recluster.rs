@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::Exchange;
@@ -81,6 +82,18 @@ impl PhysicalPlanBuilder {
                     )));
                 };
                 let plan = self.build(s_expr.child(0)?, required).await?;
+
+                let plan = PhysicalPlan::ColumnMutation(ColumnMutation {
+                    plan_id: 0,
+                    input: Box::new(plan),
+                    table_info: table_info.clone(),
+                    mutation_expr: None,
+                    computed_expr: None,
+                    mutation_kind: MutationKind::Recluster,
+                    field_id_to_schema_index: Default::default(),
+                    input_num_columns: 0, // unused
+                    has_filter_column: false,
+                });
                 PhysicalPlan::CommitSink(Box::new(CommitSink {
                     input: Box::new(plan),
                     table_info,

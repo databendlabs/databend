@@ -257,7 +257,6 @@ impl FuseTable {
         segments_location: Vec<SegmentLocation>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
-        println!("push_downs: {:?}", push_downs);
         let start = Instant::now();
         info!(
             "segment numbers" = segments_location.len();

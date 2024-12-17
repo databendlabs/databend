@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -23,7 +22,6 @@ use databend_common_exception::Result;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::Recluster;
-use databend_common_sql::MetadataRef;
 use log::error;
 use log::warn;
 
@@ -151,7 +149,10 @@ impl ReclusterTableInterpreter {
             .await?;
 
         let mut builder = PhysicalPlanBuilder::new(plan.metadata.clone(), self.ctx.clone(), false);
-        let physical_plan = match builder.build(&self.s_expr, plan.bind_context.column_set()).await {
+        let physical_plan = match builder
+            .build(&self.s_expr, plan.bind_context.column_set())
+            .await
+        {
             Ok(res) => res,
             Err(e) => {
                 return if e.code() == ErrorCode::NO_NEED_TO_RECLUSTER {
