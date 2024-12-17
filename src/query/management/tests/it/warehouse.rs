@@ -188,6 +188,20 @@ async fn test_unknown_node_drop_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_self_managed_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
+
+    let node_info = self_managed_node("test_node");
+    warehouse_manager.add_node(node_info.clone()).await?;
+
+    let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test-cluster-id"));
+
+    assert_eq!(drop_warehouse.await.unwrap_err().code(), 2403);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
@@ -251,7 +265,10 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
     for node in &nodes {
         let online_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_nodes/{}", node);
         assert_key_seq(&kv, &online_node, MatchSeq::GE(1)).await;
-        let warehouse_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/{}", node);
+        let warehouse_node = format!(
+            "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/default/{}",
+            node
+        );
         assert_no_key(&kv, &warehouse_node).await;
     }
 
@@ -266,13 +283,13 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
         let online_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_nodes/{}", node);
         assert_key_seq(&kv, &online_node, MatchSeq::GE(1)).await;
         let warehouse_node = format!(
-            "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test_warehouse/test_warehouse/{}",
+            "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
             node
         );
         assert_key_seq(&kv, &warehouse_node, MatchSeq::GE(1)).await;
     }
 
-    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "test_warehouse");
+    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "default");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
@@ -280,7 +297,7 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
 
     for warehouse_node in &warehouse_nodes {
         assert!(nodes.contains(&warehouse_node.id));
-        assert_eq!(warehouse_node.cluster_id, "test_warehouse");
+        assert_eq!(warehouse_node.cluster_id, "default");
         assert_eq!(warehouse_node.warehouse_id, "test_warehouse");
     }
 
@@ -312,7 +329,7 @@ async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> 
 
     create_warehouse.await?;
 
-    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "test_warehouse");
+    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "default");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
@@ -321,7 +338,7 @@ async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> 
     nodes.remove(0);
     for warehouse_node in &warehouse_nodes {
         assert!(nodes.contains(&warehouse_node.id));
-        assert_eq!(warehouse_node.cluster_id, "test_warehouse");
+        assert_eq!(warehouse_node.cluster_id, "default");
         assert_eq!(warehouse_node.warehouse_id, "test_warehouse");
     }
 
@@ -357,7 +374,7 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
 
     create_warehouse.await?;
 
-    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "test_warehouse");
+    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "default");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
@@ -366,7 +383,7 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
     nodes.push(new_node);
     for warehouse_node in &warehouse_nodes {
         assert!(nodes.contains(&warehouse_node.id));
-        assert_eq!(warehouse_node.cluster_id, "test_warehouse");
+        assert_eq!(warehouse_node.cluster_id, "default");
         assert_eq!(warehouse_node.warehouse_id, "test_warehouse");
     }
 
@@ -375,26 +392,24 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_duplicated_warehouse() -> Result<()> {
-    let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse("test_warehouse".to_string(), vec![SelectedNode::Random(
-            None,
-        )]);
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+    ]);
 
     create_warehouse.await?;
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse("test_warehouse".to_string(), vec![SelectedNode::Random(
-            None,
-        )]);
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+    ]);
 
     let res = create_warehouse.await;
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().code(), 2405);
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse("test_warehouse_2".to_string(), vec![SelectedNode::Random(
+    let create_warehouse = warehouse_manager
+        .create_warehouse("test_warehouse_2".to_string(), vec![SelectedNode::Random(
             None,
         )]);
 
@@ -405,23 +420,20 @@ async fn test_create_duplicated_warehouse() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_warehouse_with_self_manage() -> Result<()> {
-    let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     // Self manage node online
-    let mut self_manage_node_1 = system_managed_node("self_manage_node_1");
+    let mut self_manage_node_1 = self_managed_node("self_manage_node_1");
     self_manage_node_1.cluster_id = String::from("test_warehouse");
     self_manage_node_1.warehouse_id = String::from("test_warehouse");
-    cluster_mgr.add_node(self_manage_node_1).await?;
+    warehouse_manager.add_node(self_manage_node_1).await?;
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
             None,
         )]);
 
-    let res = create_warehouse.await;
-
-    assert!(res.is_err());
-    assert_eq!(res.unwrap_err().code(), 2408);
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 2405);
 
     Ok(())
 }
@@ -456,6 +468,11 @@ async fn test_create_warehouse_with_no_resources() -> Result<()> {
 
     Ok(())
 }
+
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_create_warehouse_with_no_resources() -> Result<()> {
+//
+// }
 
 fn system_managed_node(id: &str) -> NodeInfo {
     NodeInfo {

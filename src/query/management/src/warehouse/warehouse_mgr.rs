@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_base::base::escape_for_key;
@@ -181,7 +182,9 @@ impl WarehouseMgr {
                             Some(value) if value.seq == 0 => Ok(response),
                             Some(value) => match serde_json::from_slice(&value.data)? {
                                 WarehouseInfo::SystemManaged(_) => {
-                                    Err(ErrorCode::WarehouseAlreadyExists(""))
+                                    Err(ErrorCode::WarehouseAlreadyExists(
+                                        "Already exists same name system-managed warehouse.",
+                                    ))
                                 }
                                 WarehouseInfo::SelfManaged => match response.responses.first() {
                                     // already exists node.
@@ -439,6 +442,14 @@ impl WarehouseApi for WarehouseMgr {
                     )));
                 };
 
+                if serde_json::from_slice::<WarehouseInfo>(&value.data)?
+                    == WarehouseInfo::SelfManaged
+                {
+                    return Err(ErrorCode::InvalidWarehouse(
+                        "Cannot drop self-managed warehouse",
+                    ));
+                }
+
                 if fetch_reply.responses.len() != delete_txn.if_then.len() {
                     // TODO: maybe auto retry?
                     return Err(ErrorCode::WarehouseOperateConflict("Missing node info in online nodes list. It's possible that some nodes offline during the drop warehouse. You may try the operation again."));
@@ -531,8 +542,8 @@ impl WarehouseApi for WarehouseMgr {
                         let mut node_info = serde_json::from_slice::<NodeInfo>(&v.data)?;
 
                         if node_info.warehouse_id.is_empty() && node_info.cluster_id.is_empty() {
-                            node_info.cluster_id = warehouse.clone();
                             node_info.warehouse_id = warehouse.clone();
+                            node_info.cluster_id = String::from("default");
                             selected_nodes.push((v.seq, node_info));
                             select_queue.pop();
                         }
@@ -583,6 +594,7 @@ impl WarehouseApi for WarehouseMgr {
                 self.warehouse_key_prefix,
                 escape_for_key(&warehouse)?
             );
+
             txn.condition
                 .push(map_condition(&warehouse_key, MatchSeq::Exact(0)));
             txn.if_then.push(TxnOp::put(
@@ -591,7 +603,7 @@ impl WarehouseApi for WarehouseMgr {
                     id: GlobalUniqName::unique(),
                     status: "Running".to_string(),
                     display_name: warehouse.clone(),
-                    clusters: vec![nodes.clone()],
+                    clusters: HashMap::from([(String::from("default"), nodes.clone())]),
                 }))?,
             ));
             txn.else_then.push(TxnOp::get(warehouse_key));

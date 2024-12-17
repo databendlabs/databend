@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
@@ -30,7 +32,7 @@ pub struct SystemManagedInfo {
     pub id: String,
     pub status: String,
     pub display_name: String,
-    pub clusters: Vec<Vec<SelectedNode>>,
+    pub clusters: HashMap<String, Vec<SelectedNode>>,
 }
 
 /// Databend-query cluster management API
