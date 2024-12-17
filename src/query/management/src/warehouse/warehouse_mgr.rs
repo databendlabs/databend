@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::time::Duration;
 
 use databend_common_base::base::escape_for_key;
@@ -187,12 +186,12 @@ impl WarehouseMgr {
                                 WarehouseInfo::SelfManaged => match response.responses.first() {
                                     // already exists node.
                                     Some(TxnOpResponse {
-                                             response:
-                                             Some(Response::Get(TxnGetResponse {
-                                                                    value: Some(value),
-                                                                    ..
-                                                                })),
-                                         }) if value.seq != 0 => Ok(response),
+                                        response:
+                                            Some(Response::Get(TxnGetResponse {
+                                                value: Some(value),
+                                                ..
+                                            })),
+                                    }) if value.seq != 0 => Ok(response),
                                     _ => {
                                         log::info!("Self-managed warehouse has already been created by other nodes; attempt to join it. Retry count: {}", retry_count);
                                         retry_count += 1;
@@ -278,8 +277,8 @@ impl WarehouseMgr {
             }
             Ok(response) => match response.responses.last() {
                 Some(TxnOpResponse {
-                         response: Some(Response::Get(TxnGetResponse { value: Some(v), .. })),
-                     }) => Ok(v.seq),
+                    response: Some(Response::Get(TxnGetResponse { value: Some(v), .. })),
+                }) => Ok(v.seq),
                 _ => Err(ErrorCode::MetaServiceError("Meta insert failure.")),
             },
         }
@@ -303,8 +302,8 @@ impl WarehouseMgr {
             }
             Ok(response) => match response.responses.last() {
                 Some(TxnOpResponse {
-                         response: Some(Response::Get(TxnGetResponse { value: Some(v), .. })),
-                     }) => Ok(v.seq),
+                    response: Some(Response::Get(TxnGetResponse { value: Some(v), .. })),
+                }) => Ok(v.seq),
                 _ => Err(ErrorCode::MetaServiceError("Meta insert failure.")),
             },
         }
@@ -314,8 +313,8 @@ impl WarehouseMgr {
         match reply.responses.first() {
             None => self.leave_cluster(node, 0).await,
             Some(TxnOpResponse {
-                     response: Some(Response::Get(res)),
-                 }) => match &res.value {
+                response: Some(Response::Get(res)),
+            }) => match &res.value {
                 None => self.leave_cluster(node, 0).await,
                 Some(value) => {
                     let node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
@@ -511,39 +510,37 @@ impl WarehouseApi for WarehouseMgr {
 
         loop {
             let mut selected_nodes = Vec::with_capacity(nodes.len());
-            let mut allocated_nodes = HashSet::with_capacity(nodes.len());
 
             // get online nodes
             let online_nodes = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
 
-            for select_node in &nodes {
-                match select_node {
-                    SelectedNode::Random(Some(_)) => {
+            let mut select_queue = nodes.clone();
+            for (_, v) in &online_nodes {
+                match select_queue.last() {
+                    None => {
+                        break;
+                    }
+                    Some(SelectedNode::Random(Some(_))) => {
                         return Err(ErrorCode::Unimplemented(
                             "Custom instance types are not supported.",
                         ));
                     }
-                    // select random node
-                    SelectedNode::Random(None) => {
-                        for (_, v) in &online_nodes {
-                            let mut node_info = serde_json::from_slice::<NodeInfo>(&v.data)?;
+                    Some(SelectedNode::Random(None)) => {
+                        // select random node
 
-                            if node_info.warehouse_id.is_empty()
-                                && node_info.cluster_id.is_empty()
-                                && !allocated_nodes.contains(&node_info.id)
-                            {
-                                node_info.cluster_id = warehouse.clone();
-                                node_info.warehouse_id = warehouse.clone();
-                                allocated_nodes.insert(node_info.id.clone());
-                                selected_nodes.push((v.seq, node_info));
-                                break;
-                            }
+                        let mut node_info = serde_json::from_slice::<NodeInfo>(&v.data)?;
+
+                        if node_info.warehouse_id.is_empty() && node_info.cluster_id.is_empty() {
+                            node_info.cluster_id = warehouse.clone();
+                            node_info.warehouse_id = warehouse.clone();
+                            selected_nodes.push((v.seq, node_info));
+                            select_queue.pop();
                         }
                     }
                 }
             }
 
-            if selected_nodes.len() != nodes.len() {
+            if !select_queue.is_empty() {
                 return Err(ErrorCode::NoResourcesAvailable(
                     "Failed to create warehouse, reason: no resources available",
                 ));
@@ -603,8 +600,8 @@ impl WarehouseApi for WarehouseMgr {
                 res if res.success => Ok(()),
                 res => match res.responses.last() {
                     Some(TxnOpResponse {
-                             response: Some(Response::Get(res)),
-                         }) => {
+                        response: Some(Response::Get(res)),
+                    }) => {
                         if matches!(&res.value, Some(v) if v.seq != 0) {
                             return Err(ErrorCode::WarehouseAlreadyExists(
                                 "Warehouse already exists",

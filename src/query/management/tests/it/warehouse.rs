@@ -23,7 +23,9 @@ use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::{MatchSeq, MatchSeqExt, NodeInfo};
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -73,7 +75,7 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
         info_key,
         serde_json::to_vec(&WarehouseInfo::SelfManaged)?,
     )
-        .await;
+    .await;
 
     let mut node_info_2 = self_managed_node("test_node_2");
     warehouse_manager.add_node(node_info_2.clone()).await?;
@@ -94,7 +96,7 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
         info_key,
         serde_json::to_vec(&WarehouseInfo::SelfManaged)?,
     )
-        .await;
+    .await;
 
     Ok(())
 }
@@ -174,7 +176,10 @@ async fn test_successfully_drop_self_managed_node() -> Result<()> {
 async fn test_unknown_node_drop_self_managed_node() -> Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
-    match warehouse_manager.drop_node(String::from("UNKNOWN_ID")).await {
+    match warehouse_manager
+        .drop_node(String::from("UNKNOWN_ID"))
+        .await
+    {
         Ok(_) => { /*panic!("Unknown node drop node must be return Err.")*/ }
         Err(cause) => assert_eq!(cause.code(), 2401),
     }
@@ -219,23 +224,151 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
-    let (_, cluster_mgr, nodes) = nodes(Duration::from_mins(30), 2).await?;
+async fn test_empty_system_managed_warehouse() -> Result<()> {
+    let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
-    let create_warehouse = cluster_mgr.create_warehouse("test_warehouse".to_string(), vec![
+    let create_warehouse = cluster_mgr.create_warehouse(String::new(), vec![]);
+
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 2403);
+
+    let create_warehouse = cluster_mgr.create_warehouse(String::from("test"), vec![]);
+
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 2408);
+
+    let create_warehouse =
+        cluster_mgr.create_warehouse(String::from("test"), vec![SelectedNode::Random(Some(
+            String::from("XLargeNode"),
+        ))]);
+
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 1002);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
+    let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    for node in &nodes {
+        let online_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_nodes/{}", node);
+        assert_key_seq(&kv, &online_node, MatchSeq::GE(1)).await;
+        let warehouse_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/{}", node);
+        assert_no_key(&kv, &warehouse_node).await;
+    }
+
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
         SelectedNode::Random(None),
         SelectedNode::Random(None),
     ]);
 
     create_warehouse.await?;
 
-    let get_warehouse_nodes = cluster_mgr.get_nodes("test_warehouse", "test_warehouse");
+    for node in &nodes {
+        let online_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_nodes/{}", node);
+        assert_key_seq(&kv, &online_node, MatchSeq::GE(1)).await;
+        let warehouse_node = format!(
+            "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test_warehouse/test_warehouse/{}",
+            node
+        );
+        assert_key_seq(&kv, &warehouse_node, MatchSeq::GE(1)).await;
+    }
+
+    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "test_warehouse");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
     assert_eq!(warehouse_nodes.len(), 2);
-    assert_eq!(warehouse_nodes.last().map(|x| &x.id), nodes.last());
-    assert_eq!(warehouse_nodes.first().map(|x| &x.id), nodes.first());
+
+    for warehouse_node in &warehouse_nodes {
+        assert!(nodes.contains(&warehouse_node.id));
+        assert_eq!(warehouse_node.cluster_id, "test_warehouse");
+        assert_eq!(warehouse_node.warehouse_id, "test_warehouse");
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> {
+    let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 4).await?;
+
+    // mock node offline
+    warehouse_manager.drop_node(nodes[0].to_string()).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+    ]);
+
+    // no resources available
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 2404);
+
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+    ]);
+
+    create_warehouse.await?;
+
+    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "test_warehouse");
+
+    let warehouse_nodes = get_warehouse_nodes.await?;
+
+    assert_eq!(warehouse_nodes.len(), 3);
+
+    nodes.remove(0);
+    for warehouse_node in &warehouse_nodes {
+        assert!(nodes.contains(&warehouse_node.id));
+        assert_eq!(warehouse_node.cluster_id, "test_warehouse");
+        assert_eq!(warehouse_node.warehouse_id, "test_warehouse");
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
+    let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 3).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+    ]);
+
+    // no resources available
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 2404);
+
+    // mock node online
+    let new_node = GlobalUniqName::unique();
+    warehouse_manager
+        .add_node(system_managed_node(&new_node))
+        .await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+        SelectedNode::Random(None),
+    ]);
+
+    create_warehouse.await?;
+
+    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "test_warehouse");
+
+    let warehouse_nodes = get_warehouse_nodes.await?;
+
+    assert_eq!(warehouse_nodes.len(), 4);
+
+    nodes.push(new_node);
+    for warehouse_node in &warehouse_nodes {
+        assert!(nodes.contains(&warehouse_node.id));
+        assert_eq!(warehouse_node.cluster_id, "test_warehouse");
+        assert_eq!(warehouse_node.warehouse_id, "test_warehouse");
+    }
 
     Ok(())
 }
@@ -375,6 +508,18 @@ async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
     Ok((test_api, cluster_manager))
 }
 
+async fn assert_no_key(kv: &MetaStore, key: &str) {
+    let reply = kv.get_kv(key).await.unwrap();
+
+    match reply {
+        None => {}
+        Some(v) => match v.seq {
+            0 => {}
+            _ => panic!("assert_no_key {}", key),
+        },
+    }
+}
+
 async fn assert_key_value(kv: &MetaStore, key: &str, value: Vec<u8>) {
     let reply = kv.get_kv(key).await.unwrap();
 
@@ -401,7 +546,9 @@ async fn assert_key_expire(kv: &MetaStore, key: &str, lift: Duration) {
     let reply = kv.get_kv(key).await.unwrap();
 
     match reply {
-        Some(SeqV { meta: Some(meta), .. }) => {
+        Some(SeqV {
+            meta: Some(meta), ..
+        }) => {
             assert!(meta.get_expire_at_ms().unwrap() >= lift.as_millis() as u64);
         }
         catch => panic!("GetKVActionReply{:?}", catch),
