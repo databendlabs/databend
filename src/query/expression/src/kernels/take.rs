@@ -37,12 +37,14 @@ pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 impl DataBlock {
     pub fn take<I>(&self, indices: &[I]) -> Result<Self>
     where I: databend_common_column::types::Index {
-        if indices.is_empty() {
-            return Ok(self.slice(0..0));
-        }
+        // if indices.is_empty() {
+        //     return Ok(self.slice(0..0));
+        // }
+        //
+        // let taker = TakeVisitor::new(indices);
+        // self.take_inner(taker)
 
-        let taker = TakeVisitor::new(indices);
-        self.take_inner(taker)
+        self.take_with_optimize_size(indices)
     }
 
     pub fn take_with_optimize_size<I>(&self, indices: &[I]) -> Result<Self>
