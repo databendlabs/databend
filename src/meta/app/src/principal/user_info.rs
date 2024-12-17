@@ -102,6 +102,10 @@ impl UserInfo {
         }
     }
 
+    pub fn is_account_admin(&self) -> bool {
+        self.grants.roles().contains(&"account_admin".to_string())
+    }
+
     pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
         self.option.has_option_flag(flag)
     }
