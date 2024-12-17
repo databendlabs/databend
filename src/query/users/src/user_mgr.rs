@@ -17,6 +17,7 @@ use core::net::Ipv4Addr;
 use chrono::DateTime;
 use chrono::Utc;
 use cidr::Ipv4Cidr;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
@@ -96,6 +97,14 @@ impl UserApiProvider {
                 return Err(ErrorCode::AuthenticateFailure("Unknown client ip"));
             }
         };
+
+        let whitelist = &GlobalConfig::instance().query.network_policy_whitelist;
+        for cidr in whitelist {
+            let whitelist_cidr: Ipv4Cidr = cidr.parse().unwrap();
+            if whitelist_cidr.contains(&ip_addr) {
+                return Ok(());
+            }
+        }
 
         let network_policy = self.get_network_policy(tenant, policy).await?;
         for blocked_ip in network_policy.blocked_ip_list {
