@@ -141,7 +141,7 @@ pub struct AggregateInfo {
 
     /// Mapping: (aggregate function display name) -> (index of agg func in `aggregate_functions`)
     /// This is used to find a aggregate function in current context.
-    pub aggregate_functions_map: HashMap<String, usize>,
+    aggregate_functions_map: HashMap<String, usize>,
 
     /// Mapping: (group item) -> (index of group item in `group_items`)
     /// This is used to check if a scalar expression is a group item.
@@ -152,6 +152,20 @@ pub struct AggregateInfo {
 
     /// Information of grouping sets
     pub grouping_sets: Option<GroupingSetsInfo>,
+}
+
+impl AggregateInfo {
+    fn push_aggregate_function(&mut self, item: ScalarItem, display_name: String) {
+        self.aggregate_functions.push(item);
+        self.aggregate_functions_map
+            .insert(display_name, self.aggregate_functions.len() - 1);
+    }
+
+    pub fn get_aggregate_function(&self, display_name: &str) -> Option<&ScalarItem> {
+        self.aggregate_functions_map
+            .get(display_name)
+            .map(|index| &self.aggregate_functions[*index])
+    }
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -197,15 +211,12 @@ impl<'a> AggregateRewriter<'a> {
             return_type: aggregate.return_type.clone(),
         };
 
-        let agg_info = &mut self.bind_context.aggregate_info;
-
-        agg_info.aggregate_functions.push(ScalarItem {
-            scalar: replaced_agg.clone().into(),
-            index,
-        });
-        agg_info.aggregate_functions_map.insert(
+        self.bind_context.aggregate_info.push_aggregate_function(
+            ScalarItem {
+                scalar: replaced_agg.clone().into(),
+                index,
+            },
             replaced_agg.display_name.clone(),
-            agg_info.aggregate_functions.len() - 1,
         );
 
         Ok(replaced_agg.into())
@@ -240,15 +251,12 @@ impl<'a> AggregateRewriter<'a> {
             udf_type: udaf.udf_type.clone(),
         };
 
-        let agg_info = &mut self.bind_context.aggregate_info;
-
-        agg_info.aggregate_functions.push(ScalarItem {
-            scalar: replaced_udaf.clone().into(),
-            index,
-        });
-        agg_info.aggregate_functions_map.insert(
+        self.bind_context.aggregate_info.push_aggregate_function(
+            ScalarItem {
+                scalar: replaced_udaf.clone().into(),
+                index,
+            },
             replaced_udaf.display_name.clone(),
-            agg_info.aggregate_functions.len() - 1,
         );
 
         Ok(replaced_udaf.into())
@@ -1013,16 +1021,17 @@ pub fn find_replaced_aggregate_function(
     return_type: &DataType,
     new_name: &str,
 ) -> Option<ColumnBinding> {
-    agg_info.aggregate_functions_map.get(display_name).map(|i| {
-        // This expression is already replaced.
-        let scalar_item = &agg_info.aggregate_functions[*i];
-        debug_assert_eq!(&scalar_item.scalar.data_type().unwrap(), return_type);
-        ColumnBindingBuilder::new(
-            new_name.to_string(),
-            scalar_item.index,
-            Box::new(return_type.clone()),
-            Visibility::Visible,
-        )
-        .build()
-    })
+    agg_info
+        .get_aggregate_function(display_name)
+        .map(|scalar_item| {
+            // This expression is already replaced.
+            debug_assert_eq!(&scalar_item.scalar.data_type().unwrap(), return_type);
+            ColumnBindingBuilder::new(
+                new_name.to_string(),
+                scalar_item.index,
+                Box::new(return_type.clone()),
+                Visibility::Visible,
+            )
+            .build()
+        })
 }
