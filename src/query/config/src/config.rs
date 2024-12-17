@@ -152,6 +152,9 @@ pub struct Config {
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
+
+    #[clap(flatten)]
+    pub resources_manager: ResourceManagerConfig,
 }
 
 #[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -2946,6 +2949,25 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "30")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
     pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
+
+    #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
+    /// Allow space in bytes to spill to local disk.
+    pub spill_local_disk_max_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct ResourceManagerConfig {
+    #[clap(
+        long = "cluster-type",
+        value_name = "VALUE",
+        default_value = "system-managed"
+    )]
+    #[serde(rename = "type")]
+    pub typ: String,
+
+    #[clap(long, value_name = "VALUE")]
+    pub instance_type: Option<String>,
 
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.

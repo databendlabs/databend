@@ -15,13 +15,18 @@
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq)]
 pub enum SelectedNode {
     Random(Option<String>),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct WarehouseInfo {
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+pub enum WarehouseInfo {
+    SelfManaged,
+    SystemManaged(SystemManagedInfo),
+}
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+pub struct SystemManagedInfo {
     pub id: String,
     pub status: String,
     pub display_name: String,

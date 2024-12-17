@@ -52,4 +52,5 @@ pub use user::UserApi;
 pub use user::UserMgr;
 pub use warehouse::SelectedNode;
 pub use warehouse::WarehouseApi;
+pub use warehouse::WarehouseInfo;
 pub use warehouse::WarehouseMgr;

@@ -43,6 +43,7 @@ use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::NodeType;
 use databend_common_metrics::cluster::*;
 use futures::future::select;
 use futures::future::Either;
@@ -439,6 +440,8 @@ impl ClusterDiscovery {
 
         node_info.cluster_id = self.cluster_id.clone();
         node_info.warehouse_id = self.cluster_id.clone();
+        node_info.node_type = NodeType::SelfManaged;
+
         self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info.clone()).await {
             Ok(seq) => self.start_heartbeat(node_info, seq).await,

@@ -298,6 +298,7 @@ build_exceptions! {
     WarehouseAlreadyExists(2405),
     UnknownWarehouse(2406),
     WarehouseOperateConflict(2407),
+    EmptyNodesForWarehouse(2408),
 
     // Stage error codes.
     UnknownStage(2501),

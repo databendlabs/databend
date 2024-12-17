@@ -70,6 +70,13 @@ impl fmt::Display for Node {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default)]
+pub enum NodeType {
+    #[default]
+    SelfManaged,
+    SystemManaged,
+}
+
 /// Query node
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default)]
 #[serde(default)]
@@ -82,6 +89,7 @@ pub struct NodeInfo {
     pub flight_address: String,
     pub discovery_address: String,
     pub binary_version: String,
+    pub node_type: NodeType,
 
     #[serde(skip_serializing_if = "String::is_empty")]
     pub cluster_id: String,
@@ -110,6 +118,7 @@ impl NodeInfo {
             binary_version,
             cluster_id: "".to_string(),
             warehouse_id: "".to_string(),
+            node_type: NodeType::SystemManaged,
         }
     }
 

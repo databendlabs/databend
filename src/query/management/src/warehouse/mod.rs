@@ -17,4 +17,5 @@ mod warehouse_mgr;
 
 pub use warehouse_api::SelectedNode;
 pub use warehouse_api::WarehouseApi;
+pub use warehouse_api::WarehouseInfo;
 pub use warehouse_mgr::WarehouseMgr;
