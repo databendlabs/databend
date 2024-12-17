@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-## Create table t12_0005
-echo "create table t12_0005(a int, b int) change_tracking=true" | $BENDSQL_CLIENT_CONNECT
+## Create or replace table t12_0005
+echo "create or replace table t12_0005(a int, b int) change_tracking=true" | $BENDSQL_CLIENT_CONNECT
 echo "insert into t12_0005 values(1, 1),(2, 1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "update t12_0005 set b = 2 where a = 2" | $BENDSQL_CLIENT_OUTPUT_NULL

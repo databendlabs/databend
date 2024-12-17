@@ -1,8 +1,7 @@
-Error: APIError: QueryFailed: [2502]Stage 'test_stage' already exists.
+1
+1
+2	10	399
 expects .stats.write_progress.rows be 2
 expects .error be null
-0
-{
-  "code": 1025,
-  "message": "Unknown table 'tmp'"
-}
+2
+null
