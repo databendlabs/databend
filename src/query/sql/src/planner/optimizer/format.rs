@@ -69,7 +69,6 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
         RelOperator::CacheScan(_) => "CacheScan".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
-        // RelOperator::Udaf(_) => "Udaf".to_string(),
         RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
         RelOperator::Mutation(_) => "MergeInto".to_string(),

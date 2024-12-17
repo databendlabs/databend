@@ -181,13 +181,12 @@ impl SubqueryRewriter {
                 Arc::new(self.rewrite(s_expr.child(1)?)?),
             )),
 
-            RelOperator::Limit(_)
-            | RelOperator::Udf(_)
-            // | RelOperator::Udaf(_)// todo check
-            | RelOperator::AsyncFunction(_) => Ok(SExpr::create_unary(
-                Arc::new(s_expr.plan().clone()),
-                Arc::new(self.rewrite(s_expr.child(0)?)?),
-            )),
+            RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
+                Ok(SExpr::create_unary(
+                    Arc::new(s_expr.plan().clone()),
+                    Arc::new(self.rewrite(s_expr.child(0)?)?),
+                ))
+            }
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)

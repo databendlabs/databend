@@ -113,7 +113,6 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
-            // RelOperator::Udaf(udaf) => self.build_udaf(s_expr, udaf, required, stat_info).await,
             RelOperator::RecursiveCteScan(scan) => {
                 self.build_recursive_cte_scan(scan, stat_info).await
             }
