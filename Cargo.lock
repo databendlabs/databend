@@ -3240,6 +3240,7 @@ dependencies = [
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
+ "cidr",
  "databend-common-ast",
  "geozero",
  "gimli 0.31.1",

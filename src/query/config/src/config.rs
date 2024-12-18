@@ -1687,6 +1687,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "50")]
     pub max_cached_queries_profiles: usize,
 
+    /// A list of network that not to be checked by network policy.
+    #[clap(long, value_name = "VALUE")]
+    pub network_policy_whitelist: Vec<String>,
+
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
 }
@@ -1776,6 +1780,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             max_cached_queries_profiles: self.max_cached_queries_profiles,
+            network_policy_whitelist: self.network_policy_whitelist,
             settings: self
                 .settings
                 .into_iter()
@@ -1878,6 +1883,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
+            network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
         }
     }
