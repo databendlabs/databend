@@ -81,7 +81,7 @@ fn create_writer(
         .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
         .set_encoding(Encoding::PLAIN)
         .set_dictionary_enabled(false)
-        .set_statistics_enabled(EnabledStatistics::None)
+        .set_statistics_enabled(EnabledStatistics::Chunk)
         .set_bloom_filter_enabled(false)
         .set_created_by(format!("Databend {}", *DATABEND_SEMVER))
         .build();

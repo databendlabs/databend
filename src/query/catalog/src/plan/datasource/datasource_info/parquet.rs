@@ -71,11 +71,10 @@ pub struct ParquetTableInfo {
     pub files_to_read: Option<Vec<StageFileInfo>>,
     pub schema_from: String,
     pub compression_ratio: f64,
+    pub leaf_fields: Arc<Vec<TableField>>,
 
     // These fields are only used in coordinator node of the cluster,
     // so we don't need to serialize them.
-    #[serde(skip)]
-    pub leaf_fields: Arc<Vec<TableField>>,
     #[serde(skip)]
     pub parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
     #[serde(skip)]
