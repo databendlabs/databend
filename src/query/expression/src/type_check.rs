@@ -187,47 +187,21 @@ pub fn check_cast<Index: ColumnIndex>(
             }
         }
 
-        match (expr.data_type(), dest_type) {
-            (DataType::Null, _)
-            | (DataType::Nullable(_), DataType::Nullable(_))
-            | (DataType::Nullable(_), _)
-            | (_, DataType::Nullable(_))
-            | (DataType::EmptyArray, DataType::Array(_))
-            | (DataType::Array(_), DataType::Array(_))
-            | (DataType::Variant, DataType::Array(_))
-            | (DataType::EmptyMap, DataType::Map(_))
-            | (DataType::Map(_), DataType::Map(_)) => Ok(Expr::Cast {
-                span,
-                is_try,
-                expr: Box::new(expr),
-                dest_type: wrapped_dest_type,
-            }),
-            (DataType::Variant, DataType::Map(box DataType::Tuple(fields_dest_ty)))
-                if fields_dest_ty.len() == 2 && fields_dest_ty[0] == DataType::String =>
-            {
-                Ok(Expr::Cast {
-                    span,
-                    is_try,
-                    expr: Box::new(expr),
-                    dest_type: wrapped_dest_type,
-                })
-            }
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                Ok(Expr::Cast {
-                    span,
-                    is_try,
-                    expr: Box::new(expr),
-                    dest_type: wrapped_dest_type,
-                })
-            }
-
-            (src_type, dest_type) => Err(ErrorCode::BadArguments(format!(
-                "unable to cast type `{src_type}` to type `{dest_type}`"
+        if !can_cast_to(expr.data_type(), dest_type) {
+            return Err(ErrorCode::BadArguments(format!(
+                "unable to cast type `{}` to type `{}`",
+                expr.data_type(),
+                dest_type,
             ))
-            .set_span(span)),
+            .set_span(span));
         }
+
+        Ok(Expr::Cast {
+            span,
+            is_try,
+            expr: Box::new(expr),
+            dest_type: wrapped_dest_type,
+        })
     }
 }
 
@@ -572,6 +546,34 @@ pub fn unify(
             "unable to unify `{}` with `{}`",
             src_ty, dest_ty
         ))),
+    }
+}
+
+fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
+    match (src_ty, dest_ty) {
+        (src_ty, dest_ty) if src_ty == dest_ty => true,
+
+        (DataType::Null, _)
+        | (DataType::EmptyArray, DataType::Array(_))
+        | (DataType::EmptyMap, DataType::Map(_))
+        | (DataType::Variant, DataType::Array(_))
+        | (DataType::Variant, DataType::Map(_)) => true,
+
+        (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+            if fields_src_ty.len() == fields_dest_ty.len() =>
+        {
+            true
+        }
+
+        (DataType::Nullable(box inner_src_ty), DataType::Nullable(box inner_dest_ty))
+        | (DataType::Nullable(box inner_src_ty), inner_dest_ty)
+        | (inner_src_ty, DataType::Nullable(box inner_dest_ty))
+        | (DataType::Array(box inner_src_ty), DataType::Array(box inner_dest_ty))
+        | (DataType::Map(box inner_src_ty), DataType::Map(box inner_dest_ty)) => {
+            can_cast_to(inner_src_ty, inner_dest_ty)
+        }
+
+        (src_ty, dest_ty) => get_simple_cast_function(false, src_ty, dest_ty).is_some(),
     }
 }
 
