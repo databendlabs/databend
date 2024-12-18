@@ -12,11 +12,11 @@ runs:
         fi
         case $RUNNER_PROVIDER in
           aws)
-            aws s3 cp s3://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb
+            aws s3 cp s3://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb --no-progress
             sudo dpkg -i /tmp/bendsql.deb
             ;;
           gcp)
-            gsutil cp gs://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb
+            gsutil cp gs://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb --no-progress
             sudo dpkg -i /tmp/bendsql.deb
             ;;
           *)
