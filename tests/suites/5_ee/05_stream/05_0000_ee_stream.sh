@@ -7,9 +7,9 @@ echo "drop database if exists db_stream" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE DATABASE db_stream" | $BENDSQL_CLIENT_CONNECT
 echo "create table db_stream.t(a int) change_tracking = true" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_stream.t values(1)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db_stream.t values(1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "create stream default.test_s on table db_stream.t comment = 'test'" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_stream.t values(2)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db_stream.t values(2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 BASE_ROW_ID=$(echo "select _base_row_id from default.test_s" | $BENDSQL_CLIENT_CONNECT)
 echo "select change\$row_id='$BASE_ROW_ID' from default.test_s" | $BENDSQL_CLIENT_CONNECT

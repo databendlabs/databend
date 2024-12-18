@@ -7,12 +7,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ## Create table t12_0004
 echo "create table t12_0004(c int)" | $BENDSQL_CLIENT_CONNECT
 echo "two insertions"
-echo "insert into t12_0004 values(1),(2)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into t12_0004 values(1),(2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 # for at offset.
 sleep 2
 
-echo "insert into t12_0004 values(3)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into t12_0004 values(3)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "latest snapshot should contain 3 rows"
 echo "select count(*)  from t12_0004" | $BENDSQL_CLIENT_CONNECT
 

@@ -353,7 +353,7 @@ def run_tests_array(all_tests_with_params):
                             result_is_different = subprocess.call(
                                 ['diff', '-q', result_file, stdout_file],
                                 stdout=PIPE)
-                            if result_is_different:
+                            if not args.complete and result_is_different:
                                 diff = Popen(
                                     [
                                         'diff', '-U',
@@ -369,6 +369,15 @@ def run_tests_array(all_tests_with_params):
                                 status += " - result differs with:\n{}\n"\
                                     .format(diff)
                             else:
+                                if args.complete:
+                                    o = Popen(
+                                    [
+                                        'cp',
+                                        stdout_file,
+                                        result_file
+                                    ],
+                                    stdout=PIPE,
+                                    universal_newlines=True).communicate()[0]
                                 passed_total += 1
                                 failures_chain = 0
                                 status += MSG_OK
@@ -694,6 +703,10 @@ if __name__ == '__main__':
     parser.add_argument('--run-dir',
                         nargs='+',
                         help="Only run these tests in the dir")
+    parser.add_argument('--complete',
+                        action='store_true',
+                        default=False,
+                        help="complete results")
     parser.add_argument('--stop',
                         action='store_true',
                         default=None,

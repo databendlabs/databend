@@ -12,7 +12,7 @@ echo "set global enable_table_lock = 1" | $BENDSQL_CLIENT_CONNECT
 for i in $(seq 1 10);do
 	(
 		j=$(($i+1))
-		echo "insert into test_update.t values($i, $j)" | $BENDSQL_CLIENT_CONNECT
+		echo "insert into test_update.t values($i, $j)" | $BENDSQL_CLIENT_OUTPUT_NULL
 	)&
 done
 wait
@@ -23,7 +23,7 @@ echo "select count() from test_update.t where a + 1 = b" | $BENDSQL_CLIENT_CONNE
 echo "Test table lock for update"
 for i in $(seq 1 10);do
 	(
-		echo "update test_update.t set b = $i where a = $i" | $BENDSQL_CLIENT_CONNECT
+		echo "update test_update.t set b = $i where a = $i" | $BENDSQL_CLIENT_OUTPUT_NULL
 	)&
 done
 wait

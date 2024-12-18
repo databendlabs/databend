@@ -5,10 +5,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # set up
 cat <<EOF |  $BENDSQL_CLIENT_CONNECT
-create database i13947;
+create or replace database i13947;
 use i13947;
-create stage test_stage;
-create table tmp(id int);
+create or replace stage test_stage;
+create or replace table tmp(id int);
 insert into tmp values(1);
 insert into tmp values(2);
 copy into @test_stage from (select * from tmp);
