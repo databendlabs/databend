@@ -288,9 +288,6 @@ create table t(a int, A int)
 statement error Duplicated column name
 create table t as select number, number from numbers(1)
 
-statement error 1006
-create table t as select 'a' as c1, null as c2;
-
 statement error 4000
 create table tb101 (id int ,c1 datetime) 's3://wubx/tb101' connection=(aws_key_id='minioadmin' aws_ssecret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 
@@ -598,3 +595,25 @@ statement ok
 alter table t_opt_retention  set options(data_retention_period_in_hours = 2);
 
 
+#issue 16794
+statement ok
+create or replace table b as select 123 as col1, null  as col2;
+
+query T
+desc b;
+----
+col1 TINYINT UNSIGNED NO 0 (empty)
+col2 VARCHAR YES NULL (empty)
+
+query T
+show create table b;
+----
+b CREATE TABLE b (     col1 TINYINT UNSIGNED NOT NULL,     col2 VARCHAR NULL   ) ENGINE=FUSE
+
+query TT
+select * from b;
+----
+123 NULL
+
+statement ok
+drop table if exists b;

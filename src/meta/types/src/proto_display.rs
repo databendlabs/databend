@@ -201,6 +201,9 @@ impl Display for Target {
             Target::Seq(seq) => {
                 write!(f, "seq({})", seq)
             }
+            Target::KeysWithPrefix(n) => {
+                write!(f, "keys_with_prefix({})", n)
+            }
         }
     }
 }

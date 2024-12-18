@@ -5,4 +5,8 @@
 1
 1
 2
+>>>> remove @s1;
+>>>> select count() from @s1 where a >= 0 and b <= 1000;
+1000
+>>>> remove @s1;
 >>>> drop stage if exists s1;

@@ -528,4 +528,12 @@ impl Plan {
         }
         self.clone()
     }
+
+    pub fn bind_context(&self) -> Option<BindContext> {
+        if let Plan::Query { bind_context, .. } = self {
+            Some(*bind_context.clone())
+        } else {
+            None
+        }
+    }
 }

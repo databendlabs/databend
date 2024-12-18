@@ -92,6 +92,8 @@ impl kvapi::TestSuite {
         self.kv_transaction_with_ttl(&builder.build().await).await?;
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
             .await?;
+        self.kv_transaction_condition_keys_with_prefix(&builder.build().await)
+            .await?;
         self.kv_transaction_delete_match_seq_some_not_match(&builder.build().await)
             .await?;
         self.kv_transaction_delete_match_seq_some_match(&builder.build().await)
@@ -111,7 +113,7 @@ impl kvapi::TestSuite {
             // write
             let res = kv.upsert_kv(UpsertKV::update("foo", b"bar")).await?;
             assert_eq!(None, res.prev);
-            assert_eq!(Some(SeqV::with_meta(1, None, b"bar".to_vec())), res.result);
+            assert_eq!(Some(SeqV::new(1, b("bar"))), res.result);
         }
 
         {
@@ -120,10 +122,7 @@ impl kvapi::TestSuite {
                 .upsert_kv(UpsertKV::update("foo", b"bar").with(MatchSeq::Exact(2)))
                 .await?;
             assert_eq!(
-                (
-                    Some(SeqV::with_meta(1, None, b"bar".to_vec())),
-                    Some(SeqV::with_meta(1, None, b"bar".to_vec())),
-                ),
+                (Some(SeqV::new(1, b("bar"))), Some(SeqV::new(1, b("bar"))),),
                 (res.prev, res.result),
                 "nothing changed"
             );
@@ -134,16 +133,8 @@ impl kvapi::TestSuite {
             let res = kv
                 .upsert_kv(UpsertKV::update("foo", b"wow").with(MatchSeq::Exact(1)))
                 .await?;
-            assert_eq!(
-                Some(SeqV::with_meta(1, None, b"bar".to_vec())),
-                res.prev,
-                "old value"
-            );
-            assert_eq!(
-                Some(SeqV::with_meta(2, None, b"wow".to_vec())),
-                res.result,
-                "new value"
-            );
+            assert_eq!(Some(SeqV::new(1, b("bar"))), res.prev, "old value");
+            assert_eq!(Some(SeqV::new(2, b("wow"))), res.result, "new value");
         }
 
         Ok(())
@@ -194,10 +185,7 @@ impl kvapi::TestSuite {
         let res = kv.upsert_kv(UpsertKV::delete(test_key)).await?;
         // dbg!("delete", &res);
 
-        assert_eq!(
-            (Some(SeqV::with_meta(2, None, b"v2".to_vec())), None),
-            (res.prev, res.result)
-        );
+        assert_eq!((Some(SeqV::new(2, b("v2"))), None), (res.prev, res.result));
 
         Ok(())
     }
@@ -213,38 +201,35 @@ impl kvapi::TestSuite {
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
         let r = kv.upsert_kv(UpsertKV::update(test_key, b"v1")).await?;
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
         let seq = r.result.unwrap().seq;
 
         // unmatched seq
         let r = kv
             .upsert_kv(UpsertKV::update(test_key, b"v2").with(MatchSeq::Exact(seq + 1)))
             .await?;
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
 
         // matched seq
         let r = kv
             .upsert_kv(UpsertKV::update(test_key, b"v2").with(MatchSeq::Exact(seq)))
             .await?;
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
-        assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
+        assert_eq!(Some(SeqV::new(2, b("v2"))), r.result);
 
         // blind update
         let r = kv
             .upsert_kv(UpsertKV::update(test_key, b"v3").with(MatchSeq::GE(1)))
             .await?;
-        assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.prev);
-        assert_eq!(Some(SeqV::with_meta(3, None, b"v3".to_vec())), r.result);
+        assert_eq!(Some(SeqV::new(2, b("v2"))), r.prev);
+        assert_eq!(Some(SeqV::new(3, b("v3"))), r.result);
 
         // value updated
         let key_value = kv.get_kv(test_key).await?;
         assert!(key_value.is_some());
         let key_value = key_value.unwrap();
-        assert_eq!(
-            key_value,
-            SeqV::with_meta(key_value.seq, None, b"v3".to_vec())
-        );
+        assert_eq!(key_value, SeqV::new(key_value.seq, b("v3")));
         Ok(())
     }
 
@@ -380,7 +365,7 @@ impl kvapi::TestSuite {
         let now_sec = SeqV::<()>::now_sec();
 
         let r = kv.upsert_kv(UpsertKV::update(test_key, b"v1")).await?;
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
         let seq = r.result.unwrap().seq;
 
         info!("--- mismatching seq does nothing");
@@ -389,12 +374,12 @@ impl kvapi::TestSuite {
             .upsert_kv(UpsertKV::new(
                 test_key,
                 MatchSeq::Exact(seq + 1),
-                Operation::Update(b"v1".to_vec()),
+                Operation::Update(b("v1")),
                 Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
 
         info!("--- matching seq only update meta");
 
@@ -402,11 +387,11 @@ impl kvapi::TestSuite {
             .upsert_kv(UpsertKV::new(
                 test_key,
                 MatchSeq::Exact(seq),
-                Operation::Update(b"v1".to_vec()),
+                Operation::Update(b("v1")),
                 Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
-        assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
 
         {
             let res = r.result.unwrap();
@@ -478,15 +463,15 @@ impl kvapi::TestSuite {
 
         let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
         assert_eq!(res, vec![
-            Some(SeqV::with_meta(1, None, b"v1".to_vec(),)),
+            Some(SeqV::new(1, b("v1"),)),
             // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
-            Some(SeqV::with_meta(2, None, b"v2".to_vec(),)),
+            Some(SeqV::new(2, b("v2"),)),
         ]);
 
         let res = kv
             .mget_kv(&["k1".to_string(), "key_no exist".to_string()])
             .await?;
-        assert_eq!(res, vec![Some(SeqV::new(1, b"v1".to_vec())), None]);
+        assert_eq!(res, vec![Some(SeqV::new(1, b("v1"))), None]);
 
         Ok(())
     }
@@ -663,7 +648,7 @@ impl kvapi::TestSuite {
         // first case: get and set one key transaction
         {
             let k1 = "txn_1_K1";
-            let val1 = b"v1".to_vec();
+            let val1 = b("v1");
 
             // first insert k1 value
             kv.upsert_kv(UpsertKV::update(k1, &val1)).await?;
@@ -740,11 +725,11 @@ impl kvapi::TestSuite {
         // 3rd case: get two key and set both key transaction
         {
             let k1 = "txn_3_K1";
-            let val1 = b"v1".to_vec();
-            let val1_new = b"v1_new".to_vec();
+            let val1 = b("v1");
+            let val1_new = b("v1_new");
 
             let k2 = "txn_3_K2";
-            let val2 = b"v1".to_vec();
+            let val2 = b("v1");
 
             // first insert k1 and k2 value
             kv.upsert_kv(UpsertKV::update(k1, &val1)).await?;
@@ -1095,6 +1080,78 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
+    /// A transaction that checks the number of keys with given prefix.
+    pub async fn kv_transaction_condition_keys_with_prefix<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        let prefix = func_name!();
+
+        let sample_keys_prefix = format!("{}/xxx", prefix);
+
+        let sample = |suffix| format!("{}/{}", sample_keys_prefix, suffix);
+        let positive = format!("{prefix}/positive");
+        let negative = format!("{prefix}/negative");
+
+        kv.upsert_kv(UpsertKV::update(sample("a"), &b("a"))).await?;
+        kv.upsert_kv(UpsertKV::update(sample("b"), &b("b"))).await?;
+        kv.upsert_kv(UpsertKV::update(sample("c"), &b("c"))).await?;
+
+        use ConditionResult::*;
+
+        // A transaction that set positive key if succeeded,
+        // otherwise set the negative key.
+        let txn = |op: ConditionResult, n: u64| TxnRequest {
+            condition: vec![TxnCondition::match_keys_with_prefix(
+                &sample_keys_prefix,
+                op,
+                n,
+            )],
+            if_then: vec![TxnOp::put(&positive, b(format!("{op:?}")))],
+            else_then: vec![TxnOp::put(&negative, b(format!("{op:?}")))],
+        };
+
+        for (op, n, expected) in [
+            (Eq, 2, false),
+            (Eq, 3, true),
+            (Eq, 4, false),
+            (Ne, 2, true),
+            (Ne, 3, false),
+            (Ne, 4, true),
+            (Lt, 3, false),
+            (Lt, 4, true),
+            (Lt, 5, true),
+            (Le, 2, false),
+            (Le, 3, true),
+            (Le, 4, true),
+            (Gt, 2, true),
+            (Gt, 3, false),
+            (Gt, 4, false),
+            (Ge, 2, true),
+            (Ge, 3, true),
+            (Ge, 4, false),
+        ] {
+            kv.upsert_kv(UpsertKV::update(&positive, &b(""))).await?;
+            kv.upsert_kv(UpsertKV::update(&negative, &b(""))).await?;
+
+            let resp = kv.transaction(txn(op, n)).await?;
+            assert_eq!(
+                resp.success, expected,
+                "case: {op:?} {n}, expected: {expected}"
+            );
+
+            let expected_key = if expected { &positive } else { &negative };
+            let got = kv.get_kv(expected_key).await?.unwrap().data;
+            assert_eq!(
+                got,
+                b(format!("{op:?}")),
+                "case: {op:?} {n}, expected: {expected}"
+            );
+        }
+
+        Ok(())
+    }
+
     /// If `TxnDeleteRequest.match_seq` is not set,
     /// the delete operation will always be executed.
     pub async fn kv_transaction_delete_match_seq_none<KV: kvapi::KVApi>(
@@ -1103,7 +1160,7 @@ impl kvapi::TestSuite {
     ) -> anyhow::Result<()> {
         info!("--- {}", func_name!());
         let key = || "txn_1_K1".to_string();
-        let val = || b"v1".to_vec();
+        let val = || b("v1");
 
         kv.upsert_kv(UpsertKV::update(key(), &val())).await?;
 
@@ -1137,7 +1194,7 @@ impl kvapi::TestSuite {
     ) -> anyhow::Result<()> {
         info!("--- {}", func_name!());
         let key = || "txn_1_K1".to_string();
-        let val = || b"v1".to_vec();
+        let val = || b("v1");
 
         kv.upsert_kv(UpsertKV::update(key(), &val())).await?;
 
@@ -1175,7 +1232,7 @@ impl kvapi::TestSuite {
     ) -> anyhow::Result<()> {
         info!("--- {}", func_name!());
         let key = || "txn_1_K1".to_string();
-        let val = || b"v1".to_vec();
+        let val = || b("v1");
 
         kv.upsert_kv(UpsertKV::update(key(), &val())).await?;
 
@@ -1231,7 +1288,7 @@ impl kvapi::TestSuite {
         {
             let res = kv2.get_kv("t").await?;
             let res = res.unwrap();
-            assert_eq!(b"t".to_vec(), res.data);
+            assert_eq!(b("t"), res.data);
         }
 
         info!("--- test mget on other node");
@@ -1243,7 +1300,7 @@ impl kvapi::TestSuite {
                     Some(SeqV {
                         seq: 11,
                         meta: None,
-                        data: b"v".to_vec()
+                        data: b("v")
                     })
                 ],
                 res
@@ -1267,6 +1324,6 @@ impl kvapi::TestSuite {
     }
 }
 
-fn b(s: &str) -> Vec<u8> {
-    s.as_bytes().to_vec()
+fn b(x: impl ToString) -> Vec<u8> {
+    x.to_string().as_bytes().to_vec()
 }
