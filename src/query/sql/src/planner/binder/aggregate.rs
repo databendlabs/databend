@@ -188,7 +188,7 @@ impl<'a> AggregateRewriter<'a> {
             &self.bind_context.aggregate_info,
             &aggregate.display_name,
             &aggregate.return_type,
-            &aggregate.func_name,
+            &aggregate.display_name,
         ) {
             return Ok(BoundColumnRef { span: None, column }.into());
         }
@@ -227,7 +227,7 @@ impl<'a> AggregateRewriter<'a> {
             &self.bind_context.aggregate_info,
             &udaf.display_name,
             &udaf.return_type,
-            &udaf.name,
+            &udaf.display_name,
         ) {
             return Ok(BoundColumnRef { span: None, column }.into());
         }

@@ -264,3 +264,38 @@ pub fn create_aggregate_udf_function(
         return_type,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use arrow_array::Array;
+    use arrow_array::Int32Array;
+    use arrow_array::Int64Array;
+    use arrow_array::StructArray;
+    use arrow_schema::DataType as ArrowType;
+    use arrow_schema::Field;
+
+    use super::*;
+
+    #[test]
+    fn test_serialize() {
+        let want: Arc<dyn Array> = Arc::new(StructArray::new(
+            vec![
+                Field::new("a", ArrowType::Int32, false),
+                Field::new("b", ArrowType::Int64, false),
+            ]
+            .into(),
+            vec![
+                Arc::new(Int32Array::from(vec![1, 2, 3])),
+                Arc::new(Int64Array::from(vec![4, 5, 6])),
+            ],
+            None,
+        ));
+
+        let state = UdfAggState(want.clone());
+        let mut buf = Vec::new();
+        state.serialize(&mut buf).unwrap();
+
+        let state = UdfAggState::deserialize(&mut buf.as_slice()).unwrap();
+        assert_eq!(&want, &state.0);
+    }
+}
