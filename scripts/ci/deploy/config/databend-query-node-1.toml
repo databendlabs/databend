@@ -44,7 +44,7 @@ udf_server_allow_insecure = true
 
 cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 
-network_policy_whitelist = ['127.0.0.0/8']
+# network_policy_whitelist = ['127.0.0.0/8']
 
 [[query.users]]
 name = "root"

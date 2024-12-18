@@ -36,7 +36,7 @@ enable_udf_server = true
 udf_server_allow_list = ['http://0.0.0.0:8815']
 udf_server_allow_insecure = true
 
-network_policy_whitelist = ['127.0.0.0/8']
+# network_policy_whitelist = ['127.0.0.0/8']
 
 [[query.users]]
 name = "root"
