@@ -34,7 +34,9 @@ use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 
+use crate::warehouse::warehouse_api::RemoveNodes;
 use crate::warehouse::warehouse_api::SelectedNode;
+use crate::warehouse::warehouse_api::SelectedNodes;
 use crate::warehouse::warehouse_api::SystemManagedInfo;
 use crate::warehouse::warehouse_api::WarehouseInfo;
 use crate::warehouse::WarehouseApi;
@@ -897,6 +899,15 @@ impl WarehouseApi for WarehouseMgr {
         Err(ErrorCode::WarehouseOperateConflict(
             "Warehouse operate conflict(tried 10 times while in rename warehouse).",
         ))
+    }
+
+    async fn add_node(&self, warehouse: &str, cluster: &str, nodes: SelectedNodes) -> Result<()> {
+        // Move node to warehouse
+        todo!()
+    }
+
+    async fn remove_node(&self, warehouse: &str, cluster: &str, nodes: RemoveNodes) -> Result<()> {
+        todo!()
     }
 
     #[async_backtrace::framed]

@@ -22,6 +22,8 @@ pub enum SelectedNode {
     Random(Option<String>),
 }
 
+pub type SelectedNodes = Vec<SelectedNode>;
+
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub enum WarehouseInfo {
     SelfManaged(String),
@@ -35,6 +37,8 @@ pub struct SystemManagedInfo {
     pub display_name: String,
     pub clusters: HashMap<String, Vec<SelectedNode>>,
 }
+
+pub type RemoveNodes = Vec<Option<String>>;
 
 /// Databend-query cluster management API
 #[async_trait::async_trait]
@@ -50,11 +54,15 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn drop_warehouse(&self, warehouse: String) -> Result<()>;
 
-    async fn create_warehouse(&self, warehouse: String, nodes: Vec<SelectedNode>) -> Result<()>;
+    async fn create_warehouse(&self, warehouse: String, nodes: SelectedNodes) -> Result<()>;
 
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
 
     async fn rename_warehouse(&self, cur: String, to: String) -> Result<()>;
+
+    async fn add_node(&self, warehouse: &str, cluster: &str, added: SelectedNodes) -> Result<()>;
+
+    async fn remove_node(&self, warehouse: &str, cluster: &str, added: RemoveNodes) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>>;
