@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_tracing::set_panic_hook;
@@ -25,7 +26,8 @@ pub struct TestFixture;
 
 impl TestFixture {
     pub async fn setup(config: &InnerConfig, public_key: String) -> Result<()> {
-        set_panic_hook();
+        let binary_version = DATABEND_COMMIT_VERSION.clone();
+        set_panic_hook(binary_version);
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]
