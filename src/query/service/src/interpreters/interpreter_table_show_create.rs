@@ -281,7 +281,7 @@ impl ShowCreateTableInterpreter {
 
         if engine != "ICEBERG" && engine != "DELTA" {
             if let Some(sp) = &table_info.meta.storage_params {
-                table_create_sql.push_str(format!(" LOCATION = '{}'", sp).as_str());
+                table_create_sql.push_str(format!("'{}'", sp).as_str());
             }
         }
 
