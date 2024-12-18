@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -36,7 +37,7 @@ async fn test_empty_id_with_self_managed() -> Result<()> {
     node.node_type = NodeType::SelfManaged;
     node.warehouse_id = String::new();
     node.cluster_id = String::from("test_cluster_id");
-    let res = warehouse_manager.add_node(node).await;
+    let res = warehouse_manager.start_node(node).await;
 
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().code(), 2403);
@@ -45,7 +46,7 @@ async fn test_empty_id_with_self_managed() -> Result<()> {
     node.node_type = NodeType::SelfManaged;
     node.cluster_id = String::new();
     node.warehouse_id = String::from("test_cluster_id");
-    let res = warehouse_manager.add_node(node).await;
+    let res = warehouse_manager.start_node(node).await;
 
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().code(), 2403);
@@ -58,7 +59,7 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_secs(60), 0).await?;
 
     let mut node_info_1 = self_managed_node("test_node_1");
-    warehouse_manager.add_node(node_info_1.clone()).await?;
+    warehouse_manager.start_node(node_info_1.clone()).await?;
     let node_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node_1";
     assert_key_value(&kv, node_key, serde_json::to_vec(&node_info_1)?).await;
 
@@ -73,12 +74,12 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
     assert_key_value(
         &kv,
         info_key,
-        serde_json::to_vec(&WarehouseInfo::SelfManaged)?,
+        serde_json::to_vec(&WarehouseInfo::SelfManaged(String::from("test-cluster-id")))?,
     )
     .await;
 
     let mut node_info_2 = self_managed_node("test_node_2");
-    warehouse_manager.add_node(node_info_2.clone()).await?;
+    warehouse_manager.start_node(node_info_2.clone()).await?;
 
     let node_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node_2";
     assert_key_value(&kv, node_key, serde_json::to_vec(&node_info_2)?).await;
@@ -94,7 +95,7 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
     assert_key_value(
         &kv,
         info_key,
-        serde_json::to_vec(&WarehouseInfo::SelfManaged)?,
+        serde_json::to_vec(&WarehouseInfo::SelfManaged(String::from("test-cluster-id")))?,
     )
     .await;
 
@@ -106,20 +107,20 @@ async fn test_already_exists_add_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_secs(60), 1).await?;
 
     let node_info = self_managed_node("test_node_1");
-    warehouse_manager.add_node(node_info.clone()).await?;
+    warehouse_manager.start_node(node_info.clone()).await?;
 
     let node_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node_1";
     assert_key_value(&kv, node_key, serde_json::to_vec(&node_info)?).await;
 
     // add already exists self-managed node and get failure
-    match warehouse_manager.add_node(node_info.clone()).await {
+    match warehouse_manager.start_node(node_info.clone()).await {
         Ok(_) => panic!("Already exists add node must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2402),
     }
 
     // add already exists system-managed node and get failure
     match warehouse_manager
-        .add_node(self_managed_node(&nodes[0]))
+        .start_node(self_managed_node(&nodes[0]))
         .await
     {
         Ok(_) => panic!("Already exists add node must be return Err."),
@@ -138,14 +139,14 @@ async fn test_successfully_get_self_managed_nodes() -> Result<()> {
     assert_eq!(get_nodes.await?, vec![]);
 
     let node_1 = self_managed_node("node_1");
-    warehouse_manager.add_node(node_1.clone()).await?;
+    warehouse_manager.start_node(node_1.clone()).await?;
 
     let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![node_1.clone()]);
 
     let node_2 = self_managed_node("node_2");
-    warehouse_manager.add_node(node_2.clone()).await?;
+    warehouse_manager.start_node(node_2.clone()).await?;
 
     let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
 
@@ -158,13 +159,13 @@ async fn test_successfully_drop_self_managed_node() -> Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let node_info = self_managed_node("test_node");
-    warehouse_manager.add_node(node_info.clone()).await?;
+    warehouse_manager.start_node(node_info.clone()).await?;
 
     let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![node_info.clone()]);
 
-    warehouse_manager.drop_node(node_info.id).await?;
+    warehouse_manager.shutdown_node(node_info.id).await?;
 
     let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
 
@@ -177,7 +178,7 @@ async fn test_unknown_node_drop_self_managed_node() -> Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     match warehouse_manager
-        .drop_node(String::from("UNKNOWN_ID"))
+        .shutdown_node(String::from("UNKNOWN_ID"))
         .await
     {
         Ok(_) => { /*panic!("Unknown node drop node must be return Err.")*/ }
@@ -192,7 +193,7 @@ async fn test_drop_self_managed_warehouse() -> Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let node_info = self_managed_node("test_node");
-    warehouse_manager.add_node(node_info.clone()).await?;
+    warehouse_manager.start_node(node_info.clone()).await?;
 
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test-cluster-id"));
 
@@ -206,7 +207,7 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let mut node_info = self_managed_node("test_node");
-    let seq = warehouse_manager.add_node(node_info.clone()).await?;
+    let seq = warehouse_manager.start_node(node_info.clone()).await?;
 
     let info_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node";
     assert_key_value(&kv, info_key, serde_json::to_vec(&node_info)?).await;
@@ -220,7 +221,7 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     assert_key_expire(&kv, warehouse_key, Duration::from_mins(50)).await;
 
     let warehouse_info_key = "__fd_warehouses/v1/test%2dtenant%2did/test%2dcluster%2did";
-    let info = serde_json::to_vec(&WarehouseInfo::SelfManaged)?;
+    let info = serde_json::to_vec(&WarehouseInfo::SelfManaged(String::from("test-cluster-id")))?;
     assert_key_value(&kv, warehouse_info_key, info.clone()).await;
     assert_key_expire(&kv, warehouse_info_key, Duration::from_mins(50)).await;
 
@@ -309,7 +310,9 @@ async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> 
     let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 4).await?;
 
     // mock node offline
-    warehouse_manager.drop_node(nodes[0].to_string()).await?;
+    warehouse_manager
+        .shutdown_node(nodes[0].to_string())
+        .await?;
 
     let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
         SelectedNode::Random(None),
@@ -362,7 +365,7 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
     // mock node online
     let new_node = GlobalUniqName::unique();
     warehouse_manager
-        .add_node(system_managed_node(&new_node))
+        .start_node(system_managed_node(&new_node))
         .await?;
 
     let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
@@ -426,7 +429,9 @@ async fn test_create_warehouse_with_self_manage() -> Result<()> {
     let mut self_manage_node_1 = self_managed_node("self_manage_node_1");
     self_manage_node_1.cluster_id = String::from("test_warehouse");
     self_manage_node_1.warehouse_id = String::from("test_warehouse");
-    warehouse_manager.add_node(self_manage_node_1).await?;
+    warehouse_manager
+        .start_node(self_manage_node_1.clone())
+        .await?;
 
     let create_warehouse = warehouse_manager
         .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
@@ -435,7 +440,16 @@ async fn test_create_warehouse_with_self_manage() -> Result<()> {
 
     assert_eq!(create_warehouse.await.unwrap_err().code(), 2405);
 
-    Ok(())
+    warehouse_manager
+        .shutdown_node(self_manage_node_1.id.clone())
+        .await?;
+
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -511,7 +525,7 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     create_warehouse.await?;
 
     // mock partial node offline
-    warehouse_manager.drop_node(nodes.remove(0)).await?;
+    warehouse_manager.shutdown_node(nodes.remove(0)).await?;
 
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
     drop_warehouse.await?;
@@ -519,7 +533,7 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     // online node
     let online_node_id = GlobalUniqName::unique();
     warehouse_manager
-        .add_node(system_managed_node(&online_node_id))
+        .start_node(system_managed_node(&online_node_id))
         .await?;
     nodes.push(online_node_id);
     let create_warehouse =
@@ -532,15 +546,15 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     create_warehouse.await?;
 
     // mock all node offline
-    warehouse_manager.drop_node(nodes.remove(0)).await?;
-    warehouse_manager.drop_node(nodes.remove(0)).await?;
+    warehouse_manager.shutdown_node(nodes.remove(0)).await?;
+    warehouse_manager.shutdown_node(nodes.remove(0)).await?;
 
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
     drop_warehouse.await?;
 
     let online_node_id = GlobalUniqName::unique();
     warehouse_manager
-        .add_node(system_managed_node(&online_node_id))
+        .start_node(system_managed_node(&online_node_id))
         .await?;
     nodes.push(online_node_id);
 
@@ -550,6 +564,233 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
             None,
         )]);
     create_warehouse.await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_list_warehouses() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 10).await?;
+
+    assert_eq!(warehouse_manager.list_warehouses().await?, vec![]);
+
+    let self_managed_node_1 = GlobalUniqName::unique();
+    warehouse_manager
+        .start_node(self_managed_node(&self_managed_node_1))
+        .await?;
+
+    let list_warehouse_1 = warehouse_manager.list_warehouses().await?;
+    assert_eq!(list_warehouse_1, vec![WarehouseInfo::SelfManaged(
+        String::from("test-cluster-id")
+    )]);
+
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse_1"), vec![
+            SelectedNode::Random(None),
+        ]);
+
+    create_warehouse.await?;
+
+    let list_warehouses_2 = warehouse_manager.list_warehouses().await?;
+
+    assert_eq!(list_warehouses_2.len(), 2);
+    assert_eq!(list_warehouses_2[0], list_warehouse_1[0]);
+    let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses_2[1] else {
+        unreachable!();
+    };
+    assert!(!system_managed_info.id.is_empty());
+    assert_eq!(system_managed_info.status, "Running");
+    assert_eq!(system_managed_info.display_name, "test_warehouse_1");
+    assert_eq!(
+        system_managed_info.clusters,
+        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+    );
+
+    let self_managed_node_2 = GlobalUniqName::unique();
+    let mut self_managed_node = self_managed_node(&self_managed_node_2);
+    self_managed_node.warehouse_id = String::from("test_warehouse_2");
+    warehouse_manager.start_node(self_managed_node).await?;
+
+    let list_warehouses_3 = warehouse_manager.list_warehouses().await?;
+
+    assert_eq!(list_warehouses_3.len(), 3);
+    assert_eq!(list_warehouses_3[0], list_warehouses_2[0]);
+    assert_eq!(list_warehouses_3[1], list_warehouses_2[1]);
+    assert_eq!(
+        list_warehouses_3[2],
+        WarehouseInfo::SelfManaged(String::from("test_warehouse_2"))
+    );
+
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse_3"), vec![
+            SelectedNode::Random(None),
+        ]);
+
+    create_warehouse.await?;
+
+    let mut list_warehouses_4 = warehouse_manager.list_warehouses().await?;
+
+    assert_eq!(list_warehouses_4.len(), 4);
+    assert_eq!(list_warehouses_4[0], list_warehouses_3[0]);
+    assert_eq!(list_warehouses_4[1], list_warehouses_3[1]);
+    assert_eq!(list_warehouses_4[2], list_warehouses_3[2]);
+
+    let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses_4[3] else {
+        unreachable!();
+    };
+    assert!(!system_managed_info.id.is_empty());
+    assert_eq!(system_managed_info.status, "Running");
+    assert_eq!(system_managed_info.display_name, "test_warehouse_3");
+    assert_eq!(
+        system_managed_info.clusters,
+        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+    );
+
+    warehouse_manager.shutdown_node(self_managed_node_1).await?;
+    list_warehouses_4.remove(0);
+    assert_eq!(
+        warehouse_manager.list_warehouses().await?,
+        list_warehouses_4
+    );
+
+    warehouse_manager.shutdown_node(self_managed_node_2).await?;
+    list_warehouses_4.remove(1);
+    assert_eq!(
+        warehouse_manager.list_warehouses().await?,
+        list_warehouses_4
+    );
+
+    warehouse_manager
+        .drop_warehouse(String::from("test_warehouse_1"))
+        .await?;
+    list_warehouses_4.remove(0);
+    assert_eq!(
+        warehouse_manager.list_warehouses().await?,
+        list_warehouses_4
+    );
+
+    // keep show warehouse if all node offline
+    let nodes = warehouse_manager
+        .get_nodes("test_warehouse_3", "default")
+        .await?;
+    warehouse_manager.shutdown_node(nodes[0].id.clone()).await?;
+    assert_eq!(
+        warehouse_manager.list_warehouses().await?,
+        list_warehouses_4
+    );
+    warehouse_manager
+        .drop_warehouse(String::from("test_warehouse_3"))
+        .await?;
+    list_warehouses_4.remove(0);
+    assert_eq!(
+        warehouse_manager.list_warehouses().await?,
+        list_warehouses_4
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_rename_warehouses() -> Result<()> {
+    let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 1).await?;
+
+    let self_managed_node_1 = GlobalUniqName::unique();
+    warehouse_manager
+        .start_node(self_managed_node(&self_managed_node_1))
+        .await?;
+
+    let rename_warehouse = warehouse_manager.rename_warehouse(
+        String::from("test-cluster-id"),
+        String::from("test_warehouse"),
+    );
+
+    assert_eq!(rename_warehouse.await.unwrap_err().code(), 2403);
+
+    warehouse_manager.shutdown_node(self_managed_node_1).await?;
+
+    let warehouse_node_key = format!(
+        "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
+        &nodes[0]
+    );
+
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    assert_key_seq(&kv, &warehouse_node_key, MatchSeq::GE(1)).await;
+    let list_warehouses = warehouse_manager.list_warehouses().await?;
+
+    let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses[0] else {
+        unreachable!();
+    };
+
+    assert!(!system_managed_info.id.is_empty());
+    assert_eq!(system_managed_info.status, "Running");
+    assert_eq!(system_managed_info.display_name, "test_warehouse");
+    assert_eq!(
+        system_managed_info.clusters,
+        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+    );
+
+    let rename_warehouse = warehouse_manager.rename_warehouse(
+        String::from("test_warehouse"),
+        String::from("new_test_warehouse"),
+    );
+
+    rename_warehouse.await?;
+
+    assert_no_key(&kv, &warehouse_node_key).await;
+
+    let list_warehouses = warehouse_manager.list_warehouses().await?;
+
+    let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses[0] else {
+        unreachable!();
+    };
+
+    assert!(!system_managed_info.id.is_empty());
+    assert_eq!(system_managed_info.status, "Running");
+    assert_eq!(system_managed_info.display_name, "new_test_warehouse");
+    assert_eq!(
+        system_managed_info.clusters,
+        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+    );
+
+    let system_managed_node_2 = GlobalUniqName::unique();
+    warehouse_manager
+        .start_node(system_managed_node(&system_managed_node_2))
+        .await?;
+
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    let list_warehouses_2 = warehouse_manager.list_warehouses().await?;
+
+    assert_eq!(list_warehouses_2[0], list_warehouses[0]);
+    let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses_2[1] else {
+        unreachable!();
+    };
+
+    assert!(!system_managed_info.id.is_empty());
+    assert_eq!(system_managed_info.status, "Running");
+    assert_eq!(system_managed_info.display_name, "test_warehouse");
+    assert_eq!(
+        system_managed_info.clusters,
+        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+    );
+
+    let rename_warehouse = warehouse_manager.rename_warehouse(
+        String::from("new_test_warehouse"),
+        String::from("test_warehouse"),
+    );
+
+    assert_eq!(rename_warehouse.await.unwrap_err().code(), 2405);
 
     Ok(())
 }
@@ -592,7 +833,9 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
     let mut nodes = Vec::with_capacity(size);
     for _index in 0..size {
         let name = GlobalUniqName::unique();
-        cluster_manager.add_node(system_managed_node(&name)).await?;
+        cluster_manager
+            .start_node(system_managed_node(&name))
+            .await?;
         nodes.push(name);
     }
 

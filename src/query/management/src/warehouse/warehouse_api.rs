@@ -17,17 +17,18 @@ use std::collections::HashMap;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum SelectedNode {
     Random(Option<String>),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub enum WarehouseInfo {
-    SelfManaged,
+    SelfManaged(String),
     SystemManaged(SystemManagedInfo),
 }
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct SystemManagedInfo {
     pub id: String,
     pub status: String,
@@ -38,8 +39,11 @@ pub struct SystemManagedInfo {
 /// Databend-query cluster management API
 #[async_trait::async_trait]
 pub trait WarehouseApi: Sync + Send {
-    /// Add a new node.
-    async fn add_node(&self, node: NodeInfo) -> Result<u64>;
+    /// Start a new node.
+    async fn start_node(&self, node: NodeInfo) -> Result<u64>;
+
+    /// Shutdown the tenant's cluster one node by node.id.
+    async fn shutdown_node(&self, node_id: String) -> Result<()>;
 
     /// Keep the tenant's cluster node alive.
     async fn heartbeat(&self, node: &mut NodeInfo, seq: u64) -> Result<u64>;
@@ -48,13 +52,12 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn create_warehouse(&self, warehouse: String, nodes: Vec<SelectedNode>) -> Result<()>;
 
-    // async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
+    async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
+
+    async fn rename_warehouse(&self, cur: String, to: String) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>>;
-
-    /// Drop the tenant's cluster one node by node.id.
-    async fn drop_node(&self, node_id: String) -> Result<()>;
 
     async fn get_local_addr(&self) -> Result<Option<String>>;
 

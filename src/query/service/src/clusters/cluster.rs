@@ -346,7 +346,7 @@ impl ClusterDiscovery {
             // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
             // lead to some invalid information
             if before_node.flight_address.eq(&node_info.flight_address) {
-                let drop_invalid_node = self.api_provider.drop_node(before_node.id);
+                let drop_invalid_node = self.api_provider.shutdown_node(before_node.id);
                 if let Err(cause) = drop_invalid_node.await {
                     warn!("Drop invalid node failure: {:?}", cause);
                 }
@@ -369,7 +369,7 @@ impl ClusterDiscovery {
 
         let mut mut_signal_pin = signal.as_mut();
         let signal_future = Box::pin(mut_signal_pin.next());
-        let drop_node = Box::pin(self.api_provider.drop_node(self.local_id.clone()));
+        let drop_node = Box::pin(self.api_provider.shutdown_node(self.local_id.clone()));
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
@@ -443,7 +443,7 @@ impl ClusterDiscovery {
         node_info.node_type = NodeType::SelfManaged;
 
         self.drop_invalid_nodes(&node_info).await?;
-        match self.api_provider.add_node(node_info.clone()).await {
+        match self.api_provider.start_node(node_info.clone()).await {
             Ok(seq) => self.start_heartbeat(node_info, seq).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
