@@ -152,9 +152,7 @@ pub struct Config {
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
-
-    #[clap(flatten)]
-    pub resources_manager: ResourceManagerConfig,
+    // #[clap(flatten)]
 }
 
 #[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]

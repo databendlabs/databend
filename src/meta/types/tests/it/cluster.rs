@@ -25,6 +25,7 @@ fn test_node_info_ip_port() -> anyhow::Result<()> {
         flight_address: "1.2.3.4:123".to_string(),
         discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
+        node_type: Default::default(),
         cluster_id: "".to_string(),
         warehouse_id: "".to_string(),
     };
@@ -48,6 +49,7 @@ fn test_serde_node_info() {
         flight_address: "1.2.3.4:123".to_string(),
         discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
+        node_type: Default::default(),
         cluster_id: String::new(),
         warehouse_id: String::new(),
     };

@@ -440,24 +440,24 @@ async fn test_create_warehouse_with_self_manage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_warehouse_with_no_resources() -> Result<()> {
-    let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse("test_warehouse_1".to_string(), vec![SelectedNode::Random(
+    let create_warehouse = warehouse_manager
+        .create_warehouse("test_warehouse_1".to_string(), vec![SelectedNode::Random(
             None,
         )]);
 
     create_warehouse.await?;
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse("test_warehouse_2".to_string(), vec![SelectedNode::Random(
+    let create_warehouse = warehouse_manager
+        .create_warehouse("test_warehouse_2".to_string(), vec![SelectedNode::Random(
             None,
         )]);
 
     create_warehouse.await?;
 
-    let create_warehouse =
-        cluster_mgr.create_warehouse("test_warehouse_3".to_string(), vec![SelectedNode::Random(
+    let create_warehouse = warehouse_manager
+        .create_warehouse("test_warehouse_3".to_string(), vec![SelectedNode::Random(
             None,
         )]);
 
@@ -469,10 +469,90 @@ async fn test_create_warehouse_with_no_resources() -> Result<()> {
     Ok(())
 }
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_create_warehouse_with_no_resources() -> Result<()> {
-//
-// }
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_empty_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+    let drop_warehouse = warehouse_manager.drop_warehouse(String::new());
+
+    assert_eq!(drop_warehouse.await.unwrap_err().code(), 2403);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_not_exists_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+    let drop_warehouse = warehouse_manager.drop_warehouse(String::from("not_exists"));
+
+    assert_eq!(drop_warehouse.await.unwrap_err().code(), 2406);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_system_managed_warehouse() -> Result<()> {
+    let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 2).await?;
+    let create_warehouse =
+        warehouse_manager.create_warehouse(String::from("test_warehouse"), vec![
+            SelectedNode::Random(None),
+            SelectedNode::Random(None),
+        ]);
+
+    create_warehouse.await?;
+
+    let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
+    drop_warehouse.await?;
+
+    let create_warehouse =
+        warehouse_manager.create_warehouse(String::from("test_warehouse"), vec![
+            SelectedNode::Random(None),
+            SelectedNode::Random(None),
+        ]);
+
+    // create same name warehouse is successfully
+    create_warehouse.await?;
+
+    // mock partial node offline
+    warehouse_manager.drop_node(nodes.remove(0)).await?;
+
+    let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
+    drop_warehouse.await?;
+
+    // online node
+    let online_node_id = GlobalUniqName::unique();
+    warehouse_manager
+        .add_node(system_managed_node(&online_node_id))
+        .await?;
+    nodes.push(online_node_id);
+    let create_warehouse =
+        warehouse_manager.create_warehouse(String::from("test_warehouse"), vec![
+            SelectedNode::Random(None),
+            SelectedNode::Random(None),
+        ]);
+
+    // create same name warehouse is successfully
+    create_warehouse.await?;
+
+    // mock all node offline
+    warehouse_manager.drop_node(nodes.remove(0)).await?;
+    warehouse_manager.drop_node(nodes.remove(0)).await?;
+
+    let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
+    drop_warehouse.await?;
+
+    let online_node_id = GlobalUniqName::unique();
+    warehouse_manager
+        .add_node(system_managed_node(&online_node_id))
+        .await?;
+    nodes.push(online_node_id);
+
+    // create same name warehouse is successfully
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
+            None,
+        )]);
+    create_warehouse.await?;
+
+    Ok(())
+}
 
 fn system_managed_node(id: &str) -> NodeInfo {
     NodeInfo {

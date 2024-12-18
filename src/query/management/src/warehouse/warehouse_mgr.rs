@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::protobuf::SeqV;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
@@ -91,15 +90,6 @@ fn map_condition(k: &str, seq: MatchSeq) -> TxnCondition {
         MatchSeq::GE(v) => TxnCondition::match_seq(k.to_owned(), ConditionResult::Ge, v),
         MatchSeq::Exact(v) => TxnCondition::match_seq(k.to_owned(), ConditionResult::Eq, v),
     }
-}
-
-fn get_prev_value(res: Option<&TxnOpResponse>) -> Option<&SeqV> {
-    res.and_then(|response| response.response.as_ref())
-        .and_then(|response| match response {
-            Response::Put(v) => v.prev_value.as_ref(),
-            Response::Delete(v) => v.prev_value.as_ref(),
-            _ => unreachable!(),
-        })
 }
 
 impl WarehouseMgr {
@@ -394,6 +384,10 @@ impl WarehouseApi for WarehouseMgr {
     }
 
     async fn drop_warehouse(&self, warehouse: String) -> Result<()> {
+        if warehouse.is_empty() {
+            return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
+        }
+
         let drop_key = format!("{}/{}", self.meta_key_prefix, escape_for_key(&warehouse)?);
 
         loop {
@@ -402,11 +396,12 @@ impl WarehouseApi for WarehouseMgr {
 
             let mut txn = TxnRequest::default();
             for (node_key, _value) in values {
-                txn.if_then.push(TxnOp::get(format!(
-                    "{}/{}",
-                    self.node_key_prefix,
-                    &node_key[drop_key.len() + 1..]
-                )));
+                let suffix = &node_key[drop_key.len() + 1..];
+
+                if let Some((_, node)) = suffix.split_once('/') {
+                    txn.if_then
+                        .push(TxnOp::get(format!("{}/{}", self.node_key_prefix, node)));
+                }
 
                 delete_txn.if_then.push(TxnOp::delete(node_key));
             }
@@ -680,10 +675,7 @@ impl WarehouseApi for WarehouseMgr {
 
             let res = self.metastore.transaction(txn).await?;
 
-            if res.success
-                && get_prev_value(res.responses.first()).is_some()
-                && get_prev_value(res.responses.last()).is_some()
-            {
+            if res.success {
                 return Ok(());
             }
         }
@@ -701,7 +693,7 @@ impl WarehouseApi for WarehouseMgr {
     }
 
     async fn get_node_info(&self, node_id: &str) -> Result<NodeInfo> {
-        let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(&node_id)?);
+        let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
         let node_info = self.metastore.get_kv(&node_key).await?;
         match node_info {
             None => Err(ErrorCode::NotFoundClusterNode("")),
