@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -205,7 +206,7 @@ impl FuseTable {
             let ctx = ctx.clone();
             let (tx, rx) = async_channel::bounded(max_io_requests);
             pipeline.set_on_init(move || {
-                ctx.get_runtime()?.try_spawn(
+                GlobalIORuntime::instance().try_spawn(
                     async move {
                         match table
                             .prune_snapshot_blocks(
