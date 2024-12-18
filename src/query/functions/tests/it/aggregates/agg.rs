@@ -1118,11 +1118,3 @@ fn test_agg_st_collect(file: &mut impl Write, simulator: impl AggregationSimulat
         simulator,
     );
 }
-
-#[test]
-fn test_agg2() {
-    let mut mint = Mint::new("tests/it/aggregates/testdata");
-    let file = &mut mint.new_goldenfile("agg.temp.txt").unwrap();
-
-    run_agg_ast(file, "udf(a,b)", get_example().as_slice(), eval_aggr);
-}

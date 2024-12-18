@@ -274,9 +274,6 @@ async fn create_memory_table_for_cte_scan(
         PhysicalPlan::Udf(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
-        // PhysicalPlan::Udaf(plan) => {
-        //     create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        // }
         PhysicalPlan::RecursiveCteScan(plan) => {
             // Create memory table for cte scan
             let table_fields = plan

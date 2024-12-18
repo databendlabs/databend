@@ -142,7 +142,6 @@ pub enum RelOperator {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
-    // Udaf(Udaf),
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
     Mutation(Mutation),

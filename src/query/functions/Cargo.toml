@@ -11,7 +11,6 @@ doctest = false
 
 [dependencies]
 arrow-array = { workspace = true }
-arrow-cast = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
@@ -49,7 +48,7 @@ jiff = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 libm = { workspace = true }
-log.workspace = true
+log = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
 naive-cityhash = { workspace = true }
