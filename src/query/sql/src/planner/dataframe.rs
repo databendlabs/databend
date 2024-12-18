@@ -101,7 +101,6 @@ impl Dataframe {
                 false,
                 false,
                 false,
-                false,
                 None,
             );
 

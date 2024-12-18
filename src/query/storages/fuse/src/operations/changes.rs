@@ -120,6 +120,7 @@ impl FuseTable {
 
     pub async fn get_changes_query(
         &self,
+        ctx: Arc<dyn TableContext>,
         mode: &StreamMode,
         base_location: &Option<String>,
         table_desc: String,
@@ -153,56 +154,64 @@ impl FuseTable {
                 )
             }
             StreamMode::Standard => {
+                let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
+
                 let a_table_alias = format!("_change_insert${}", suffix);
-                let a_cols = cols.join(", ");
-
                 let d_table_alias = format!("_change_delete${}", suffix);
-                let d_cols = cols
-                    .iter()
-                    .map(|s| format!("d_{}", s))
-                    .collect::<Vec<_>>()
-                    .join(", ");
 
+                let mut a_cols_vec = Vec::with_capacity(cols.len());
+                let mut d_alias_vec = Vec::with_capacity(cols.len());
+                let mut d_cols_vec = Vec::with_capacity(cols.len());
+                for col in cols {
+                    a_cols_vec.push(format!("{quote}{col}{quote}"));
+                    d_alias_vec.push(format!("{quote}{col}{quote} as d_{col}"));
+                    d_cols_vec.push(format!("d_{col}"));
+                }
+                let a_cols = a_cols_vec.join(", ");
+                let d_cols_alias = d_alias_vec.join(", ");
+                let d_cols = d_cols_vec.join(", ");
+
+                let cte_name = format!("_change${}", suffix);
                 format!(
-                    "with _change({a_cols}, change$action, change$row_id, \
-                        {d_cols}, d_change$action, d_change$row_id) as \
+                    "with {cte_name} as materialized \
                     ( \
-                        select * \
+                        select {a_cols}, a_change$action, a_change$row_id, \
+                        {d_cols}, d_change$action, d_change$row_id \
                         from ( \
-                            select *, \
+                            select {a_cols}, \
                                     _row_version, \
-                                    'INSERT' as change$action, \
+                                    'INSERT' as a_change$action, \
                                     if(is_not_null(_origin_block_id), \
                                         concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                         {a_table_alias}._base_row_id \
-                                    ) as change$row_id \
+                                    ) as a_change$row_id \
                             from {table_desc} as {a_table_alias} \
                         ) as A \
                         FULL OUTER JOIN ( \
-                            select *, \
+                            select {d_cols_alias}, \
                                     _row_version, \
-                                    'DELETE' as change$action, \
+                                    'DELETE' as d_change$action, \
                                     if(is_not_null(_origin_block_id), \
                                         concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                         {d_table_alias}._base_row_id \
-                                    ) as change$row_id \
+                                    ) as d_change$row_id \
                             from {table_desc} as {d_table_alias} \
                         ) as D \
-                        on A.change$row_id = D.change$row_id \
-                        where A.change$row_id is null or D.change$row_id is null or A._row_version > D._row_version \
+                        on A.a_change$row_id = D.d_change$row_id \
+                        where A.a_change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
                     ) \
                     select {a_cols}, \
-                            change$action, \
-                            change$row_id, \
+                            a_change$action as change$action, \
+                            a_change$row_id as change$row_id, \
                             d_change$action is not null as change$is_update \
-                    from _change \
-                    where change$action is not null \
+                    from {cte_name} \
+                    where a_change$action is not null \
                     union all \
                     select {d_cols}, \
                             d_change$action, \
                             d_change$row_id, \
-                            change$action is not null as change$is_update \
-                    from _change \
+                            a_change$action is not null \
+                    from {cte_name} \
                     where d_change$action is not null",
                 )
             }

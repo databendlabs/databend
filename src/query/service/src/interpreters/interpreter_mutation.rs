@@ -190,8 +190,7 @@ impl MutationInterpreter {
         table_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<MutationBuildInfo> {
         let table_info = fuse_table.get_table_info().clone();
-        let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let partitions = self
             .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
             .await?;
