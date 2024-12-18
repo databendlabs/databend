@@ -87,7 +87,7 @@ table_inserts=(
 )
 
 for i in "${table_inserts[@]}"; do
-  echo "$i" | $BENDSQL_CLIENT_CONNECT
+  echo "$i" | $BENDSQL_CLIENT_OUTPUT_NULL
 done
 
 ## Select table
