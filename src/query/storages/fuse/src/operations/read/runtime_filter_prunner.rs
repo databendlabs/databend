@@ -107,7 +107,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
 ) -> Result<()> {
     let data_type = column.data_type();
     let num_rows = column.len();
-    let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
+    let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
     let columns = &[column];
     let group_columns = columns.into();
     let mut idx = 0;
@@ -116,19 +116,6 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             let key_state = method.build_keys_state(group_columns, num_rows)?;
             match key_state {
                 KeysState::Column(Column::Binary(col)) => col.iter().for_each(|key| {
-                    let hash = key.fast_hash();
-                    if filter.contains(&hash) {
-                        bitmap.set(idx, true);
-                    }
-                    idx += 1;
-                }),
-                _ => unreachable!(),
-            }
-        }
-        HashMethodKind::DictionarySerializer(method) => {
-            let key_state = method.build_keys_state(group_columns, num_rows)?;
-            match key_state {
-                KeysState::Dictionary { dictionaries, .. } => dictionaries.iter().for_each(|key| {
                     let hash = key.fast_hash();
                     if filter.contains(&hash) {
                         bitmap.set(idx, true);

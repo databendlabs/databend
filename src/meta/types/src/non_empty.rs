@@ -34,7 +34,7 @@ impl<'a> NonEmptyStr<'a> {
     }
 }
 
-impl<'a> Display for NonEmptyStr<'a> {
+impl Display for NonEmptyStr<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.non_empty)
     }

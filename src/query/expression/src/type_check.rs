@@ -85,22 +85,16 @@ pub fn check<Index: ColumnIndex>(
             // This may hurt the bloom filter, we should try cast to literal as the datatype of column
             if name == "eq" && args_expr.len() == 2 {
                 match args_expr.as_mut_slice() {
-                    [
-                        e,
-                        Expr::Constant {
-                            span,
-                            scalar,
-                            data_type,
-                        },
-                    ]
-                    | [
-                        Expr::Constant {
-                            span,
-                            scalar,
-                            data_type,
-                        },
-                        e,
-                    ] => {
+                    [e, Expr::Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }]
+                    | [Expr::Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }, e] => {
                         let src_ty = data_type.remove_nullable();
                         let dest_ty = e.data_type().remove_nullable();
 
@@ -768,6 +762,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_float32",
     "to_float64",
     "to_timestamp",
+    "to_interval",
     "to_date",
     "to_variant",
     "to_boolean",

@@ -106,10 +106,10 @@ impl InvertedIndexReader {
     }
 
     // legacy query search function, using tantivy searcher.
-    async fn legacy_search<'a>(
+    async fn legacy_search(
         &self,
         settings: &ReadSettings,
-        index_path: &'a str,
+        index_path: &str,
         query: Box<dyn Query>,
         inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
@@ -180,10 +180,10 @@ impl InvertedIndexReader {
     // If the term matches, the `term_dict` and `postings`, `positions`
     // data of the related terms need to be read instead of all
     // the `postings` and `positions` data.
-    async fn search<'a>(
+    async fn search(
         &self,
         settings: &ReadSettings,
-        index_path: &'a str,
+        index_path: &str,
         query: Box<dyn Query>,
         field_ids: &HashSet<u32>,
         index_record: &IndexRecordOption,

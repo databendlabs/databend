@@ -1,3 +1,4 @@
+1
 Error: APIError: QueryFailed: [1301]table option snapshot_location is invalid for alter table statement
 Error: APIError: QueryFailed: [1301]table option snapshot_loc is invalid for alter table statement
 Error: APIError: QueryFailed: [1301]table option extrenal_location is invalid for alter table statement

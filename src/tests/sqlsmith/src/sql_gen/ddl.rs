@@ -63,7 +63,7 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
     TypeName::Geography,
 ];
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_base_tables(&mut self) -> Vec<(DropTableStmt, CreateTableStmt)> {
         let mut tables = Vec::with_capacity(BASE_TABLE_NAMES.len());
 
@@ -301,5 +301,9 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             value: Literal::Null,
         },
         TypeName::NotNull(box ty) => gen_default_expr(ty),
+        TypeName::Interval => Expr::Literal {
+            span: None,
+            value: Literal::String("1 month 1 hour".to_string()),
+        },
     }
 }

@@ -46,7 +46,6 @@ use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CopyIntoTableSource;
-use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
@@ -57,7 +56,6 @@ use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
-use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -94,8 +92,6 @@ pub enum PhysicalPlan {
     RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
-    CteScan(CteScan),
-    MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
@@ -244,15 +240,7 @@ impl PhysicalPlan {
                 plan.left.adjust_plan_id(next_id);
                 plan.right.adjust_plan_id(next_id);
             }
-            PhysicalPlan::CteScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
             PhysicalPlan::RecursiveCteScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::MaterializedCte(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
@@ -431,8 +419,6 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
-            PhysicalPlan::CteScan(v) => v.plan_id,
-            PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::ExpressionScan(v) => v.plan_id,
             PhysicalPlan::CacheScan(v) => v.plan_id,
@@ -488,8 +474,6 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.output_schema(),
-            PhysicalPlan::CteScan(plan) => plan.output_schema(),
-            PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::ExpressionScan(plan) => plan.output_schema(),
             PhysicalPlan::CacheScan(plan) => plan.output_schema(),
@@ -563,9 +547,7 @@ impl PhysicalPlan {
             PhysicalPlan::MutationManipulate(_) => "MutationManipulate".to_string(),
             PhysicalPlan::MutationOrganize(_) => "MutationOrganize".to_string(),
             PhysicalPlan::AddStreamColumn(_) => "AddStreamColumn".to_string(),
-            PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
-            PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
@@ -586,7 +568,6 @@ impl PhysicalPlan {
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_)
-            | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::ExchangeSource(_)
@@ -634,9 +615,6 @@ impl PhysicalPlan {
             }
             PhysicalPlan::MutationOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MaterializedCte(plan) => Box::new(
-                std::iter::once(plan.right.as_ref()).chain(std::iter::once(plan.left.as_ref())),
-            ),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AsyncFunction(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -680,7 +658,6 @@ impl PhysicalPlan {
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
             | PhysicalPlan::RangeJoin(_)
-            | PhysicalPlan::MaterializedCte(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
@@ -700,7 +677,6 @@ impl PhysicalPlan {
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
-            | PhysicalPlan::CteScan(_)
             | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::Duplicate(_)
@@ -860,9 +836,6 @@ impl PhysicalPlan {
                 .iter()
                 .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
                 .join(", "),
-            PhysicalPlan::CteScan(v) => {
-                format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
-            }
             PhysicalPlan::UnionAll(v) => v
                 .left_outputs
                 .iter()
@@ -900,9 +873,11 @@ impl PhysicalPlan {
                     ),
                     v.name_mapping.keys().cloned().collect(),
                 );
-                labels.insert(String::from("Total partitions"), vec![
-                    v.source.statistics.partitions_total.to_string(),
-                ]);
+                labels.insert(String::from("Total partitions"), vec![v
+                    .source
+                    .statistics
+                    .partitions_total
+                    .to_string()]);
             }
             PhysicalPlan::Filter(v) => {
                 labels.insert(

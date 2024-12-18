@@ -7,16 +7,17 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        if bendsql --version; then
+        if command -v bendsql >/dev/null 2>&1; then
+          bendsql --version
           exit 0
         fi
         case $RUNNER_PROVIDER in
           aws)
-            aws s3 cp s3://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb
+            aws s3 cp s3://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb --no-progress
             sudo dpkg -i /tmp/bendsql.deb
             ;;
           gcp)
-            gsutil cp gs://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb
+            gsutil cp gs://databend-ci/packages/bendsql_$(dpkg --print-architecture).deb /tmp/bendsql.deb --no-progress
             sudo dpkg -i /tmp/bendsql.deb
             ;;
           *)
@@ -29,7 +30,8 @@ runs:
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        if bendsql --version; then
+        if command -v bendsql >/dev/null 2>&1; then
+          bendsql --version
           exit 0
         fi
         brew install databendcloud/homebrew-tap/bendsql

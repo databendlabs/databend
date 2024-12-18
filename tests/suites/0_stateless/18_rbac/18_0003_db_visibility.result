@@ -1,3 +1,4 @@
+1
 === test u1 with role1 ===
 information_schema
 system
@@ -5,6 +6,7 @@ true	true
 db1	true
 system
 information_schema
+1
 1
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u1'@'%' with roles [public,role1]
 db1
@@ -14,6 +16,7 @@ system
 db1
 information_schema
 system
+1
 db1
 db2
 information_schema
@@ -24,6 +27,7 @@ system
 === test u3 with role2 ===
 information_schema
 system
+1
 db_u3
 information_schema
 system

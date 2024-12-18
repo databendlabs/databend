@@ -3625,6 +3625,8 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_area(Geometry) :: Float64
+1 st_area(Geometry NULL) :: Float64 NULL
 0 st_asewkb(Geometry) :: Binary
 1 st_asewkb(Geometry NULL) :: Binary NULL
 0 st_asewkt(Geometry) :: String
@@ -3637,6 +3639,8 @@ Functions overloads:
 1 st_aswkt(Geometry NULL) :: String NULL
 0 st_contains(Geometry, Geometry) :: Boolean
 1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_convexhull(Geometry) :: Geometry
+1 st_convexhull(Geometry NULL) :: Geometry NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
 0 st_disjoint(Geometry, Geometry) :: Boolean
@@ -3757,8 +3761,16 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
-0 to_binary(String) :: Binary
-1 to_binary(String NULL) :: Binary NULL
+0 to_binary(Variant) :: Binary
+1 to_binary(Variant NULL) :: Binary NULL
+2 to_binary(Bitmap) :: Binary
+3 to_binary(Bitmap NULL) :: Binary NULL
+4 to_binary(Geometry) :: Binary
+5 to_binary(Geometry NULL) :: Binary NULL
+6 to_binary(Geography) :: Binary
+7 to_binary(Geography NULL) :: Binary NULL
+8 to_binary(String) :: Binary
+9 to_binary(String NULL) :: Binary NULL
 0 to_bitmap(String) :: Bitmap
 1 to_bitmap(String NULL) :: Bitmap NULL
 2 to_bitmap(UInt64) :: Bitmap
@@ -3997,6 +4009,8 @@ Functions overloads:
 23 to_int8(Float64 NULL) :: Int8 NULL
 24 to_int8(Boolean) :: Int8
 25 to_int8(Boolean NULL) :: Int8 NULL
+0 to_interval(String) :: Interval
+1 to_interval(String NULL) :: Interval NULL
 0 to_last_of_month(Date) :: Date
 1 to_last_of_month(Date NULL) :: Date NULL
 2 to_last_of_month(Timestamp) :: Date
@@ -4162,6 +4176,8 @@ Functions overloads:
 34 to_string(Bitmap NULL) :: String NULL
 35 to_string(Geometry) :: String
 36 to_string(Geometry NULL) :: String NULL
+37 to_string(Interval) :: String NULL
+38 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -4374,8 +4390,16 @@ Functions overloads:
 1 try_parse_json(Variant NULL) :: Variant NULL
 2 try_parse_json(String) :: Variant NULL
 3 try_parse_json(String NULL) :: Variant NULL
-0 try_to_binary(String) :: Binary NULL
-1 try_to_binary(String NULL) :: Binary NULL
+0 try_to_binary(Variant) :: Binary NULL
+1 try_to_binary(Variant NULL) :: Binary NULL
+2 try_to_binary(Bitmap) :: Binary NULL
+3 try_to_binary(Bitmap NULL) :: Binary NULL
+4 try_to_binary(Geometry) :: Binary NULL
+5 try_to_binary(Geometry NULL) :: Binary NULL
+6 try_to_binary(Geography) :: Binary NULL
+7 try_to_binary(Geography NULL) :: Binary NULL
+8 try_to_binary(String) :: Binary NULL
+9 try_to_binary(String NULL) :: Binary NULL
 0 try_to_boolean(Variant) :: Boolean NULL
 1 try_to_boolean(Variant NULL) :: Boolean NULL
 2 try_to_boolean(String) :: Boolean NULL
@@ -4584,6 +4608,8 @@ Functions overloads:
 23 try_to_int8(Float64 NULL) :: Int8 NULL
 24 try_to_int8(Boolean) :: Int8 NULL
 25 try_to_int8(Boolean NULL) :: Int8 NULL
+0 try_to_interval(String) :: Interval NULL
+1 try_to_interval(String NULL) :: Interval NULL
 0 try_to_string(Variant) :: String NULL
 1 try_to_string(Variant NULL) :: String NULL
 2 try_to_string(UInt8) :: String NULL

@@ -677,6 +677,65 @@ SELECT st_equals(st_geomfromtext('SRID=4326;POLYGON((-87.906471 43.038902, -95.9
 0
 
 statement ok
+CREATE OR REPLACE TABLE collect_test (g GEOMETRY);
+
+statement ok
+INSERT INTO collect_test VALUES
+    ('POINT(1 2)'),
+    ('POINT(3 4)'),
+    ('LINESTRING(0 0, 1 1)'),
+    ('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))');
+
+query T
+SELECT ST_ASWKT(ST_COLLECT(g)) FROM collect_test;
+----
+GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4),LINESTRING(0 0,1 1),POLYGON((0 0,1 0,1 1,0 1,0 0)))
+
+query T
+SELECT ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'));
+----
+1.0
+
+query T
+SELECT ST_AREA(TO_GEOMETRY('MULTIPOLYGON(((0 0, 0 1, 1 1, 1 0, 0 0)), ((2 2, 2 3, 3 3, 3 2, 2 2)))'));
+----
+2.0
+
+query T
+SELECT ST_AREA(TO_GEOMETRY('POINT(0 0)'));
+----
+0.0
+
+query T
+SELECT ST_AREA(g) FROM collect_test;
+----
+0.0
+0.0
+0.0
+1.0
+
+query T
+SELECT ST_ASWKT(ST_CONVEXHULL(TO_GEOMETRY('MULTIPOINT(0 0, 1 0, 1 1, 0 1, 0.5 0.5)')));
+----
+POLYGON((1 0,1 1,0 1,0 0,1 0))
+
+query T
+SELECT ST_ASWKT(ST_CONVEXHULL(TO_GEOMETRY('LINESTRING(0 0, 1 1, 0 2)')));
+----
+POLYGON((0 0,1 1,0 2,0 0))
+
+query T
+SELECT ST_ASWKT(ST_CONVEXHULL(g)) FROM collect_test;
+----
+POLYGON((1 2,1 2))
+POLYGON((3 4,3 4))
+POLYGON((0 0,1 1,0 0))
+POLYGON((1 0,1 1,0 1,0 0,1 0))
+
+statement ok
+DROP TABLE collect_test;
+
+statement ok
 SET enable_geo_create_table=0
 
 statement ok

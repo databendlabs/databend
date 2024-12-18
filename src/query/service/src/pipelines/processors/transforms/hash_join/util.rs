@@ -163,14 +163,6 @@ where
                     .map(|key| key.fast_hash()),
             );
         }
-        HashMethodKind::DictionarySerializer(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
         HashMethodKind::SingleBinary(method) => {
             let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(

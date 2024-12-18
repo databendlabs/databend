@@ -290,7 +290,7 @@ struct SelectRewriter<'a> {
 }
 
 // helper functions to SelectRewriter
-impl<'a> SelectRewriter<'a> {
+impl SelectRewriter<'_> {
     fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
         if self.is_unquoted_ident_case_sensitive {
             a == b

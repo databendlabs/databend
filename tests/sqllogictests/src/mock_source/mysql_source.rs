@@ -24,6 +24,7 @@ use msql_srv::MysqlShim;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
 use mysql_common::Value;
+use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::Expr;
 use sqlparser::ast::SelectItem;
 use sqlparser::ast::SetExpr;
@@ -31,17 +32,24 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
+use threadpool::ThreadPool;
 
 pub fn run_mysql_source() {
     // Bind the listener to the address
     let listener = TcpListener::bind("0.0.0.0:3106").unwrap();
 
+    // Create a thread pool
+    let pool = ThreadPool::new(32);
     let backend = Backend::create();
+
     loop {
         if let Ok((socket, _)) = listener.accept() {
             let backend = backend.clone();
-            databend_common_base::runtime::Thread::spawn(move || {
-                MysqlIntermediary::run_on_tcp(backend, socket).unwrap();
+
+            pool.execute(move || {
+                if let Err(e) = MysqlIntermediary::run_on_tcp(backend, socket) {
+                    eprintln!("handle MySQL connection error: {}", e);
+                }
             });
         }
     }
@@ -186,11 +194,22 @@ impl<W: io::Read + io::Write> MysqlShim<W> for Backend {
                     if let TableFactor::Table { name, .. } = &select.from[0].relation {
                         table = Some(name.0[0].value.clone());
                     }
-                    if let Some(Expr::InList { expr, list, .. }) = &select.selection {
-                        if let Expr::Identifier(ident) = *expr.clone() {
-                            key = Some(ident.value.clone());
-                            in_list_keys.extend(list.clone());
+                    match &select.selection {
+                        Some(Expr::InList { expr, list, .. }) => {
+                            if let Expr::Identifier(ident) = *expr.clone() {
+                                key = Some(ident.value.clone());
+                                in_list_keys.extend(list.clone());
+                            }
                         }
+                        Some(Expr::BinaryOp { left, op, right }) => {
+                            if op == &BinaryOperator::Eq {
+                                if let Expr::Identifier(ident) = *left.clone() {
+                                    key = Some(ident.value.clone());
+                                    in_list_keys.push(*right.clone());
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

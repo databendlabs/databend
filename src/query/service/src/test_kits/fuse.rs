@@ -55,7 +55,6 @@ use crate::interpreters::MutationInterpreter;
 use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
-
 pub async fn generate_snapshot_with_segments(
     fuse_table: &FuseTable,
     segment_locations: Vec<Location>,

@@ -494,6 +494,7 @@ impl Plan {
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
+            Plan::Insert(plan) => plan.schema(),
 
             _ => Arc::new(DataSchema::empty()),
         }
@@ -526,5 +527,13 @@ impl Plan {
             }
         }
         self.clone()
+    }
+
+    pub fn bind_context(&self) -> Option<BindContext> {
+        if let Plan::Query { bind_context, .. } = self {
+            Some(*bind_context.clone())
+        } else {
+            None
+        }
     }
 }

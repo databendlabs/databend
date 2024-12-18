@@ -106,6 +106,7 @@ pub struct Binder {
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+    pub m_cte_table_name: HashMap<String, String>,
 
     pub enable_result_cache: bool,
 
@@ -132,6 +133,7 @@ impl<'a> Binder {
             metadata,
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            m_cte_table_name: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
         }
@@ -179,8 +181,6 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
-                // Wrap `LogicalMaterializedCte` to `s_expr`
-                s_expr = bind_context.cte_context.wrap_m_cte(s_expr);
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::ready;
 use std::io;
 use std::time::Duration;
 
@@ -22,7 +23,7 @@ use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
-use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
 use databend_common_meta_types::AppliedState;
@@ -49,9 +50,11 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
+use futures_util::StreamExt;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use num::FromPrimitive;
 
 use crate::state_machine_api::StateMachineApi;
@@ -119,9 +122,9 @@ where SM: StateMachineApi + 'static
         };
 
         // Send queued change events to subscriber
-        if let Some(subscriber) = self.sm.get_subscriber() {
+        if let Some(sender) = self.sm.event_sender() {
             for event in self.changes.drain(..) {
-                subscriber.kv_changed(event);
+                sender.send(event);
             }
         }
 
@@ -299,48 +302,52 @@ where SM: StateMachineApi + 'static
             seqv.value()
         );
 
-        let target = if let Some(target) = &cond.target {
-            target
-        } else {
+        let op = FromPrimitive::from_i32(cond.expected);
+        let Some(op) = op else {
+            warn!(
+                "Invalid condition: {}; TxnCondition: {}",
+                cond.expected, cond
+            );
             return Ok(false);
         };
 
-        let positive = match target {
-            txn_condition::Target::Seq(right) => {
-                Self::eval_seq_condition(seqv.seq(), cond.expected, right)
-            }
-            txn_condition::Target::Value(right) => {
-                if let Some(v) = seqv.value() {
-                    Self::eval_value_condition(v, cond.expected, right)
+        let Some(against) = &cond.target else {
+            return Ok(false);
+        };
+
+        let positive = match against {
+            Target::Seq(against_seq) => Self::eval_compare(seqv.seq(), op, *against_seq),
+            Target::Value(against_value) => {
+                if let Some(stored) = seqv.value() {
+                    Self::eval_compare(stored, op, against_value)
                 } else {
                     false
                 }
+            }
+            Target::KeysWithPrefix(against_n) => {
+                let against_n = *against_n;
+
+                let strm = self.sm.list_kv(key).await?;
+                // Taking at most `against_n + 1` keys is just enough for every predicate.
+                let strm = strm.take((against_n + 1) as usize);
+                let count: u64 = strm.try_fold(0, |acc, _| ready(Ok(acc + 1))).await?;
+
+                Self::eval_compare(count, op, against_n)
             }
         };
         Ok(positive)
     }
 
-    fn eval_seq_condition(left: u64, op: i32, right: &u64) -> bool {
-        match FromPrimitive::from_i32(op) {
-            Some(ConditionResult::Eq) => left == *right,
-            Some(ConditionResult::Gt) => left > *right,
-            Some(ConditionResult::Lt) => left < *right,
-            Some(ConditionResult::Ne) => left != *right,
-            Some(ConditionResult::Ge) => left >= *right,
-            Some(ConditionResult::Le) => left <= *right,
-            _ => false,
-        }
-    }
-
-    fn eval_value_condition(left: &Vec<u8>, op: i32, right: &Vec<u8>) -> bool {
-        match FromPrimitive::from_i32(op) {
-            Some(ConditionResult::Eq) => left == right,
-            Some(ConditionResult::Gt) => left > right,
-            Some(ConditionResult::Lt) => left < right,
-            Some(ConditionResult::Ne) => left != right,
-            Some(ConditionResult::Ge) => left >= right,
-            Some(ConditionResult::Le) => left <= right,
-            _ => false,
+    fn eval_compare<T>(left: T, op: ConditionResult, right: T) -> bool
+    where T: PartialOrd + PartialEq {
+        use ConditionResult::*;
+        match op {
+            Eq => left == right,
+            Gt => left > right,
+            Lt => left < right,
+            Ne => left != right,
+            Ge => left >= right,
+            Le => left <= right,
         }
     }
 

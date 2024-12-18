@@ -299,6 +299,10 @@ impl Column {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
+            Column::Interval(_) => {
+                let builder = IntervalType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<IntervalType>(columns, builder, indices)
+            }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
@@ -520,6 +524,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Timestamp(columns)
             }
+            Column::Interval(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| IntervalType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Interval(columns)
+            }
             Column::Date(_) => {
                 let columns = columns
                     .iter()
@@ -682,6 +693,14 @@ impl Column {
                 .into_int32()
                 .unwrap();
                 Column::Date(d)
+            }
+            ColumnVec::Interval(columns) => {
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let i =
+                    <IntervalType>::upcast_column(<IntervalType>::column_from_vec(builder, &[]))
+                        .into_interval()
+                        .unwrap();
+                Column::Interval(i)
             }
             ColumnVec::Array(columns) => {
                 let data_type = data_type.as_array().unwrap();

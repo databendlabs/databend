@@ -122,7 +122,7 @@ impl<'a> VolnitskyBase<'a> {
 
     fn fallback_search(&self, haystack: &[u8]) -> Option<usize> {
         if haystack.len() < 64 {
-            return self.fallback_searcher.find(haystack, self.needle.as_ref());
+            self.fallback_searcher.find(haystack, self.needle.as_ref())
         } else {
             memchr::memmem::find(haystack, self.needle.as_ref())
         }
@@ -165,7 +165,7 @@ fn test_volnitsky_search() {
     let haystack = string.as_bytes();
     let needle = "google";
     let searcher = VolnitskyBase::new(needle.as_bytes(), 0);
-    let step = "fdsfsgooglefdafdsf".as_bytes().len() + 2;
+    let step = "fdsfsgooglefdafdsf".len() + 2;
 
     for i in 10..100 {
         let pos = searcher.search(haystack[(i - 10) * step..].as_ref());
@@ -183,7 +183,7 @@ fn test_volnitsky_userid() {
     let haystack = string.as_bytes();
     let needle = "google";
     let searcher = VolnitskyBase::new(needle.as_bytes(), 0);
-    let step = "xxgooglex".as_bytes().len() + format!("{start}").as_bytes().len();
+    let step = "xxgooglex".len() + format!("{start}").as_bytes().len();
 
     for i in start..start + 1000 {
         let pos = searcher.search(haystack[(i - start) * step..].as_ref());

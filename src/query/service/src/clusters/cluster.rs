@@ -42,7 +42,6 @@ use databend_common_management::ClusterApi;
 use databend_common_management::ClusterMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 use databend_common_metrics::cluster::*;
 use futures::future::select;
@@ -50,12 +49,14 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use log::error;
+use log::info;
 use log::warn;
 use parking_lot::RwLock;
 use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
 
@@ -81,11 +82,11 @@ pub trait ClusterHelper {
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 
-    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
         &self,
         path: &str,
         message: HashMap<String, T>,
-        timeout: u64,
+        flight_params: FlightParams,
     ) -> Result<HashMap<String, Res>>;
 }
 
@@ -118,11 +119,11 @@ impl ClusterHelper for Cluster {
         self.nodes.to_vec()
     }
 
-    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
         &self,
         path: &str,
         message: HashMap<String, T>,
-        timeout: u64,
+        flight_params: FlightParams,
     ) -> Result<HashMap<String, Res>> {
         fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
             for node in nodes {
@@ -141,16 +142,42 @@ impl ClusterHelper for Cluster {
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
-            let config = GlobalConfig::instance();
-            let flight_address = node.flight_address.clone();
-            let node_secret = node.secret.clone();
+            let do_action_with_retry = {
+                let config = GlobalConfig::instance();
+                let flight_address = node.flight_address.clone();
+                let node_secret = node.secret.clone();
 
-            let mut conn = create_client(&config, &flight_address).await?;
-            response.insert(
-                id,
-                conn.do_action::<_, Res>(path, node_secret, message, timeout)
-                    .await?,
-            );
+                async move {
+                    let mut attempt = 0;
+
+                    loop {
+                        let mut conn = create_client(&config, &flight_address).await?;
+                        match conn
+                            .do_action::<_, Res>(
+                                path,
+                                node_secret.clone(),
+                                message.clone(),
+                                flight_params.timeout,
+                            )
+                            .await
+                        {
+                            Ok(result) => return Ok(result),
+                            Err(e)
+                                if e.code() == ErrorCode::CANNOT_CONNECT_NODE
+                                    && attempt < flight_params.retry_times =>
+                            {
+                                // only retry when error is network problem
+                                info!("retry do_action, attempt: {}", attempt);
+                                attempt += 1;
+                                sleep(Duration::from_secs(flight_params.retry_interval)).await;
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                }
+            };
+
+            response.insert(id, do_action_with_retry.await?);
         }
 
         Ok(response)
@@ -211,17 +238,19 @@ impl ClusterDiscovery {
     ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
-        let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager =
-            ClusterMgr::create(metastore, tenant_id.tenant_name(), cluster_id, lift_time)?;
+        let cluster_manager = ClusterMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
     #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        match self.api_provider.get_nodes().await {
+        match self
+            .api_provider
+            .get_nodes(&self.cluster_id, &self.cluster_id)
+            .await
+        {
             Err(cause) => {
                 metric_incr_cluster_error_count(
                     &self.local_id,
@@ -294,7 +323,11 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
-        let current_nodes_info = match self.api_provider.get_nodes().await {
+        let current_nodes_info = match self
+            .api_provider
+            .get_nodes(&node_info.warehouse_id, &node_info.cluster_id)
+            .await
+        {
             Ok(nodes) => nodes,
             Err(cause) => {
                 metric_incr_cluster_error_count(
@@ -312,8 +345,7 @@ impl ClusterDiscovery {
             // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
             // lead to some invalid information
             if before_node.flight_address.eq(&node_info.flight_address) {
-                let drop_invalid_node =
-                    self.api_provider.drop_node(before_node.id, MatchSeq::GE(1));
+                let drop_invalid_node = self.api_provider.drop_node(before_node.id);
                 if let Err(cause) = drop_invalid_node.await {
                     warn!("Drop invalid node failure: {:?}", cause);
                 }
@@ -336,10 +368,7 @@ impl ClusterDiscovery {
 
         let mut mut_signal_pin = signal.as_mut();
         let signal_future = Box::pin(mut_signal_pin.next());
-        let drop_node = Box::pin(
-            self.api_provider
-                .drop_node(self.local_id.clone(), MatchSeq::GE(1)),
-        );
+        let drop_node = Box::pin(self.api_provider.drop_node(self.local_id.clone()));
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
@@ -398,7 +427,7 @@ impl ClusterDiscovery {
             }
         }
 
-        let node_info = NodeInfo::create(
+        let mut node_info = NodeInfo::create(
             self.local_id.clone(),
             self.local_secret.clone(),
             cpus,
@@ -408,6 +437,8 @@ impl ClusterDiscovery {
             DATABEND_COMMIT_VERSION.to_string(),
         );
 
+        node_info.cluster_id = self.cluster_id.clone();
+        node_info.warehouse_id = self.cluster_id.clone();
         self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info.clone()).await {
             Ok(_) => self.start_heartbeat(node_info).await,
@@ -536,4 +567,11 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     Ok(FlightClient::new(FlightServiceClient::new(
         ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
     )))
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FlightParams {
+    pub(crate) timeout: u64,
+    pub(crate) retry_times: u64,
+    pub(crate) retry_interval: u64,
 }

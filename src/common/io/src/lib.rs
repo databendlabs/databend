@@ -20,8 +20,7 @@
 #![feature(read_buf)]
 #![feature(slice_internals)]
 #![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-#![feature(cursor_remaining)]
+#![feature(cursor_split)]
 #![feature(buf_read_has_data_left)]
 
 pub mod constants;
@@ -44,6 +43,7 @@ pub mod geometry;
 mod position;
 mod stat_buffer;
 
+pub mod interval;
 pub mod wkb;
 
 pub use bitmap::deserialize_bitmap;
@@ -66,3 +66,4 @@ pub use geometry::read_srid;
 pub use geometry::Axis;
 pub use geometry::Extremum;
 pub use geometry::GeometryDataType;
+pub use interval::Interval;

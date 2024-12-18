@@ -139,8 +139,8 @@ impl AggregatingIndexRewriter {
             }
         });
 
-        match group_by {
-            Some(group_by) => match group_by {
+        if let Some(group_by) = group_by {
+            match group_by {
                 GroupBy::Normal(groups) => {
                     groups.iter().for_each(|expr| {
                         // if group by item not in targets, we will add it in.
@@ -154,8 +154,7 @@ impl AggregatingIndexRewriter {
                     });
                 }
                 _ => unreachable!(),
-            },
-            None => {}
+            }
         }
 
         // replace the select list with our rewritten new select list.

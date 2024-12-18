@@ -15,8 +15,11 @@
 #[macro_use]
 extern crate criterion;
 
+use arrow_buffer::BooleanBuffer;
 use arrow_buffer::ScalarBuffer;
 use criterion::Criterion;
+use databend_common_base::vec_ext::VecExt;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
@@ -49,6 +52,29 @@ fn bench(c: &mut Criterion) {
 
             group.bench_function(format!("concat_string_view/{length}"), |b| {
                 b.iter(|| Column::concat_columns(str_col.clone()).unwrap())
+            });
+
+            let binary_col = BinaryType::column_from_iter(b.iter().cloned(), &[]);
+            let mut c = 0;
+            group.bench_function(format!("binary_sum_len/{length}"), |b| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..binary_col.len() {
+                        sum += binary_col.value(i).len();
+                    }
+
+                    c += sum;
+                })
+            });
+
+            group.bench_function(format!("binary_sum_len_unchecked/{length}"), |b| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..binary_col.len() {
+                        sum += unsafe { binary_col.index_unchecked(i).len() };
+                    }
+                    c += sum;
+                })
             });
         }
     }
@@ -178,6 +204,18 @@ fn bench(c: &mut Criterion) {
         );
 
         group.bench_function(
+            format!("function_buffer_index_unchecked_push/{length}"),
+            |b| {
+                b.iter(|| {
+                    let mut c = Vec::with_capacity(length);
+                    for i in 0..length {
+                        unsafe { c.push_unchecked(left.get_unchecked(i) + right.get_unchecked(i)) };
+                    }
+                })
+            },
+        );
+
+        group.bench_function(
             format!("function_buffer_scalar_index_unchecked_iterator/{length}"),
             |b| {
                 b.iter(|| {
@@ -248,6 +286,27 @@ fn bench(c: &mut Criterion) {
                 let _c = Int32Type::column_from_iter(iter, &[]);
             })
         });
+
+        group.bench_function(format!("bitmap_from_arrow1_collect_bool/{length}"), |b| {
+            b.iter(|| {
+                let buffer = collect_bool(length, false, |x| x % 2 == 0);
+                assert!(buffer.count_set_bits() == length / 2);
+            })
+        });
+
+        group.bench_function(format!("bitmap_from_arrow2_collect_bool/{length}"), |b| {
+            b.iter(|| {
+                let nulls = Bitmap::collect_bool(length, |x| x % 2 == 0);
+                assert!(nulls.null_count() == length / 2);
+            })
+        });
+
+        group.bench_function(format!("bitmap_from_arrow2/{length}"), |b| {
+            b.iter(|| {
+                let nulls = Bitmap::from_trusted_len_iter((0..length).map(|x| x % 2 == 0));
+                assert!(nulls.null_count() == length / 2);
+            })
+        });
     }
 }
 
@@ -255,7 +314,7 @@ criterion_group!(benches, bench);
 criterion_main!(benches);
 
 fn generate_random_string_data(rng: &mut StdRng, length: usize) -> (Vec<String>, Vec<Vec<u8>>) {
-    let iter_str: Vec<_> = (0..10000)
+    let iter_str: Vec<_> = (0..102400)
         .map(|_| {
             let random_string: String = (0..length)
                 .map(|_| {
@@ -279,4 +338,43 @@ fn generate_random_int_data(rng: &mut StdRng, length: usize) -> (Buffer<i32>, Bu
     let s: Buffer<i32> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
     let b: Buffer<i32> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
     (s, b)
+}
+
+/// Invokes `f` with values `0..len` collecting the boolean results into a new `BooleanBuffer`
+///
+/// This is similar to [`MutableBuffer::collect_bool`] but with
+/// the option to efficiently negate the result
+fn collect_bool(len: usize, neg: bool, f: impl Fn(usize) -> bool) -> BooleanBuffer {
+    let mut buffer = arrow_buffer::MutableBuffer::new(arrow_buffer::bit_util::ceil(len, 64) * 8);
+
+    let chunks = len / 64;
+    let remainder = len % 64;
+    for chunk in 0..chunks {
+        let mut packed = 0;
+        for bit_idx in 0..64 {
+            let i = bit_idx + chunk * 64;
+            packed |= (f(i) as u64) << bit_idx;
+        }
+        if neg {
+            packed = !packed
+        }
+
+        // SAFETY: Already allocated sufficient capacity
+        unsafe { buffer.push_unchecked(packed) }
+    }
+
+    if remainder != 0 {
+        let mut packed = 0;
+        for bit_idx in 0..remainder {
+            let i = bit_idx + chunks * 64;
+            packed |= (f(i) as u64) << bit_idx;
+        }
+        if neg {
+            packed = !packed
+        }
+
+        // SAFETY: Already allocated sufficient capacity
+        unsafe { buffer.push_unchecked(packed) }
+    }
+    BooleanBuffer::new(buffer.into(), 0, len)
 }

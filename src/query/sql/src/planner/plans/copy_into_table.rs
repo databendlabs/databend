@@ -277,7 +277,6 @@ impl Debug for CopyIntoTablePlan {
 }
 
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
-
 impl CopyIntoTablePlan {
     fn copy_into_table_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![

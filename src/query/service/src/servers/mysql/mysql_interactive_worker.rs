@@ -269,24 +269,36 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 impl InteractiveWorkerBase {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
+        let user_api = UserApiProvider::instance();
         let ctx = self.session.create_query_context().await?;
+        let tenant = ctx.get_tenant();
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
-        let mut user = UserApiProvider::instance()
-            .get_user_with_client_ip(&ctx.get_tenant(), identity.clone(), Some(client_ip))
+        let mut user = user_api
+            .get_user_with_client_ip(&tenant, identity.clone(), Some(client_ip))
             .await?;
 
+        // check global network policy if user is not account admin
+        if !user.is_account_admin() {
+            let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
+            if !global_network_policy.is_empty() {
+                user_api
+                    .enforce_network_policy(&tenant, &global_network_policy, Some(client_ip))
+                    .await?;
+            }
+        }
+
         // Check password policy for login
-        let need_change = UserApiProvider::instance()
-            .check_login_password(&ctx.get_tenant(), identity.clone(), &user)
+        let need_change = user_api
+            .check_login_password(&tenant, identity.clone(), &user)
             .await?;
         if need_change {
             user.update_auth_need_change_password();
         }
 
         let authed = user.auth_info.auth_mysql(&info.user_password, salt)?;
-        UserApiProvider::instance()
-            .update_user_login_result(ctx.get_tenant(), identity, authed, &user)
+        user_api
+            .update_user_login_result(tenant, identity, authed, &user)
             .await?;
         if authed {
             self.session.set_authed_user(user, None).await?;
@@ -430,10 +442,11 @@ impl InteractiveWorkerBase {
             None,
         )?;
 
-        let query_result = query_result.await.map_err_to_code(
-            ErrorCode::TokioError,
-            || "Cannot join handle from context's runtime",
-        )?;
+        let query_result = query_result
+            .await
+            .map_err_to_code(ErrorCode::TokioError, || {
+                "Cannot join handle from context's runtime"
+            })?;
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
         query_result.map(|data| (data, Some(reporter)))

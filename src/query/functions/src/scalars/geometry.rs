@@ -46,8 +46,10 @@ use databend_common_io::Axis;
 use databend_common_io::Extremum;
 use geo::coord;
 use geo::dimensions::Dimensions;
+use geo::Area;
 use geo::BoundingRect;
 use geo::Contains;
+use geo::ConvexHull;
 use geo::Coord;
 use geo::EuclideanDistance;
 use geo::EuclideanLength;
@@ -441,6 +443,57 @@ pub fn register(registry: &mut FunctionRegistry) {
                 },
             ),
         );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_area",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push(F64::from(0_f64));
+                    return;
+                }
+            }
+
+            match ewkb_to_geo(&mut Ewkb(ewkb)) {
+                Ok((geo, _)) => {
+                    let area = geo.unsigned_area();
+                    let area = (area * 1_000_000_000_f64).round() / 1_000_000_000_f64;
+                    builder.push(area.into());
+                }
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                    builder.push(F64::from(0_f64));
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+        "st_convexhull",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|ewkb, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            match ewkb_to_geo(&mut Ewkb(ewkb)).and_then(|(geo, srid)| {
+                let polygon = geo.convex_hull();
+                geo_to_ewkb(Geometry::from(polygon), srid)
+            }) {
+                Ok(ewkb) => {
+                    builder.put_slice(ewkb.as_slice());
+                }
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            }
+            builder.commit_row();
+        }),
+    );
 
     registry.register_combine_nullable_1_arg::<GeometryType, GeometryType, _, _>(
         "st_endpoint",
@@ -1664,7 +1717,6 @@ fn st_transform_impl(
 /// EWKT (extended well-known text).
 /// EWKB (extended well-known binary) in hexadecimal format (without a leading 0x).
 /// GEOJSON
-
 fn json_to_geometry_impl(binary: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
     let s = to_string(binary);
     let json = GeoJson(s.as_str());

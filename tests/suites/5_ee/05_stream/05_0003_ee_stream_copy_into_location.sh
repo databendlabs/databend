@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "create or replace database db_stream" | $BENDSQL_CLIENT_CONNECT
 echo "create table db_stream.t(c int)" | $BENDSQL_CLIENT_CONNECT
 echo "create stream db_stream.s on table db_stream.t" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_stream.t values(1)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db_stream.t values(1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "create or replace stage stage_05_0003" | $BENDSQL_CLIENT_CONNECT
 

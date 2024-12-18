@@ -795,7 +795,7 @@ impl Display for FileFormatParams {
 }
 
 pub fn check_row_tag(option: &str) -> std::result::Result<(), String> {
-    let len = option.as_bytes().len();
+    let len = option.len();
     let (max, min) = (1024, 1);
     if len > max || len < min {
         Err("Expecting a non-empty string containing at most 1024 characters.".to_string())

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use ethnum::i256;
@@ -62,6 +63,7 @@ impl RowConverter {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
+            | DataType::Interval
             | DataType::Date
             | DataType::Binary
             | DataType::String
@@ -74,12 +76,10 @@ impl RowConverter {
     /// Convert columns into [`BinaryColumn`] represented comparable row format.
     pub fn convert_columns(&self, columns: &[Column], num_rows: usize) -> BinaryColumn {
         debug_assert!(columns.len() == self.fields.len());
-        debug_assert!(
-            columns
-                .iter()
-                .zip(self.fields.iter())
-                .all(|(col, f)| col.len() == num_rows && col.data_type() == f.data_type)
-        );
+        debug_assert!(columns
+            .iter()
+            .zip(self.fields.iter())
+            .all(|(col, f)| col.len() == num_rows && col.data_type() == f.data_type));
 
         let mut builder = self.new_empty_rows(columns, num_rows);
         for (column, field) in columns.iter().zip(self.fields.iter()) {
@@ -119,6 +119,9 @@ impl RowConverter {
                 DataType::Timestamp => lengths
                     .iter_mut()
                     .for_each(|x| *x += i64::ENCODED_LEN as u64),
+                DataType::Interval => lengths
+                    .iter_mut()
+                    .for_each(|x| *x += months_days_micros::ENCODED_LEN as u64),
                 DataType::Date => lengths
                     .iter_mut()
                     .for_each(|x| *x += i32::ENCODED_LEN as u64),
@@ -228,7 +231,11 @@ impl RowConverter {
 
 #[inline(always)]
 pub(super) fn null_sentinel(nulls_first: bool) -> u8 {
-    if nulls_first { 0 } else { 0xFF }
+    if nulls_first {
+        0
+    } else {
+        0xFF
+    }
 }
 
 fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, nulls_first: bool) {
@@ -252,6 +259,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
             })
         }
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
+        Column::Interval(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Binary(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         Column::String(col) => variable::encode(

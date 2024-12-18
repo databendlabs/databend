@@ -64,15 +64,15 @@ async fn test_watch_main(
 
     loop {
         if let Ok(Some(resp)) = watch_stream.message().await {
-            if let Some(event) = resp.event {
-                assert!(!watch_events.is_empty());
+            let event = resp.event.unwrap();
 
-                assert_eq!(watch_events.first(), Some(&event));
-                watch_events.remove(0);
+            assert!(!watch_events.is_empty());
 
-                if watch_events.is_empty() {
-                    break;
-                }
+            let want = watch_events.remove(0);
+            assert_eq!(want, event);
+
+            if watch_events.is_empty() {
+                break;
             }
         }
     }
@@ -110,6 +110,43 @@ async fn test_watch_txn_main(
             }
         }
     }
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_watch_single_key() -> anyhow::Result<()> {
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
+
+    let seq: u64 = 1;
+
+    let watch = WatchRequest {
+        key: s("a"),
+        key_end: None,
+        filter_type: FilterType::All.into(),
+    };
+
+    let key_a = s("a");
+    let val_a = b("a");
+
+    let watch_events = vec![
+        // set a->a
+        Event {
+            key: key_a.clone(),
+            current: Some(SeqV::new(seq, val_a.clone())),
+            prev: None,
+        },
+    ];
+
+    let updates = vec![UpsertKV::new(
+        "a",
+        MatchSeq::GE(0),
+        Operation::Update(val_a),
+        None,
+    )];
+
+    test_watch_main(addr.clone(), watch, watch_events, updates).await?;
 
     Ok(())
 }
@@ -466,19 +503,14 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().map(|x| x.get_meta_node()).unwrap();
 
-    let watcher_count = Arc::new(std::sync::Mutex::new(0usize));
-
     info!("one watcher");
     {
-        let cnt = watcher_count.clone();
+        let got = mn
+            .subscriber_handle
+            .request_blocking(move |d| d.watch_senders().len())
+            .await?;
 
-        mn.dispatcher_handle
-            .request_blocking(move |d| {
-                *cnt.lock().unwrap() = d.watchers().count();
-            })
-            .await;
-
-        assert_eq!(1, *watcher_count.lock().unwrap());
+        assert_eq!(1, got);
     }
 
     info!("second watcher");
@@ -486,15 +518,12 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         let client2 = make_client(&addr)?;
         let _watch_stream2 = client2.request(watch_req()).await?;
 
-        let cnt = watcher_count.clone();
+        let got = mn
+            .subscriber_handle
+            .request_blocking(move |d| d.watch_senders().len())
+            .await?;
 
-        mn.dispatcher_handle
-            .request_blocking(move |d| {
-                *cnt.lock().unwrap() = d.watchers().count();
-            })
-            .await;
-
-        assert_eq!(2, *watcher_count.lock().unwrap());
+        assert_eq!(2, got);
     }
 
     info!("wait a while for MetaNode to process stream cleanup");
@@ -502,15 +531,12 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     info!("second watcher is removed");
     {
-        let cnt = watcher_count.clone();
+        let got = mn
+            .subscriber_handle
+            .request_blocking(move |d| d.watch_senders().len())
+            .await?;
 
-        mn.dispatcher_handle
-            .request_blocking(move |d| {
-                *cnt.lock().unwrap() = d.watchers().count();
-            })
-            .await;
-
-        assert_eq!(1, *watcher_count.lock().unwrap());
+        assert_eq!(1, got);
     }
 
     Ok(())
