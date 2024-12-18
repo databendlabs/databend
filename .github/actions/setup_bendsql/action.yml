@@ -8,6 +8,7 @@ runs:
       shell: bash
       run: |
         if command -v bendsql >/dev/null 2>&1; then
+          bendsql --version
           exit 0
         fi
         case $RUNNER_PROVIDER in
@@ -30,6 +31,7 @@ runs:
       shell: bash
       run: |
         if command -v bendsql >/dev/null 2>&1; then
+          bendsql --version
           exit 0
         fi
         brew install databendcloud/homebrew-tap/bendsql
