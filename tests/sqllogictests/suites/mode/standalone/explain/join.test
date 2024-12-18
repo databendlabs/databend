@@ -1,4 +1,7 @@
 statement ok
+set ddl_column_type_nullable=0;
+
+statement ok
 drop table if exists t
 
 statement ok
@@ -1019,3 +1022,6 @@ DROP TABLE t1;
 
 statement ok
 DROP TABLE t2;
+
+statement ok
+unset ddl_column_type_nullable;

@@ -1,4 +1,7 @@
 statement ok
+set ddl_column_type_nullable=0;
+
+statement ok
 drop database if exists join_reorder
 
 statement ok
@@ -510,3 +513,6 @@ HashJoin: LEFT ANTI
 
 statement ok
 drop database join_reorder
+
+statement ok
+unset ddl_column_type_nullable;

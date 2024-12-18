@@ -1,4 +1,7 @@
 statement ok
+set ddl_column_type_nullable=0;
+
+statement ok
 drop view if exists v
 
 statement ok
@@ -283,3 +286,6 @@ drop table t2;
 
 statement ok
 drop view v
+
+statement ok
+unset ddl_column_type_nullable;
