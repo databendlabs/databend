@@ -61,9 +61,7 @@ db_root
 db_u3
 default
 information_schema
-nogrant
 system
-test_fuse_time_travel_size
 1
 2
 3
