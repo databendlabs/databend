@@ -70,37 +70,45 @@ impl Binder {
         };
 
         // Check and bind common table expression
+        let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
-        if let Some(cte_info) = cte_map.get(&table_name)
-            && !cte_info.materialized
-        {
-            if self
-                .metadata
-                .read()
-                .get_table_index(Some(&database), &table_name)
-                .is_some()
-            {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Table name `{}` is misleading, please distinguish it.",
-                    table_name
-                ))
-                .set_span(*span));
-            }
-            return if cte_info.recursive {
-                if self.bind_recursive_cte {
-                    self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
-                } else {
-                    self.bind_r_cte(*span, bind_context, cte_info, &table_name, alias)
-                }
+        if let Some(cte_info) = cte_map.get(&table_name) {
+            if cte_info.materialized {
+                cte_suffix_name = Some(self.ctx.get_id().replace("-", "_"));
             } else {
-                self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-            };
+                if self
+                    .metadata
+                    .read()
+                    .get_table_index(Some(&database), &table_name)
+                    .is_some()
+                {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Table name `{}` is misleading, please distinguish it.",
+                        table_name
+                    ))
+                    .set_span(*span));
+                }
+                return if cte_info.recursive {
+                    if self.bind_recursive_cte {
+                        self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
+                    } else {
+                        self.bind_r_cte(*span, bind_context, cte_info, &table_name, alias)
+                    }
+                } else {
+                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                };
+            }
         }
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
         let table_meta = {
+            let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
+                format!("{}_{}", &table_name, cte_suffix_name)
+            } else {
+                table_name.clone()
+            };
             match self.resolve_data_source(
                 catalog.as_str(),
                 database.as_str(),
@@ -154,6 +162,7 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     consume,
+                    None,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -232,6 +241,7 @@ impl Binder {
                         false,
                         false,
                         false,
+                        None,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
@@ -264,6 +274,7 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     false,
+                    cte_suffix_name,
                 );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(

@@ -20,8 +20,8 @@ echo "checking that 3 snapshots exist"
 echo "select count(*)  from fuse_snapshot('default', 'fuse_test_flashback')" | $BENDSQL_CLIENT_CONNECT
 
 # write down 2 new rows using current version
-echo "insert into fuse_test_flashback values (4)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into fuse_test_flashback values (5)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into fuse_test_flashback values (4)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "insert into fuse_test_flashback values (5)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 # the table now contains five rows {1,2,3,4,5}, and 5 snapshots:
 # s1 {1}, s2 {1,2}, s3 {1,2,3}, s4 {1,2,3,4}, s5 {1,2,3,4,5}
@@ -121,7 +121,7 @@ echo "suite: mixed versioned segment compaction test"
 # creation of s5:
 #---------------
 # insert another row, which will produce a new snapshot s5 {1,2,3,4}, of version 3
-echo "insert into t2 values (4)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into t2 values (4)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 # s5 now contains 3 segments, 2 of version 3, and 1 of version 4
 # - v2 segment_1: {1,2}, v2 segment_2: {3}, v3 segment_3: {4}

@@ -15,8 +15,8 @@ echo "drop table if exists default.t2;" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE FUNCTION f1 AS (p) -> (p)" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE FUNCTION f2 AS (p) -> (p)" | $BENDSQL_CLIENT_CONNECT
-echo "create table default.t(i UInt8 not null);" | $BENDSQL_CLIENT_CONNECT
-echo "create table default.t2(i UInt8 not null);" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace table default.t(i UInt8 not null);" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace table default.t2(i UInt8 not null);" | $BENDSQL_CLIENT_CONNECT
 
 ## create user
 echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT

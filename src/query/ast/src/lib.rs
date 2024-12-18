@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(let_chains)]
+
 // TODO(xuanwo): Add crate level documents here.
 pub mod ast;
 mod error;

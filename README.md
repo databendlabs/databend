@@ -78,7 +78,7 @@
 
 - **ACID Compliance + Version Control**: Ensure reliable transactions with full ACID compliance and Git-like versioning.  
 
-- **Schema Flexibility**: Effortlessly handle semi-structured data with the flexible [VARIANT](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) data type.  
+- **Schema Flexibility**: Effortlessly handle semi-structured data with the flexible [VARIANT](https://docs.databend.com/sql/sql-reference/data-types/variant) data type.  
 
 - **Community-Driven Growth**: Open-source and continuously evolving with contributions from a global community.
 
