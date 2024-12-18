@@ -1,7 +1,4 @@
 statement ok
-set ddl_column_type_nullable=0;
-
-statement ok
 drop view if exists v
 
 statement ok
@@ -228,10 +225,10 @@ statement ok
 drop table t2
 
 statement ok
-create table t1 as select number as a from numbers(10000);
+settings (ddl_column_type_nullable=0) create table t1 as select number as a from numbers(10000);
 
 statement ok
-create table t2 as select number as b from numbers(10000);
+settings (ddl_column_type_nullable=0) create table t2 as select number as b from numbers(10000);
 
 query T
 explain select * from t1 where t1.a < 0 union all select a from t2 join t1 on t1.a = t2.b where a <0;
@@ -286,6 +283,3 @@ drop table t2;
 
 statement ok
 drop view v
-
-statement ok
-unset ddl_column_type_nullable;
