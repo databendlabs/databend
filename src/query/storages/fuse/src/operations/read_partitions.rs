@@ -33,6 +33,7 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -251,14 +252,14 @@ impl FuseTable {
                                 break;
                             }
                         }
-                        Ok(())
+                        Ok::<_, ErrorCode>(())
                     }
                 });
 
                 if let Err(cause) = join_handler.await {
                     log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
                 }
-                Ok(())
+                Ok::<_, ErrorCode>(())
             });
             Ok(())
         });
