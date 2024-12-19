@@ -28,7 +28,6 @@ use futures_util::TryStreamExt;
 use log::info;
 use opendal::Buffer;
 use opendal::ErrorKind;
-use opendal::Metakey;
 
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
@@ -71,74 +70,85 @@ async fn vacuum_by_duration(
 
     let mut removed_total = 0;
     let temporary_dir = format!("{}/", temporary_dir.trim_end_matches('/'));
-    let mut ds = operator
-        .lister_with(&temporary_dir)
-        .metakey(Metakey::Mode | Metakey::LastModified)
-        .await?;
+    let mut ds = operator.lister_with(&temporary_dir).await?;
 
     let mut temp_files = Vec::new();
     let mut gc_metas = HashSet::new();
 
-    while let Some(de) = ds.try_next().await? {
-        abort_checker.try_check_aborting()?;
-        if de.path() == temporary_dir {
-            continue;
-        }
-        let name = de.name();
-        let meta = de.metadata();
-
-        if let Some(modified) = meta.last_modified() {
-            if timestamp - modified.timestamp_millis() < expire_time {
-                continue;
-            }
-        }
-
-        if meta.is_file() {
-            if name.ends_with(".meta") {
-                if gc_metas.contains(name) {
+    // We may delete next entries during iteration
+    // So we can't use
+    loop {
+        let de = ds.try_next().await;
+        match de {
+            Ok(Some(de)) => {
+                abort_checker.try_check_aborting()?;
+                if de.path() == temporary_dir {
                     continue;
                 }
-                let removed = vacuum_by_meta(de.path(), limit, &mut removed_total).await?;
-                limit = limit.saturating_sub(removed);
-                gc_metas.insert(name.to_owned());
-            } else {
-                temp_files.push(de.path().to_owned());
-                if temp_files.len() >= limit {
+                let name = de.name();
+
+                let meta = operator.stat(de.path()).await;
+                if meta.is_err() {
+                    continue;
+                }
+                let meta = meta.unwrap();
+                if let Some(modified) = meta.last_modified() {
+                    if timestamp - modified.timestamp_millis() < expire_time {
+                        continue;
+                    }
+                }
+                if meta.is_file() {
+                    if name.ends_with(".meta") {
+                        if gc_metas.contains(name) {
+                            continue;
+                        }
+                        let removed = vacuum_by_meta(de.path(), limit, &mut removed_total).await?;
+                        limit = limit.saturating_sub(removed);
+                        gc_metas.insert(name.to_owned());
+                    } else {
+                        temp_files.push(de.path().to_owned());
+                        if temp_files.len() >= limit {
+                            break;
+                        }
+                    }
+                } else {
+                    let removed = vacuum_by_meta(
+                        &format!("{}.meta", de.path().trim_end_matches('/')),
+                        limit,
+                        &mut removed_total,
+                    )
+                    .await?;
+                    // by meta
+                    if removed > 0 {
+                        let meta_name = format!("{}.meta", name);
+                        if gc_metas.contains(&meta_name) {
+                            continue;
+                        }
+
+                        limit = limit.saturating_sub(removed);
+                        gc_metas.insert(meta_name);
+                    } else {
+                        // by list
+                        let removed =
+                            vacuum_by_list_dir(de.path(), limit, &mut removed_total).await?;
+                        limit = limit.saturating_sub(removed);
+                    }
+                }
+                if limit == 0 {
                     break;
                 }
             }
-        } else {
-            let removed = vacuum_by_meta(
-                &format!("{}.meta", de.path().trim_end_matches('/')),
-                limit,
-                &mut removed_total,
-            )
-            .await?;
-            // by meta
-            if removed > 0 {
-                let meta_name = format!("{}.meta", name);
-                if gc_metas.contains(&meta_name) {
-                    continue;
-                }
-
-                limit = limit.saturating_sub(removed);
-                gc_metas.insert(meta_name);
-            } else {
-                // by list
-                let removed = vacuum_by_list_dir(de.path(), limit, &mut removed_total).await?;
-                limit = limit.saturating_sub(removed);
-            }
-        }
-        if limit == 0 {
-            break;
+            Ok(None) => break,
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
         }
     }
 
     if temp_files.len() <= limit {
         removed_total += temp_files.len();
-        operator
+        let _ = operator
             .remove_via(stream::iter(temp_files.into_iter()))
-            .await?;
+            .await;
     }
 
     // Log for the final total progress
@@ -193,7 +203,7 @@ async fn vacuum_by_meta(
 
     let cur_removed = to_be_removed.len();
     let remove_temp_files_path = stream::iter(files.into_iter().take(limit));
-    operator.remove_via(remove_temp_files_path).await?;
+    let _ = operator.remove_via(remove_temp_files_path).await;
 
     // update unfinished meta file
     if !remain.is_empty() {
@@ -235,9 +245,9 @@ async fn vacuum_by_list_dir(
     batches.push(dir_path.to_owned());
 
     let cur_removed = batches.len().min(limit);
-    operator
+    let _ = operator
         .remove_via(stream::iter(batches.into_iter().take(limit)))
-        .await?;
+        .await;
 
     *removed_total += cur_removed;
     // Log for the current batch

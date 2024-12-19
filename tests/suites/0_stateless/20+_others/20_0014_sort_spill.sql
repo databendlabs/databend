@@ -99,3 +99,9 @@ unset max_vacuum_temp_files_after_query;
 unset enable_experimental_stream_sort_spilling;
 set sort_spilling_bytes_threshold_per_proc = 0;
 SELECT any_if(count, number = 8) - any_if(count, number = 7) FROM temp_files_count;
+
+SET max_vacuum_temp_files_after_query= 300000;
+SELECT '==Start to clean==';
+SELECT sleep(1);
+VACUUM TEMPORARY FILES RETAIN 1 SECONDS;
+SELECT count() from system.temp_files;
