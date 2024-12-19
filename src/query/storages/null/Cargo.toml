@@ -21,8 +21,5 @@ databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sinks = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 
-[build-dependencies]
-databend-common-building = { workspace = true }
-
 [lints]
 workspace = true
