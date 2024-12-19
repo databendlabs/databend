@@ -200,7 +200,10 @@ impl FuseTable {
                 // We cannot use the runtime associated with the query to avoid increasing its lifetime.
                 GlobalIORuntime::instance().spawn(async move {
                     // avoid block global io runtime
-                    let runtime = Runtime::with_worker_threads(2, None)?;
+                    let runtime = Runtime::with_worker_threads(
+                        2,
+                        Some("send_partitions_from_cache".to_string()),
+                    )?;
 
                     let join_handler = runtime.spawn(async move {
                         for part in part.partitions {
@@ -241,7 +244,7 @@ impl FuseTable {
             // We cannot use the runtime associated with the query to avoid increasing its lifetime.
             GlobalIORuntime::instance().spawn(async move {
                 // avoid block global io runtime
-                let runtime = Runtime::with_worker_threads(2, None)?;
+                let runtime = Runtime::with_worker_threads(2, Some("segment_pruning".to_string()))?;
                 let join_handler = runtime.spawn(async move {
                     let segment_pruned_result =
                         pruner.clone().segment_pruning(lazy_init_segments).await?;
