@@ -151,24 +151,25 @@ impl Runtime {
 
         let n = name.clone();
         // Block the runtime to shutdown.
-        let join_handler = Thread::spawn(move || {
-            let _ = runtime.block_on(recv_stop);
-            info!(
-                "Runtime({:?}) received shutdown signal, start to shut down",
-                n
-            );
+        let join_handler =
+            Thread::named_spawn(n.as_ref().map(|n| format!("wait-to-drop-{n}")), move || {
+                let _ = runtime.block_on(recv_stop);
+                info!(
+                    "Runtime({:?}) received shutdown signal, start to shut down",
+                    n
+                );
 
-            match !cfg!(debug_assertions) {
-                true => false,
-                false => {
-                    let instant = Instant::now();
-                    // We wait up to 3 seconds to complete the runtime shutdown.
-                    runtime.shutdown_timeout(Duration::from_secs(3));
+                match !cfg!(debug_assertions) {
+                    true => false,
+                    false => {
+                        let instant = Instant::now();
+                        // We wait up to 3 seconds to complete the runtime shutdown.
+                        runtime.shutdown_timeout(Duration::from_secs(3));
 
-                    instant.elapsed() >= Duration::from_secs(3)
+                        instant.elapsed() >= Duration::from_secs(3)
+                    }
                 }
-            }
-        });
+            });
 
         Ok(Runtime {
             handle,
