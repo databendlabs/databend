@@ -196,9 +196,9 @@ impl JwkKeyStore {
         if !new_keys.keys().eq(old_keys.keys()) {
             info!("JWKS keys changed.");
         }
-        *self.cached_keys.write() = new_keys;
+        *self.cached_keys.write() = new_keys.clone();
         self.last_refreshed_at.write().replace(Instant::now());
-        Ok(old_keys)
+        Ok(new_keys)
     }
 
     #[async_backtrace::framed]
