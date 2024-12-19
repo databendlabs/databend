@@ -1528,7 +1528,12 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
+    /// The interval in seconds to refresh the jwks from the jwks url
+    pub jwks_refresh_interval: u64,
+
+    /// The timeout in seconds to refresh the jwks from the jwks url
+    pub jwks_refresh_timeout: u64,
+
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
@@ -1754,6 +1759,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             max_storage_io_requests: self.max_storage_io_requests,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
+            jwks_refresh_interval: self.jwks_refresh_interval,
+            jwks_refresh_timeout: self.jwks_refresh_timeout,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
             builtin: BuiltInConfig {
@@ -1845,6 +1852,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_storage_io_requests: inner.max_storage_io_requests,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
+            jwks_refresh_interval: inner.jwks_refresh_interval,
+            jwks_refresh_timeout: inner.jwks_refresh_timeout,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
             users: inner.builtin.users,
