@@ -11,7 +11,7 @@ query TT
 select * from t order by c1;
 ----
 -1 year -1 month 0:00:00.000001
--1 month -1 day -1:00:00 0:00:00.001
+-1 month -1:00:00 0:00:00.001
 
 onlyif http
 statement error 1006
@@ -22,3 +22,9 @@ query T
 select to_interval('1 month 1 hour 1 microsecond');
 ----
 1 month 1:00:00.000001
+
+onlyif http
+query T
+select to_interval('1 month 1 hour 1 microsecond ago');
+----
+-1 month -1:00:00.000001

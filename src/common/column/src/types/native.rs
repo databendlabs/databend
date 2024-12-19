@@ -271,8 +271,10 @@ pub struct months_days_micros(pub i128);
 impl months_days_micros {
     pub fn new(months: i32, days: i32, microseconds: i64) -> Self {
         let months_bits = (months as i128) << 96;
-        let days_bits = (days as i128) << 64;
-        let micros_bits = microseconds as i128;
+        // converting to u32 before i128 ensures we’re working with the raw, unsigned bit pattern of the i32 value,
+        // preventing unwanted sign extension when that value is later used within the i128.
+        let days_bits = ((days as u32) as i128) << 64;
+        let micros_bits = (microseconds as u64) as i128;
 
         Self(months_bits | days_bits | micros_bits)
     }
