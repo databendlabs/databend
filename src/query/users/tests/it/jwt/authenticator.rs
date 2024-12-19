@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_users::JwkKeyStore;
 use databend_common_users::JwtAuthenticator;
-use databend_common_users::PubKey;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
