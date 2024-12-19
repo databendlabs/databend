@@ -1644,10 +1644,16 @@ impl std::fmt::Debug for QueryContext {
 impl Drop for QueryContext {
     fn drop(&mut self) {
         let _ = drop_guard(move || {
-            GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
-                self.unload_spill_meta().await;
-                Ok(())
-            })
+            let mut r = self.spilled_files.read();
+            let is_empty = r.is_empty();
+            drop(r);
+
+            if !is_empty {
+                GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
+                    self.unload_spill_meta().await;
+                    Ok(())
+                });
+            }
         });
     }
 }
