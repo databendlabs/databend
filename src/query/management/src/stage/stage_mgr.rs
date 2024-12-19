@@ -144,14 +144,13 @@ impl StageApi for StageMgr {
                 .collect();
             dels.push(txn_op_del(&stage_ident));
 
-            let txn_req = TxnRequest {
-                condition: vec![
+            let txn_req = TxnRequest::new(
+                vec![
                     // stage is not change, prevent add file to stage
                     txn_cond_eq_seq(&stage_ident, stage_seq),
                 ],
-                if_then: dels,
-                else_then: vec![],
-            };
+                dels,
+            );
             let tx_reply = self.kv_api.transaction(txn_req).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 
@@ -195,14 +194,14 @@ impl StageApi for StageMgr {
                 };
             old_stage.number_of_files += 1;
 
-            let txn_req = TxnRequest {
-                condition: vec![
+            let txn_req = TxnRequest::new(
+                vec![
                     // file does not exist
                     txn_cond_seq(&file_ident, Eq, 0),
                     // stage is not changed
                     txn_cond_seq(&stage_ident, Eq, stage_seq),
                 ],
-                if_then: vec![
+                vec![
                     txn_op_put(
                         &file_ident,
                         serialize_struct(&file, ErrorCode::IllegalStageFileFormat, || "")?,
@@ -212,8 +211,7 @@ impl StageApi for StageMgr {
                         serialize_struct(&old_stage, ErrorCode::IllegalUserStageFormat, || "")?,
                     ),
                 ],
-                else_then: vec![],
-            };
+            );
 
             let tx_reply = self.kv_api.transaction(txn_req).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
@@ -269,14 +267,13 @@ impl StageApi for StageMgr {
                 serialize_struct(&old_stage, ErrorCode::IllegalUserStageFormat, || "")?,
             ));
 
-            let txn_req = TxnRequest {
-                condition: vec![
+            let txn_req = TxnRequest::new(
+                vec![
                     // stage is not change
                     txn_cond_seq(&stage_ident, Eq, stage_seq),
                 ],
                 if_then,
-                else_then: vec![],
-            };
+            );
             let tx_reply = self.kv_api.transaction(txn_req).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 

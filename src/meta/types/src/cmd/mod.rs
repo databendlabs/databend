@@ -131,15 +131,14 @@ mod tests {
         assert_eq!(cmd, serde_json::from_str(want)?);
 
         // Transaction
-        let cmd = super::Cmd::Transaction(TxnRequest {
-            condition: vec![TxnCondition::eq_value("k", b("v"))],
-            if_then: vec![TxnOp::put_with_ttl(
+        let cmd = super::Cmd::Transaction(TxnRequest::new(
+            vec![TxnCondition::eq_value("k", b("v"))],
+            vec![TxnOp::put_with_ttl(
                 "k",
                 b("v"),
                 Some(Duration::from_millis(100)),
             )],
-            else_then: vec![],
-        });
+        ));
         let want = concat!(
             r#"{"Transaction":{"#,
             r#""condition":[{"key":"k","expected":0,"target":{"Value":[118]}}],"#,

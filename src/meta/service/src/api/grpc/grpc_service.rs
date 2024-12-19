@@ -57,6 +57,7 @@ use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
+use log::error;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -177,12 +178,8 @@ impl MetaServiceImpl {
                 (endpoint, txn_reply)
             }
             Err(err) => {
-                let txn_reply = TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                };
-                (None, txn_reply)
+                error!("txn request failed: {:?}", err);
+                return Err(Status::internal(err.to_string()));
             }
         };
 

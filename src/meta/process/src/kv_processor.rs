@@ -164,11 +164,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                 Ok(Some(LogEntry {
                     txid: log_entry.txid,
                     time_ms: log_entry.time_ms,
-                    cmd: Cmd::Transaction(TxnRequest {
-                        condition,
-                        if_then,
-                        else_then,
-                    }),
+                    cmd: Cmd::Transaction(TxnRequest::new(condition, if_then).with_else(else_then)),
                 }))
             }
         }

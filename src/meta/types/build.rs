@@ -84,6 +84,18 @@ fn build_proto() {
             "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
+            "ConditionalOperation",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
+        .type_attribute(
+            "BooleanExpression",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
+        .type_attribute(
+            "BooleanExpression.CombiningOperator",
+            "#[derive(serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
+        .type_attribute(
             "TxnOp",
             "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
@@ -138,6 +150,10 @@ fn build_proto() {
         .field_attribute(
             "TxnPutRequest.ttl_ms",
             r#"#[serde(skip_serializing_if = "Option::is_none")]"#,
+        )
+        .field_attribute(
+            "TxnRequest.operations",
+            r#"#[serde(skip_serializing_if = "Vec::is_empty")] #[serde(default)]"#,
         )
         .compile_protos_with_config(config, &protos, &[&proto_dir])
         .unwrap();
