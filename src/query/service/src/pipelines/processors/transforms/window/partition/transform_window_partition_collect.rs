@@ -32,7 +32,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;

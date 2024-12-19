@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -210,7 +209,6 @@ impl FlightScatter for HashTableHashScatter {
 
 pub struct AggregateInjector {
     ctx: Arc<QueryContext>,
-    tenant: String,
     aggregator_params: Arc<AggregatorParams>,
 }
 
@@ -219,10 +217,8 @@ impl AggregateInjector {
         ctx: Arc<QueryContext>,
         params: Arc<AggregatorParams>,
     ) -> Arc<dyn ExchangeInjector> {
-        let tenant = ctx.get_tenant();
         Arc::new(AggregateInjector {
             ctx,
-            tenant: tenant.tenant_name().to_string(),
             aggregator_params: params,
         })
     }

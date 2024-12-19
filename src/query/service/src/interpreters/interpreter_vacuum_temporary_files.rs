@@ -22,6 +22,7 @@ use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -61,7 +62,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             .do_vacuum_temporary_files(
                 self.ctx.clone().get_abort_checker(),
                 temporary_files_prefix,
-                self.plan.retain,
+                &VacuumTempOptions::VacuumCommand(self.plan.retain),
                 self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
             )
             .await?;

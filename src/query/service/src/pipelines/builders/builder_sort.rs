@@ -276,7 +276,7 @@ impl SortPipelineBuilder {
 
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
-            let location_prefix = ctx.query_id_spill_prefix();
+            let location_prefix = self.ctx.query_id_spill_prefix();
 
             let config = SpillerConfig {
                 spiller_type: SpillerType::OrderBy,

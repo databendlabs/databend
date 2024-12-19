@@ -125,6 +125,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
+use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -383,13 +384,19 @@ impl QueryContext {
     }
 
     pub fn query_tenant_spill_prefix(&self) -> String {
-        let tenant = self.get_tenant().tenant_name();
-        format!("_query_spill/{}", tenant)
+        let tenant = self.get_tenant();
+        format!("_query_spill/{}", tenant.tenant_name())
     }
 
     pub fn query_id_spill_prefix(&self) -> String {
-        let tenant = self.get_tenant().tenant_name();
-        format!("_query_spill/{}/{}", tenant, self.get_id())
+        let tenant = self.get_tenant();
+        let node_index = self.get_cluster().ordered_index();
+        format!(
+            "_query_spill/{}/{}_{}",
+            tenant.tenant_name(),
+            self.get_id(),
+            node_index
+        )
     }
 
     #[async_backtrace::framed]
@@ -422,6 +429,41 @@ impl QueryContext {
             _ => table,
         };
         Ok(table)
+    }
+
+    pub async fn unload_spill_meta(&self) {
+        let mut w = self.spilled_files.write();
+        let mut remote_spill_files = w
+            .iter()
+            .map(|(k, _)| k)
+            .filter_map(|l| match l {
+                crate::spillers::Location::Remote(r) => Some(r),
+                _ => None,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        w.clear();
+        if !remote_spill_files.is_empty() {
+            let location_prefix = self.query_tenant_spill_prefix();
+            let node_idx = self.get_cluster().ordered_index();
+            let meta_path = format!("{}/{}_{}.meta", location_prefix, self.get_id(), node_idx);
+
+            // append dir and current meta
+            remote_spill_files.push(meta_path.clone());
+            remote_spill_files.push(format!(
+                "{}/{}_{}/",
+                location_prefix,
+                self.get_id(),
+                node_idx
+            ));
+
+            let joined_contents = remote_spill_files.join("\n");
+            let op = DataOperator::instance().operator();
+            if let Err(e) = op.write(&meta_path, joined_contents).await {
+                log::error!("create spill meta file error: {}", e);
+            }
+        }
     }
 }
 
@@ -1573,34 +1615,12 @@ impl std::fmt::Debug for QueryContext {
 
 impl Drop for QueryContext {
     fn drop(&mut self) {
-        drop_guard(move || {
-            let r = self.spilled_files.read();
-
-            let remote_spill_files = r
-                .iter()
-                .map(|(k, _)| k)
-                .filter_map(|l| match l {
-                    crate::spillers::Location::Remote(r) => Some(r),
-                    _ => None,
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-
-            if !remote_spill_files.is_empty() {
-                let joined_contents = remote_spill_files.join("\n");
-                let path = "xxx";
-
-                let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
-                let op = DataOperator::instance().operator();
-
-                if let Err(e) = GlobalIORuntime::instance().block_on(async move {
-                    op.write(path, joined_contents).await?;
-                    Ok(())
-                }) {
-                    log::error!("create spill meta file error: {}", e);
-                }
-            }
-        })
+        let _ = drop_guard(move || {
+            GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
+                self.unload_spill_meta().await;
+                Ok(())
+            })
+        });
     }
 }
 

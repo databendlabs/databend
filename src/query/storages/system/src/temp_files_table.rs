@@ -151,7 +151,7 @@ impl TempFilesTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         let tenant = ctx.get_tenant();
-        let location_prefix = format!("_query_spill/{}/", tenant);
+        let location_prefix = format!("_query_spill/{}/", tenant.tenant_name());
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
         let operator = DataOperator::instance().operator();

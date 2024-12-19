@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::io::BufRead;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -20,11 +22,12 @@ use std::time::UNIX_EPOCH;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use futures_util::stream;
 use futures_util::TryStreamExt;
 use log::info;
-use opendal::Entry;
-use opendal::EntryMode;
+use opendal::Buffer;
+use opendal::ErrorKind;
 use opendal::Metakey;
 
 // Default retention duration for temporary files: 3 days.
@@ -34,229 +37,217 @@ const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 pub async fn do_vacuum_temporary_files(
     abort_checker: AbortChecker,
     temporary_dir: String,
-    retain: Option<Duration>,
+    options: &VacuumTempOptions,
     limit: usize,
 ) -> Result<usize> {
     if limit == 0 {
         return Ok(0);
     }
 
-    let expire_time = retain.unwrap_or(DEFAULT_RETAIN_DURATION).as_millis() as i64;
+    match options {
+        VacuumTempOptions::QueryHook(nodes_num, query_id) => {
+            vacuum_query_hook(abort_checker, &temporary_dir, *nodes_num, query_id, limit).await
+        }
+        VacuumTempOptions::VacuumCommand(duration) => {
+            vacuum_by_duration(abort_checker, &temporary_dir, limit, duration).await
+        }
+    }
+}
+
+async fn vacuum_by_duration(
+    abort_checker: AbortChecker,
+    temporary_dir: &str,
+    mut limit: usize,
+    duration: &Option<Duration>,
+) -> Result<usize> {
+    let operator = DataOperator::instance().operator();
+    let start_time = Instant::now();
+
+    let expire_time = duration.unwrap_or(DEFAULT_RETAIN_DURATION).as_millis() as i64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
 
-    let operator = DataOperator::instance().operator();
-
+    let mut removed_total = 0;
     let temporary_dir = format!("{}/", temporary_dir.trim_end_matches('/'));
-
     let mut ds = operator
         .lister_with(&temporary_dir)
         .metakey(Metakey::Mode | Metakey::LastModified)
         .await?;
 
-    let mut removed_temp_files = 0;
-    let mut total_cleaned_size = 0;
-    let mut total_batch_size = 0;
-    let start_time = Instant::now();
+    let mut temp_files = Vec::new();
+    let mut gc_metas = HashSet::new();
 
-    while removed_temp_files < limit {
-        let instant = Instant::now();
-        let mut end_of_stream = true;
-        let mut remove_temp_files_path = Vec::with_capacity(1000);
-        let mut batch_size = 0;
+    while let Some(de) = ds.try_next().await? {
+        abort_checker.try_check_aborting()?;
+        if de.path() == temporary_dir {
+            continue;
+        }
+        let name = de.name();
+        let meta = de.metadata();
 
-        while let Some(de) = ds.try_next().await? {
-            abort_checker.try_check_aborting()?;
-            if de.path() == temporary_dir {
+        if let Some(modified) = meta.last_modified() {
+            if timestamp - modified.timestamp_millis() < expire_time {
                 continue;
             }
+        }
 
-            let meta = de.metadata();
-
-            match meta.mode() {
-                EntryMode::DIR => {
-                    let life_mills =
-                        match operator.exists(&format!("{}finished", de.path())).await? {
-                            true => 0,
-                            false => expire_time,
-                        };
-
-                    vacuum_finished_query(
-                        &abort_checker,
-                        start_time,
-                        &mut removed_temp_files,
-                        &mut total_cleaned_size,
-                        &mut batch_size,
-                        &de,
-                        limit,
-                        timestamp,
-                        life_mills,
-                    )
-                    .await?;
-
-                    if removed_temp_files >= limit {
-                        end_of_stream = false;
-                        break;
-                    }
+        if meta.is_file() {
+            if name.ends_with(".meta") {
+                if gc_metas.contains(name) {
+                    continue;
                 }
-                EntryMode::FILE => {
-                    if let Some(modified) = meta.last_modified() {
-                        if timestamp - modified.timestamp_millis() >= expire_time {
-                            removed_temp_files += 1;
-                            remove_temp_files_path.push(de.path().to_string());
-                            batch_size += meta.content_length() as usize;
-
-                            if removed_temp_files >= limit || remove_temp_files_path.len() >= 1000 {
-                                end_of_stream = false;
-                                break;
-                            }
-                        }
-                    }
+                let removed = vacuum_by_meta(de.path(), limit, &mut removed_total).await?;
+                limit = limit.saturating_sub(removed);
+                gc_metas.insert(name.to_owned());
+            } else {
+                temp_files.push(de.path().to_owned());
+                if temp_files.len() >= limit {
+                    break;
                 }
-                EntryMode::Unknown => unreachable!(),
+            }
+        } else {
+            let removed = vacuum_by_meta(
+                &format!("{}.meta", de.path().trim_end_matches('/')),
+                limit,
+                &mut removed_total,
+            )
+            .await?;
+            // by meta
+            if removed > 0 {
+                let meta_name = format!("{}.meta", name);
+                if gc_metas.contains(&meta_name) {
+                    continue;
+                }
+
+                limit = limit.saturating_sub(removed);
+                gc_metas.insert(meta_name);
+            } else {
+                // by list
+                let removed = vacuum_by_list_dir(de.path(), limit, &mut removed_total).await?;
+                limit = limit.saturating_sub(removed);
             }
         }
-
-        if !remove_temp_files_path.is_empty() {
-            let cur_removed = remove_temp_files_path.len();
-            total_cleaned_size += batch_size;
-            operator
-                .remove_via(stream::iter(remove_temp_files_path))
-                .await?;
-
-            // Log for the current batch
-            info!(
-                "vacuum removed {} temp files in {:?}(elapsed: {} seconds), batch size: {} bytes",
-                cur_removed,
-                temporary_dir,
-                instant.elapsed().as_secs(),
-                batch_size
-            );
-
-            // Log for the total progress
-            info!(
-                "Total progress: {} files removed, total cleaned size: {} bytes, total batch size: {} bytes",
-                removed_temp_files,
-                total_cleaned_size,
-                total_batch_size + batch_size
-            );
-        }
-
-        total_batch_size += batch_size;
-
-        if end_of_stream {
+        if limit == 0 {
             break;
         }
+    }
+
+    if temp_files.len() <= limit {
+        removed_total += temp_files.len();
+        operator
+            .remove_via(stream::iter(temp_files.into_iter()))
+            .await?;
     }
 
     // Log for the final total progress
     info!(
-        "vacuum finished, total cleaned {} files, total cleaned size: {} bytes, total elapsed: {} seconds",
-        removed_temp_files,
-        total_cleaned_size,
+        "vacuum command finished, total cleaned {} files, total elapsed: {} seconds",
+        removed_total,
         start_time.elapsed().as_secs()
     );
-
-    Ok(removed_temp_files)
+    Ok(removed_total)
 }
 
-async fn vacuum_finished_query(
-    abort_checker: &AbortChecker,
-    total_instant: Instant,
-    removed_temp_files: &mut usize,
-    total_cleaned_size: &mut usize,
-    batch_size: &mut usize,
-    parent: &Entry,
-    limit: usize,
-    timestamp: i64,
-    life_mills: i64,
-) -> Result<()> {
-    let operator = DataOperator::instance().operator();
+async fn vacuum_query_hook(
+    abort_checker: AbortChecker,
+    temporary_dir: &str,
+    nodes_num: usize,
+    query_id: &str,
+    mut limit: usize,
+) -> Result<usize> {
+    let mut removed_total = 0;
 
-    let mut all_files_removed = true;
-    let mut ds = operator
-        .lister_with(parent.path())
-        .metakey(Metakey::Mode | Metakey::LastModified)
-        .await?;
-
-    while *removed_temp_files < limit {
-        let instant = Instant::now();
-
-        let mut end_of_stream = true;
-        let mut all_each_files_removed = true;
-        let mut remove_temp_files_path = Vec::with_capacity(1001);
-
-        while let Some(de) = ds.try_next().await? {
-            abort_checker.try_check_aborting()?;
-            if de.path() == parent.path() {
-                continue;
-            }
-
-            let meta = de.metadata();
-            if meta.is_file() {
-                if de.name() == "finished" {
-                    continue;
-                }
-
-                if let Some(modified) = meta.last_modified() {
-                    if timestamp - modified.timestamp_millis() >= life_mills {
-                        *removed_temp_files += 1;
-                        remove_temp_files_path.push(de.path().to_string());
-                        *batch_size += meta.content_length() as usize;
-
-                        if *removed_temp_files >= limit || remove_temp_files_path.len() >= 1000 {
-                            end_of_stream = false;
-                            break;
-                        }
-
-                        continue;
-                    }
-                }
-            }
-
-            all_each_files_removed = false;
-        }
-
-        all_files_removed &= all_each_files_removed;
-
-        if !remove_temp_files_path.is_empty() {
-            let cur_removed = remove_temp_files_path.len();
-            *total_cleaned_size += *batch_size;
-            operator
-                .remove_via(stream::iter(remove_temp_files_path))
-                .await?;
-
-            // Log for the current batch
-            info!(
-                "vacuum removed {} temp files in {:?}(elapsed: {} seconds), batch size: {} bytes",
-                cur_removed,
-                parent.path(),
-                instant.elapsed().as_secs(),
-                *batch_size
-            );
-
-            // Log for the total progress
-            info!(
-                "Total progress: {} files removed, total cleaned size: {} bytes, total elapsed: {} seconds",
-                *removed_temp_files,
-                *total_cleaned_size,
-                total_instant.elapsed().as_secs()
-            );
-        }
-
-        if end_of_stream {
+    for i in 0..nodes_num {
+        if limit == 0 {
             break;
         }
+        abort_checker.try_check_aborting()?;
+        let meta_file_path = format!("{}/{}_{}.meta", temporary_dir, query_id, i);
+        let removed = vacuum_by_meta(&meta_file_path, limit, &mut removed_total).await?;
+        limit = limit.saturating_sub(removed);
+    }
+    Ok(removed_total)
+}
+
+async fn vacuum_by_meta(
+    meta_file_path: &str,
+    limit: usize,
+    removed_total: &mut usize,
+) -> Result<usize> {
+    let operator = DataOperator::instance().operator();
+    let meta: Buffer;
+    let r = operator.read(meta_file_path).await;
+    match r {
+        Ok(r) => meta = r,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e.into()),
+    }
+    let meta = meta.to_bytes();
+    let start_time = Instant::now();
+    let files: Vec<String> = meta.lines().map(|x| Ok(x?)).collect::<Result<Vec<_>>>()?;
+
+    let (to_be_removed, remain) = files.split_at(limit.min(files.len()));
+    let remain = remain.to_vec();
+
+    let cur_removed = to_be_removed.len();
+    let remove_temp_files_path = stream::iter(files.into_iter().take(limit));
+    operator.remove_via(remove_temp_files_path).await?;
+
+    // update unfinished meta file
+    if !remain.is_empty() {
+        let remain = remain.join("\n");
+        operator.write(meta_file_path, remain).await?;
     }
 
-    if all_files_removed {
-        operator
-            .delete(&format!("{}finished", parent.path()))
-            .await?;
-        operator.delete(parent.path()).await?;
-    }
+    *removed_total += cur_removed;
+    // Log for the current batch
+    info!(
+            "Total progress: {} files removed, now vacuum removed {} temp files from meta: {}(elapsed: {} seconds)",
+            *removed_total,
+            cur_removed,
+            meta_file_path,
+            start_time.elapsed().as_secs(),
+        );
 
-    Ok(())
+    Ok(cur_removed)
+}
+
+async fn vacuum_by_list_dir(
+    dir_path: &str,
+    limit: usize,
+    removed_total: &mut usize,
+) -> Result<usize> {
+    let start_time = Instant::now();
+    let operator = DataOperator::instance().operator();
+    let mut r = operator.lister_with(dir_path).recursive(true).await?;
+    let mut batches = vec![];
+
+    while let Some(entry) = r.try_next().await? {
+        // Let's remove it at last
+        if entry.path() == dir_path {
+            continue;
+        }
+        let path = entry.path().to_string();
+        batches.push(path);
+    }
+    batches.push(dir_path.to_owned());
+
+    let cur_removed = batches.len().min(limit);
+    operator
+        .remove_via(stream::iter(batches.into_iter().take(limit)))
+        .await?;
+
+    *removed_total += cur_removed;
+    // Log for the current batch
+    info!(
+            "Total progress: {} files removed, now vacuum removed {} temp files from list query dir: {}(elapsed: {} seconds)",
+            *removed_total,
+            cur_removed,
+            dir_path,
+            start_time.elapsed().as_secs(),
+        );
+
+    Ok(cur_removed)
 }
