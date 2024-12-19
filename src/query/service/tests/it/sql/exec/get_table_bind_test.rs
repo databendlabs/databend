@@ -997,10 +997,6 @@ impl TableContext for CtxDelegation {
         false
     }
 
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        todo!()
-    }
-
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
         todo!()
     }

@@ -1476,10 +1476,6 @@ impl TableContext for QueryContext {
                 .is_temp_table(database_name, table_name)
     }
 
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
-    }
-
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         self.m_cte_temp_table
             .write()

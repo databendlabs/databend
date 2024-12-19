@@ -33,7 +33,6 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -238,20 +237,29 @@ impl FuseTable {
             derterministic_cache_key.clone(),
         )?;
         prune_pipeline.set_on_init(move || {
-            ctx.get_runtime()?.try_spawn(
-                async move {
-                    let segment_pruned_result =
-                        pruner.clone().segment_pruning(lazy_init_segments).await?;
-                    for segment in segment_pruned_result {
-                        // the sql may be killed or early stop, ignore the error
-                        if let Err(_e) = segment_tx.send(Ok(segment)).await {
-                            break;
+            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+            GlobalIORuntime::instance().spawn(async move {
+                // avoid block global io runtime
+                let runtime = Runtime::with_worker_threads(2, None)?;
+                let join_handler = runtime.spawn(async move {
+                    async move {
+                        let segment_pruned_result =
+                            pruner.clone().segment_pruning(lazy_init_segments).await?;
+                        for segment in segment_pruned_result {
+                            // the sql may be killed or early stop, ignore the error
+                            if let Err(_e) = segment_tx.send(Ok(segment)).await {
+                                break;
+                            }
                         }
+                        Ok(())
                     }
-                    Ok::<_, ErrorCode>(())
-                },
-                None,
-            )?;
+                });
+
+                if let Err(cause) = join_handler.await {
+                    log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                }
+                Ok(())
+            });
             Ok(())
         });
 

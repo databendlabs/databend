@@ -876,11 +876,6 @@ impl TableContext for CtxDelegation {
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
     }
-
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        todo!()
-    }
-
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
         todo!()
     }
