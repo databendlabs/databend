@@ -58,6 +58,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -279,11 +280,23 @@ pub trait TableContext: Send + Sync {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+    fn add_inserted_segment_location(&self, segment_loc: Location) -> Result<()>;
 
-    fn clear_segment_locations(&self) -> Result<()>;
+    fn clear_inserted_segment_locations(&self) -> Result<()>;
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+    fn get_inserted_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_target_segment(&self, _segment: Arc<CompactSegmentInfo>) {
+        unimplemented!()
+    }
+
+    fn get_target_segments(&self) -> Vec<Arc<CompactSegmentInfo>> {
+        unimplemented!()
+    }
+
+    fn clear_target_segments(&self) {
+        unimplemented!()
+    }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 

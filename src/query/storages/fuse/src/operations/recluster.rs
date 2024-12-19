@@ -65,10 +65,7 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let snapshot_opt = self.read_table_snapshot().await?;
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
             // no snapshot, no recluster.
             return Ok(None);
         };

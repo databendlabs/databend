@@ -33,6 +33,7 @@ use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
@@ -170,7 +171,8 @@ impl FuseTable {
         modified_schema: Option<Arc<DataSchema>>,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys(ctx.clone());
-        if cluster_keys.is_empty() {
+        let cluster_type = self.cluster_type();
+        if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
             return Ok(ClusterStatsGenerator::default());
         }
 
