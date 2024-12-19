@@ -12,21 +12,25 @@ D as (select * from C)
 select * from D;
 ----
 HashJoin
-├── output columns: [a.a (#0), a.b (#1), a.b (#3), a.a (#2)]
+├── output columns: [a.a (#0), a.b (#1), b (#5), a (#4)]
 ├── join type: INNER
-├── build keys: [b2.a (#2)]
-├── probe keys: [b1.a (#0)]
-├── filters: [d.b (#1) < d.b (#3)]
+├── build keys: [b2.a (#4)]
+├── probe keys: [CAST(b1.a (#0) AS UInt64 NULL)]
+├── filters: [CAST(d.b (#1) AS UInt64 NULL) < d.b (#5)]
 ├── estimated rows: 400.00
-├── TableScan(Build)
-│   ├── table: default.default.a
-│   ├── output columns: [a (#2), b (#3)]
-│   ├── read rows: 20
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 20.00
+├── EvalScalar(Build)
+│   ├── output columns: [a (#4), b (#5)]
+│   ├── expressions: [CAST(b2.a (#2) AS UInt64 NULL), CAST(b2.b (#3) AS UInt64 NULL)]
+│   ├── estimated rows: 20.00
+│   └── TableScan
+│       ├── table: default.default.a
+│       ├── output columns: [a (#2), b (#3)]
+│       ├── read rows: 20
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 0
+│       ├── partitions scanned: 0
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 20.00
 └── TableScan(Probe)
     ├── table: default.default.a
     ├── output columns: [a (#0), b (#1)]

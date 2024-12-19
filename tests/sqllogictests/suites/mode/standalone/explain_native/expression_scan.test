@@ -100,7 +100,7 @@ query T
 explain select t1.a, v1.c1, v1.c2 from t1 left join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v1 ("c1", "c2") on t1.a = v1.c2;
 ----
 HashJoin
-├── output columns: [c1 (#3), c2 (#4), t1.a (#0)]
+├── output columns: [c2 (#4), c1 (#8), t1.a (#0)]
 ├── join type: RIGHT OUTER
 ├── build keys: [t1.a (#0), b (#1), c (#2)]
 ├── probe keys: [v1.c2 (#4), b (#6), c (#7)]
@@ -118,38 +118,42 @@ HashJoin
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
-└── ExpressionScan(Probe)
-    ├── output columns: [c1 (#3), c2 (#4), b (#6), c (#7)]
-    ├── column 0: ['t1_b', t1.b (#1), t1.b (#1), t1.c (#2)]
-    ├── column 1: ['t1_c', t1.c (#2), t1.b (#1), t1.c (#2)]
-    └── AggregateFinal
-        ├── output columns: [t1.c (#2), t1.b (#1)]
-        ├── group by: [c, b]
-        ├── aggregate functions: []
-        ├── estimated rows: 0.00
-        └── AggregatePartial
+└── EvalScalar(Probe)
+    ├── output columns: [c2 (#4), b (#6), c (#7), c1 (#8)]
+    ├── expressions: [CAST(v1.c1 (#3) AS String NULL)]
+    ├── estimated rows: 2.00
+    └── ExpressionScan
+        ├── output columns: [c1 (#3), c2 (#4), b (#6), c (#7)]
+        ├── column 0: ['t1_b', t1.b (#1), t1.b (#1), t1.c (#2)]
+        ├── column 1: ['t1_c', t1.c (#2), t1.b (#1), t1.c (#2)]
+        └── AggregateFinal
+            ├── output columns: [t1.c (#2), t1.b (#1)]
             ├── group by: [c, b]
             ├── aggregate functions: []
             ├── estimated rows: 0.00
-            └── CacheScan
-                ├── output columns: [t1.c (#2), t1.b (#1)]
-                ├── cache index: 0
-                └── column indexes: [1, 2]
+            └── AggregatePartial
+                ├── group by: [c, b]
+                ├── aggregate functions: []
+                ├── estimated rows: 0.00
+                └── CacheScan
+                    ├── output columns: [t1.c (#2), t1.b (#1)]
+                    ├── cache index: 0
+                    └── column indexes: [1, 2]
 
 query T
 explain select t1.a, v1.c1, v1.c2 from t1 left join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v1 ("c1", "c2") on t1.a = v1.c2 left join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v2 ("c1", "c2") on t1.a = v2.c2;
 ----
 HashJoin
-├── output columns: [c1 (#3), c2 (#4), t1.a (#0)]
+├── output columns: [c2 (#4), c1 (#8), t1.a (#0)]
 ├── join type: RIGHT OUTER
 ├── build keys: [t1.a (#0), b (#1), c (#2)]
-├── probe keys: [v2.c2 (#9), b (#11), c (#12)]
+├── probe keys: [v2.c2 (#10), b (#12), c (#13)]
 ├── filters: []
 ├── cache index: 1
 ├── cache columns: [1, 2]
 ├── estimated rows: 12.00
 ├── HashJoin(Build)
-│   ├── output columns: [c1 (#3), c2 (#4), t1.a (#0), t1.b (#1), t1.c (#2)]
+│   ├── output columns: [c2 (#4), c1 (#8), t1.a (#0), t1.b (#1), t1.c (#2)]
 │   ├── join type: RIGHT OUTER
 │   ├── build keys: [t1.a (#0), b (#1), c (#2)]
 │   ├── probe keys: [v1.c2 (#4), b (#6), c (#7)]
@@ -167,25 +171,29 @@ HashJoin
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   │   ├── push downs: [filters: [], limit: NONE]
 │   │   └── estimated rows: 3.00
-│   └── ExpressionScan(Probe)
-│       ├── output columns: [c1 (#3), c2 (#4), b (#6), c (#7)]
-│       ├── column 0: ['t1_b', t1.b (#1), t1.b (#1), t1.c (#2)]
-│       ├── column 1: ['t1_c', t1.c (#2), t1.b (#1), t1.c (#2)]
-│       └── AggregateFinal
-│           ├── output columns: [t1.c (#2), t1.b (#1)]
-│           ├── group by: [c, b]
-│           ├── aggregate functions: []
-│           ├── estimated rows: 0.00
-│           └── AggregatePartial
+│   └── EvalScalar(Probe)
+│       ├── output columns: [c2 (#4), b (#6), c (#7), c1 (#8)]
+│       ├── expressions: [CAST(v1.c1 (#3) AS String NULL)]
+│       ├── estimated rows: 2.00
+│       └── ExpressionScan
+│           ├── output columns: [c1 (#3), c2 (#4), b (#6), c (#7)]
+│           ├── column 0: ['t1_b', t1.b (#1), t1.b (#1), t1.c (#2)]
+│           ├── column 1: ['t1_c', t1.c (#2), t1.b (#1), t1.c (#2)]
+│           └── AggregateFinal
+│               ├── output columns: [t1.c (#2), t1.b (#1)]
 │               ├── group by: [c, b]
 │               ├── aggregate functions: []
 │               ├── estimated rows: 0.00
-│               └── CacheScan
-│                   ├── output columns: [t1.c (#2), t1.b (#1)]
-│                   ├── cache index: 0
-│                   └── column indexes: [1, 2]
+│               └── AggregatePartial
+│                   ├── group by: [c, b]
+│                   ├── aggregate functions: []
+│                   ├── estimated rows: 0.00
+│                   └── CacheScan
+│                       ├── output columns: [t1.c (#2), t1.b (#1)]
+│                       ├── cache index: 0
+│                       └── column indexes: [1, 2]
 └── ExpressionScan(Probe)
-    ├── output columns: [c1 (#8), c2 (#9), b (#11), c (#12)]
+    ├── output columns: [c1 (#9), c2 (#10), b (#12), c (#13)]
     ├── column 0: ['t1_b', t1.b (#1), t1.b (#1), t1.c (#2)]
     ├── column 1: ['t1_c', t1.c (#2), t1.b (#1), t1.c (#2)]
     └── AggregateFinal
