@@ -571,11 +571,11 @@ pub(crate) mod jaro_winkler {
         let left_as_bytes = left.as_bytes();
         let right_as_bytes = right.as_bytes();
 
-        for i in 0..s2_len {
+        for (i, item) in right_as_bytes.iter().enumerate().take(s2_len) {
             let mut j = (i as isize - range as isize).max(0) as usize;
             let l = (i + range + 1).min(s1_len);
             while j < l {
-                if right_as_bytes[i] == left_as_bytes[j] && !s1m.get(j) {
+                if item == &left_as_bytes[j] && !s1m.get(j) {
                     s1m.set_true(j);
                     s2m.set_true(i);
                     matching += 1.0;
@@ -592,7 +592,7 @@ pub(crate) mod jaro_winkler {
 
         let mut l = 0;
 
-        for i in 0..s2_len - 1 {
+        for (i, item) in right_as_bytes.iter().enumerate().take(s2_len - 1) {
             if s2m.get(i) {
                 let mut j = l;
 
@@ -605,7 +605,7 @@ pub(crate) mod jaro_winkler {
                     j += 1;
                 }
 
-                if right_as_bytes[i] != left_as_bytes[j] {
+                if item != &left_as_bytes[j] {
                     transpositions += 1.0;
                 }
             }
