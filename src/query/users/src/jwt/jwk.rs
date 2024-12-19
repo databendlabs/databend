@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
 use log::info;
-use log::warn;
 use p256::EncodedPoint;
 use p256::FieldBytes;
 use parking_lot::RwLock;
@@ -218,31 +217,12 @@ impl JwkKeyStore {
             }
         };
 
-        // happy path: the key_id is found in the store
-        if let Some(key) = keys.get(&key_id) {
-            return Ok(key.clone());
+        match keys.get(&key_id) {
+            None => Err(ErrorCode::AuthenticateFailure(format!(
+                "key id {} not found in jwk store",
+                key_id
+            ))),
+            Some(key) => Ok(key.clone()),
         }
-
-        // if the key_id is not set here, it might because the JWKS has been rotated, we need to refresh it.
-        warn!(
-            "key_id {} not found in jwks store, try to reload keys",
-            key_id
-        );
-        let keys = self
-            .load_keys_with_cache(true)
-            .await
-            .map_err(|e| e.add_message("failed to reload JWKS keys"))?;
-
-        let key = match keys.get(&key_id) {
-            None => {
-                return Err(ErrorCode::AuthenticateFailure(format!(
-                    "key id {} not found in jwk store",
-                    key_id
-                )));
-            }
-            Some(key) => key.clone(),
-        };
-
-        Ok(key)
     }
 }
