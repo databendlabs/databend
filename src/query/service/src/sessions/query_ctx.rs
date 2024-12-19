@@ -35,7 +35,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -1474,10 +1473,6 @@ impl TableContext for QueryContext {
                 .temp_tbl_mgr()
                 .lock()
                 .is_temp_table(database_name, table_name)
-    }
-
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
     }
 
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {

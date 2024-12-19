@@ -238,8 +238,11 @@ impl FuseTable {
             derterministic_cache_key.clone(),
         )?;
         prune_pipeline.set_on_init(move || {
-            ctx.get_runtime()?.try_spawn(
-                async move {
+            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+            GlobalIORuntime::instance().spawn(async move {
+                // avoid block global io runtime
+                let runtime = Runtime::with_worker_threads(2, None)?;
+                let join_handler = runtime.spawn(async move {
                     let segment_pruned_result =
                         pruner.clone().segment_pruning(lazy_init_segments).await?;
                     for segment in segment_pruned_result {
@@ -249,9 +252,13 @@ impl FuseTable {
                         }
                     }
                     Ok::<_, ErrorCode>(())
-                },
-                None,
-            )?;
+                });
+
+                if let Err(cause) = join_handler.await {
+                    log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                }
+                Ok::<_, ErrorCode>(())
+            });
             Ok(())
         });
 
