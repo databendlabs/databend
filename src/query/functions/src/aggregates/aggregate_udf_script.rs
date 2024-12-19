@@ -33,6 +33,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
 use databend_common_expression::StateAddr;
+use databend_common_meta_app::principal::UDFLanguage;
 
 use crate::aggregates::AggregateFunction;
 
@@ -226,7 +227,7 @@ impl UdfAggState {
 
 pub fn create_aggregate_udf_function(
     name: &str,
-    _lang: &str,
+    _lang: UDFLanguage,
     _runtime_version: &str,
     state_fields: Vec<DataField>,
     arguments: Vec<DataField>,

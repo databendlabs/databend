@@ -30,6 +30,7 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
 databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
 dtparse = { workspace = true }

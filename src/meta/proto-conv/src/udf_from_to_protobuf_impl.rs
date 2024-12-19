@@ -14,6 +14,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -100,7 +101,7 @@ impl FromToProto for mt::UDFServer {
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
             handler: self.handler.clone(),
-            language: self.language.clone(),
+            language: self.language.to_string(),
             arg_types,
             return_type: Some(return_type),
         })
@@ -126,12 +127,16 @@ impl FromToProto for mt::UDFScript {
             },
         )?)?);
 
+        let language = p.language.parse().map_err(|e: ErrorCode| Incompatible {
+            reason: e.message(),
+        })?;
+
         Ok(mt::UDFScript {
             code: p.code,
             arg_types,
             return_type,
             handler: p.handler,
-            language: p.language,
+            language,
             runtime_version: p.runtime_version,
         })
     }
@@ -157,7 +162,7 @@ impl FromToProto for mt::UDFScript {
             min_reader_ver: MIN_READER_VER,
             code: self.code.clone(),
             handler: self.handler.clone(),
-            language: self.language.clone(),
+            language: self.language.to_string(),
             arg_types,
             return_type: Some(return_type),
             runtime_version: self.runtime_version.clone(),
@@ -197,11 +202,15 @@ impl FromToProto for mt::UDAFScript {
             },
         )?)?);
 
+        let language = p.language.parse().map_err(|e: ErrorCode| Incompatible {
+            reason: e.message(),
+        })?;
+
         Ok(mt::UDAFScript {
             code: p.code,
             arg_types,
             return_type,
-            language: p.language,
+            language,
             runtime_version: p.runtime_version,
             state_fields,
         })
@@ -242,7 +251,7 @@ impl FromToProto for mt::UDAFScript {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             code: self.code.clone(),
-            language: self.language.clone(),
+            language: self.language.to_string(),
             runtime_version: self.runtime_version.clone(),
             arg_types,
             state_names,

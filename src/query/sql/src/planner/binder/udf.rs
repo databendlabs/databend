@@ -29,6 +29,7 @@ use databend_common_expression::DataField;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
+use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -46,12 +47,6 @@ use crate::Binder;
 use crate::UdfRewriter;
 
 impl Binder {
-    fn is_allowed_language(language: &str) -> bool {
-        let allowed_languages: HashSet<&str> =
-            ["javascript", "wasm", "python"].iter().cloned().collect();
-        allowed_languages.contains(&language.to_lowercase().as_str())
-    }
-
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
         udf_name: &Identifier,
@@ -246,11 +241,11 @@ fn create_udf_definition_script(
     language: &str,
     code: &str,
 ) -> Result<PlanUDFDefinition> {
-    if !Binder::is_allowed_language(language) {
+    let Some(language) = language.parse().ok() else {
         return Err(ErrorCode::InvalidArgument(format!(
             "Unallowed UDF language '{language}', must be python, javascript or wasm"
         )));
-    }
+    };
 
     let arg_types = arg_types
         .iter()
@@ -260,7 +255,7 @@ fn create_udf_definition_script(
     let return_type = DataType::from(&resolve_type_name(return_type, false)?);
 
     let mut runtime_version = runtime_version.to_string();
-    if runtime_version.is_empty() && language.to_lowercase() == "python" {
+    if runtime_version.is_empty() && language == UDFLanguage::Python {
         runtime_version = "3.12.2".to_string();
     }
 
@@ -291,7 +286,7 @@ fn create_udf_definition_script(
                 arg_types,
                 state_fields,
                 return_type,
-                language: language.to_string(),
+                language,
                 runtime_version,
             }))
         }
@@ -300,7 +295,7 @@ fn create_udf_definition_script(
             arg_types,
             return_type,
             handler: handler.to_string(),
-            language: language.to_string(),
+            language,
             runtime_version,
         })),
     }

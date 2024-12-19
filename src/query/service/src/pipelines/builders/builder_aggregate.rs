@@ -257,7 +257,7 @@ impl PipelineBuilder {
                     Some((state_fields, UDFType::Script((lang, runtime_version, code)))) => {
                         create_aggregate_udf_function(
                             &agg_func.sig.name,
-                            lang,
+                            *lang,
                             runtime_version,
                             state_fields
                                 .iter()

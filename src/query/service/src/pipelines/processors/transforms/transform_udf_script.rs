@@ -31,6 +31,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
+use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFType;
@@ -48,9 +49,9 @@ pub enum ScriptRuntime {
 }
 
 impl ScriptRuntime {
-    pub fn try_create(lang: &str, code: Option<&[u8]>, runtime_num: usize) -> Result<Self> {
+    pub fn try_create(lang: UDFLanguage, code: Option<&[u8]>, runtime_num: usize) -> Result<Self> {
         match lang {
-            "javascript" => {
+            UDFLanguage::JavaScript => {
                 // Create multiple runtimes to execute in parallel to avoid blocking caused by js udf runtime locks.
                 let runtimes = (0..runtime_num)
                     .map(|_| {
@@ -74,12 +75,8 @@ impl ScriptRuntime {
                     .collect::<Result<Vec<Arc<RwLock<arrow_udf_js::Runtime>>>>>()?;
                 Ok(Self::JavaScript(runtimes))
             }
-            "wasm" => Self::create_wasm_runtime(code),
-            "python" => Ok(Self::Python),
-            _ => Err(ErrorCode::from_string(format!(
-                "Invalid {} lang Runtime not supported",
-                lang
-            ))),
+            UDFLanguage::WebAssembly => Self::create_wasm_runtime(code),
+            UDFLanguage::Python => Ok(Self::Python),
         }
     }
 
@@ -256,7 +253,7 @@ impl TransformUdfScript {
             }
         };
 
-        let runtime_key = format!("{}-{}", lang.trim(), func_name.trim());
+        let runtime_key = format!("{}-{}", lang, func_name.trim());
         Ok(runtime_key)
     }
 
@@ -268,7 +265,7 @@ impl TransformUdfScript {
 
         let start = std::time::Instant::now();
         for func in funcs {
-            let (lang, code_opt) = match &func.udf_type {
+            let (&lang, code_opt) = match &func.udf_type {
                 UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref().as_ref())),
                 _ => continue,
             };
@@ -277,7 +274,7 @@ impl TransformUdfScript {
             let runtime = match script_runtimes.entry(runtime_key.clone()) {
                 Entry::Occupied(entry) => entry.into_mut().clone(),
                 Entry::Vacant(entry) => {
-                    let new_runtime = ScriptRuntime::try_create(lang.trim(), code_opt, runtime_num)
+                    let new_runtime = ScriptRuntime::try_create(lang, code_opt, runtime_num)
                         .map(Arc::new)
                         .map_err(|err| {
                             ErrorCode::UDFDataError(format!(

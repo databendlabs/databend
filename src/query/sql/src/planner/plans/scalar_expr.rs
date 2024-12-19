@@ -31,6 +31,7 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -824,8 +825,8 @@ pub struct UDFField {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                           // server_addr
-    Script((String, String, Arc<Box<[u8]>>)), // Lang, Version, Code
+    Server(String),                                // server_addr
+    Script((UDFLanguage, String, Arc<Box<[u8]>>)), // Lang, Version, Code
 }
 
 impl UDFType {
