@@ -304,6 +304,15 @@ statement error 1301
 create table t(a int) external_location='xxx'
 
 statement error 1301
+create table t(a int) location='xxx'
+
+statement error 1301
+create table t(a int) seed='123'
+
+statement ok
+create table t_random(a int) engine=RANDOM seed='123'
+
+statement error 1301
 create table t(a int) snapshot_loc='xxx'
 
 statement error 3001
@@ -597,6 +606,9 @@ alter table t_opt_retention  set options(data_retention_period_in_hours = 2);
 
 #issue 16794
 statement ok
+set ddl_column_type_nullable=0;
+
+statement ok
 create or replace table b as select 123 as col1, null  as col2;
 
 query T
@@ -614,6 +626,34 @@ query TT
 select * from b;
 ----
 123 NULL
+
+statement ok
+drop table if exists b;
+
+statement ok
+set ddl_column_type_nullable=1;
+
+statement ok
+create or replace table b as select 123 as col1;
+
+query T
+desc b;
+----
+col1 TINYINT UNSIGNED YES NULL (empty)
+
+statement ok
+set ddl_column_type_nullable=0;
+
+statement ok
+create or replace table b as select 123 as col1;
+
+query T
+desc b;
+----
+col1 TINYINT UNSIGNED NO 0 (empty)
+
+statement ok
+unset ddl_column_type_nullable;
 
 statement ok
 drop table if exists b;

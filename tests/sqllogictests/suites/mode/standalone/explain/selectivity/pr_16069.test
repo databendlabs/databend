@@ -1,5 +1,5 @@
 statement ok
-create or replace table t as select * from numbers(100);
+settings (ddl_column_type_nullable=0) create or replace table t as select * from numbers(100);
 
 statement ok
 analyze table t;

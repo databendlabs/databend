@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -101,9 +102,17 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_CLUSTER_TYPE
             )));
         }
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+        let database = self.plan.database.as_str();
+        let table_name = self.plan.table.as_str();
+        let table = catalog
+            .get_table(&self.ctx.get_tenant(), database, table_name)
+            .await?;
+
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key) {
+            let engine = Engine::from(table.engine());
+            if !is_valid_create_opt(&key, &engine) {
                 error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "table option {key} is invalid for alter table statement",
@@ -111,12 +120,6 @@ impl Interpreter for SetOptionsInterpreter {
             }
             options_map.insert(key, Some(table_option.1.clone()));
         }
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let database = self.plan.database.as_str();
-        let table_name = self.plan.table.as_str();
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), database, table_name)
-            .await?;
 
         let table_version = table.get_table_info().ident.seq;
         if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {

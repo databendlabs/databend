@@ -36,6 +36,7 @@ runs:
         EOF
 
         RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"
+        export SCCACHE_IDLE_TIMEOUT=0
         case ${RUNNER_PROVIDER} in
           aws)
             echo "setting up sccache for AWS S3..."

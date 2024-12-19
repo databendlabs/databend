@@ -537,7 +537,10 @@ impl Binder {
                     .map(|column_binding| {
                         Ok(TableField::new(
                             &column_binding.column_name,
-                            create_as_select_infer_schema_type(&column_binding.data_type)?,
+                            create_as_select_infer_schema_type(
+                                &column_binding.data_type,
+                                self.is_column_not_null(),
+                            )?,
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -1780,9 +1783,16 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         .expect("join must succeed")
 }
 
-fn create_as_select_infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
-    match data_type {
-        DataType::Null => Ok(TableDataType::Nullable(Box::new(TableDataType::String))),
-        _ => infer_schema_type(data_type),
+fn create_as_select_infer_schema_type(
+    data_type: &DataType,
+    not_null: bool,
+) -> Result<TableDataType> {
+    use DataType::*;
+
+    match (data_type, not_null) {
+        (Null, _) => Ok(TableDataType::Nullable(Box::new(TableDataType::String))),
+        (dt, true) => infer_schema_type(dt),
+        (Nullable(_), false) => infer_schema_type(data_type),
+        (dt, false) => infer_schema_type(&Nullable(Box::new(dt.clone()))),
     }
 }

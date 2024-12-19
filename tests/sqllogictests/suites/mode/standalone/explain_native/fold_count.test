@@ -2,7 +2,7 @@ statement ok
 drop table if exists t
 
 statement ok
-create table t as select * from numbers(1000)
+settings (ddl_column_type_nullable=0) create table t as select * from numbers(1000)
 
 query T
 explain select count(*) from t

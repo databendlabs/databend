@@ -33,7 +33,8 @@ use serde::Serialize;
 
 use super::PubKey;
 
-const JWK_REFRESH_INTERVAL: u64 = 15;
+const JWKS_REFRESH_TIMEOUT: u64 = 10;
+const JWKS_REFRESH_INTERVAL: u64 = 600;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwkKey {
@@ -99,17 +100,17 @@ pub struct JwkKeyStore {
     cached_keys: Arc<RwLock<HashMap<String, PubKey>>>,
     pub(crate) last_refreshed_at: RwLock<Option<Instant>>,
     pub(crate) refresh_interval: Duration,
+    pub(crate) refresh_timeout: Duration,
     pub(crate) load_keys_func: Option<Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>>,
 }
 
 impl JwkKeyStore {
     pub fn new(url: String) -> Self {
-        let refresh_interval = Duration::from_secs(JWK_REFRESH_INTERVAL * 60);
-        let keys = Arc::new(RwLock::new(HashMap::new()));
         Self {
             url,
-            cached_keys: keys,
-            refresh_interval,
+            cached_keys: Arc::new(RwLock::new(HashMap::new())),
+            refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
+            refresh_timeout: Duration::from_secs(JWKS_REFRESH_TIMEOUT),
             last_refreshed_at: RwLock::new(None),
             load_keys_func: None,
         }
@@ -121,6 +122,16 @@ impl JwkKeyStore {
         func: Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>,
     ) -> Self {
         self.load_keys_func = Some(func);
+        self
+    }
+
+    pub fn with_refresh_interval(mut self, interval: u64) -> Self {
+        self.refresh_interval = Duration::from_secs(interval);
+        self
+    }
+
+    pub fn with_refresh_timeout(mut self, timeout: u64) -> Self {
+        self.refresh_timeout = Duration::from_secs(timeout);
         self
     }
 
@@ -136,12 +147,19 @@ impl JwkKeyStore {
             return Ok(load_keys_func());
         }
 
-        let response = reqwest::get(&self.url).await.map_err(|e| {
+        let client = reqwest::Client::builder()
+            .timeout(self.refresh_timeout)
+            .build()
+            .map_err(|e| {
+                ErrorCode::InvalidConfig(format!("Failed to create jwks client: {}", e))
+            })?;
+        let response = client.get(&self.url).send().await.map_err(|e| {
             ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
         })?;
-        let body = response.text().await.unwrap();
-        let jwk_keys = serde_json::from_str::<JwkKeys>(&body)
-            .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse keys: {}", e)))?;
+        let jwk_keys: JwkKeys = response
+            .json()
+            .await
+            .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse JWKS: {}", e)))?;
         let mut new_keys: HashMap<String, PubKey> = HashMap::new();
         for k in &jwk_keys.keys {
             new_keys.insert(k.kid.to_string(), k.get_public_key()?);
@@ -166,6 +184,7 @@ impl JwkKeyStore {
         let new_keys = match self.load_keys().await {
             Ok(new_keys) => new_keys,
             Err(err) => {
+                warn!("Failed to load JWKS: {}", err);
                 if !old_keys.is_empty() {
                     return Ok(old_keys);
                 }
@@ -177,9 +196,9 @@ impl JwkKeyStore {
         if !new_keys.keys().eq(old_keys.keys()) {
             info!("JWKS keys changed.");
         }
-        *self.cached_keys.write() = new_keys;
+        *self.cached_keys.write() = new_keys.clone();
         self.last_refreshed_at.write().replace(Instant::now());
-        Ok(old_keys)
+        Ok(new_keys)
     }
 
     #[async_backtrace::framed]
@@ -200,31 +219,12 @@ impl JwkKeyStore {
             }
         };
 
-        // happy path: the key_id is found in the store
-        if let Some(key) = keys.get(&key_id) {
-            return Ok(key.clone());
+        match keys.get(&key_id) {
+            None => Err(ErrorCode::AuthenticateFailure(format!(
+                "key id {} not found in jwk store",
+                key_id
+            ))),
+            Some(key) => Ok(key.clone()),
         }
-
-        // if the key_id is not set here, it might because the JWKS has been rotated, we need to refresh it.
-        warn!(
-            "key_id {} not found in jwks store, try to reload keys",
-            key_id
-        );
-        let keys = self
-            .load_keys_with_cache(true)
-            .await
-            .map_err(|e| e.add_message("failed to reload JWKS keys"))?;
-
-        let key = match keys.get(&key_id) {
-            None => {
-                return Err(ErrorCode::AuthenticateFailure(format!(
-                    "key id {} not found in jwk store",
-                    key_id
-                )));
-            }
-            Some(key) => key.clone(),
-        };
-
-        Ok(key)
     }
 }

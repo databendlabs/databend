@@ -11,19 +11,19 @@ statement ok
 drop table if exists t
 
 statement ok
-create table t as select number as a from numbers(1)
+settings (ddl_column_type_nullable=0) create table t as select number as a from numbers(1)
 
 statement ok
 drop table if exists t1
 
 statement ok
-create table t1 as select number as a from numbers(10)
+settings (ddl_column_type_nullable=0) create table t1 as select number as a from numbers(10)
 
 statement ok
 drop table if exists t2
 
 statement ok
-create table t2 as select number as a from numbers(100)
+settings (ddl_column_type_nullable=0) create table t2 as select number as a from numbers(100)
 
 query T
 explain select * from t, t1, t2 where t.a = t1.a and t1.a = t2.a
