@@ -1528,10 +1528,12 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub jwt_key_file: String,
 
-    /// The interval in seconds to refresh the jwks from the jwks url
+    /// Interval in seconds to refresh jwks
+    #[clap(long, value_name = "VALUE", default_value = "600")]
     pub jwks_refresh_interval: u64,
 
-    /// The timeout in seconds to refresh the jwks from the jwks url
+    /// Timeout in seconds to refresh jwks
+    #[clap(long, value_name = "VALUE", default_value = "10")]
     pub jwks_refresh_timeout: u64,
 
     #[clap(skip)]
