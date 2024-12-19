@@ -189,7 +189,7 @@ impl Binder {
         let query_id = self.ctx.get_id();
         let database = self.ctx.get_current_database();
         let mut table_identifier = cte.alias.name.clone();
-        table_identifier.name = format!("{}_{}", table_identifier.name, query_id.replace("-", "_"));
+        table_identifier.name = format!("{}${}", table_identifier.name, query_id.replace("-", ""));
         let table_name = normalize_identifier(&table_identifier, &self.name_resolution_ctx).name;
         self.m_cte_table_name.insert(
             normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name,

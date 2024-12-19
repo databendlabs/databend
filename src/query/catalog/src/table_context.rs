@@ -376,6 +376,14 @@ pub trait TableContext: Send + Sync {
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
 
     async fn drop_m_cte_temp_table(&self) -> Result<()>;
+
+    fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
+        unimplemented!()
+    }
+
+    fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        unimplemented!()
+    }
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

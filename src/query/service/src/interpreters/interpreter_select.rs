@@ -138,7 +138,7 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        let update_stream_metas = query_build_update_stream_req(&self.ctx, &self.metadata).await?;
+        let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
         build_res
