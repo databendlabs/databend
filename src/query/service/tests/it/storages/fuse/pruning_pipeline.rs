@@ -109,12 +109,13 @@ async fn apply_block_pruning(
                 for segment in segment_pruned_result {
                     let _ = segment_tx.send(Ok(segment)).await;
                 }
-                Ok(())
+                Ok::<_, ErrorCode>(())
             });
             join_handler
                 .await
                 .unwrap()
                 .expect("Join error while in prune pipeline");
+            Ok::<_, ErrorCode>(())
         });
         Ok(())
     });

@@ -243,17 +243,15 @@ impl FuseTable {
                 // avoid block global io runtime
                 let runtime = Runtime::with_worker_threads(2, None)?;
                 let join_handler = runtime.spawn(async move {
-                    async move {
-                        let segment_pruned_result =
-                            pruner.clone().segment_pruning(lazy_init_segments).await?;
-                        for segment in segment_pruned_result {
-                            // the sql may be killed or early stop, ignore the error
-                            if let Err(_e) = segment_tx.send(Ok(segment)).await {
-                                break;
-                            }
+                    let segment_pruned_result =
+                        pruner.clone().segment_pruning(lazy_init_segments).await?;
+                    for segment in segment_pruned_result {
+                        // the sql may be killed or early stop, ignore the error
+                        if let Err(_e) = segment_tx.send(Ok(segment)).await {
+                            break;
                         }
-                        Ok::<_, ErrorCode>(())
                     }
+                    Ok::<_, ErrorCode>(())
                 });
 
                 if let Err(cause) = join_handler.await {
