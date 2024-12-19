@@ -280,12 +280,12 @@ impl InvertedIndexReader {
                 let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
                 let term_info_store = TermInfoStore::open(term_dict_file)?;
 
-                for (_, (term_field_id, term_id)) in matched_terms.iter() {
-                    if field_id == term_field_id {
-                        let term_info = term_info_store.get(*term_id);
-                        term_infos.insert(*term_id, term_info);
+                for (_, term_id) in matched_terms.iter() {
+                    if *field_id == term_id.field_id {
+                        let term_info = term_info_store.get(term_id.term_ordinal);
+                        term_infos.insert(term_id.clone(), term_info);
                         if let Some(term_ids) = field_term_ids.get_mut(field_id) {
-                            term_ids.insert(*term_id);
+                            term_ids.insert(term_id.clone());
                         }
                     }
                 }
@@ -293,17 +293,19 @@ impl InvertedIndexReader {
         }
 
         // 5. read postings and optional positions.
-        let mut term_slice_len = if self.need_position {
+        let term_slice_len = if self.need_position {
             term_infos.len() * 2
         } else {
             term_infos.len()
         };
-        if self.has_score {
-            term_slice_len += 2 * field_ids.len();
-        }
-
-        let mut slice_columns = Vec::with_capacity(term_slice_len);
+        let field_slice_len = if self.has_score {
+            2 * field_ids.len()
+        } else {
+            0
+        };
         let mut slice_name_map = HashMap::with_capacity(term_slice_len);
+        let mut field_slice_name_map = HashMap::with_capacity(field_slice_len);
+        let mut slice_columns = Vec::with_capacity(term_slice_len + field_slice_len);
         for (field_id, term_ids) in field_term_ids.iter() {
             // if has score, need read fieldnorm to calculate the score.
             if self.has_score {
@@ -315,7 +317,7 @@ impl InvertedIndexReader {
                         ..(fieldnorm_col_meta.offset + fieldnorm_col_meta.len);
                     slice_columns.push((fieldnorm_slice_name.clone(), fieldnorm_range));
                 }
-                slice_name_map.insert(fieldnorm_slice_name, *field_id as u64);
+                field_slice_name_map.insert(fieldnorm_slice_name, *field_id);
             }
             let idx_col_name = format!("idx-{}", field_id);
             let idx_meta = inverted_index_meta_map.get(&idx_col_name).ok_or_else(|| {
@@ -331,7 +333,7 @@ impl InvertedIndexReader {
                 let len = 8;
                 let tokens_slice_range = offset..(offset + len);
                 slice_columns.push((tokens_slice_name.clone(), tokens_slice_range));
-                slice_name_map.insert(tokens_slice_name, *field_id as u64);
+                field_slice_name_map.insert(tokens_slice_name, *field_id);
             }
 
             for term_id in term_ids {
@@ -343,7 +345,7 @@ impl InvertedIndexReader {
 
                 let idx_slice_name = format!("{}-{}", idx_col_name, term_info.postings_range.start);
                 slice_columns.push((idx_slice_name.clone(), idx_slice_range));
-                slice_name_map.insert(idx_slice_name, *term_id);
+                slice_name_map.insert(idx_slice_name, term_id.clone());
             }
 
             if self.need_position {
@@ -364,7 +366,7 @@ impl InvertedIndexReader {
                     let pos_slice_name =
                         format!("{}-{}", pos_col_name, term_info.positions_range.start);
                     slice_columns.push((pos_slice_name.clone(), pos_slice_range));
-                    slice_name_map.insert(pos_slice_name, *term_id);
+                    slice_name_map.insert(pos_slice_name, term_id.clone());
                 }
             }
         }
@@ -381,9 +383,8 @@ impl InvertedIndexReader {
         let mut block_postings_map = HashMap::with_capacity(term_infos.len());
         let mut position_reader_map = HashMap::with_capacity(term_infos.len());
         for (slice_name, mut slice_data) in slice_column_files_map.into_iter() {
-            let id = slice_name_map.remove(&slice_name).unwrap();
             if slice_name.starts_with("idx") {
-                let term_id = id;
+                let term_id = slice_name_map.remove(&slice_name).unwrap();
                 let term_info = term_infos.get(&term_id).unwrap();
                 let posting_file = FileSlice::new(Arc::new(slice_data));
                 let block_postings = BlockSegmentPostings::open(
@@ -395,16 +396,16 @@ impl InvertedIndexReader {
 
                 block_postings_map.insert(term_id, block_postings);
             } else if slice_name.starts_with("pos") {
-                let term_id = id;
+                let term_id = slice_name_map.remove(&slice_name).unwrap();
                 let position_reader = PositionReader::open(slice_data)?;
                 position_reader_map.insert(term_id, position_reader);
             } else if slice_name.starts_with("fieldnorm") {
-                let field_id = id as u32;
+                let field_id = field_slice_name_map.remove(&slice_name).unwrap();
                 let slice_file = FileSlice::new(Arc::new(slice_data));
                 let fieldnorm_reader = FieldNormReader::open(slice_file)?;
                 fieldnorm_reader_map.insert(field_id, fieldnorm_reader);
             } else if slice_name.starts_with("tokens") {
-                let field_id = id as u32;
+                let field_id = field_slice_name_map.remove(&slice_name).unwrap();
                 let total_num_tokens = u64::deserialize(&mut slice_data)?;
                 field_num_tokens_map.insert(field_id, total_num_tokens);
             }
