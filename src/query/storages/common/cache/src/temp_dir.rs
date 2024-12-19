@@ -62,7 +62,7 @@ impl TempDirManager {
             if let Err(e) = remove_dir_all(&path) {
                 if !matches!(e.kind(), ErrorKind::NotFound) {
                     return Err(ErrorCode::StorageUnavailable(format!(
-                        "can't clean temp dir: {e}",
+                        "can't clean temp dir {path:?}: {e}",
                     )));
                 }
             }
