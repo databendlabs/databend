@@ -328,10 +328,10 @@ with t2 as (
    union all select flag from t3
   )t1
 )
-select distinct try_cast(flag as int) from t2;
+select distinct try_cast(flag as int) as f from t2 order by f;
 ----
-2
 1
+2
 
 statement ok
 DROP TABLE IF EXISTS t1;
