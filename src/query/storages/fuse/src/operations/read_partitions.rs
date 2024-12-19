@@ -18,6 +18,8 @@ use std::time::Instant;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -195,17 +197,26 @@ impl FuseTable {
             let sender = part_info_tx.clone();
             info!("prune pipeline: get prune result from cache");
             source_pipeline.set_on_init(move || {
-                ctx.get_runtime()?.try_spawn(
-                    async move {
+                // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+                GlobalIORuntime::instance().spawn(async move {
+                    // avoid block global io runtime
+                    let runtime = Runtime::with_worker_threads(2, None)?;
+
+                    let join_handler = runtime.spawn(async move {
                         for part in part.partitions {
                             // the sql may be killed or early stop, ignore the error
                             if let Err(_e) = sender.send(Ok(part)).await {
                                 break;
                             }
                         }
-                    },
-                    None,
-                )?;
+                    });
+
+                    if let Err(cause) = join_handler.await {
+                        log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                    }
+
+                    Result::Ok(())
+                });
 
                 Ok(())
             });
