@@ -20,9 +20,5 @@ procfs = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 
-[dev-dependencies.tokio]
-features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]
-workspace = true
-
 [lints]
 workspace = true

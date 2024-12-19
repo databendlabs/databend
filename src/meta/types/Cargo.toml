@@ -38,7 +38,6 @@ tonic-build = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-regex = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "prost"]

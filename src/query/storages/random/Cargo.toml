@@ -23,8 +23,5 @@ databend-storages-common-table-meta = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 
-[build-dependencies]
-databend-common-building = { workspace = true }
-
 [lints]
 workspace = true

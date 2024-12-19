@@ -16,8 +16,5 @@ databend-common-catalog = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storages-view = { workspace = true }
 
-[build-dependencies]
-databend-common-building = { workspace = true }
-
 [lints]
 workspace = true

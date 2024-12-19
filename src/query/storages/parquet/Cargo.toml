@@ -44,8 +44,5 @@ serde = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 
-[dev-dependencies]
-tempfile = { workspace = true }
-
 [lints]
 workspace = true

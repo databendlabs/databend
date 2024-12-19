@@ -34,7 +34,6 @@ wkt = { workspace = true }
 
 [dev-dependencies]
 aho-corasick = { workspace = true }
-rand = { workspace = true }
 rmp-serde = { workspace = true }
 
 [lints]

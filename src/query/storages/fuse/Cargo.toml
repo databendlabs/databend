@@ -77,8 +77,5 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
 
-[dev-dependencies]
-criterion = { workspace = true }
-
 [lints]
 workspace = true

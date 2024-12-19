@@ -39,7 +39,6 @@ url = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 goldenfile = { workspace = true }
-regex = { workspace = true }
 
 [[bench]]
 name = "bench"

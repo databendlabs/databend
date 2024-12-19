@@ -28,12 +28,5 @@ sled = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 
-[dev-dependencies]
-anyhow = { workspace = true }
-databend-common-base = { workspace = true }
-pretty_assertions = { workspace = true }
-test-harness = { workspace = true }
-tokio = { workspace = true }
-
 [lints]
 workspace = true
