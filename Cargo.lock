@@ -3723,6 +3723,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tonic",
 ]
 
 [[package]]

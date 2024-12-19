@@ -386,13 +386,23 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
+        let watch = request.into_inner();
+
+        let key_range = watch.key_range().map_err(|e| Status::invalid_argument(e))?;
+
         let (tx, rx) = mpsc::channel(4);
 
         let mn = &self.meta_node;
 
-        let sender = mn.add_watcher(request.into_inner(), tx).await?;
-
+        let sender = mn.add_watcher(watch, tx.clone()).await?;
         let stream = WatchStream::new(rx, sender, mn.subscriber_handle.clone());
+
+        let sm = mn.raft_store.state_machine.clone();
+        {
+            let mut sm = sm.write().await;
+            sm.send_range(tx, key_range).await?;
+        }
+
         Ok(Response::new(Box::pin(stream) as Self::WatchStream))
     }
 
