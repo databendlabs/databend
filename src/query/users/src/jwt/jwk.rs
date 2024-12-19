@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
 use log::info;
+use log::warn;
 use p256::EncodedPoint;
 use p256::FieldBytes;
 use parking_lot::RwLock;
@@ -183,6 +184,7 @@ impl JwkKeyStore {
         let new_keys = match self.load_keys().await {
             Ok(new_keys) => new_keys,
             Err(err) => {
+                warn!("Failed to refresh JWKS: {}", err);
                 if !old_keys.is_empty() {
                     return Ok(old_keys);
                 }
