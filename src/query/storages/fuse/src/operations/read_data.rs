@@ -209,7 +209,8 @@ impl FuseTable {
                 // We cannot use the runtime associated with the query to avoid increasing its lifetime.
                 GlobalIORuntime::instance().spawn(async move {
                     // avoid block global io runtime
-                    let runtime = Runtime::with_worker_threads(2, None)?;
+                    let runtime =
+                        Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
                     let handler = runtime.spawn(async move {
                         match table
                             .prune_snapshot_blocks(
