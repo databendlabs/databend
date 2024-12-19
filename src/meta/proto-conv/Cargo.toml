@@ -13,6 +13,7 @@ test = true
 [dependencies]
 chrono = { workspace = true }
 chrono-tz = { workspace = true, features = ["serde"] }
+databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }

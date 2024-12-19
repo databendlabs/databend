@@ -145,29 +145,27 @@ impl VisitorMut<'_> for QualifyChecker<'_> {
         }
 
         if let ScalarExpr::AggregateFunction(agg) = expr {
-            if let Some(column) = self
+            let Some(agg_func) = self
                 .bind_context
                 .aggregate_info
-                .aggregate_functions_map
-                .get(&agg.display_name)
-            {
-                let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
-                let column_binding = ColumnBindingBuilder::new(
-                    agg.display_name.clone(),
-                    agg_func.index,
-                    Box::new(agg_func.scalar.data_type()?),
-                    Visibility::Visible,
-                )
-                .build();
-                *expr = BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                }
-                .into();
-                return Ok(());
-            }
+                .get_aggregate_function(&agg.display_name)
+            else {
+                return Err(ErrorCode::Internal("Invalid aggregate function"));
+            };
 
-            return Err(ErrorCode::Internal("Invalid aggregate function"));
+            let column_binding = ColumnBindingBuilder::new(
+                agg.display_name.clone(),
+                agg_func.index,
+                Box::new(agg_func.scalar.data_type()?),
+                Visibility::Visible,
+            )
+            .build();
+            *expr = BoundColumnRef {
+                span: None,
+                column: column_binding,
+            }
+            .into();
+            return Ok(());
         }
 
         walk_expr_mut(self, expr)

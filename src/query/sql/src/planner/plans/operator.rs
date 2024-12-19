@@ -111,6 +111,7 @@ pub enum RelOp {
     ExpressionScan,
     CacheScan,
     Udf,
+    Udaf,
     AsyncFunction,
     RecursiveCteScan,
     MergeInto,

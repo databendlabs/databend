@@ -113,29 +113,50 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Err(ErrorCode::Internal("Group Check: Invalid window function"));
             }
             ScalarExpr::AggregateFunction(agg) => {
-                if let Some(column) = self
+                let Some(agg_func) = self
                     .bind_context
                     .aggregate_info
-                    .aggregate_functions_map
-                    .get(&agg.display_name)
-                {
-                    let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
-                    let column_binding = ColumnBindingBuilder::new(
-                        agg.display_name.clone(),
-                        agg_func.index,
-                        Box::new(agg_func.scalar.data_type()?),
-                        Visibility::Visible,
-                    )
-                    .build();
-                    *expr = BoundColumnRef {
-                        span: None,
-                        column: column_binding,
-                    }
-                    .into();
-                    return Ok(());
-                }
+                    .get_aggregate_function(&agg.display_name)
+                else {
+                    return Err(ErrorCode::Internal("Invalid aggregate function"));
+                };
 
-                return Err(ErrorCode::Internal("Invalid aggregate function"));
+                let column_binding = ColumnBindingBuilder::new(
+                    agg.display_name.clone(),
+                    agg_func.index,
+                    Box::new(agg_func.scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }
+                .into();
+                return Ok(());
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                let Some(agg_func) = self
+                    .bind_context
+                    .aggregate_info
+                    .get_aggregate_function(&udaf.display_name)
+                else {
+                    return Err(ErrorCode::Internal("Invalid udaf function"));
+                };
+
+                let column_binding = ColumnBindingBuilder::new(
+                    udaf.display_name.clone(),
+                    agg_func.index,
+                    Box::new(agg_func.scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }
+                .into();
+                return Ok(());
             }
             ScalarExpr::BoundColumnRef(column_ref) => {
                 if let Some(index) = self
@@ -165,8 +186,8 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         if self
             .bind_context
             .aggregate_info
-            .aggregate_functions_map
-            .contains_key(&column.column.column_name)
+            .get_aggregate_function(&column.column.column_name)
+            .is_some()
         {
             // Be replaced by `WindowRewriter`.
             return Ok(());

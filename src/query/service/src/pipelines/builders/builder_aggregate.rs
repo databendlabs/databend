@@ -17,10 +17,12 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_functions::aggregates::create_aggregate_udf_function;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
@@ -31,6 +33,7 @@ use databend_common_sql::executor::physical_plans::AggregateFinal;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregatePartial;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::UDFType;
 use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 
@@ -246,17 +249,40 @@ impl PipelineBuilder {
                 let args = agg_func
                     .arg_indices
                     .iter()
-                    .map(|i| {
-                        let index = input_schema.index_of(&i.to_string())?;
-                        Ok(index)
-                    })
+                    .map(|i| input_schema.index_of(&i.to_string()))
                     .collect::<Result<Vec<_>>>()?;
                 agg_args.push(args);
-                AggregateFunctionFactory::instance().get(
-                    agg_func.sig.name.as_str(),
-                    agg_func.sig.params.clone(),
-                    agg_func.sig.args.clone(),
-                )
+
+                match &agg_func.sig.udaf {
+                    Some((state_fields, UDFType::Script((lang, runtime_version, code)))) => {
+                        create_aggregate_udf_function(
+                            &agg_func.sig.name,
+                            *lang,
+                            runtime_version,
+                            state_fields
+                                .iter()
+                                .map(|f| DataField::new(&f.name, f.data_type.clone()))
+                                .collect(),
+                            agg_func
+                                .sig
+                                .args
+                                .iter()
+                                .enumerate()
+                                .map(|(i, data_type)| {
+                                    DataField::new(&format!("arg_{}", i), data_type.clone())
+                                })
+                                .collect(),
+                            agg_func.sig.return_type.clone(),
+                            code.as_ref().as_ref(),
+                        )
+                    }
+                    None => AggregateFunctionFactory::instance().get(
+                        agg_func.sig.name.as_str(),
+                        agg_func.sig.params.clone(),
+                        agg_func.sig.args.clone(),
+                    ),
+                    _ => todo!(),
+                }
             })
             .collect::<Result<_>>()?;
 

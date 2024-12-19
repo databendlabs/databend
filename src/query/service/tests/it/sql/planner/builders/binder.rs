@@ -26,3 +26,16 @@ async fn test_query_kind() -> Result<()> {
     assert_eq!(kind, QueryKind::CopyIntoTable);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_planner() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let mut planner = Planner::new(ctx.clone());
+    planner
+        .plan_sql("SELECT avg(number) from numbers_mt(10000)")
+        .await?;
+
+    Ok(())
+}
