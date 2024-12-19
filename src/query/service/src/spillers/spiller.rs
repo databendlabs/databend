@@ -95,8 +95,6 @@ pub struct Spiller {
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<usize, Vec<Location>>,
-    /// Record columns layout for spilled data, will be used when read data from disk
-    pub columns_layout: HashMap<Location, Layout>,
     /// Record how many bytes have been spilled for each partition.
     pub partition_spilled_bytes: HashMap<usize, u64>,
 }
@@ -134,7 +132,6 @@ impl Spiller {
             _spiller_type: spiller_type,
             join_spilling_partition_bits: settings.get_join_spilling_partition_bits()?,
             partition_location: Default::default(),
-            columns_layout: Default::default(),
             partition_spilled_bytes: Default::default(),
         })
     }
@@ -144,16 +141,15 @@ impl Spiller {
     }
 
     /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
-    pub async fn spill(&mut self, data_block: Vec<DataBlock>) -> Result<Location> {
+    pub async fn spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
         let (location, layout) = self.spill_unmanage(data_block).await?;
 
         // Record columns layout for spilled data.
-        self.columns_layout.insert(location.clone(), layout);
-
+        self.ctx.add_spill_file(location.clone(), layout);
         Ok(location)
     }
 
-    pub async fn spill_unmanage(&self, data_block: Vec<DataBlock>) -> Result<(Location, Layout)> {
+    async fn spill_unmanage(&self, data_block: Vec<DataBlock>) -> Result<(Location, Layout)> {
         debug_assert!(!data_block.is_empty());
         let instant = Instant::now();
 
@@ -261,11 +257,11 @@ impl Spiller {
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
-        let layout = self.columns_layout.get(location).unwrap();
-        self.read_unmanage_spilled_file(location, layout).await
+        let layout = self.ctx.get_spill_layout(location).unwrap();
+        self.read_unmanage_spilled_file(location, &layout).await
     }
 
-    pub async fn read_unmanage_spilled_file(
+    async fn read_unmanage_spilled_file(
         &self,
         location: &Location,
         columns_layout: &Layout,
@@ -443,7 +439,7 @@ impl Spiller {
     }
 
     pub(crate) fn spilled_files(&self) -> Vec<Location> {
-        self.columns_layout.keys().cloned().collect()
+        self.ctx.get_spilled_files()
     }
 }
 

@@ -41,7 +41,6 @@ pub use pipe::PipeItem;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
-pub use pipeline::query_spill_prefix;
 pub use pipeline::DynTransformBuilder;
 pub use pipeline::Pipeline;
 pub use processors::PlanProfile;
