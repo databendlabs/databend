@@ -88,9 +88,14 @@ impl JwtAuthenticator {
             return None;
         }
         // init a vec of key store
-        let mut key_stores = vec![jwk::JwkKeyStore::new(jwt_key_file)
-            .with_refresh_interval(jwks_refresh_interval)
-            .with_refresh_timeout(jwks_refresh_timeout)];
+        let mut key_stores = vec![];
+        if !jwt_key_file.is_empty() {
+            key_stores.push(
+                jwk::JwkKeyStore::new(jwt_key_file)
+                    .with_refresh_interval(jwks_refresh_interval)
+                    .with_refresh_timeout(jwks_refresh_timeout),
+            );
+        }
         for u in jwt_key_files {
             key_stores.push(
                 jwk::JwkKeyStore::new(u)
