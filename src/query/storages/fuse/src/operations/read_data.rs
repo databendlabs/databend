@@ -25,7 +25,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
@@ -239,6 +238,8 @@ impl FuseTable {
                     if let Err(cause) = handler.await {
                         log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
                     }
+
+                    Result::Ok(())
                 });
 
                 Ok(())

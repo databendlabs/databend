@@ -214,7 +214,11 @@ impl FuseTable {
                     if let Err(cause) = join_handler.await {
                         log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
                     }
+
+                    Result::Ok(())
                 });
+
+                Ok(())
             });
             return Ok(None);
         }
