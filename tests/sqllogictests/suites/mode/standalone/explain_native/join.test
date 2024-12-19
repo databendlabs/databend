@@ -8,13 +8,13 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t as select number from numbers(1)
+settings (ddl_column_type_nullable=0) create table t as select number from numbers(1)
 
 statement ok
-create table t1 as select number from numbers(10)
+settings (ddl_column_type_nullable=0) create table t1 as select number from numbers(10)
 
 statement ok
-create table t2 as select number from numbers(100)
+settings (ddl_column_type_nullable=0) create table t2 as select number from numbers(100)
 
 query T
 explain select t.number from t, t1 where t.number = t1.number
@@ -574,7 +574,7 @@ set enable_cbo = 0
 
 # https://github.com/datafuselabs/databend/issues/10523
 statement ok
-create table t1 as select * from numbers(1)
+settings (ddl_column_type_nullable=0) create table t1 as select * from numbers(1)
 
 query I
 select t1.number FROM

@@ -52,6 +52,12 @@ impl From<std::net::AddrParseError> for ErrorCode {
     }
 }
 
+impl From<cidr::errors::NetworkParseError> for ErrorCode {
+    fn from(error: cidr::errors::NetworkParseError) -> Self {
+        ErrorCode::BadAddressFormat(format!("Bad network format, cause: {}", error))
+    }
+}
+
 impl From<std::str::Utf8Error> for ErrorCode {
     fn from(error: std::str::Utf8Error) -> Self {
         ErrorCode::Internal(format!("Invalid Utf8, cause: {}", error))

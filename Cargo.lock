@@ -3240,6 +3240,7 @@ dependencies = [
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
+ "cidr",
  "databend-common-ast",
  "geozero",
  "gimli 0.31.1",
@@ -5709,7 +5710,7 @@ checksum = "dcbb2bf8e87535c23f7a8a321e364ce21462d0ff10cb6407820e8e96dfff6653"
 [[package]]
 name = "dtparse"
 version = "2.0.0"
-source = "git+https://github.com/datafuse-extras/dtparse.git?rev=de0a15b#de0a15b5db5cf3f2c99f38a6535f669bc0ee7ea1"
+source = "git+https://github.com/datafuse-extras/dtparse.git?rev=30e28ca#30e28ca916b3563d98495d00063fa896cdb1cafe"
 dependencies = [
  "chrono",
  "lazy_static",

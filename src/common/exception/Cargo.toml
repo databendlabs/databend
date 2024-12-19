@@ -18,6 +18,7 @@ arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
+cidr = { workspace = true }
 geozero = { workspace = true }
 gimli = { workspace = true }
 http = { workspace = true }

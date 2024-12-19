@@ -167,8 +167,7 @@ impl Interpreter for InsertInterpreter {
                     .format_pretty()?;
                 info!("Insert select plan: \n{}", explain_plan);
 
-                let update_stream_meta =
-                    dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+                let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let insert_select_plan = match (select_plan, table.support_distributed_insert()) {

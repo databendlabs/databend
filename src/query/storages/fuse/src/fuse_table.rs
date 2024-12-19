@@ -1082,7 +1082,7 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn generate_changes_query(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
         _with_options: &str,
@@ -1102,6 +1102,7 @@ impl Table for FuseTable {
 
         self.check_changes_valid(&db_tb_name, *seq)?;
         self.get_changes_query(
+            ctx,
             mode,
             location,
             format!("{}.{} {}", database_name, table_name, desc),

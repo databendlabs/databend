@@ -27,7 +27,6 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,6 +47,7 @@ use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
 use databend_common_storage::init_stage_operator;
 use databend_storages_common_io::Files;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::table::is_stream_name;
 use log::error;
 use log::info;
 use log::warn;
@@ -649,17 +649,20 @@ impl<'a> Binder {
                 }
         };
 
-        match plan.kind() {
-            QueryKind::Query | QueryKind::Explain => {}
+        match &plan {
+            Plan::Explain { .. }
+            | Plan::ExplainAnalyze { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
+            | Plan::Query { .. } => {}
+            Plan::CreateTable(plan)
+                if is_stream_name(&plan.table, self.ctx.get_id().replace("-", "").as_str()) => {}
             _ => {
-                let meta_data_guard = self.metadata.read();
-                let tables = meta_data_guard.tables();
-                for t in tables {
-                    if t.is_consume() {
-                        return Err(ErrorCode::SyntaxException(
-                            "WITH CONSUME only allowed in query",
-                        ));
-                    }
+                let consume_streams = self.ctx.get_consume_streams(true)?;
+                if !consume_streams.is_empty() {
+                    return Err(ErrorCode::SyntaxException(
+                        "WITH CONSUME only allowed in query",
+                    ));
                 }
             }
         }
