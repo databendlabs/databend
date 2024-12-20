@@ -224,7 +224,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
         "strlen2",
         "testcode",
         "strlen_py",
-        "python",
+        "javascript",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "3.12.0",

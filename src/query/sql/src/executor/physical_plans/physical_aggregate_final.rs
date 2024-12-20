@@ -55,7 +55,7 @@ impl AggregateFinal {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            let data_type = agg.sig.return_type()?;
+            let data_type = agg.sig.return_type.clone();
             fields.push(DataField::new(&agg.output_column.to_string(), data_type));
         }
         for id in self.group_by.iter() {

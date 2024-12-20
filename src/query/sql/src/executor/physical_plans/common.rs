@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 
@@ -30,15 +29,6 @@ pub struct AggregateFunctionSignature {
     pub return_type: DataType,
     pub params: Vec<Scalar>,
     pub args: Vec<DataType>,
-}
-
-impl AggregateFunctionSignature {
-    pub fn return_type(&self) -> Result<DataType> {
-        Ok(self.return_type.clone())
-        // AggregateFunctionFactory::instance()
-        //     .get(&self.name, self.params.clone(), self.args.clone())?
-        //     .return_type()
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
