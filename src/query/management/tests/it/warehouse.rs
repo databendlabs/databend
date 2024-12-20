@@ -825,6 +825,55 @@ async fn test_rename_warehouses() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_warehouse_cluster_failure() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 1).await?;
+    let drop_warehouse_cluster = warehouse_manager
+        .drop_warehouse_cluster(String::from("test_warehouse"), String::from("test_cluster"));
+
+    assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2406);
+
+    let create_warehouse = warehouse_manager
+        .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
+            None,
+        )]);
+
+    create_warehouse.await?;
+
+    let drop_warehouse_cluster =
+        warehouse_manager.drop_warehouse_cluster(String::from(""), String::from("test_cluster"));
+
+    assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2403);
+
+    let drop_warehouse_cluster =
+        warehouse_manager.drop_warehouse_cluster(String::from("test_warehouse"), String::from(""));
+
+    assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2403);
+
+    let drop_warehouse_cluster = warehouse_manager
+        .drop_warehouse_cluster(String::from("test_warehouse"), String::from("test_cluster"));
+
+    assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2410);
+
+    let drop_warehouse_cluster = warehouse_manager
+        .drop_warehouse_cluster(String::from("test_warehouse"), String::from("default"));
+
+    assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2408);
+
+    warehouse_manager
+        .start_node(self_managed_node(&GlobalUniqName::unique()))
+        .await?;
+
+    let drop_warehouse_cluster = warehouse_manager.drop_warehouse_cluster(
+        String::from("test-cluster-id"),
+        String::from("test-cluster-id"),
+    );
+
+    assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2403);
+
+    Ok(())
+}
+
 fn system_managed_node(id: &str) -> NodeInfo {
     NodeInfo {
         id: id.to_string(),

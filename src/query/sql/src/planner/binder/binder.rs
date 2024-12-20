@@ -645,6 +645,18 @@ impl<'a> Binder {
                     return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
                 }
                 }
+            Statement::ShowWarehouses(_) => unimplemented!(),
+            Statement::DropWarehouse(_) => unimplemented!(),
+            Statement::CreateWarehouse(_) => unimplemented!(),
+            Statement::RenameWarehouse(_) => unimplemented!(),
+            Statement::ResumeWarehouse(_) => unimplemented!(),
+            Statement::SuspendWarehouse(_) => unimplemented!(),
+            Statement::InspectWarehouse(_) => unimplemented!(),
+            Statement::AddWarehouseCluster(_) => unimplemented!(),
+            Statement::DropWarehouseCluster(_) => unimplemented!(),
+            Statement::RenameWarehouseCluster(_) => unimplemented!(),
+            Statement::AddWarehouseClusterNode(_) => unimplemented!(),
+            Statement::DropWarehouseClusterNode(_) => unimplemented!(),
         };
 
         match plan.kind() {

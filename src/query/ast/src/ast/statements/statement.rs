@@ -29,6 +29,7 @@ use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::statements::warehouse::ShowWarehousesStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -127,6 +128,20 @@ pub enum Statement {
     UseCatalog {
         catalog: Identifier,
     },
+
+    // Warehouses
+    ShowWarehouses(ShowWarehousesStmt),
+    DropWarehouse(DropWarehouseStmt),
+    CreateWarehouse(CreateWarehouseStmt),
+    RenameWarehouse(RenameWarehouseStmt),
+    ResumeWarehouse(ResumeWarehouseStmt),
+    SuspendWarehouse(SuspendWarehouseStmt),
+    InspectWarehouse(InspectWarehouseStmt),
+    AddWarehouseCluster(AddWarehouseClusterStmt),
+    DropWarehouseCluster(DropWarehouseClusterStmt),
+    RenameWarehouseCluster(RenameWarehouseClusterStmt),
+    AddWarehouseClusterNode(AddWarehouseClusterNodeStmt),
+    DropWarehouseClusterNode(DropWarehouseClusterNodeStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -469,7 +484,9 @@ impl Statement {
             | Statement::ExecuteImmediate(..)
             | Statement::ShowProcedures { .. }
             | Statement::DescProcedure(..)
-            | Statement::CallProcedure(..) => true,
+            | Statement::CallProcedure(..)
+            | Statement::ShowWarehouses(..)
+            | Statement::InspectWarehouse(..) => true,
 
             Statement::CreateDatabase(..)
             | Statement::CreateTable(..)
@@ -536,8 +553,17 @@ impl Statement {
             | Statement::AlterNotification(..)
             | Statement::DropNotification(..)
             | Statement::CreateProcedure(..)
-            | Statement::DropProcedure(..) => false,
-
+            | Statement::DropProcedure(..)
+            | Statement::CreateWarehouse(..)
+            | Statement::DropWarehouse(..)
+            | Statement::RenameWarehouse(..)
+            | Statement::AddWarehouseCluster(..)
+            | Statement::DropWarehouseCluster(..)
+            | Statement::RenameWarehouseCluster(..)
+            | Statement::AddWarehouseClusterNode(..)
+            | Statement::DropWarehouseClusterNode(..)
+            | Statement::ResumeWarehouse(..)
+            | Statement::SuspendWarehouse(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -948,6 +974,19 @@ impl Display for Statement {
             }
             Statement::System(stmt) => write!(f, "{stmt}")?,
             Statement::CallProcedure(stmt) => write!(f, "{stmt}")?,
+
+            Statement::ShowWarehouses(_) => unimplemented!(),
+            Statement::DropWarehouse(_) => unimplemented!(),
+            Statement::CreateWarehouse(_) => unimplemented!(),
+            Statement::RenameWarehouse(_) => unimplemented!(),
+            Statement::ResumeWarehouse(_) => unimplemented!(),
+            Statement::SuspendWarehouse(_) => unimplemented!(),
+            Statement::InspectWarehouse(_) => unimplemented!(),
+            Statement::AddWarehouseCluster(_) => unimplemented!(),
+            Statement::DropWarehouseCluster(_) => unimplemented!(),
+            Statement::RenameWarehouseCluster(_) => unimplemented!(),
+            Statement::AddWarehouseClusterNode(_) => unimplemented!(),
+            Statement::DropWarehouseClusterNode(_) => unimplemented!(),
         }
         Ok(())
     }

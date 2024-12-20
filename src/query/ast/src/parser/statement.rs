@@ -523,6 +523,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, catalog)| Statement::UseCatalog { catalog },
     );
 
+    let show_warehouses = map(
+        rule! {
+            SHOW ~ WAREHOUSES
+        },
+        |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
+    );
+
+    // let create_warehouse = map(
+    //     rule! {
+    //         CREATE ~ WAREHOUSE ~ #ident
+    //     },
+    //     |(_, _, name)| {
+    //         Statement::ShowWarehouses(ShowWarehousesStmt {})
+    //     },
+    // );
+
     let show_databases = map(
         rule! {
             SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
@@ -2291,6 +2307,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
                 #use_catalog: "`USE CATALOG <catalog>`"
                 | #use_database : "`USE <database>`"
+        ),
+        // warehouse
+        rule!(
+            #show_warehouses: "`SHOW WAREHOUSES`"
         ),
         // database
         rule!(
