@@ -49,9 +49,9 @@ pub struct TransformUdfServer {
     request_timeout: u64,
     // request batch rows is used to split the block into smaller blocks and improve concurrency performance.
     request_batch_rows: usize,
-    // request numbers is used to control the total number of concurrent runtimes,
-    // to avoid the case of too many flight connections due to the small batch rows.
-    request_numbers: usize,
+    // request max threads is used to control the total number of concurrent threads,
+    // avoid the case of too many flight connections caused by the small batch rows.
+    request_max_threads: usize,
     retry_times: usize,
 }
 
@@ -61,7 +61,7 @@ impl TransformUdfServer {
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
         let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
-        let request_numbers = settings.get_max_threads()? as usize;
+        let request_max_threads = settings.get_external_server_request_max_threads()? as usize;
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
 
         let s = Self {
@@ -70,7 +70,7 @@ impl TransformUdfServer {
             connect_timeout,
             request_timeout,
             request_batch_rows,
-            request_numbers,
+            request_max_threads,
             retry_times,
         };
         Ok(s)
@@ -201,15 +201,15 @@ impl AsyncTransform for TransformUdfServer {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        let rows = data_block.num_rows();
+        // Use block row numbers and request max threads to calculate the number of rows for each threads.
+        // In each thread, the block is split by the batch rows and call the udf server serially,
+        // so that the flight connection can be reused.
+        let mut batch_rows = rows / self.request_max_threads;
+        if batch_rows < self.request_batch_rows {
+            batch_rows = self.request_batch_rows;
+        }
         for func in self.funcs.iter() {
-            let rows = data_block.num_rows();
-            // Use block row numbers and request numbers to calculate the number of rows for each runtime.
-            // In each runtime, the block is split by the batch rows and call the udf server
-            // serially, so that the flight connection can be reused.
-            let mut batch_rows = rows / self.request_numbers;
-            if batch_rows < self.request_batch_rows {
-                batch_rows = self.request_batch_rows;
-            }
             let tasks: Vec<_> = (0..rows)
                 .step_by(batch_rows)
                 .map(|start| {
