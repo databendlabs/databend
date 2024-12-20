@@ -204,7 +204,7 @@ impl AsyncTransform for TransformUdfServer {
         for func in self.funcs.iter() {
             let rows = data_block.num_rows();
             // Use block row numbers and request numbers to calculate the number of rows for each runtime.
-            // In each runtime, the block is splitted by the batch rows and call the udf server
+            // In each runtime, the block is split by the batch rows and call the udf server
             // serially, so that the flight connection can be reused.
             let mut batch_rows = rows / self.request_numbers;
             if batch_rows < self.request_batch_rows {
