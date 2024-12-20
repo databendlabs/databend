@@ -102,7 +102,9 @@ async fn vacuum_by_duration(
                         if gc_metas.contains(name) {
                             continue;
                         }
-                        let removed = vacuum_by_meta(de.path(), limit, &mut removed_total).await?;
+                        let removed =
+                            vacuum_by_meta(&temporary_dir, de.path(), limit, &mut removed_total)
+                                .await?;
                         limit = limit.saturating_sub(removed);
                         gc_metas.insert(name.to_owned());
                     } else {
@@ -113,6 +115,7 @@ async fn vacuum_by_duration(
                     }
                 } else {
                     let removed = vacuum_by_meta(
+                        &temporary_dir,
                         &format!("{}.meta", de.path().trim_end_matches('/')),
                         limit,
                         &mut removed_total,
@@ -175,13 +178,15 @@ async fn vacuum_query_hook(
         }
         abort_checker.try_check_aborting()?;
         let meta_file_path = format!("{}/{}_{}.meta", temporary_dir, query_id, i);
-        let removed = vacuum_by_meta(&meta_file_path, limit, &mut removed_total).await?;
+        let removed =
+            vacuum_by_meta(temporary_dir, &meta_file_path, limit, &mut removed_total).await?;
         limit = limit.saturating_sub(removed);
     }
     Ok(removed_total)
 }
 
 async fn vacuum_by_meta(
+    temporary_dir: &str,
     meta_file_path: &str,
     limit: usize,
     removed_total: &mut usize,
@@ -202,7 +207,12 @@ async fn vacuum_by_meta(
     let remain = remain.to_vec();
 
     let cur_removed = to_be_removed.len();
-    let remove_temp_files_path = stream::iter(files.into_iter().take(limit));
+    let remove_temp_files_path = stream::iter(
+        files
+            .into_iter()
+            .filter(|f| f.starts_with(temporary_dir))
+            .take(limit),
+    );
     let _ = operator.remove_via(remove_temp_files_path).await;
 
     // update unfinished meta file

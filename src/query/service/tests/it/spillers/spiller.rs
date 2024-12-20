@@ -36,7 +36,6 @@ async fn test_spill_with_partition() -> Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let tenant = ctx.get_tenant();
     let location_prefix = ctx.query_id_spill_prefix();
     let spiller_config = SpillerConfig {
         spiller_type: SpillerType::HashJoinBuild,
