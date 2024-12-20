@@ -160,7 +160,7 @@ fn bare_blocks_to_parquet<W: Write + Send>(
     let table_schema = infer_table_schema(&data_schema)?;
 
     let props = WriterProperties::builder()
-        .set_compression(Compression::LZ4_RAW)
+        .set_compression(Compression::SNAPPY)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
         .build();

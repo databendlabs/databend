@@ -185,7 +185,7 @@ impl HashJoinSpiller {
             }
         } else {
             // Cross join.
-            let spilled_files = self.spiller.spilled_files();
+            let spilled_files = self.spiller.private_spilled_files();
             if !spilled_files.is_empty() {
                 let file_index = self.next_restore_file;
                 let spilled_data = self

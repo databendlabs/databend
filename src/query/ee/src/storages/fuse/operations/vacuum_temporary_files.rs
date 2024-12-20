@@ -31,6 +31,7 @@ use opendal::ErrorKind;
 
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
+const SPILL_META_SUFFIX: &str = ".idx";
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
@@ -86,19 +87,24 @@ async fn vacuum_by_duration(
                     continue;
                 }
                 let name = de.name();
+                let meta = if de.metadata().last_modified().is_none() {
+                    operator.stat(de.path()).await
+                } else {
+                    Ok(de.metadata().clone())
+                };
 
-                let meta = operator.stat(de.path()).await;
                 if meta.is_err() {
                     continue;
                 }
                 let meta = meta.unwrap();
+
                 if let Some(modified) = meta.last_modified() {
                     if timestamp - modified.timestamp_millis() < expire_time {
                         continue;
                     }
                 }
                 if meta.is_file() {
-                    if name.ends_with(".meta") {
+                    if name.ends_with(SPILL_META_SUFFIX) {
                         if gc_metas.contains(name) {
                             continue;
                         }
@@ -116,14 +122,14 @@ async fn vacuum_by_duration(
                 } else {
                     let removed = vacuum_by_meta(
                         &temporary_dir,
-                        &format!("{}.meta", de.path().trim_end_matches('/')),
+                        &format!("{}{}", de.path().trim_end_matches('/'), SPILL_META_SUFFIX),
                         limit,
                         &mut removed_total,
                     )
                     .await?;
                     // by meta
                     if removed > 0 {
-                        let meta_name = format!("{}.meta", name);
+                        let meta_name = format!("{}{}", name, SPILL_META_SUFFIX);
                         if gc_metas.contains(&meta_name) {
                             continue;
                         }
@@ -177,7 +183,7 @@ async fn vacuum_query_hook(
             break;
         }
         abort_checker.try_check_aborting()?;
-        let meta_file_path = format!("{}/{}_{}.meta", temporary_dir, query_id, i);
+        let meta_file_path = format!("{}/{}_{}{}", temporary_dir, query_id, i, SPILL_META_SUFFIX);
         let removed =
             vacuum_by_meta(temporary_dir, &meta_file_path, limit, &mut removed_total).await?;
         limit = limit.saturating_sub(removed);

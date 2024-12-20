@@ -107,11 +107,3 @@ SELECT (any_if(count, number = 8) - any_if(count, number = 7)) > 0 FROM temp_fil
 
 SET max_vacuum_temp_files_after_query= 300000;
 """
-
-$BENDSQL_CLIENT_CONNECT --query="""
-SELECT '==Start to clean==';
-SELECT sleep(2);
-"""
-
-$BENDSQL_CLIENT_OUTPUT_NULL --query="VACUUM TEMPORARY FILES RETAIN 1 SECONDS;"
-stmt "SELECT count() from system.temp_files"

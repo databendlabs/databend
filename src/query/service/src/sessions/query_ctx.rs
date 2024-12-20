@@ -429,6 +429,7 @@ impl QueryContext {
     }
 
     pub fn unload_spill_meta(&self) {
+        const SPILL_META_SUFFIX: &str = ".idx";
         let mut w = self.shared.spilled_files.write();
         let mut remote_spill_files = w
             .iter()
@@ -444,7 +445,13 @@ impl QueryContext {
         if !remote_spill_files.is_empty() {
             let location_prefix = self.query_tenant_spill_prefix();
             let node_idx = self.get_cluster().ordered_index();
-            let meta_path = format!("{}/{}_{}.meta", location_prefix, self.get_id(), node_idx);
+            let meta_path = format!(
+                "{}/{}_{}{}",
+                location_prefix,
+                self.get_id(),
+                node_idx,
+                SPILL_META_SUFFIX
+            );
             let op = DataOperator::instance().operator();
             // append dir and current meta
             remote_spill_files.push(meta_path.clone());

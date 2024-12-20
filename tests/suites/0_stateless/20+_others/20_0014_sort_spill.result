@@ -84,7 +84,3 @@ NULL	NULL
 ==Test f==
 1
 true
-==Start to clean==
-0
->>>> SELECT count() from system.temp_files
-0

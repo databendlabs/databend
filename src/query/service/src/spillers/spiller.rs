@@ -35,6 +35,7 @@ use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 use super::serialize::*;
 use crate::sessions::QueryContext;
@@ -92,6 +93,9 @@ pub struct Spiller {
     local_operator: Option<Operator>,
     use_parquet: bool,
     _spiller_type: SpillerType,
+
+    // Stores the spilled files that controlled by current spiller
+    private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<usize, Vec<Location>>,
@@ -130,6 +134,7 @@ impl Spiller {
             local_operator,
             use_parquet,
             _spiller_type: spiller_type,
+            private_spilled_files: Default::default(),
             join_spilling_partition_bits: settings.get_join_spilling_partition_bits()?,
             partition_location: Default::default(),
             partition_spilled_bytes: Default::default(),
@@ -145,7 +150,10 @@ impl Spiller {
         let (location, layout) = self.spill_unmanage(data_block).await?;
 
         // Record columns layout for spilled data.
-        self.ctx.add_spill_file(location.clone(), layout);
+        self.ctx.add_spill_file(location.clone(), layout.clone());
+        self.private_spilled_files
+            .write()
+            .insert(location.clone(), layout);
         Ok(location)
     }
 
@@ -199,6 +207,10 @@ impl Spiller {
         writer.close().await?;
         self.ctx
             .add_spill_file(Location::Remote(location.clone()), Layout::Aggregate);
+
+        self.private_spilled_files
+            .write()
+            .insert(Location::Remote(location.clone()), Layout::Aggregate);
         Ok((location, write_bytes))
     }
 
@@ -277,7 +289,10 @@ impl Spiller {
         // Record statistics.
         record_write_profile(&location, &instant, write_bytes);
 
-        self.ctx.add_spill_file(location.clone(), layout);
+        self.ctx.add_spill_file(location.clone(), layout.clone());
+        self.private_spilled_files
+            .write()
+            .insert(location.clone(), layout);
         Ok(MergedPartition {
             location,
             partitions,
@@ -471,6 +486,11 @@ impl Spiller {
 
     pub(crate) fn spilled_files(&self) -> Vec<Location> {
         self.ctx.get_spilled_files()
+    }
+
+    pub(crate) fn private_spilled_files(&self) -> Vec<Location> {
+        let r = self.private_spilled_files.read();
+        r.keys().cloned().collect()
     }
 }
 
