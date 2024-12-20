@@ -230,7 +230,7 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     assert_key_value(&kv, warehouse_info_key, info.clone()).await;
     assert_key_expire(&kv, warehouse_info_key, Duration::from_mins(50)).await;
 
-    warehouse_manager.heartbeat(&mut node_info, seq).await?;
+    warehouse_manager.heartbeat_node(&mut node_info, seq).await?;
     assert_key_value(&kv, warehouse_info_key, info.clone()).await;
     assert_key_value(&kv, info_key, serde_json::to_vec(&node_info)?).await;
     assert_key_value(&kv, warehouse_key, serde_json::to_vec(&warehouse_node)?).await;

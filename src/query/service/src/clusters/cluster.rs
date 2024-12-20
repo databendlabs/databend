@@ -511,7 +511,7 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = cluster_api.heartbeat(&mut node, match_seq);
+                        let heartbeat = cluster_api.heartbeat_node(&mut node, match_seq);
                         match heartbeat.await {
                             Ok(new_match_seq) => {
                                 match_seq = new_match_seq;

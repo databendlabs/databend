@@ -562,7 +562,7 @@ impl WarehouseApi for WarehouseMgr {
         )))
     }
 
-    async fn heartbeat(&self, node: &mut NodeInfo, seq: u64) -> Result<u64> {
+    async fn heartbeat_node(&self, node: &mut NodeInfo, seq: u64) -> Result<u64> {
         if node.node_type == NodeType::SelfManaged {
             assert!(!node.cluster_id.is_empty());
             assert!(!node.warehouse_id.is_empty());

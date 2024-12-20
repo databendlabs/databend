@@ -53,7 +53,7 @@ pub trait WarehouseApi: Sync + Send {
     async fn shutdown_node(&self, node_id: String) -> Result<()>;
 
     /// Keep the tenant's cluster node alive.
-    async fn heartbeat(&self, node: &mut NodeInfo, seq: u64) -> Result<u64>;
+    async fn heartbeat_node(&self, node: &mut NodeInfo, seq: u64) -> Result<u64>;
 
     async fn drop_warehouse(&self, warehouse: String) -> Result<()>;
 
