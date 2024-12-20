@@ -776,7 +776,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.commit_row();
                 },
             ),
-        )
+        );
 }
 
 pub(crate) mod soundex {

@@ -5,10 +5,10 @@ statement ok
 drop table if exists t2 all
 
 statement ok
-create OR REPLACE table t1 as select number as a, number as b from numbers(1)
+settings (ddl_column_type_nullable=0) create OR REPLACE table t1 as select number as a, number as b from numbers(1)
 
 statement ok
-create OR REPLACE table t2 as select number as a, number as b from numbers(5)
+settings (ddl_column_type_nullable=0) create OR REPLACE table t2 as select number as a, number as b from numbers(5)
 
 statement error 1005
 explain explain select t1.a from t1 where a > 0
@@ -584,7 +584,7 @@ statement ok
 drop table if exists t3
 
 statement ok
-create OR REPLACE table t3 as select number as a, number as b from numbers(10)
+settings (ddl_column_type_nullable=0) create OR REPLACE table t3 as select number as a, number as b from numbers(10)
 
 query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
