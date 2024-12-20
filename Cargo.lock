@@ -3006,7 +3006,6 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "recursive",
- "regex",
  "rspack-codespan-reporting",
  "serde",
  "serde_json",
@@ -3218,7 +3217,6 @@ dependencies = [
  "serde",
  "serde_with",
  "serfig",
- "strum 0.24.1",
 ]
 
 [[package]]
@@ -3316,7 +3314,6 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "recursive",
- "rmp-serde",
  "roaring",
  "rust_decimal",
  "serde",
@@ -3491,7 +3488,6 @@ dependencies = [
  "jiff",
  "lexical-core",
  "micromarshal",
- "rand",
  "rmp-serde",
  "roaring",
  "scroll 0.12.0",
@@ -3527,7 +3523,6 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-proto-conv",
- "databend-common-storage",
  "enumflags2",
  "fastrace",
  "futures",
@@ -3581,7 +3576,6 @@ dependencies = [
  "cron",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
@@ -3602,7 +3596,6 @@ dependencies = [
  "sha1",
  "sha2",
  "thiserror",
- "tonic-build",
 ]
 
 [[package]]
@@ -3618,7 +3611,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
- "databend-common-meta-app",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
  "databend-common-metrics",
@@ -3660,6 +3652,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "databend-common-base",
  "databend-common-meta-types",
  "fastrace",
  "futures-util",
@@ -3728,7 +3721,6 @@ dependencies = [
  "serde_json",
  "stream-more",
  "tempfile",
- "test-harness",
  "thiserror",
  "tokio",
 ]
@@ -3738,22 +3730,17 @@ name = "databend-common-meta-sled-store"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "anyhow",
  "byteorder",
- "databend-common-base",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "fastrace",
  "log",
  "openraft",
- "pretty_assertions",
  "serde",
  "serde_json",
  "sled",
  "tempfile",
- "test-harness",
  "thiserror",
- "tokio",
 ]
 
 [[package]]
@@ -3801,7 +3788,6 @@ dependencies = [
  "openraft",
  "prost",
  "prost-build",
- "regex",
  "rotbl",
  "serde",
  "serde_json",
@@ -3819,7 +3805,6 @@ dependencies = [
  "databend-common-base",
  "procfs",
  "prometheus-client",
- "tokio",
 ]
 
 [[package]]
@@ -3874,7 +3859,6 @@ dependencies = [
  "log",
  "petgraph",
  "serde",
- "serde_json",
  "tokio",
  "typetag",
 ]
@@ -4119,9 +4103,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "deltalake",
  "fastrace",
- "match-template",
  "object_store_opendal",
- "opendal",
  "parquet",
  "serde",
  "serde_json",
@@ -4165,7 +4147,6 @@ dependencies = [
  "backoff",
  "bytes",
  "chrono",
- "criterion",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4282,8 +4263,6 @@ dependencies = [
  "iceberg-catalog-glue",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
- "match-template",
- "ordered-float 4.5.0",
  "serde",
  "tokio",
  "typetag",
@@ -4294,7 +4273,6 @@ name = "databend-common-storages-information-schema"
 version = "0.1.0"
 dependencies = [
  "databend-common-ast",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-meta-app",
  "databend-common-storages-view",
@@ -4307,7 +4285,6 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "databend-common-base",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
@@ -4329,7 +4306,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
@@ -4404,7 +4380,6 @@ dependencies = [
  "parquet",
  "rand",
  "serde",
- "tempfile",
  "thrift",
  "typetag",
 ]
@@ -4415,7 +4390,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
@@ -4467,7 +4441,6 @@ dependencies = [
  "csv-core",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-compress",
  "databend-common-config",
@@ -4962,7 +4935,6 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz 0.8.6",
- "criterion",
  "ctor 0.2.8",
  "dashmap 6.1.0",
  "databend-common-ast",
@@ -5054,13 +5026,11 @@ dependencies = [
  "md-5",
  "mysql_async",
  "naive-cityhash",
- "num",
  "num_cpus",
  "opendal",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
- "ordered-float 4.5.0",
  "p256 0.13.2",
  "parking_lot 0.12.3",
  "parquet",
@@ -5075,7 +5045,6 @@ dependencies = [
  "redis",
  "regex",
  "reqwest",
- "rmp-serde",
  "rustls 0.23.18",
  "rustls-pemfile 2.1.3",
  "rustls-pki-types",
@@ -5301,7 +5270,6 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "log",
  "parquet",
- "pot",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -5543,17 +5511,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "derive-where"
-version = "1.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.58",
 ]
 
 [[package]]
@@ -11143,20 +11100,6 @@ dependencies = [
  "embedded-io 0.4.0",
  "embedded-io 0.6.1",
  "serde",
-]
-
-[[package]]
-name = "pot"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ec1c1010060295c3405ce19ea911ede48967e96ed2ad9034b74f56f1ef0aaf2"
-dependencies = [
- "byteorder",
- "bytes",
- "derive-where",
- "half",
- "serde",
- "thiserror",
 ]
 
 [[package]]

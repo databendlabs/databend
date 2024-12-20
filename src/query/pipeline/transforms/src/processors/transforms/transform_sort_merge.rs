@@ -223,5 +223,6 @@ pub fn sort_merge(
     for block in data_blocks {
         processor.transform(block)?;
     }
+
     processor.on_finish(true)
 }
