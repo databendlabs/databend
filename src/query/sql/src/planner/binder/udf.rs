@@ -101,7 +101,7 @@ impl Binder {
                         .get_external_server_request_timeout_secs()?,
                     self.ctx
                         .get_settings()
-                        .get_external_server_request_batch_rows()?,
+                        .get_external_server_request_batch_rows()? as usize,
                 )
                 .await?;
                 client

@@ -47,8 +47,12 @@ pub struct TransformUdfServer {
     funcs: Vec<UdfFunctionDesc>,
     connect_timeout: u64,
     request_timeout: u64,
-    request_bacth_rows: u64,
-    retry_times: u64,
+    // request batch rows is used to split the block into smaller blocks and improve concurrency performance.
+    request_batch_rows: usize,
+    // request numbers is used to control the total number of concurrent runtimes,
+    // to avoid the case of too many concurrent connections due to the small batch rows.
+    request_numbers: usize,
+    retry_times: usize,
 }
 
 impl TransformUdfServer {
@@ -56,15 +60,17 @@ impl TransformUdfServer {
         let settings = ctx.get_settings();
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
-        let request_bacth_rows = settings.get_external_server_request_batch_rows()?;
-        let retry_times = settings.get_external_server_request_retry_times()?;
+        let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
+        let request_numbers = settings.get_max_threads()? as usize;
+        let retry_times = settings.get_external_server_request_retry_times()? as usize;
 
         let s = Self {
             ctx,
             funcs,
             connect_timeout,
             request_timeout,
-            request_bacth_rows,
+            request_batch_rows,
+            request_numbers,
             retry_times,
         };
         Ok(s)
@@ -75,6 +81,7 @@ impl TransformUdfServer {
         ctx: Arc<QueryContext>,
         connect_timeout: u64,
         request_timeout: u64,
+        request_batch_rows: usize,
         func: UdfFunctionDesc,
         mut data_block: DataBlock,
     ) -> Result<DataBlock> {
@@ -110,12 +117,16 @@ impl TransformUdfServer {
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
         let instant = Instant::now();
-        let mut client =
-            UDFFlightClient::connect(server_addr, connect_timeout, request_timeout, 65536)
-                .await?
-                .with_tenant(ctx.get_tenant().tenant_name())?
-                .with_func_name(&func.func_name)?
-                .with_query_id(&ctx.get_id())?;
+        let mut client = UDFFlightClient::connect(
+            server_addr,
+            connect_timeout,
+            request_timeout,
+            request_batch_rows,
+        )
+        .await?
+        .with_tenant(ctx.get_tenant().tenant_name())?
+        .with_func_name(&func.func_name)?
+        .with_query_id(&ctx.get_id())?;
 
         let connect_duration = instant.elapsed();
         record_connect_external_duration(func.func_name.clone(), connect_duration);
@@ -192,8 +203,13 @@ impl AsyncTransform for TransformUdfServer {
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
         for func in self.funcs.iter() {
             let rows = data_block.num_rows();
-            let batch_rows = self.request_bacth_rows as usize;
-
+            // Use block row numbers and request numbers to calculate the number of rows for each runtime.
+            // In each runtime, the block is splitted by the batch rows and call the udf server
+            // serially, so the flight connection is reused.
+            let mut batch_rows = rows / self.request_numbers;
+            if batch_rows < self.request_batch_rows {
+                batch_rows = self.request_batch_rows;
+            }
             let tasks: Vec<_> = (0..rows)
                 .step_by(batch_rows)
                 .map(|start| {
@@ -203,6 +219,7 @@ impl AsyncTransform for TransformUdfServer {
                         let ctx = self.ctx.clone();
                         let connect_timeout = self.connect_timeout;
                         let request_timeout = self.request_timeout;
+                        let request_batch_rows = self.request_batch_rows;
                         let func = func.clone();
                         let name = func.name.clone();
 
@@ -212,6 +229,7 @@ impl AsyncTransform for TransformUdfServer {
                                     ctx.clone(),
                                     connect_timeout,
                                     request_timeout,
+                                    request_batch_rows,
                                     func.clone(),
                                     mini_batch.clone(),
                                 )
@@ -221,7 +239,7 @@ impl AsyncTransform for TransformUdfServer {
                             .with_min_delay(Duration::from_millis(50))
                             .with_factor(2.0)
                             .with_max_delay(Duration::from_secs(30))
-                            .with_max_times(self.retry_times as usize);
+                            .with_max_times(self.retry_times);
 
                         f.retry(backoff).when(retry_on).notify(move |err, dur| {
                             Profile::record_usize_profile(
