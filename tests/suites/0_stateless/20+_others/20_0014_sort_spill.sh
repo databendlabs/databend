@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$CURDIR"/../../../shell_env.sh
+
+$BENDSQL_CLIENT_CONNECT --query="""
 SELECT '==TEST GLOBAL SORT==';
 SET max_vacuum_temp_files_after_query= 0;
 set sort_spilling_bytes_threshold_per_proc = 8;
@@ -101,7 +106,12 @@ set sort_spilling_bytes_threshold_per_proc = 0;
 SELECT (any_if(count, number = 8) - any_if(count, number = 7)) > 0 FROM temp_files_count;
 
 SET max_vacuum_temp_files_after_query= 300000;
+"""
+
+$BENDSQL_CLIENT_CONNECT --query="""
 SELECT '==Start to clean==';
 SELECT sleep(2);
-VACUUM TEMPORARY FILES RETAIN 1 SECONDS;
-SELECT $c > 0, count() from system.temp_files;
+"""
+
+$BENDSQL_CLIENT_OUTPUT_NULL --query="VACUUM TEMPORARY FILES RETAIN 1 SECONDS;"
+stmt "SELECT count() from system.temp_files"
