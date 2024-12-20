@@ -16,9 +16,14 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use databend_common_base::display::display_option::DisplayOptionExt;
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use num_traits::FromPrimitive;
 
+use crate::protobuf::boolean_expression::CombiningOperator;
+use crate::protobuf::BooleanExpression;
+use crate::protobuf::ConditionalOperation;
 use crate::txn_condition::Target;
 use crate::txn_op;
 use crate::txn_op::Request;
@@ -98,13 +103,17 @@ impl<T: Display> Display for VecDisplay<'_, T> {
 
 impl Display for TxnRequest {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "TxnRequest{{ if:{} then:{} else:{} }}",
-            VecDisplay::new_at_most(&self.condition, 5),
-            VecDisplay::new_at_most(&self.if_then, 5),
-            VecDisplay::new_at_most(&self.else_then, 5),
-        )
+        write!(f, "TxnRequest{{",)?;
+
+        for op in self.operations.iter() {
+            write!(f, "{{ {} }}, ", op)?;
+        }
+
+        write!(f, "if:{} ", VecDisplay::new_at_most(&self.condition, 10),)?;
+        write!(f, "then:{} ", VecDisplay::new_at_most(&self.if_then, 10),)?;
+        write!(f, "else:{}", VecDisplay::new_at_most(&self.else_then, 10),)?;
+
+        write!(f, "}}",)
     }
 }
 
@@ -287,8 +296,52 @@ impl Display for TxnDeleteByPrefixResponse {
     }
 }
 
+impl Display for BooleanExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let op = self.operator();
+        let op = match op {
+            CombiningOperator::And => "AND",
+            CombiningOperator::Or => "OR",
+        };
+
+        let mut printed = false;
+
+        for expr in self.sub_expressions.iter() {
+            if printed {
+                write!(f, " {} ", op)?;
+            }
+            write!(f, "({})", expr)?;
+            printed = true;
+        }
+
+        for cond in self.conditions.iter() {
+            if printed {
+                write!(f, " {} ", op)?;
+            }
+            write!(f, "{}", cond)?;
+            printed = true;
+        }
+        Ok(())
+    }
+}
+
+impl Display for ConditionalOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "if:({}) then:{}",
+            self.predicate.display(),
+            self.operations.display_n::<10>()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::protobuf::BooleanExpression;
+    use crate::protobuf::TxnCondition;
+    use crate::TxnOp;
+
     #[test]
     fn test_vec_display() {
         assert_eq!(
@@ -309,6 +362,74 @@ mod tests {
         assert_eq!(
             format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 0)),
             "[...]"
+        );
+    }
+
+    #[test]
+    fn test_tx_display_with_bool_expression() {
+        let expr = BooleanExpression::from_conditions_and([
+            TxnCondition::eq_seq("k1", 1),
+            TxnCondition::eq_seq("k2", 2),
+        ])
+        .and(BooleanExpression::from_conditions_or([
+            TxnCondition::eq_seq("k3", 3),
+            TxnCondition::eq_seq("k4", 4),
+            TxnCondition::keys_with_prefix("k5", 10),
+        ]));
+
+        assert_eq!(
+            format!("{}", expr),
+            "(k3 == seq(3) OR k4 == seq(4) OR k5 == keys_with_prefix(10)) AND k1 == seq(1) AND k2 == seq(2)"
+        );
+    }
+
+    #[test]
+    fn test_display_conditional_operation() {
+        let op = crate::protobuf::ConditionalOperation {
+            predicate: Some(BooleanExpression::from_conditions_and([
+                TxnCondition::eq_seq("k1", 1),
+                TxnCondition::eq_seq("k2", 2),
+            ])),
+            operations: vec![
+                //
+                TxnOp::put("k1", b"v1".to_vec()),
+                TxnOp::put("k2", b"v2".to_vec()),
+            ],
+        };
+
+        assert_eq!(
+            format!("{}", op),
+            "if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)]"
+        );
+    }
+
+    #[test]
+    fn test_display_txn_request() {
+        let op = crate::protobuf::ConditionalOperation {
+            predicate: Some(BooleanExpression::from_conditions_and([
+                TxnCondition::eq_seq("k1", 1),
+                TxnCondition::eq_seq("k2", 2),
+            ])),
+            operations: vec![
+                //
+                TxnOp::put("k1", b"v1".to_vec()),
+                TxnOp::put("k2", b"v2".to_vec()),
+            ],
+        };
+
+        let req = crate::TxnRequest {
+            operations: vec![op],
+            condition: vec![TxnCondition::eq_seq("k1", 1), TxnCondition::eq_seq("k2", 2)],
+            if_then: vec![
+                TxnOp::put("k1", b"v1".to_vec()),
+                TxnOp::put("k2", b"v2".to_vec()),
+            ],
+            else_then: vec![TxnOp::put("k3", b"v1".to_vec())],
+        };
+
+        assert_eq!(
+            format!("{}", req),
+           "TxnRequest{{ if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)] }, if:[k1 == seq(1),k2 == seq(2)] then:[Put(Put key=k1),Put(Put key=k2)] else:[Put(Put key=k3)]}",
         );
     }
 }

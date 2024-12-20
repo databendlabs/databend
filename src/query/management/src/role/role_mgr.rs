@@ -311,11 +311,7 @@ impl RoleApi for RoleMgr {
             }
 
             if need_transfer {
-                let txn_req = TxnRequest {
-                    condition: condition.clone(),
-                    if_then: if_then.clone(),
-                    else_then: vec![],
-                };
+                let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
                 let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
                 let (succ, _) = txn_reply_to_api_result(tx_reply)?;
                 debug!(
@@ -378,11 +374,7 @@ impl RoleApi for RoleMgr {
                 }
             }
 
-            let txn_req = TxnRequest {
-                condition: condition.clone(),
-                if_then: if_then.clone(),
-                else_then: vec![],
-            };
+            let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
@@ -467,11 +459,7 @@ impl RoleApi for RoleMgr {
                 }
             }
 
-            let txn_req = TxnRequest {
-                condition: condition.clone(),
-                if_then: if_then.clone(),
-                else_then: vec![],
-            };
+            let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;

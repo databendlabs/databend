@@ -3652,6 +3652,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "databend-common-base",
  "databend-common-meta-types",
  "fastrace",
  "futures-util",

@@ -14,21 +14,183 @@
 
 use std::time::Duration;
 
+use pb::boolean_expression::CombiningOperator;
 use pb::txn_condition::ConditionResult;
 use pb::txn_condition::Target;
 
 use crate::protobuf as pb;
 use crate::seq_value::SeqV;
-use crate::TxnRequest;
 
-impl TxnRequest {
+impl pb::TxnRequest {
+    /// Push a new conditional operation branch to the transaction.
+    pub fn push_branch(
+        mut self,
+        expr: Option<pb::BooleanExpression>,
+        ops: impl IntoIterator<Item = pb::TxnOp>,
+    ) -> Self {
+        self.operations
+            .push(pb::ConditionalOperation::new(expr, ops));
+        self
+    }
+
+    /// Push the old version of `condition` and `if_then` to the transaction.
+    pub fn push_if_then(
+        mut self,
+        conditions: impl IntoIterator<Item = pb::TxnCondition>,
+        ops: impl IntoIterator<Item = pb::TxnOp>,
+    ) -> Self {
+        assert!(self.condition.is_empty());
+        assert!(self.if_then.is_empty());
+        self.condition.extend(conditions);
+        self.if_then.extend(ops);
+        self
+    }
+
+    pub fn new(conditions: Vec<pb::TxnCondition>, ops: Vec<pb::TxnOp>) -> Self {
+        Self {
+            operations: vec![],
+            condition: conditions,
+            if_then: ops,
+            else_then: vec![],
+        }
+    }
+
+    /// Adds operations to execute when the conditions are not met.
+    pub fn with_else(mut self, ops: Vec<pb::TxnOp>) -> Self {
+        self.else_then = ops;
+        self
+    }
+
     /// Creates a transaction request that performs the specified operations
     /// unconditionally.
     pub fn unconditional(ops: Vec<pb::TxnOp>) -> Self {
         Self {
+            operations: vec![],
             condition: vec![],
             if_then: ops,
             else_then: vec![],
+        }
+    }
+}
+
+impl pb::TxnReply {
+    pub fn new(execution_path: impl ToString) -> Self {
+        let execution_path = execution_path.to_string();
+        Self {
+            success: execution_path != "else",
+            responses: vec![],
+            error: "".to_string(),
+            execution_path,
+        }
+    }
+
+    /// Return the index of the branch that was executed in [`pb::TxnRequest::operations`].
+    ///
+    /// If none of the branches were executed, return `None`,
+    /// i.e., the `condition` is met and `if_then` is executed, or `else_then` is executed.
+    /// In such case, the caller should then compare `execution_path` against "then" or "else` to determine which branch was executed.
+    ///
+    /// If there is an error parsing the index, return the original `execution_path`.
+    pub fn executed_branch_index(&self) -> Result<Option<usize>, &str> {
+        // if self.execution_path is in form "operation:<index>", return the index.
+        if let Some(index) = self.execution_path.strip_prefix("operation:") {
+            index
+                .parse()
+                .map(Some)
+                .map_err(|_| self.execution_path.as_str())
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(derive_more::From)]
+pub enum ExpressionOrCondition {
+    Expression(#[from] pb::BooleanExpression),
+    Condition(#[from] pb::TxnCondition),
+}
+
+impl pb::BooleanExpression {
+    pub fn from_conditions_and(conditions: impl IntoIterator<Item = pb::TxnCondition>) -> Self {
+        Self::from_conditions(CombiningOperator::And, conditions)
+    }
+
+    pub fn from_conditions_or(conditions: impl IntoIterator<Item = pb::TxnCondition>) -> Self {
+        Self::from_conditions(CombiningOperator::Or, conditions)
+    }
+
+    fn from_conditions(
+        op: CombiningOperator,
+        conditions: impl IntoIterator<Item = pb::TxnCondition>,
+    ) -> Self {
+        Self {
+            conditions: conditions.into_iter().collect(),
+            operator: op as i32,
+            sub_expressions: vec![],
+        }
+    }
+
+    pub fn and(self, expr_or_condition: impl Into<ExpressionOrCondition>) -> Self {
+        self.merge(CombiningOperator::And, expr_or_condition)
+    }
+
+    pub fn or(self, expr_or_condition: impl Into<ExpressionOrCondition>) -> Self {
+        self.merge(CombiningOperator::Or, expr_or_condition)
+    }
+
+    pub fn and_many(self, others: impl IntoIterator<Item = pb::BooleanExpression>) -> Self {
+        self.merge_expressions(CombiningOperator::And, others)
+    }
+
+    pub fn or_many(self, others: impl IntoIterator<Item = pb::BooleanExpression>) -> Self {
+        self.merge_expressions(CombiningOperator::Or, others)
+    }
+
+    fn merge(
+        self,
+        op: CombiningOperator,
+        expr_or_condition: impl Into<ExpressionOrCondition>,
+    ) -> Self {
+        let x = expr_or_condition.into();
+        match x {
+            ExpressionOrCondition::Expression(expr) => self.merge_expressions(op, [expr]),
+            ExpressionOrCondition::Condition(cond) => self.merge_conditions(op, [cond]),
+        }
+    }
+
+    fn merge_conditions(
+        mut self,
+        op: CombiningOperator,
+        condition: impl IntoIterator<Item = pb::TxnCondition>,
+    ) -> Self {
+        if self.operator == op as i32 {
+            self.conditions.extend(condition);
+            self
+        } else {
+            pb::BooleanExpression {
+                operator: op as i32,
+                sub_expressions: vec![self],
+                conditions: condition.into_iter().collect(),
+            }
+        }
+    }
+
+    fn merge_expressions(
+        mut self,
+        op: CombiningOperator,
+        other: impl IntoIterator<Item = pb::BooleanExpression>,
+    ) -> Self {
+        if self.operator == op as i32 {
+            self.sub_expressions.extend(other);
+            self
+        } else {
+            let mut expressions = vec![self];
+            expressions.extend(other);
+            Self {
+                conditions: vec![],
+                operator: op as i32,
+                sub_expressions: expressions,
+            }
         }
     }
 }
@@ -76,6 +238,14 @@ impl pb::TxnCondition {
             expected: op as i32,
             target: Some(Target::KeysWithPrefix(count)),
         }
+    }
+
+    pub fn and(self, other: pb::TxnCondition) -> pb::BooleanExpression {
+        pb::BooleanExpression::from_conditions_and([self, other])
+    }
+
+    pub fn or(self, other: pb::TxnCondition) -> pb::BooleanExpression {
+        pb::BooleanExpression::from_conditions_or([self, other])
     }
 }
 
@@ -180,6 +350,125 @@ impl pb::TxnGetResponse {
         Self {
             key: key.to_string(),
             value,
+        }
+    }
+}
+
+impl pb::ConditionalOperation {
+    pub fn new(
+        expr: Option<pb::BooleanExpression>,
+        ops: impl IntoIterator<Item = pb::TxnOp>,
+    ) -> Self {
+        Self {
+            predicate: expr,
+            operations: ops.into_iter().collect(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::protobuf::BooleanExpression;
+    use crate::TxnCondition;
+
+    #[test]
+    fn test_bool_expression() {
+        use BooleanExpression as Expr;
+
+        let cond = |k: &str, seq| TxnCondition::eq_seq(k, seq);
+
+        // from_conditions_and
+        let expr = Expr::from_conditions_and([cond("a", 1), cond("b", 2)]);
+        assert_eq!(expr.to_string(), "a == seq(1) AND b == seq(2)");
+
+        // from_conditions_or
+        let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)]);
+        assert_eq!(expr.to_string(), "a == seq(1) OR b == seq(2)");
+
+        // and_condition
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)]).and(cond("c", 3));
+            assert_eq!(
+                expr.to_string(),
+                "(a == seq(1) OR b == seq(2)) AND c == seq(3)"
+            );
+        }
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)]).and(cond("e", 5));
+            assert_eq!(
+                expr.to_string(),
+                "(a == seq(1) OR b == seq(2)) AND e == seq(5)"
+            );
+        }
+
+        // or_condition
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)]).or(cond("c", 3));
+            assert_eq!(
+                expr.to_string(),
+                "a == seq(1) OR b == seq(2) OR c == seq(3)"
+            );
+        }
+        {
+            let expr = Expr::from_conditions_and([cond("a", 1), cond("b", 2)]).or(cond("e", 5));
+            assert_eq!(
+                expr.to_string(),
+                "(a == seq(1) AND b == seq(2)) OR e == seq(5)"
+            );
+        }
+
+        // and
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)])
+                .and(Expr::from_conditions_or([cond("c", 3), cond("d", 4)]));
+            assert_eq!(
+                expr.to_string(),
+                "(a == seq(1) OR b == seq(2)) AND (c == seq(3) OR d == seq(4))"
+            );
+        }
+        // or
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)])
+                .or(Expr::from_conditions_or([cond("c", 3), cond("d", 4)]));
+            assert_eq!(
+                expr.to_string(),
+                "(c == seq(3) OR d == seq(4)) OR a == seq(1) OR b == seq(2)"
+            );
+        }
+        // and_many
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)]).and_many([
+                Expr::from_conditions_or([cond("c", 3), cond("d", 4)]),
+                Expr::from_conditions_or([cond("e", 5), cond("f", 6)]),
+            ]);
+            assert_eq!(
+                expr.to_string(),
+                "(a == seq(1) OR b == seq(2)) AND (c == seq(3) OR d == seq(4)) AND (e == seq(5) OR f == seq(6))"
+            );
+        }
+        // or_many
+        {
+            let expr = Expr::from_conditions_or([cond("a", 1), cond("b", 2)]).or_many([
+                Expr::from_conditions_or([cond("c", 3), cond("d", 4)]),
+                Expr::from_conditions_or([cond("e", 5), cond("f", 6)]),
+            ]);
+            assert_eq!(
+                expr.to_string(),
+                "(c == seq(3) OR d == seq(4)) OR (e == seq(5) OR f == seq(6)) OR a == seq(1) OR b == seq(2)"
+            );
+        }
+        // complex
+        {
+            let expr = cond("a", 1)
+                .or(cond("b", 2))
+                .and(cond("c", 3).or(cond("d", 4)))
+                .or(cond("e", 5)
+                    .or(cond("f", 6))
+                    .and(cond("g", 7).or(cond("h", 8))));
+            assert_eq!(
+                expr.to_string(),
+                "((a == seq(1) OR b == seq(2)) AND (c == seq(3) OR d == seq(4))) OR ((e == seq(5) OR f == seq(6)) AND (g == seq(7) OR h == seq(8)))"
+            );
         }
     }
 }
