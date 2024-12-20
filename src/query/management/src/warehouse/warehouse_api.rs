@@ -59,6 +59,10 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn create_warehouse(&self, warehouse: String, nodes: SelectedNodes) -> Result<()>;
 
+    async fn resume_warehouse(&self, warehouse: String) -> Result<()>;
+
+    async fn suspend_warehouse(&self, warehouse: String) -> Result<()>;
+
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
 
     async fn rename_warehouse(&self, cur: String, to: String) -> Result<()>;

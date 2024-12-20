@@ -779,6 +779,201 @@ impl WarehouseApi for WarehouseMgr {
         }
     }
 
+    async fn resume_warehouse(&self, warehouse: String) -> Result<()> {
+        if warehouse.is_empty() {
+            return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
+        }
+
+        for _idx in 0..10 {
+            let mut warehouse_info = self.consistent_warehouse_info(&warehouse).await?;
+
+            let mut need_schedule_cluster = HashMap::new();
+            warehouse_info.warehouse_info = match warehouse_info.warehouse_info {
+                WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(
+                    "Cannot resume self-managed warehouse.",
+                )),
+                WarehouseInfo::SystemManaged(warehouse) => {
+                    if warehouse.status != "SUSPEND" {
+                        return Err(ErrorCode::InvalidWarehouse(format!(
+                            "Cannot resume warehouse {:?}, because warehouse state is not suspend",
+                            warehouse
+                        )));
+                    }
+
+                    // TODO: support cluster resume?
+                    need_schedule_cluster = warehouse.clusters.clone();
+                    Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
+                        id: warehouse.id.clone(),
+                        status: "RUNNING".to_string(),
+                        display_name: warehouse.display_name,
+                        clusters: warehouse.clusters,
+                    }))
+                }
+            }?;
+
+            // get online nodes
+            let online_nodes = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
+
+            let mut unassign_online_nodes = Vec::with_capacity(online_nodes.len());
+
+            for (_key, v) in online_nodes {
+                let node_info = serde_json::from_slice::<NodeInfo>(&v.data)?;
+
+                if node_info.warehouse_id.is_empty() && node_info.cluster_id.is_empty() {
+                    assert_eq!(node_info.node_type, NodeType::SystemManaged);
+                    unassign_online_nodes.push((v.seq, node_info));
+                }
+            }
+
+            let mut resume_txn = TxnRequest::default();
+            for (cluster, info) in need_schedule_cluster {
+                for selected_node in info.nodes {
+                    match selected_node {
+                        SelectedNode::Random(Some(_)) => {
+                            return Err(ErrorCode::Unimplemented(
+                                "Custom instance types are not supported.",
+                            ));
+                        }
+                        SelectedNode::Random(None) => match unassign_online_nodes.pop() {
+                            None => {
+                                return Err(ErrorCode::NoResourcesAvailable(
+                                    "Failed to create warehouse, reason: no resources available",
+                                ));
+                            }
+                            Some((seq, mut node)) => {
+                                node.cluster_id = cluster.clone();
+                                node.warehouse_id = warehouse.clone();
+
+                                let node_key = self.node_key(&node)?;
+                                let cluster_key = self.cluster_key(&node)?;
+
+                                resume_txn
+                                    .condition
+                                    .push(map_condition(&node_key, MatchSeq::Exact(seq)));
+
+                                resume_txn.if_then.push(TxnOp::put_with_ttl(
+                                    node_key,
+                                    serde_json::to_vec(&node)?,
+                                    Some(self.lift_time * 4),
+                                ));
+
+                                node.cluster_id = String::new();
+                                node.warehouse_id = String::new();
+                                resume_txn
+                                    .condition
+                                    .push(map_condition(&cluster_key, MatchSeq::Exact(0)));
+                                resume_txn.if_then.push(TxnOp::put_with_ttl(
+                                    cluster_key,
+                                    serde_json::to_vec(&node)?,
+                                    Some(self.lift_time * 4),
+                                ));
+                            }
+                        },
+                    }
+                }
+            }
+
+            let warehouse_key = format!(
+                "{}/{}",
+                self.warehouse_key_prefix,
+                escape_for_key(&warehouse)?
+            );
+
+            resume_txn.condition.push(map_condition(
+                &warehouse_key,
+                MatchSeq::Exact(warehouse_info.info_seq),
+            ));
+            resume_txn.if_then.push(TxnOp::put(
+                warehouse_key.clone(),
+                serde_json::to_vec(&warehouse_info.warehouse_info)?,
+            ));
+
+            if self.metastore.transaction(resume_txn).await?.success {
+                return Ok(());
+            }
+        }
+
+        Err(ErrorCode::WarehouseOperateConflict(
+            "Warehouse operate conflict(tried 10 times while in resume warehouse).",
+        ))
+    }
+
+    async fn suspend_warehouse(&self, warehouse: String) -> Result<()> {
+        if warehouse.is_empty() {
+            return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
+        }
+
+        for _idx in 0..10 {
+            let mut consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+
+            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+                WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(
+                    "Cannot suspend self-managed warehouse",
+                )),
+                WarehouseInfo::SystemManaged(warehouse) => {
+                    if warehouse.status != "RUNNING" {
+                        return Err(ErrorCode::InvalidWarehouse(format!("Cannot suspend warehouse {:?}, because warehouse state is not running.", warehouse)));
+                    }
+
+                    Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
+                        id: warehouse.id.clone(),
+                        status: "RUNNING".to_string(),
+                        display_name: warehouse.display_name,
+                        clusters: warehouse.clusters,
+                    }))
+                }
+            }?;
+
+            let mut suspend_txn = TxnRequest::default();
+
+            let warehouse_key = format!(
+                "{}/{}",
+                self.warehouse_key_prefix,
+                escape_for_key(&warehouse)?
+            );
+
+            suspend_txn.condition.push(map_condition(
+                &warehouse_key,
+                MatchSeq::Exact(consistent_info.info_seq),
+            ));
+            suspend_txn.if_then.push(TxnOp::put(
+                warehouse_key,
+                serde_json::to_vec(&consistent_info.warehouse_info)?,
+            ));
+
+            for mut consistent_node in consistent_info.consistent_nodes {
+                let node_key = self.node_key(&consistent_node.node_info)?;
+                let cluster_key = self.cluster_key(&consistent_node.node_info)?;
+
+                suspend_txn.condition.push(map_condition(
+                    &node_key,
+                    MatchSeq::Exact(consistent_node.node_seq),
+                ));
+                suspend_txn.condition.push(map_condition(
+                    &cluster_key,
+                    MatchSeq::Exact(consistent_node.cluster_seq),
+                ));
+
+                suspend_txn.if_then.push(TxnOp::delete(cluster_key));
+                consistent_node.node_info.cluster_id = String::new();
+                consistent_node.node_info.warehouse_id = String::new();
+                suspend_txn.if_then.push(TxnOp::put_with_ttl(
+                    node_key,
+                    serde_json::to_vec(&consistent_node.node_info)?,
+                    Some(self.lift_time * 4),
+                ));
+            }
+
+            if self.metastore.transaction(suspend_txn).await?.success {
+                return Ok(());
+            }
+        }
+
+        Err(ErrorCode::WarehouseOperateConflict(
+            "Warehouse operate conflict(tried 10 times while in suspend warehouse).",
+        ))
+    }
+
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
         let values = self
             .metastore
