@@ -5258,6 +5258,14 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
     Ok(data_type)
 }
 
+pub fn resolve_type_name_udf(type_name: &TypeName) -> Result<TableDataType> {
+    let type_name = match type_name {
+        name @ TypeName::Nullable(_) | name @ TypeName::NotNull(_) => name,
+        name => &name.clone().wrap_nullable(),
+    };
+    resolve_type_name(type_name, true)
+}
+
 pub fn validate_function_arg(
     name: &str,
     args_len: usize,

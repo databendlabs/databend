@@ -35,7 +35,7 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::planner::resolve_type_name;
+use crate::planner::resolve_type_name_udf;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
@@ -87,9 +87,9 @@ impl Binder {
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, false)?));
+                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
                 }
-                let return_type = DataType::from(&resolve_type_name(return_type, false)?);
+                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
 
                 let mut client = UDFFlightClient::connect(
                     address,
@@ -249,10 +249,10 @@ fn create_udf_definition_script(
 
     let arg_types = arg_types
         .iter()
-        .map(|arg_type| Ok(DataType::from(&resolve_type_name(arg_type, false)?)))
+        .map(|arg_type| Ok(DataType::from(&resolve_type_name_udf(arg_type)?)))
         .collect::<Result<Vec<_>>>()?;
 
-    let return_type = DataType::from(&resolve_type_name(return_type, false)?);
+    let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
 
     let mut runtime_version = runtime_version.to_string();
     if runtime_version.is_empty() && language == UDFLanguage::Python {
@@ -266,7 +266,7 @@ fn create_udf_definition_script(
                 .map(|field| {
                     Ok(DataField::new(
                         &field.name.name,
-                        DataType::from(&resolve_type_name(&field.type_name, false)?),
+                        DataType::from(&resolve_type_name_udf(&field.type_name)?),
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;

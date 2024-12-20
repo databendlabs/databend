@@ -24,7 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_sql::resolve_type_name;
+use databend_common_sql::resolve_type_name_udf;
 use log::error;
 
 pub struct BuiltinUDFs {
@@ -52,9 +52,9 @@ impl BuiltinUDFs {
                 } => {
                     let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                     for arg_type in arg_types {
-                        arg_datatypes.push(DataType::from(&resolve_type_name(&arg_type, false)?));
+                        arg_datatypes.push(DataType::from(&resolve_type_name_udf(&arg_type)?));
                     }
-                    let return_type = DataType::from(&resolve_type_name(&return_type, false)?);
+                    let return_type = DataType::from(&resolve_type_name_udf(&return_type)?);
                     let udf = UserDefinedFunction::create_udf_server(
                         name,
                         &address,

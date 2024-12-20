@@ -200,6 +200,7 @@ impl AggregateUdfScript {
     }
 }
 
+#[derive(Debug)]
 pub struct UdfAggState(Arc<dyn Array>);
 
 impl UdfAggState {
@@ -328,6 +329,7 @@ impl JsRuntimePool {
             Some(runtime) => runtime,
             None => self.create()?,
         };
+        drop(runtimes);
 
         let result = op(&runtime)?;
 
@@ -405,6 +407,8 @@ mod tests {
     use arrow_array::StructArray;
     use arrow_schema::DataType as ArrowType;
     use arrow_schema::Field;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::Float32Type;
 
     use super::*;
 
@@ -429,5 +433,57 @@ mod tests {
 
         let state = UdfAggState::deserialize(&mut buf.as_slice()).unwrap();
         assert_eq!(&want, &state.0);
+    }
+
+    #[test]
+    fn test_js_pool() -> Result<()> {
+        let agg_name = "weighted_avg".to_string();
+        let fields = vec![
+            Field::new("sum", ArrowType::Int64, false),
+            Field::new("weight", ArrowType::Int64, false),
+        ];
+        let pool = JsRuntimePool::new(
+            agg_name.clone(),
+            r#"
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+            "#
+            .to_string(),
+            ArrowType::Struct(fields.clone().into()),
+            Float32Type::data_type(),
+        );
+
+        let state = pool.call(|runtime| runtime.create_state(&agg_name))?;
+
+        let want: Arc<dyn arrow_array::Array> = Arc::new(StructArray::new(
+            fields.into(),
+            vec![
+                Arc::new(Int64Array::from(vec![0])),
+                Arc::new(Int64Array::from(vec![0])),
+            ],
+            None,
+        ));
+
+        assert_eq!(&want, &state);
+        Ok(())
     }
 }
