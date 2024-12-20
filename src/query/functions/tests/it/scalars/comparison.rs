@@ -54,6 +54,11 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "today()='2020-01-01'", &[]);
     run_ast(
         file,
+        "to_interval('1 hour')=to_interval('3600 seconds')",
+        &[],
+    );
+    run_ast(
+        file,
         "to_timestamp(-315360000000000)=to_timestamp(-100)",
         &[],
     );
@@ -119,6 +124,11 @@ fn test_noteq(file: &mut impl Write) {
     run_ast(file, "(1, 'a') != (1, 'b')", &[]);
     run_ast(
         file,
+        "to_interval('1 hour')!=to_interval('3600 seconds')",
+        &[],
+    );
+    run_ast(
+        file,
         "to_timestamp(-315360000000000)!=to_timestamp(-100)",
         &[],
     );
@@ -163,6 +173,7 @@ fn test_lt(file: &mut impl Write) {
     run_ast(file, "(1, 'b') < (1, 'a')", &[]);
     run_ast(file, "(1, 'a') < (1, 'b')", &[]);
     run_ast(file, "(1, 'a') < (2, 'a')", &[]);
+    run_ast(file, "to_interval('29 days')<to_interval('1 month')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)<to_timestamp(-100)",
@@ -212,6 +223,7 @@ fn test_lte(file: &mut impl Write) {
     run_ast(file, "(1, 'a') <= (1, 'b')", &[]);
     run_ast(file, "(1, 'a') <= (2, 'a')", &[]);
     run_ast(file, "parse_json('null') <= parse_json('null')", &[]);
+    run_ast(file, "to_interval('29 days')<=to_interval('1 month')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)<=to_timestamp(-100)",
@@ -256,6 +268,7 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "(1, 'b') > (1, 'a')", &[]);
     run_ast(file, "(1, 'a') > (1, 'b')", &[]);
     run_ast(file, "(1, 'a') > (2, 'a')", &[]);
+    run_ast(file, "to_interval('29 days')>to_interval('1 month')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)>to_timestamp(-100)",
@@ -311,6 +324,7 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "(1, 'b') >= (1, 'a')", &[]);
     run_ast(file, "(1, 'a') >= (1, 'b')", &[]);
     run_ast(file, "(1, 'a') >= (2, 'a')", &[]);
+    run_ast(file, "to_interval('29 days')>=to_interval('1 month')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)>=to_timestamp(-100)",

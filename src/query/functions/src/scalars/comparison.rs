@@ -28,6 +28,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::GenericType;
+use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberType;
@@ -65,6 +66,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_array_cmp(registry);
     register_tuple_cmp(registry);
     register_like(registry);
+    register_interval_cmp(registry);
 }
 
 pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte", "contains"];
@@ -78,6 +80,39 @@ const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
     has_true: false,
     has_false: true,
 };
+
+fn register_interval_cmp(registry: &mut FunctionRegistry) {
+    registry.register_comparison_2_arg::<IntervalType, IntervalType, _, _>(
+        "eq",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs.cmp(&rhs) == Ordering::Equal,
+    );
+    registry.register_comparison_2_arg::<IntervalType, IntervalType, _, _>(
+        "noteq",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs.cmp(&rhs) != Ordering::Equal,
+    );
+    registry.register_comparison_2_arg::<IntervalType, IntervalType, _, _>(
+        "gt",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs.cmp(&rhs) == Ordering::Greater,
+    );
+    registry.register_comparison_2_arg::<IntervalType, IntervalType, _, _>(
+        "gte",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs.cmp(&rhs) != Ordering::Less,
+    );
+    registry.register_comparison_2_arg::<IntervalType, IntervalType, _, _>(
+        "lt",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs.cmp(&rhs) == Ordering::Less,
+    );
+    registry.register_comparison_2_arg::<IntervalType, IntervalType, _, _>(
+        "lte",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs.cmp(&rhs) != Ordering::Greater,
+    );
+}
 
 fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_comparison_2_arg::<VariantType, VariantType, _, _>(
