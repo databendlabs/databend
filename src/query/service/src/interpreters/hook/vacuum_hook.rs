@@ -47,9 +47,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
         let query_id = query_ctx.get_id();
 
         let abort_checker = query_ctx.clone().get_abort_checker();
-        // TODO: check metric if it is necessary to do vacuum
         let _ = GlobalIORuntime::instance().block_on(async move {
-            query_ctx.unload_spill_meta().await;
             let removed_files = handler
                 .do_vacuum_temporary_files(
                     abort_checker,

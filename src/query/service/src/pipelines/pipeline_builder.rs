@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileLabel;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -97,10 +96,7 @@ impl PipelineBuilder {
         // unload spill metas
         self.main_pipeline
             .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
-                let _ = GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
-                    self.ctx.unload_spill_meta().await;
-                    Ok(())
-                });
+                self.ctx.unload_spill_meta();
                 Ok(())
             }));
 

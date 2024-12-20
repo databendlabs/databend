@@ -35,6 +35,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -427,7 +428,7 @@ impl QueryContext {
         Ok(table)
     }
 
-    pub async fn unload_spill_meta(&self) {
+    pub fn unload_spill_meta(&self) {
         let mut w = self.shared.spilled_files.write();
         let mut remote_spill_files = w
             .iter()
@@ -438,14 +439,13 @@ impl QueryContext {
             })
             .cloned()
             .collect::<Vec<_>>();
-
         w.clear();
 
         if !remote_spill_files.is_empty() {
             let location_prefix = self.query_tenant_spill_prefix();
             let node_idx = self.get_cluster().ordered_index();
             let meta_path = format!("{}/{}_{}.meta", location_prefix, self.get_id(), node_idx);
-
+            let op = DataOperator::instance().operator();
             // append dir and current meta
             remote_spill_files.push(meta_path.clone());
             remote_spill_files.push(format!(
@@ -454,10 +454,11 @@ impl QueryContext {
                 self.get_id(),
                 node_idx
             ));
-
             let joined_contents = remote_spill_files.join("\n");
-            let op = DataOperator::instance().operator();
-            if let Err(e) = op.write(&meta_path, joined_contents).await {
+
+            if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
+                Ok(op.write(&meta_path, joined_contents).await?)
+            }) {
                 log::error!("create spill meta file error: {}", e);
             }
         }

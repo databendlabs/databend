@@ -828,7 +828,7 @@ impl<R: Rows> BoundBlockStream<R> {
         }
 
         let location = block.location.as_ref().unwrap();
-        let data = self.spiller.read_spilled_file(&location).await?;
+        let data = self.spiller.read_spilled_file(location).await?;
         block.data = Some(if block.processed != 0 {
             debug_assert_eq!(block.rows + block.processed, data.num_rows());
             data.slice(block.processed..data.num_rows())
