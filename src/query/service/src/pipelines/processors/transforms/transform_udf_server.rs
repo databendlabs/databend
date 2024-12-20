@@ -209,13 +209,15 @@ impl AsyncTransform for TransformUdfServer {
         if batch_rows < self.request_batch_rows {
             batch_rows = self.request_batch_rows;
         }
+        let mut batch_blocks: Vec<DataBlock> = (0..rows)
+            .step_by(batch_rows)
+            .map(|start| data_block.slice(start..start + batch_rows.min(rows - start)))
+            .collect();
         for func in self.funcs.iter() {
-            let tasks: Vec<_> = (0..rows)
-                .step_by(batch_rows)
-                .map(|start| {
+            let tasks: Vec<_> = batch_blocks
+                .into_iter()
+                .map(|mini_batch| {
                     databend_common_base::runtime::spawn({
-                        let mini_batch =
-                            data_block.slice(start..start + batch_rows.min(rows - start));
                         let ctx = self.ctx.clone();
                         let connect_timeout = self.connect_timeout;
                         let request_timeout = self.request_timeout;
@@ -255,9 +257,9 @@ impl AsyncTransform for TransformUdfServer {
 
             let task_len = tasks.len() as u64;
             record_running_requests_external_start(func.name.clone(), task_len);
-            let blocks = futures::future::join_all(tasks).await;
+            let task_results = futures::future::join_all(tasks).await;
             record_running_requests_external_finish(func.name.clone(), task_len);
-            let blocks: Vec<DataBlock> = blocks
+            batch_blocks = task_results
                 .into_iter()
                 .map(|b| b.unwrap())
                 .map(|b| match b {
@@ -268,9 +270,8 @@ impl AsyncTransform for TransformUdfServer {
                     }
                 })
                 .collect::<Result<Vec<_>>>()?;
-
-            data_block = DataBlock::concat(&blocks)?;
         }
+        data_block = DataBlock::concat(&batch_blocks)?;
         Ok(data_block)
     }
 }
