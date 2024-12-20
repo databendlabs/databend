@@ -96,7 +96,11 @@ pub trait WarehouseApi: Sync + Send {
     ) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.
-    async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>>;
+    async fn list_warehouse_cluster_nodes(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+    ) -> Result<Vec<NodeInfo>>;
 
     async fn get_local_addr(&self) -> Result<Option<String>>;
 

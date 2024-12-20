@@ -1572,7 +1572,11 @@ impl WarehouseApi for WarehouseMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>> {
+    async fn list_warehouse_cluster_nodes(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+    ) -> Result<Vec<NodeInfo>> {
         let cluster_key = format!(
             "{}/{}/{}",
             self.meta_key_prefix,

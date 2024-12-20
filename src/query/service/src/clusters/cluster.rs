@@ -249,7 +249,7 @@ impl ClusterDiscovery {
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self
             .api_provider
-            .get_nodes(&self.cluster_id, &self.cluster_id)
+            .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
             .await
         {
             Err(cause) => {
@@ -326,7 +326,7 @@ impl ClusterDiscovery {
     async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
         let current_nodes_info = match self
             .api_provider
-            .get_nodes(&node_info.warehouse_id, &node_info.cluster_id)
+            .list_warehouse_cluster_nodes(&node_info.warehouse_id, &node_info.cluster_id)
             .await
         {
             Ok(nodes) => nodes,

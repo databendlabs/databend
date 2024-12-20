@@ -134,21 +134,24 @@ async fn test_already_exists_add_self_managed_node() -> Result<()> {
 async fn test_successfully_get_self_managed_nodes() -> Result<()> {
     let (_kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
-    let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
+    let get_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![]);
 
     let node_1 = self_managed_node("node_1");
     warehouse_manager.start_node(node_1.clone()).await?;
 
-    let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
+    let get_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![node_1.clone()]);
 
     let node_2 = self_managed_node("node_2");
     warehouse_manager.start_node(node_2.clone()).await?;
 
-    let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
+    let get_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![node_1, node_2]);
     Ok(())
@@ -161,13 +164,15 @@ async fn test_successfully_drop_self_managed_node() -> Result<()> {
     let node_info = self_managed_node("test_node");
     warehouse_manager.start_node(node_info.clone()).await?;
 
-    let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
+    let get_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![node_info.clone()]);
 
     warehouse_manager.shutdown_node(node_info.id).await?;
 
-    let get_nodes = warehouse_manager.get_nodes("test-cluster-id", "test-cluster-id");
+    let get_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test-cluster-id", "test-cluster-id");
 
     assert_eq!(get_nodes.await?, vec![]);
     Ok(())
@@ -290,7 +295,8 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
         assert_key_seq(&kv, &warehouse_node, MatchSeq::GE(1)).await;
     }
 
-    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "default");
+    let get_warehouse_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test_warehouse", "default");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
@@ -332,7 +338,8 @@ async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> 
 
     create_warehouse.await?;
 
-    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "default");
+    let get_warehouse_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test_warehouse", "default");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
@@ -377,7 +384,8 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
 
     create_warehouse.await?;
 
-    let get_warehouse_nodes = warehouse_manager.get_nodes("test_warehouse", "default");
+    let get_warehouse_nodes =
+        warehouse_manager.list_warehouse_cluster_nodes("test_warehouse", "default");
 
     let warehouse_nodes = get_warehouse_nodes.await?;
 
@@ -675,7 +683,7 @@ async fn test_list_warehouses() -> Result<()> {
 
     // keep show warehouse if all node offline
     let nodes = warehouse_manager
-        .get_nodes("test_warehouse_3", "default")
+        .list_warehouse_cluster_nodes("test_warehouse_3", "default")
         .await?;
     warehouse_manager.shutdown_node(nodes[0].id.clone()).await?;
     assert_eq!(
