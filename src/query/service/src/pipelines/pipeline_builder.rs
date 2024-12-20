@@ -16,12 +16,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileLabel;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
@@ -90,6 +93,16 @@ impl PipelineBuilder {
                 ));
             }
         }
+
+        // unload spill metas
+        self.main_pipeline
+            .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+                let _ = GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
+                    self.ctx.unload_spill_meta().await;
+                    Ok(())
+                });
+                Ok(())
+            }));
 
         Ok(PipelineBuildResult {
             main_pipeline: self.main_pipeline,

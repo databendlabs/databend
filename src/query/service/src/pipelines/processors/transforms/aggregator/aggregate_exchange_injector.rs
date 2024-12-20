@@ -257,14 +257,16 @@ impl ExchangeInjector for AggregateInjector {
         let location_prefix = self.ctx.query_id_spill_prefix();
 
         pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
-                self.ctx.clone(),
-                input,
-                output,
-                operator.clone(),
-                params.clone(),
-                location_prefix.clone(),
-            )))
+            Ok(ProcessorPtr::create(
+                TransformAggregateSpillWriter::try_create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    operator.clone(),
+                    params.clone(),
+                    location_prefix.clone(),
+                )?,
+            ))
         })?;
 
         pipeline.add_transform(|input, output| {
@@ -292,7 +294,7 @@ impl ExchangeInjector for AggregateInjector {
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
-                TransformExchangeAggregateSerializer::create(
+                TransformExchangeAggregateSerializer::try_create(
                     self.ctx.clone(),
                     input,
                     output,
@@ -302,7 +304,7 @@ impl ExchangeInjector for AggregateInjector {
                     compression,
                     schema.clone(),
                     local_pos,
-                ),
+                )?,
             ))
         })?;
 

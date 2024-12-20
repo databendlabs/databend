@@ -33,10 +33,8 @@ use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -156,7 +154,6 @@ pub struct QueryContext {
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
-    spilled_files: Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
 }
 
 impl QueryContext {
@@ -183,7 +180,6 @@ impl QueryContext {
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
             m_cte_temp_table: Arc::new(Default::default()),
-            spilled_files: Arc::new(Default::default()),
         })
     }
 
@@ -319,7 +315,8 @@ impl QueryContext {
         self.shared.set_affect(affect)
     }
 
-    pub fn set_id(&self, id: String) {
+    pub fn update_init_query_id(&self, id: String) {
+        self.shared.spilled_files.write().clear();
         *self.shared.init_query_id.write() = id;
     }
 
@@ -365,7 +362,7 @@ impl QueryContext {
         location: crate::spillers::Location,
         layout: crate::spillers::Layout,
     ) {
-        let mut w = self.spilled_files.write();
+        let mut w = self.shared.spilled_files.write();
         w.insert(location, layout);
     }
 
@@ -373,12 +370,12 @@ impl QueryContext {
         &self,
         location: &crate::spillers::Location,
     ) -> Option<crate::spillers::Layout> {
-        let r = self.spilled_files.read();
+        let r = self.shared.spilled_files.read();
         r.get(location).cloned()
     }
 
     pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
-        let r = self.spilled_files.read();
+        let r = self.shared.spilled_files.read();
         r.keys().cloned().collect()
     }
 
@@ -431,7 +428,7 @@ impl QueryContext {
     }
 
     pub async fn unload_spill_meta(&self) {
-        let mut w = self.spilled_files.write();
+        let mut w = self.shared.spilled_files.write();
         let mut remote_spill_files = w
             .iter()
             .map(|(k, _)| k)
@@ -443,6 +440,7 @@ impl QueryContext {
             .collect::<Vec<_>>();
 
         w.clear();
+
         if !remote_spill_files.is_empty() {
             let location_prefix = self.query_tenant_spill_prefix();
             let node_idx = self.get_cluster().ordered_index();
@@ -1638,23 +1636,6 @@ impl TrySpawn for QueryContext {
 impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
-    }
-}
-
-impl Drop for QueryContext {
-    fn drop(&mut self) {
-        let _ = drop_guard(move || {
-            let mut r = self.spilled_files.read();
-            let is_empty = r.is_empty();
-            drop(r);
-
-            if !is_empty {
-                GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
-                    self.unload_spill_meta().await;
-                    Ok(())
-                });
-            }
-        });
     }
 }
 

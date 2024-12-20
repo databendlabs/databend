@@ -46,8 +46,7 @@ pub enum SpillerType {
     HashJoinProbe,
     Window,
     OrderBy,
-    // Todo: Add more spillers type
-    // Aggregation
+    Aggregation,
 }
 
 impl Display for SpillerType {
@@ -57,6 +56,7 @@ impl Display for SpillerType {
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
             SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
+            SpillerType::Aggregation => write!(f, "Aggregation"),
         }
     }
 }
@@ -167,10 +167,39 @@ impl Spiller {
 
         // Record statistics.
         record_write_profile(&location, &instant, data_size);
-
         let layout = columns_layout.pop().unwrap();
-
         Ok((location, layout))
+    }
+
+    pub fn create_unique_location(&self) -> String {
+        format!("{}/{}", self.location_prefix, GlobalUniqName::unique())
+    }
+
+    pub async fn spill_stream_aggregate_buffer(
+        &self,
+        location: Option<String>,
+        write_data: Vec<Vec<Vec<u8>>>,
+    ) -> Result<(String, usize)> {
+        let mut write_bytes = 0;
+        let location = location
+            .unwrap_or_else(|| format!("{}/{}", self.location_prefix, GlobalUniqName::unique()));
+
+        let mut writer = self
+            .operator
+            .writer_with(&location)
+            .chunk(8 * 1024 * 1024)
+            .await?;
+        for write_bucket_data in write_data.into_iter() {
+            for data in write_bucket_data.into_iter() {
+                write_bytes += data.len();
+                writer.write(data).await?;
+            }
+        }
+
+        writer.close().await?;
+        self.ctx
+            .add_spill_file(Location::Remote(location.clone()), Layout::Aggregate);
+        Ok((location, write_bytes))
     }
 
     #[async_backtrace::framed]
@@ -230,6 +259,7 @@ impl Spiller {
             ..
         } = encoder;
 
+        let layout = columns_layout.last().unwrap().clone();
         let partitions = partition_ids
             .into_iter()
             .zip(
@@ -244,10 +274,10 @@ impl Spiller {
         // Spill data to storage.
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
-
         // Record statistics.
         record_write_profile(&location, &instant, write_bytes);
 
+        self.ctx.add_spill_file(location.clone(), layout);
         Ok(MergedPartition {
             location,
             partitions,
@@ -275,6 +305,7 @@ impl Spiller {
                         debug_assert_eq!(path.size(), layout.iter().sum::<usize>())
                     }
                     Layout::Parquet => {}
+                    Layout::Aggregate => {}
                 }
 
                 match self.local_operator {

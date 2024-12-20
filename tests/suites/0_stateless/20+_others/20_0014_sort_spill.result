@@ -6,7 +6,7 @@
 NULL
 1
 ==Test if the spill is activated==
-3
+1
 ==Enable sort_spilling_bytes_threshold_per_proc==
 1
 0
@@ -40,7 +40,7 @@ NULL	6
 2	5
 1
 ==Test a==
-24
+1
 ==Test b==
 1
 2	NULL
@@ -69,7 +69,7 @@ NULL	NULL
 0
 ==Test d==
 1
-2
+1
 ==Test e==
 1
 2	NULL
@@ -83,8 +83,8 @@ NULL	NULL
 2	5
 ==Test f==
 1
-12
+1
 ==Start to clean==
 0
-110
+184
 0
