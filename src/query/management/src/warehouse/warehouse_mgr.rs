@@ -37,7 +37,7 @@ use databend_common_meta_types::TxnRequest;
 use crate::warehouse::warehouse_api::SelectedNode;
 use crate::warehouse::warehouse_api::SelectedNodes;
 use crate::warehouse::warehouse_api::SystemManagedCluster;
-use crate::warehouse::warehouse_api::SystemManagedInfo;
+use crate::warehouse::warehouse_api::SystemManagedWarehouse;
 use crate::warehouse::warehouse_api::WarehouseInfo;
 use crate::warehouse::WarehouseApi;
 
@@ -745,7 +745,7 @@ impl WarehouseApi for WarehouseMgr {
                 .push(map_condition(&warehouse_key, MatchSeq::Exact(0)));
             txn.if_then.push(TxnOp::put(
                 warehouse_key.clone(),
-                serde_json::to_vec(&WarehouseInfo::SystemManaged(SystemManagedInfo {
+                serde_json::to_vec(&WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                     id: GlobalUniqName::unique(),
                     status: "Running".to_string(),
                     display_name: warehouse.clone(),
@@ -994,7 +994,7 @@ impl WarehouseApi for WarehouseMgr {
                             info.clusters.insert(cluster.clone(), SystemManagedCluster {
                                 nodes: nodes.clone(),
                             });
-                            Ok(WarehouseInfo::SystemManaged(SystemManagedInfo {
+                            Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                                 id: info.id,
                                 status: info.status,
                                 display_name: info.display_name,
@@ -1108,7 +1108,7 @@ impl WarehouseApi for WarehouseMgr {
                             ))),
                             false => {
                                 info.clusters.remove(&cluster);
-                                Ok(WarehouseInfo::SystemManaged(SystemManagedInfo {
+                                Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                                     id: info.id,
                                     status: info.status,
                                     display_name: info.display_name,
@@ -1211,7 +1211,7 @@ impl WarehouseApi for WarehouseMgr {
                     true => {
                         let cluster_info = info.clusters.remove(&cur);
                         info.clusters.insert(to.clone(), cluster_info.unwrap());
-                        Ok(WarehouseInfo::SystemManaged(SystemManagedInfo {
+                        Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                             id: info.id,
                             status: info.status,
                             display_name: info.display_name,
@@ -1366,7 +1366,7 @@ impl WarehouseApi for WarehouseMgr {
                     ))),
                     Some(cluster_info) => {
                         cluster_info.nodes.extend(nodes.clone());
-                        Ok(WarehouseInfo::SystemManaged(SystemManagedInfo {
+                        Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                             id: info.id,
                             status: info.status,
                             display_name: info.display_name,
@@ -1500,7 +1500,7 @@ impl WarehouseApi for WarehouseMgr {
                                 )));
                             }
 
-                            Ok(WarehouseInfo::SystemManaged(SystemManagedInfo {
+                            Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                                 id: info.id,
                                 status: info.status,
                                 display_name: info.display_name,

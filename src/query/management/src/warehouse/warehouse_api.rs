@@ -27,7 +27,7 @@ pub type SelectedNodes = Vec<SelectedNode>;
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub enum WarehouseInfo {
     SelfManaged(String),
-    SystemManaged(SystemManagedInfo),
+    SystemManaged(SystemManagedWarehouse),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
@@ -36,7 +36,7 @@ pub struct SystemManagedCluster {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
-pub struct SystemManagedInfo {
+pub struct SystemManagedWarehouse {
     pub id: String,
     pub status: String,
     pub display_name: String,
