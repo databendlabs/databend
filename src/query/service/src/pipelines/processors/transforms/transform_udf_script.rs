@@ -38,14 +38,13 @@ use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
 use parking_lot::RwLock;
 
-/// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
 #[cfg(feature = "python-udf")]
-static GLOBAL_PYTHON_RUNTIME: std::sync::LazyLock<Arc<RwLock<arrow_udf_python::Runtime>>> =
-    std::sync::LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
+use super::python_udf::GLOBAL_PYTHON_RUNTIME;
 
 pub enum ScriptRuntime {
     JavaScript(Vec<Arc<RwLock<arrow_udf_js::Runtime>>>),
     WebAssembly(Arc<RwLock<arrow_udf_wasm::Runtime>>),
+    #[cfg(feature = "python-udf")]
     Python,
 }
 
@@ -76,7 +75,12 @@ impl ScriptRuntime {
                 Ok(Self::JavaScript(runtimes))
             }
             UDFLanguage::WebAssembly => Self::create_wasm_runtime(code),
+            #[cfg(feature = "python-udf")]
             UDFLanguage::Python => Ok(Self::Python),
+            #[cfg(not(feature = "python-udf"))]
+            UDFLanguage::Python => Err(ErrorCode::EnterpriseFeatureNotEnable(
+                "Failed to create python script udf",
+            )),
         }
     }
 
@@ -125,12 +129,6 @@ impl ScriptRuntime {
                     &func.func_name,
                 )?;
             }
-            #[cfg(not(feature = "python-udf"))]
-            ScriptRuntime::Python => {
-                return Err(ErrorCode::EnterpriseFeatureNotEnable(
-                    "Failed to create python script udf",
-                ));
-            }
             // Ignore the execution for WASM context
             ScriptRuntime::WebAssembly(_) => {}
         }
@@ -166,12 +164,6 @@ impl ScriptRuntime {
                         func.name
                     ))
                 })?
-            }
-            #[cfg(not(feature = "python-udf"))]
-            ScriptRuntime::Python => {
-                return Err(ErrorCode::EnterpriseFeatureNotEnable(
-                    "Failed to execute python script udf",
-                ));
             }
             ScriptRuntime::WebAssembly(runtime) => {
                 let runtime = runtime.read();

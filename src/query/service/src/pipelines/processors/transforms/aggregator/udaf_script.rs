@@ -40,6 +40,9 @@ use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 
+#[cfg(feature = "python-udf")]
+use super::super::python_udf::GLOBAL_PYTHON_RUNTIME;
+
 pub struct AggregateUdfScript {
     display_name: String,
     runtime: UDAFRuntime,
@@ -260,7 +263,31 @@ pub fn create_udaf_script_function(
             UDAFRuntime::JavaScript(pool)
         }
         UDFLanguage::WebAssembly => unimplemented!(),
-        UDFLanguage::Python => unimplemented!(),
+        #[cfg(not(feature = "python-udf"))]
+        UDFLanguage::Python => {
+            return Err(ErrorCode::EnterpriseFeatureNotEnable(
+                "Failed to create python script udf",
+            ));
+        }
+        #[cfg(feature = "python-udf")]
+        UDFLanguage::Python => {
+            let mut runtime = GLOBAL_PYTHON_RUNTIME.write();
+            let code = String::from_utf8(code.to_vec())?;
+            runtime.add_aggregate(
+                &name,
+                ArrowType::Struct(
+                    state_fields
+                        .iter()
+                        .map(|f| f.into())
+                        .collect::<Vec<arrow_schema::Field>>()
+                        .into(),
+                ),
+                ArrowType::from(&output_type),
+                arrow_udf_python::CallMode::CalledOnNullInput,
+                &code,
+            )?;
+            UDAFRuntime::Python(PythonInfo { name, output_type })
+        }
     };
     // check if the runtime is valid
     runtime
@@ -344,14 +371,22 @@ enum UDAFRuntime {
     JavaScript(JsRuntimePool),
     #[expect(unused)]
     WebAssembly,
-    #[expect(unused)]
-    Python,
+    #[cfg(feature = "python-udf")]
+    Python(PythonInfo),
+}
+
+#[cfg(feature = "python-udf")]
+struct PythonInfo {
+    name: String,
+    output_type: DataType,
 }
 
 impl UDAFRuntime {
     fn name(&self) -> &str {
         match self {
             UDAFRuntime::JavaScript(pool) => &pool.name,
+            #[cfg(feature = "python-udf")]
+            UDAFRuntime::Python(info) => &info.name,
             _ => unimplemented!(),
         }
     }
@@ -359,6 +394,8 @@ impl UDAFRuntime {
     fn return_type(&self) -> DataType {
         match self {
             UDAFRuntime::JavaScript(pool) => pool.output_type.clone(),
+            #[cfg(feature = "python-udf")]
+            UDAFRuntime::Python(info) => info.output_type.clone(),
             _ => unimplemented!(),
         }
     }
@@ -366,6 +403,11 @@ impl UDAFRuntime {
     fn create_state(&self) -> anyhow::Result<UdfAggState> {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| runtime.create_state(&pool.name)),
+            #[cfg(feature = "python-udf")]
+            UDAFRuntime::Python(info) => {
+                let runtime = GLOBAL_PYTHON_RUNTIME.read();
+                runtime.create_state(&info.name)
+            }
             _ => unimplemented!(),
         }?;
         Ok(UdfAggState(state))
@@ -376,6 +418,11 @@ impl UDAFRuntime {
             UDAFRuntime::JavaScript(pool) => {
                 pool.call(|runtime| runtime.accumulate(&pool.name, &state.0, input))
             }
+            #[cfg(feature = "python-udf")]
+            UDAFRuntime::Python(info) => {
+                let runtime = GLOBAL_PYTHON_RUNTIME.read();
+                runtime.accumulate(&info.name, &state.0, input)
+            }
             _ => unimplemented!(),
         }?;
         Ok(UdfAggState(state))
@@ -384,6 +431,11 @@ impl UDAFRuntime {
     fn merge(&self, states: &Arc<dyn Array>) -> anyhow::Result<UdfAggState> {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| runtime.merge(&pool.name, states)),
+            #[cfg(feature = "python-udf")]
+            UDAFRuntime::Python(info) => {
+                let runtime = GLOBAL_PYTHON_RUNTIME.read();
+                runtime.merge(&info.name, states)
+            }
             _ => unimplemented!(),
         }?;
         Ok(UdfAggState(state))
@@ -393,6 +445,11 @@ impl UDAFRuntime {
         match self {
             UDAFRuntime::JavaScript(pool) => {
                 pool.call(|runtime| runtime.finish(&pool.name, &state.0))
+            }
+            #[cfg(feature = "python-udf")]
+            UDAFRuntime::Python(info) => {
+                let runtime = GLOBAL_PYTHON_RUNTIME.read();
+                runtime.finish(&info.name, &state.0)
             }
             _ => unimplemented!(),
         }
@@ -484,6 +541,64 @@ export function finish(state) {
         ));
 
         assert_eq!(&want, &state);
+        Ok(())
+    }
+
+    #[cfg(feature = "python-udf")]
+    #[test]
+    fn test_python_runtime() -> Result<()> {
+        use databend_common_expression::types::Int32Type;
+
+        let code = Vec::from(
+            r#"
+class State:
+    def __init__(self):
+        self.sum = 0
+        self.weight = 0
+
+def create_state():
+    return State()
+
+def accumulate(state, value, weight):
+    state.sum += value * weight
+    state.weight += weight
+    return state
+
+def merge(state1, state2):
+    state1.sum += state2.sum
+    state1.weight += state2.weight
+    return state1
+
+def finish(state):
+    if state.weight == 0:
+        return None
+    else:
+        return state.sum / state.weight
+"#,
+        )
+        .into_boxed_slice();
+
+        let script = UDFScriptCode {
+            language: UDFLanguage::Python,
+            code: code.into(),
+            runtime_version: "3.12".to_string(),
+        };
+        let name = "test".to_string();
+        let display_name = "test".to_string();
+        let state_fields = vec![
+            DataField::new("sum", Int32Type::data_type()),
+            DataField::new("weight", Int32Type::data_type()),
+        ];
+        let arguments = vec![DataField::new("value", Int32Type::data_type())];
+        let output_type = Float32Type::data_type();
+        create_udaf_script_function(
+            &script,
+            name,
+            display_name,
+            state_fields,
+            arguments,
+            output_type,
+        )?;
         Ok(())
     }
 }
