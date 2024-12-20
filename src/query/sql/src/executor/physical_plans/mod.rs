@@ -67,7 +67,6 @@ pub use physical_async_func::AsyncFunctionDesc;
 pub use physical_cache_scan::CacheScan;
 pub use physical_column_mutation::ColumnMutation;
 pub use physical_commit_sink::CommitSink;
-pub use physical_commit_sink::ReclusterInfoSideCar;
 pub use physical_compact_source::CompactSource;
 pub use physical_constant_table_scan::ConstantTableScan;
 pub use physical_copy_into_location::CopyIntoLocation;

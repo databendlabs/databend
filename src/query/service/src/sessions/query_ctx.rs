@@ -110,6 +110,7 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
@@ -151,6 +152,7 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    target_segments: Arc<RwLock<Vec<Arc<CompactSegmentInfo>>>>,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -177,9 +179,10 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
-            block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
-            m_cte_temp_table: Arc::new(Default::default()),
+            inserted_segment_locs: Default::default(),
+            block_threshold: Default::default(),
+            m_cte_temp_table: Default::default(),
+            target_segments: Default::default(),
         })
     }
 
@@ -1067,25 +1070,37 @@ impl TableContext for QueryContext {
         })
     }
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
+    fn add_inserted_segment_location(&self, segment_loc: Location) -> Result<()> {
         let mut segment_locations = self.inserted_segment_locs.write();
         segment_locations.insert(segment_loc);
         Ok(())
     }
 
-    fn clear_segment_locations(&self) -> Result<()> {
+    fn clear_inserted_segment_locations(&self) -> Result<()> {
         let mut segment_locations = self.inserted_segment_locs.write();
         segment_locations.clear();
         Ok(())
     }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_inserted_segment_locations(&self) -> Result<Vec<Location>> {
         Ok(self
             .inserted_segment_locs
             .read()
             .iter()
             .cloned()
             .collect::<Vec<_>>())
+    }
+
+    fn add_target_segment(&self, segment: Arc<CompactSegmentInfo>) {
+        self.target_segments.write().push(segment);
+    }
+
+    fn get_target_segments(&self) -> Vec<Arc<CompactSegmentInfo>> {
+        self.target_segments.read().clone()
+    }
+
+    fn clear_target_segments(&self) {
+        self.target_segments.write().clear();
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {

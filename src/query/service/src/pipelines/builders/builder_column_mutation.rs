@@ -47,7 +47,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(&column_mutation.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
-        if column_mutation.mutation_type == MutationType::Delete {
+        if matches!(column_mutation.mutation_kind, MutationKind::Delete) {
             let cluster_stats_gen = table.get_cluster_stats_gen(
                 self.ctx.clone(),
                 0,
@@ -80,7 +80,7 @@ impl PipelineBuilder {
                     output,
                     table,
                     cluster_stats_gen.clone(),
-                    MutationKind::Update,
+                    column_mutation.mutation_kind,
                 )?;
                 proc.into_processor()
             })?;

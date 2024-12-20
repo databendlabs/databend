@@ -52,6 +52,7 @@ use crate::aggregates::aggregate_quantile_cont_function_desc;
 use crate::aggregates::aggregate_quantile_disc_function_desc;
 use crate::aggregates::aggregate_quantile_tdigest_function_desc;
 use crate::aggregates::aggregate_quantile_tdigest_weighted_function_desc;
+use crate::aggregates::aggregate_range_bound_function_desc;
 use crate::aggregates::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_skewness_function_desc;
 use crate::aggregates::aggregate_st_collect_function_desc;
@@ -118,6 +119,8 @@ impl Aggregators {
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());
+
+        factory.register("range_bound", aggregate_range_bound_function_desc());
 
         factory.register(
             "bitmap_and_count",

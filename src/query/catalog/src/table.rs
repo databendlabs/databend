@@ -14,20 +14,25 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -37,9 +42,12 @@ use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
@@ -117,8 +125,40 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        vec![]
+    fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        None
+    }
+
+    fn cluster_type(&self) -> Option<ClusterType> {
+        self.cluster_key_meta()?;
+        let cluster_type = self
+            .options()
+            .get(OPT_KEY_CLUSTER_TYPE)
+            .and_then(|s| s.parse::<ClusterType>().ok())
+            .unwrap_or(ClusterType::Linear);
+        Some(cluster_type)
+    }
+
+    fn resolve_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Option<Vec<Expr>> {
+        let Some((_, cluster_key_str)) = &self.cluster_key_meta() else {
+            return None;
+        };
+        let tokens = tokenize_sql(cluster_key_str).unwrap();
+        let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect).unwrap();
+        // unwrap tuple.
+        if ast_exprs.len() == 1 {
+            if let Expr::Tuple { exprs, .. } = &ast_exprs[0] {
+                ast_exprs = exprs.clone();
+            }
+        } else {
+            // Defensive check:
+            // `ast_exprs` should always contain one element which can be one of the following:
+            // 1. A tuple of composite cluster keys
+            // 2. A single cluster key
+            unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+        }
+        Some(ast_exprs)
     }
 
     fn change_tracking_enabled(&self) -> bool {
@@ -583,11 +623,6 @@ pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
 }
-
-use std::collections::HashMap;
-
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::UnknownTableId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {
