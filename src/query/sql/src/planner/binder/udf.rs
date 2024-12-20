@@ -87,9 +87,9 @@ impl Binder {
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, true)?));
+                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, false)?));
                 }
-                let return_type = DataType::from(&resolve_type_name(return_type, true)?);
+                let return_type = DataType::from(&resolve_type_name(return_type, false)?);
 
                 let mut client = UDFFlightClient::connect(
                     address,
@@ -241,12 +241,11 @@ fn create_udf_definition_script(
     language: &str,
     code: &str,
 ) -> Result<PlanUDFDefinition> {
-    let language = language.trim().to_lowercase();
-    if language.parse::<UDFLanguage>().is_err() {
+    let Ok(language) = language.parse::<UDFLanguage>() else {
         return Err(ErrorCode::InvalidArgument(format!(
             "Unallowed UDF language {language:?}, must be python, javascript or wasm"
         )));
-    }
+    };
 
     let arg_types = arg_types
         .iter()
@@ -256,7 +255,7 @@ fn create_udf_definition_script(
     let return_type = DataType::from(&resolve_type_name(return_type, false)?);
 
     let mut runtime_version = runtime_version.to_string();
-    if runtime_version.is_empty() && language == "python" {
+    if runtime_version.is_empty() && language == UDFLanguage::Python {
         runtime_version = "3.12.2".to_string();
     }
 
@@ -287,7 +286,7 @@ fn create_udf_definition_script(
                 arg_types,
                 state_fields,
                 return_type,
-                language,
+                language: language.to_string(),
                 runtime_version,
             }))
         }
@@ -296,7 +295,7 @@ fn create_udf_definition_script(
             arg_types,
             return_type,
             handler: handler.to_string(),
-            language,
+            language: language.to_string(),
             runtime_version,
         })),
     }

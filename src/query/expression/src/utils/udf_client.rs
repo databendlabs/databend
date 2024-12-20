@@ -199,8 +199,13 @@ impl UDFFlightClient {
             .collect::<Vec<_>>();
         if expect_arg_types != arg_types {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF arg types mismatch, actual arg types: ({:?})",
+                "UDF arg types mismatch, expected arg types: ({:?}), actual arg types: ({:?})",
                 expect_arg_types
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                arg_types
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()

@@ -834,7 +834,7 @@ impl FromStr for UDFLanguage {
     type Err = ErrorCode;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s {
+        match s.trim().to_lowercase().as_str() {
             "javascript" => Ok(Self::JavaScript),
             "wasm" => Ok(Self::WebAssembly),
             "python" => Ok(Self::Python),
