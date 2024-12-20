@@ -50,7 +50,7 @@ pub struct TransformUdfServer {
     // request batch rows is used to split the block into smaller blocks and improve concurrency performance.
     request_batch_rows: usize,
     // request numbers is used to control the total number of concurrent runtimes,
-    // to avoid the case of too many concurrent connections due to the small batch rows.
+    // to avoid the case of too many flight connections due to the small batch rows.
     request_numbers: usize,
     retry_times: usize,
 }
@@ -205,7 +205,7 @@ impl AsyncTransform for TransformUdfServer {
             let rows = data_block.num_rows();
             // Use block row numbers and request numbers to calculate the number of rows for each runtime.
             // In each runtime, the block is splitted by the batch rows and call the udf server
-            // serially, so the flight connection is reused.
+            // serially, so that the flight connection can be reused.
             let mut batch_rows = rows / self.request_numbers;
             if batch_rows < self.request_batch_rows {
                 batch_rows = self.request_batch_rows;
