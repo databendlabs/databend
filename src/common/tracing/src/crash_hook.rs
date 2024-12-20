@@ -450,25 +450,46 @@ impl SignalListener {
                     pos = new_pos;
                 }
 
+                let id = std::process::id();
+                let signal_mess = signal_message(sig, si_code, si_addr as usize);
                 let stack_trace = StackTrace::from_ips(&frames);
 
-                eprintln!("{:#^80}", " Crash fault info ");
-                eprintln!("PID: {}", std::process::id());
-                eprintln!("Version: {}", crash_version);
-                eprintln!("Timestamp(UTC): {}", chrono::Utc::now());
-                eprintln!("Timestamp(Local): {}", chrono::Local::now());
-                eprintln!("QueryId: {:?}", crash_query_id);
-                eprintln!("{}", signal_message(sig, si_code, si_addr as usize));
-                eprintln!("Backtrace:\n {:?}", stack_trace);
-
-                log::error!("{:#^80}", " Crash fault info ");
-                log::error!("PID: {}", std::process::id());
-                log::error!("Version: {}", crash_version);
-                log::error!("Timestamp(UTC): {}", chrono::Utc::now());
-                log::error!("Timestamp(Local): {}", chrono::Local::now());
-                log::error!("QueryId: {:?}", crash_query_id);
-                log::error!("{}", signal_message(sig, si_code, si_addr as usize));
-                log::error!("Backtrace:\n {:?}", stack_trace);
+                eprintln!(
+                    "{:#^80}\n\
+                    PID: {}\n\
+                    Version: {}\n\
+                    Timestamp(UTC): {}\n\
+                    Timestamp(Local): {}\n\
+                    QueryId: {:?}\n\
+                    Signal Message: {}\n\
+                    Backtrace:\n{:?}",
+                    " Crash fault info ",
+                    id,
+                    crash_version,
+                    chrono::Utc::now(),
+                    chrono::Local::now(),
+                    crash_query_id,
+                    signal_mess,
+                    stack_trace
+                );
+                log::error!(
+                    "{:#^80}\n\
+                    PID: {}\n\
+                    Version: {}\n\
+                    Timestamp(UTC): {}\n\
+                    Timestamp(Local): {}\n\
+                    QueryId: {:?}\n\
+                    Signal Message: {}\n\
+                    Backtrace:\n{:?}",
+                    " Crash fault info ",
+                    id,
+                    crash_version,
+                    chrono::Utc::now(),
+                    chrono::Local::now(),
+                    crash_query_id,
+                    signal_mess,
+                    stack_trace
+                );
             }
         });
     }

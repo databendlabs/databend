@@ -35,7 +35,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -1476,10 +1475,6 @@ impl TableContext for QueryContext {
                 .is_temp_table(database_name, table_name)
     }
 
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
-    }
-
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         self.m_cte_temp_table
             .write()
@@ -1515,6 +1510,39 @@ impl TableContext for QueryContext {
         let mut m_cte_temp_table = self.m_cte_temp_table.write();
         m_cte_temp_table.clear();
         Ok(())
+    }
+
+    fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
+        let mut streams = self.shared.streams_refs.write();
+        let stream_key = (
+            catalog.to_string(),
+            database.to_string(),
+            stream.to_string(),
+        );
+        streams
+            .entry(stream_key)
+            .and_modify(|v| {
+                if consume {
+                    *v = true;
+                }
+            })
+            .or_insert(consume);
+    }
+
+    fn get_consume_streams(&self, query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        let streams_refs = self.shared.streams_refs.read();
+        let tables = self.shared.tables_refs.lock();
+        let mut streams_meta = Vec::with_capacity(streams_refs.len());
+        for (stream_key, consume) in streams_refs.iter() {
+            if query && !consume {
+                continue;
+            }
+            let stream = tables
+                .get(stream_key)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            streams_meta.push(stream.clone());
+        }
+        Ok(streams_meta)
     }
 }
 

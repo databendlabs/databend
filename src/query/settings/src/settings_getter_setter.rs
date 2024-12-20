@@ -26,6 +26,7 @@ use crate::ChangeValue;
 use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 use crate::SettingMode;
+use crate::SettingScope;
 
 #[derive(Clone, Copy)]
 pub enum FlightCompression {
@@ -104,6 +105,7 @@ impl Settings {
 
     fn try_set_u64(&self, key: &str, val: u64) -> Result<()> {
         DefaultSettings::check_setting_mode(key, SettingMode::Write)?;
+        DefaultSettings::check_setting_scope(key, SettingScope::Session)?;
 
         unsafe { self.unchecked_try_set_u64(key, val) }
     }
@@ -147,6 +149,7 @@ impl Settings {
 
     pub fn set_setting(&self, k: String, v: String) -> Result<()> {
         DefaultSettings::check_setting_mode(&k, SettingMode::Write)?;
+        DefaultSettings::check_setting_scope(&k, SettingScope::Session)?;
 
         unsafe { self.unchecked_set_setting(k, v) }
     }
@@ -500,10 +503,6 @@ impl Settings {
         self.try_get_u64("lazy_read_threshold")
     }
 
-    pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
-        self.try_set_u64("parquet_fast_read_bytes", value)
-    }
-
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
     }
@@ -531,11 +530,6 @@ impl Settings {
     /// # Safety
     pub unsafe fn get_enterprise_license(&self) -> Result<String> {
         self.unchecked_try_get_string("enterprise_license")
-    }
-
-    /// # Safety
-    pub unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
-        self.unchecked_set_setting("enterprise_license".to_string(), val)
     }
 
     /// # Safety
@@ -840,5 +834,9 @@ impl Settings {
 
     pub fn get_flight_retry_interval(&self) -> Result<u64> {
         self.try_get_u64("flight_connection_retry_interval")
+    }
+
+    pub fn get_network_policy(&self) -> Result<String> {
+        self.try_get_string("network_policy")
     }
 }

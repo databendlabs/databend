@@ -78,7 +78,7 @@ impl CopyIntoTableInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),

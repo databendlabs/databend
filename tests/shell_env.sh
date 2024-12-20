@@ -14,6 +14,8 @@ export QUERY_CLICKHOUSE_HTTP_HANDLER_PORT=${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT:=
 
 
 export BENDSQL_CLIENT_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export BENDSQL_CLIENT_OUTPUT_NULL="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never --output null"
+
 
 # share client
 export QUERY_MYSQL_HANDLER_SHARE_PROVIDER_PORT="18000"

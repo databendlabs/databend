@@ -267,7 +267,7 @@ defer = "0.2"
 deltalake = "0.21"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
-dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "de0a15b" }
+dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
 educe = "0.4" # FIXME: failed to upgrade to educe 0.6
 either = "1.9"

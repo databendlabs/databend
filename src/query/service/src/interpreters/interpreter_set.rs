@@ -84,6 +84,16 @@ impl SetInterpreter {
                         .await?;
                     true
                 }
+                "network_policy" => {
+                    // check if the network policy exists
+                    let tenant = self.ctx.get_tenant();
+                    let _ = UserApiProvider::instance()
+                        .get_network_policy(&tenant, scalar)
+                        .await?;
+                    self.set_settings(var.to_string(), scalar.clone(), is_global)
+                        .await?;
+                    true
+                }
                 // TODO: if account_admin is built-in meta in future, we need process set sandbox_tenant in there.
                 // Like: https://github.com/datafuselabs/databend/pull/14451/files#diff-a26c9dfc9c0a37f5efa19e2b16006732b9023f42ee47cbe37fe461fb46b9dfc0R82-R85
                 "sandbox_tenant" => {

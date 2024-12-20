@@ -543,3 +543,18 @@ drop table products
 
 statement ok
 drop table sales
+
+statement ok
+create or replace table t1(a int, b int);
+
+statement ok
+create or replace table t2(a int, b int);
+
+statement ok
+CREATE or replace TABLE t3 AS with x as MATERIALIZED (select t1.a as t1_a, t2.a as t2_a from t1 inner join t2 on t1.a = t2.a) (select * from (select * from x));
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;

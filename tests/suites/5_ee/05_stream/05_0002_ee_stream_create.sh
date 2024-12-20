@@ -6,10 +6,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "drop database if exists db_stream" | $BENDSQL_CLIENT_CONNECT
 echo "create database db_stream" | $BENDSQL_CLIENT_CONNECT
 echo "create table db_stream.base(a int)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_stream.base values(1)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db_stream.base values(1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "alter table db_stream.base set options(change_tracking = true)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_stream.base values(2)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_stream.base values(3)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db_stream.base values(2)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "insert into db_stream.base values(3)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 BASE_ROW_ID=$(echo "select _base_row_id from db_stream.base where a = 3" | $BENDSQL_CLIENT_CONNECT)
 
