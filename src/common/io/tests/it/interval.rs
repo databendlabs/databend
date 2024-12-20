@@ -76,7 +76,7 @@ fn test_interval_from_string() {
 }
 
 #[test]
-fn test_string_to_interval() {
+fn test_interval_to_string() {
     let tests = vec![
         (
             Interval {
@@ -141,6 +141,14 @@ fn test_string_to_interval() {
                 micros: 5025000000,
             },
             "-1 day 1:23:45",
+        ),
+        (
+            Interval {
+                months: 0,
+                days: -225,
+                micros: -52550000000,
+            },
+            "-225 days -14:35:50",
         ),
         (
             Interval {
