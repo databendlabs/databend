@@ -31,14 +31,17 @@ pub enum WarehouseInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+pub struct SystemManagedCluster {
+    pub nodes: Vec<SelectedNode>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct SystemManagedInfo {
     pub id: String,
     pub status: String,
     pub display_name: String,
-    pub clusters: HashMap<String, Vec<SelectedNode>>,
+    pub clusters: HashMap<String, SystemManagedCluster>,
 }
-
-pub type RemoveNodes = Vec<Option<String>>;
 
 /// Databend-query cluster management API
 #[async_trait::async_trait]
@@ -59,10 +62,27 @@ pub trait WarehouseApi: Sync + Send {
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
 
     async fn rename_warehouse(&self, cur: String, to: String) -> Result<()>;
+    // async fn list_warehouse_nodes(&self, warehouse: String) -> Result<()>;
+    //
+    async fn add_warehouse_cluster(
+        &self,
+        warehouse: String,
+        cluster: String,
+        nodes: SelectedNodes,
+    ) -> Result<()>;
 
-    async fn add_node(&self, warehouse: &str, cluster: &str, added: SelectedNodes) -> Result<()>;
+    async fn drop_warehouse_cluster(&self, warehouse: String, cluster: String) -> Result<()>;
 
-    async fn remove_node(&self, warehouse: &str, cluster: &str, added: RemoveNodes) -> Result<()>;
+    async fn rename_warehouse_cluster(
+        &self,
+        warehouse: String,
+        cur: String,
+        to: String,
+    ) -> Result<()>;
+
+    // async fn add_warehouse_cluster_node(&self, warehouse: &str, cluster: &str, added: SelectedNodes) -> Result<()>;
+    //
+    // async fn remove_warehouse_cluster_node(&self, warehouse: &str, cluster: &str, added: RemoveNodes) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>>;

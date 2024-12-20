@@ -603,7 +603,9 @@ async fn test_list_warehouses() -> Result<()> {
     assert_eq!(system_managed_info.display_name, "test_warehouse_1");
     assert_eq!(
         system_managed_info.clusters,
-        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+        HashMap::from([(String::from("default"), SystemManagedCluster {
+            nodes: vec![SelectedNode::Random(None)]
+        })])
     );
 
     let self_managed_node_2 = GlobalUniqName::unique();
@@ -643,7 +645,9 @@ async fn test_list_warehouses() -> Result<()> {
     assert_eq!(system_managed_info.display_name, "test_warehouse_3");
     assert_eq!(
         system_managed_info.clusters,
-        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+        HashMap::from([(String::from("default"), SystemManagedCluster {
+            nodes: vec![SelectedNode::Random(None)]
+        })])
     );
 
     warehouse_manager.shutdown_node(self_managed_node_1).await?;
@@ -691,6 +695,16 @@ async fn test_list_warehouses() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_rename_not_exists_warehouses() -> Result<()> {
+    let (_, warehouse_manager, _) = nodes(Duration::from_mins(30), 1).await?;
+    let rename_warehouse =
+        warehouse_manager.rename_warehouse(String::from("test_warehouse"), String::from("aa"));
+
+    assert_eq!(rename_warehouse.await.unwrap_err().code(), 2406);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rename_warehouses() -> Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 1).await?;
 
@@ -732,7 +746,9 @@ async fn test_rename_warehouses() -> Result<()> {
     assert_eq!(system_managed_info.display_name, "test_warehouse");
     assert_eq!(
         system_managed_info.clusters,
-        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+        HashMap::from([(String::from("default"), SystemManagedCluster {
+            nodes: vec![SelectedNode::Random(None)]
+        })])
     );
 
     let rename_warehouse = warehouse_manager.rename_warehouse(
@@ -755,7 +771,9 @@ async fn test_rename_warehouses() -> Result<()> {
     assert_eq!(system_managed_info.display_name, "new_test_warehouse");
     assert_eq!(
         system_managed_info.clusters,
-        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+        HashMap::from([(String::from("default"), SystemManagedCluster {
+            nodes: vec![SelectedNode::Random(None)]
+        })])
     );
 
     let system_managed_node_2 = GlobalUniqName::unique();
@@ -782,7 +800,9 @@ async fn test_rename_warehouses() -> Result<()> {
     assert_eq!(system_managed_info.display_name, "test_warehouse");
     assert_eq!(
         system_managed_info.clusters,
-        HashMap::from([(String::from("default"), vec![SelectedNode::Random(None)])])
+        HashMap::from([(String::from("default"), SystemManagedCluster {
+            nodes: vec![SelectedNode::Random(None)]
+        })])
     );
 
     let rename_warehouse = warehouse_manager.rename_warehouse(
