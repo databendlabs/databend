@@ -31,9 +31,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
-use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
+use databend_common_sql::plans::UDFLanguage;
+use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
 use parking_lot::RwLock;
 
@@ -66,9 +67,8 @@ impl ScriptRuntime {
                                 Arc::new(RwLock::new(runtime))
                             })
                             .map_err(|err| {
-                                ErrorCode::UDFDataError(format!(
-                                    "Cannot create js runtime: {}",
-                                    err
+                                ErrorCode::UDFRuntimeError(format!(
+                                    "Cannot create js runtime: {err}",
                                 ))
                             })
                     })
@@ -85,7 +85,7 @@ impl ScriptRuntime {
             .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
 
         let runtime = arrow_udf_wasm::Runtime::new(decoded_code_blob).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Failed to create WASM runtime for module: {}", err))
+            ErrorCode::UDFRuntimeError(format!("Failed to create WASM runtime for module: {err}"))
         })?;
 
         Ok(ScriptRuntime::WebAssembly(Arc::new(RwLock::new(runtime))))
@@ -151,9 +151,9 @@ impl ScriptRuntime {
                 let runtime = &runtimes[idx];
                 let runtime = runtime.read();
                 runtime.call(&func.name, input_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "JavaScript UDF '{}' execution failed: {}",
-                        func.name, err
+                    ErrorCode::UDFRuntimeError(format!(
+                        "JavaScript UDF {:?} execution failed: {err}",
+                        func.name
                     ))
                 })?
             }
@@ -161,9 +161,9 @@ impl ScriptRuntime {
             ScriptRuntime::Python => {
                 let runtime = GLOBAL_PYTHON_RUNTIME.read();
                 runtime.call(&func.name, input_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "Python UDF '{}' execution failed: {}",
-                        func.name, err
+                    ErrorCode::UDFRuntimeError(format!(
+                        "Python UDF {:?} execution failed: {err}",
+                        func.name
                     ))
                 })?
             }
@@ -176,9 +176,9 @@ impl ScriptRuntime {
             ScriptRuntime::WebAssembly(runtime) => {
                 let runtime = runtime.read();
                 runtime.call(&func.func_name, input_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "WASM UDF '{}' execution failed: {}",
-                        func.func_name, err
+                    ErrorCode::UDFRuntimeError(format!(
+                        "WASM UDF {:?} execution failed: {err}",
+                        func.func_name
                     ))
                 })?
             }
@@ -232,7 +232,7 @@ impl Transform for TransformUdfScript {
                 self.update_datablock(func, result_batch, &mut data_block)?;
             } else {
                 return Err(ErrorCode::UDFDataError(format!(
-                    "Failed to find runtime for function '{}' with key: {}",
+                    "Failed to find runtime for function {:?} with key: {:?}",
                     func.name, runtime_key
                 )));
             }
@@ -244,10 +244,10 @@ impl Transform for TransformUdfScript {
 impl TransformUdfScript {
     fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String> {
         let (lang, func_name) = match &func.udf_type {
-            UDFType::Script((lang, _, _)) => (lang, &func.func_name),
+            UDFType::Script(UDFScriptCode { language: lang, .. }) => (lang, &func.func_name),
             _ => {
                 return Err(ErrorCode::UDFDataError(format!(
-                    "Unsupported UDFType variant for function '{}'",
+                    "Unsupported UDFType variant for function {:?}",
                     func.name
                 )));
             }
@@ -266,7 +266,9 @@ impl TransformUdfScript {
         let start = std::time::Instant::now();
         for func in funcs {
             let (&lang, code_opt) = match &func.udf_type {
-                UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref().as_ref())),
+                UDFType::Script(UDFScriptCode { language, code, .. }) => {
+                    (language, Some(code.as_ref().as_ref()))
+                }
                 _ => continue,
             };
 
@@ -278,16 +280,15 @@ impl TransformUdfScript {
                         .map(Arc::new)
                         .map_err(|err| {
                             ErrorCode::UDFDataError(format!(
-                                "Failed to create UDF runtime for language '{}' with error: {}",
-                                lang, err
+                                "Failed to create UDF runtime for language {lang:?} with error: {err}",
                             ))
                         })?;
                     entry.insert(new_runtime).clone()
                 }
             };
 
-            if let UDFType::Script((_, _, code)) = &func.udf_type {
-                runtime.add_function_with_handler(func, code)?;
+            if let UDFType::Script(UDFScriptCode { code, .. }) = &func.udf_type {
+                runtime.add_function_with_handler(func, code.as_ref().as_ref())?;
             }
         }
 

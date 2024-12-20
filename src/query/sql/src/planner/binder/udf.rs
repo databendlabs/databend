@@ -29,7 +29,6 @@ use databend_common_expression::DataField;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
-use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -42,6 +41,7 @@ use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
+use crate::plans::UDFLanguage;
 use crate::BindContext;
 use crate::Binder;
 use crate::UdfRewriter;
@@ -241,11 +241,12 @@ fn create_udf_definition_script(
     language: &str,
     code: &str,
 ) -> Result<PlanUDFDefinition> {
-    let Some(language) = language.parse().ok() else {
+    let language = language.trim().to_lowercase();
+    if language.parse::<UDFLanguage>().is_err() {
         return Err(ErrorCode::InvalidArgument(format!(
-            "Unallowed UDF language '{language}', must be python, javascript or wasm"
+            "Unallowed UDF language {language:?}, must be python, javascript or wasm"
         )));
-    };
+    }
 
     let arg_types = arg_types
         .iter()
@@ -255,7 +256,7 @@ fn create_udf_definition_script(
     let return_type = DataType::from(&resolve_type_name(return_type, false)?);
 
     let mut runtime_version = runtime_version.to_string();
-    if runtime_version.is_empty() && language == UDFLanguage::Python {
+    if runtime_version.is_empty() && language == "python" {
         runtime_version = "3.12.2".to_string();
     }
 

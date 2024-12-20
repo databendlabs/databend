@@ -14,46 +14,11 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
-
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum UDFLanguage {
-    JavaScript,
-    WebAssembly,
-    Python,
-}
-
-impl FromStr for UDFLanguage {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "javascript" => Ok(Self::JavaScript),
-            "wasm" => Ok(Self::WebAssembly),
-            "python" => Ok(Self::Python),
-            _ => Err(ErrorCode::BadArguments(format!(
-                "Unsupported script language: {s}"
-            ))),
-        }
-    }
-}
-
-impl Display for UDFLanguage {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            UDFLanguage::JavaScript => write!(f, "javascript"),
-            UDFLanguage::WebAssembly => write!(f, "wasm"),
-            UDFLanguage::Python => write!(f, "python"),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
@@ -74,7 +39,7 @@ pub struct UDFServer {
 pub struct UDFScript {
     pub code: String,
     pub handler: String,
-    pub language: UDFLanguage,
+    pub language: String,
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
     pub runtime_version: String,
@@ -83,7 +48,7 @@ pub struct UDFScript {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDAFScript {
     pub code: String,
-    pub language: UDFLanguage,
+    pub language: String,
     pub arg_types: Vec<DataType>,
     pub state_fields: Vec<DataField>,
     pub return_type: DataType,
@@ -151,7 +116,7 @@ impl UserDefinedFunction {
         name: &str,
         code: &str,
         handler: &str,
-        language: UDFLanguage,
+        language: &str,
         arg_types: Vec<DataType>,
         return_type: DataType,
         runtime_version: &str,
@@ -163,7 +128,7 @@ impl UserDefinedFunction {
             definition: UDFDefinition::UDFScript(UDFScript {
                 code: code.to_string(),
                 handler: handler.to_string(),
-                language,
+                language: language.to_string(),
                 arg_types,
                 return_type,
                 runtime_version: runtime_version.to_string(),

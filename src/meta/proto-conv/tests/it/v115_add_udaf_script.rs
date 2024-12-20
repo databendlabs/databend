@@ -19,7 +19,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
-use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use fastrace::func_name;
@@ -54,7 +53,7 @@ fn test_decode_v115_add_udaf_script() -> anyhow::Result<()> {
         description: "This is a description".to_string(),
         definition: UDFDefinition::UDAFScript(UDAFScript {
             code: "some code".to_string(),
-            language: UDFLanguage::JavaScript,
+            language: "javascript".to_string(),
             arg_types: vec![DataType::Number(NumberDataType::Int32)],
             state_fields: vec![DataField::new(
                 "sum",
@@ -88,7 +87,7 @@ fn test_decode_udf_script() -> anyhow::Result<()> {
         definition: UDFDefinition::UDFScript(UDFScript {
             code: "some code".to_string(),
             handler: "my_fn".to_string(),
-            language: UDFLanguage::Python,
+            language: "python".to_string(),
             arg_types: vec![DataType::Number(NumberDataType::Int32)],
             return_type: DataType::Number(NumberDataType::Float32),
             runtime_version: "3.12.2".to_string(),

@@ -21,7 +21,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;
-use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -225,7 +224,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
         "strlen2",
         "testcode",
         "strlen_py",
-        UDFLanguage::JavaScript,
+        "python",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "3.12.0",

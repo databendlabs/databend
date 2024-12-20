@@ -97,7 +97,6 @@ pub use user_defined_file_format::UserDefinedFileFormat;
 pub use user_defined_function::LambdaUDF;
 pub use user_defined_function::UDAFScript;
 pub use user_defined_function::UDFDefinition;
-pub use user_defined_function::UDFLanguage;
 pub use user_defined_function::UDFScript;
 pub use user_defined_function::UDFServer;
 pub use user_defined_function::UserDefinedFunction;

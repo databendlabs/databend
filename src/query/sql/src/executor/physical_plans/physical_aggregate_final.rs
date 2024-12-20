@@ -189,7 +189,7 @@ impl PhysicalPlanBuilder {
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: udaf.name.clone(),
-                                    udaf: Some((udaf.state_fields.clone(), udaf.udf_type.clone())),
+                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
@@ -423,7 +423,7 @@ impl PhysicalPlanBuilder {
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: udaf.name.clone(),
-                                    udaf: Some((udaf.state_fields.clone(), udaf.udf_type.clone())),
+                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],

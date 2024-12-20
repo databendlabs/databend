@@ -3364,11 +3364,6 @@ dependencies = [
 name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
- "arrow-ipc",
- "arrow-schema",
- "arrow-select",
- "arrow-udf-js",
  "base64 0.22.1",
  "blake3",
  "borsh",
@@ -3386,7 +3381,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-hashtable",
  "databend-common-io",
- "databend-common-meta-app",
  "databend-common-openai",
  "databend-common-vector",
  "dtparse",
@@ -3406,7 +3400,6 @@ dependencies = [
  "jsonb",
  "lexical-core",
  "libm",
- "log",
  "match-template",
  "md-5",
  "naive-cityhash",
@@ -3942,7 +3935,6 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "convert_case 0.6.0",
- "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
@@ -4945,12 +4937,14 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
  "arrow-schema",
+ "arrow-select",
  "arrow-udf-js",
  "arrow-udf-python",
  "arrow-udf-wasm",

@@ -26,7 +26,7 @@ use crate::IndexType;
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
     pub name: String,
-    pub udaf: Option<(Vec<UDFField>, UDFType)>,
+    pub udaf: Option<(UDFType, Vec<UDFField>)>,
     pub return_type: DataType,
     pub params: Vec<Scalar>,
     pub args: Vec<DataType>,

@@ -22,7 +22,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
-use databend_common_functions::aggregates::create_aggregate_udf_function;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
@@ -38,6 +37,7 @@ use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
@@ -223,7 +223,7 @@ impl PipelineBuilder {
         build_partition_bucket(&mut self.main_pipeline, params.clone())
     }
 
-    pub fn build_aggregator_params(
+    fn build_aggregator_params(
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
@@ -254,34 +254,31 @@ impl PipelineBuilder {
                 agg_args.push(args);
 
                 match &agg_func.sig.udaf {
-                    Some((state_fields, UDFType::Script((lang, runtime_version, code)))) => {
-                        create_aggregate_udf_function(
-                            &agg_func.sig.name,
-                            *lang,
-                            runtime_version,
-                            state_fields
-                                .iter()
-                                .map(|f| DataField::new(&f.name, f.data_type.clone()))
-                                .collect(),
-                            agg_func
-                                .sig
-                                .args
-                                .iter()
-                                .enumerate()
-                                .map(|(i, data_type)| {
-                                    DataField::new(&format!("arg_{}", i), data_type.clone())
-                                })
-                                .collect(),
-                            agg_func.sig.return_type.clone(),
-                            code.as_ref().as_ref(),
-                        )
-                    }
                     None => AggregateFunctionFactory::instance().get(
                         agg_func.sig.name.as_str(),
                         agg_func.sig.params.clone(),
                         agg_func.sig.args.clone(),
                     ),
-                    _ => todo!(),
+                    Some((UDFType::Script(code), state_fields)) => create_udaf_script_function(
+                        code,
+                        agg_func.sig.name.clone(),
+                        agg_func.display.clone(),
+                        state_fields
+                            .iter()
+                            .map(|f| DataField::new(&f.name, f.data_type.clone()))
+                            .collect(),
+                        agg_func
+                            .sig
+                            .args
+                            .iter()
+                            .enumerate()
+                            .map(|(i, data_type)| {
+                                DataField::new(&format!("arg_{}", i), data_type.clone())
+                            })
+                            .collect(),
+                        agg_func.sig.return_type.clone(),
+                    ),
+                    Some((UDFType::Server(_), _state_fields)) => unimplemented!(),
                 }
             })
             .collect::<Result<_>>()?;

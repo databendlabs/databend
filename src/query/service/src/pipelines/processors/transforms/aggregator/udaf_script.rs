@@ -17,6 +17,7 @@ use std::fmt;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use arrow_array::Array;
 use arrow_array::RecordBatch;
@@ -24,6 +25,8 @@ use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
@@ -33,30 +36,32 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
 use databend_common_expression::StateAddr;
-use databend_common_meta_app::principal::UDFLanguage;
-
-use crate::aggregates::AggregateFunction;
+use databend_common_functions::aggregates::AggregateFunction;
+use databend_common_sql::plans::UDFLanguage;
+use databend_common_sql::plans::UDFScriptCode;
 
 pub struct AggregateUdfScript {
-    name: String,
-    runtime: arrow_udf_js::Runtime,
+    display_name: String,
+    runtime: UDAFRuntime,
     argument_schema: DataSchema,
-    return_type: DataType,
 }
 
 impl AggregateFunction for AggregateUdfScript {
     fn name(&self) -> &str {
-        &self.name
+        self.runtime.name()
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.return_type.clone())
+        Ok(self.runtime.return_type())
     }
 
     fn init_state(&self, place: StateAddr) {
-        let state = self.runtime.create_state(self.agg_name()).unwrap(); // todo
-        log::info!("init_state: {:?}", state);
-        place.write_state(UdfAggState(state));
+        let state = self
+            .runtime
+            .create_state()
+            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to create state: {e}")))
+            .unwrap(); // todo
+        place.write_state(state);
     }
 
     fn state_layout(&self) -> Layout {
@@ -74,10 +79,9 @@ impl AggregateFunction for AggregateUdfScript {
         let state = place.get::<UdfAggState>();
         let state = self
             .runtime
-            .accumulate(self.agg_name(), &state.0, &input_batch)
-            .unwrap();
-        log::info!("accumulate: {:?}", state);
-        place.write_state(UdfAggState(state));
+            .accumulate(state, &input_batch)
+            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to accumulate: {e}")))?;
+        place.write_state(state);
         Ok(())
     }
 
@@ -86,44 +90,52 @@ impl AggregateFunction for AggregateUdfScript {
         let state = place.get::<UdfAggState>();
         let state = self
             .runtime
-            .accumulate(self.agg_name(), &state.0, &input_batch)
-            .unwrap();
-        log::info!("accumulate_row: {:?}", state);
-        place.write_state(UdfAggState(state));
+            .accumulate(state, &input_batch)
+            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to accumulate_row: {e}")))?;
+        place.write_state(state);
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<UdfAggState>();
-        state.serialize(writer).unwrap();
-        Ok(())
+        state
+            .serialize(writer)
+            .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<UdfAggState>();
-        let rhs = UdfAggState::deserialize(reader).unwrap();
-        let states = arrow_select::concat::concat(&[&state.0, &rhs.0]).unwrap(); // todo
-        let state = self.runtime.merge(self.agg_name(), &states).unwrap();
-        log::info!("merge: {:?}", state);
-        place.write_state(UdfAggState(state));
+        let rhs =
+            UdfAggState::deserialize(reader).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
+        let state = self
+            .runtime
+            .merge(&states)
+            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
+        place.write_state(state);
         Ok(())
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let other = rhs.get::<UdfAggState>();
-        let states = arrow_select::concat::concat(&[&state.0, &other.0]).unwrap(); // todo
-        let state = self.runtime.merge(self.agg_name(), &states).unwrap();
-        log::info!("merge_states: {:?}", state);
-        place.write_state(UdfAggState(state));
+        let states = arrow_select::concat::concat(&[&state.0, &other.0])
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let state = self
+            .runtime
+            .merge(&states)
+            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge_states: {e}")))?;
+        place.write_state(state);
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<UdfAggState>();
-        let array = self.runtime.finish(self.agg_name(), &state.0).unwrap();
-        log::info!("merge_result: {:?}", array);
-        let result = Column::from_arrow_rs(array, &self.return_type()?)?;
+        let array = self
+            .runtime
+            .finish(state)
+            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge_result: {e}")))?;
+        let result = Column::from_arrow_rs(array, &self.runtime.return_type())?;
         builder.append_column(&result);
         Ok(())
     }
@@ -131,15 +143,11 @@ impl AggregateFunction for AggregateUdfScript {
 
 impl fmt::Display for AggregateUdfScript {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name) // todo
+        write!(f, "{}", self.display_name)
     }
 }
 
 impl AggregateUdfScript {
-    fn agg_name(&self) -> &str {
-        &self.name
-    }
-
     #[cfg(debug_assertions)]
     fn check_columns(&self, columns: InputColumns) {
         let fields = self.argument_schema.fields();
@@ -225,45 +233,168 @@ impl UdfAggState {
     }
 }
 
-pub fn create_aggregate_udf_function(
-    name: &str,
-    _lang: UDFLanguage,
-    _runtime_version: &str,
+pub fn create_udaf_script_function(
+    code: &UDFScriptCode,
+    name: String,
+    display_name: String,
     state_fields: Vec<DataField>,
     arguments: Vec<DataField>,
-    return_type: DataType,
-    code: &[u8],
+    output_type: DataType,
 ) -> Result<Arc<dyn AggregateFunction>> {
-    let mut runtime = arrow_udf_js::Runtime::new().unwrap();
-
-    let state_type = ArrowType::Struct(
-        state_fields
-            .iter()
-            .map(|f| f.into())
-            .collect::<Vec<arrow_schema::Field>>()
-            .into(),
-    );
-
-    log::info!("state_type: {:?}", state_type);
-
-    let code = String::from_utf8(code.to_vec())?;
-    let output_type: ArrowType = (&return_type).into();
+    let UDFScriptCode { language, code, .. } = code;
+    let runtime = match language {
+        UDFLanguage::JavaScript => {
+            let pool = JsRuntimePool::new(
+                name,
+                String::from_utf8(code.to_vec())?,
+                ArrowType::Struct(
+                    state_fields
+                        .iter()
+                        .map(|f| f.into())
+                        .collect::<Vec<arrow_schema::Field>>()
+                        .into(),
+                ),
+                output_type,
+            );
+            UDAFRuntime::JavaScript(pool)
+        }
+        UDFLanguage::WebAssembly => unimplemented!(),
+        UDFLanguage::Python => unimplemented!(),
+    };
+    // check if the runtime is valid
     runtime
-        .add_aggregate(
-            name,
-            state_type,
-            output_type,
-            arrow_udf_js::CallMode::CalledOnNullInput,
-            &code,
-        )
-        .unwrap();
+        .create_state()
+        .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to create state: {e}")))?;
 
     Ok(Arc::new(AggregateUdfScript {
-        name: name.to_string(),
+        display_name,
         runtime,
         argument_schema: DataSchema::new(arguments),
-        return_type,
     }))
+}
+
+struct JsRuntimePool {
+    name: String,
+    code: String,
+    state_type: ArrowType,
+    output_type: DataType,
+
+    runtimes: Mutex<Vec<arrow_udf_js::Runtime>>,
+}
+
+impl JsRuntimePool {
+    fn new(name: String, code: String, state_type: ArrowType, output_type: DataType) -> Self {
+        Self {
+            name,
+            code,
+            state_type,
+            output_type,
+            runtimes: Mutex::new(vec![]),
+        }
+    }
+
+    fn create(&self) -> Result<arrow_udf_js::Runtime> {
+        let mut runtime = match arrow_udf_js::Runtime::new() {
+            Ok(runtime) => runtime,
+            Err(e) => {
+                return Err(ErrorCode::UDFDataError(format!(
+                    "Cannot create js runtime: {e}"
+                )))
+            }
+        };
+
+        let converter = runtime.converter_mut();
+        converter.set_arrow_extension_key(EXTENSION_KEY);
+        converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
+
+        let output_type: ArrowType = (&self.output_type).into();
+        runtime
+            .add_aggregate(
+                &self.name,
+                self.state_type.clone(),
+                output_type,
+                arrow_udf_js::CallMode::CalledOnNullInput,
+                &self.code,
+            )
+            .map_err(|e| ErrorCode::UDFDataError(format!("Cannot add aggregate: {e}")))?;
+
+        Ok(runtime)
+    }
+
+    fn call<T, F>(&self, op: F) -> anyhow::Result<T>
+    where F: FnOnce(&arrow_udf_js::Runtime) -> anyhow::Result<T> {
+        let mut runtimes = self.runtimes.lock().unwrap();
+        let runtime = match runtimes.pop() {
+            Some(runtime) => runtime,
+            None => self.create()?,
+        };
+
+        let result = op(&runtime)?;
+
+        let mut runtimes = self.runtimes.lock().unwrap();
+        runtimes.push(runtime);
+
+        Ok(result)
+    }
+}
+
+enum UDAFRuntime {
+    JavaScript(JsRuntimePool),
+    #[expect(unused)]
+    WebAssembly,
+    #[expect(unused)]
+    Python,
+}
+
+impl UDAFRuntime {
+    fn name(&self) -> &str {
+        match self {
+            UDAFRuntime::JavaScript(pool) => &pool.name,
+            _ => unimplemented!(),
+        }
+    }
+
+    fn return_type(&self) -> DataType {
+        match self {
+            UDAFRuntime::JavaScript(pool) => pool.output_type.clone(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn create_state(&self) -> anyhow::Result<UdfAggState> {
+        let state = match self {
+            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| runtime.create_state(&pool.name)),
+            _ => unimplemented!(),
+        }?;
+        Ok(UdfAggState(state))
+    }
+
+    fn accumulate(&self, state: &UdfAggState, input: &RecordBatch) -> anyhow::Result<UdfAggState> {
+        let state = match self {
+            UDAFRuntime::JavaScript(pool) => {
+                pool.call(|runtime| runtime.accumulate(&pool.name, &state.0, input))
+            }
+            _ => unimplemented!(),
+        }?;
+        Ok(UdfAggState(state))
+    }
+
+    fn merge(&self, states: &Arc<dyn Array>) -> anyhow::Result<UdfAggState> {
+        let state = match self {
+            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| runtime.merge(&pool.name, states)),
+            _ => unimplemented!(),
+        }?;
+        Ok(UdfAggState(state))
+    }
+
+    fn finish(&self, state: &UdfAggState) -> anyhow::Result<Arc<dyn Array>> {
+        match self {
+            UDAFRuntime::JavaScript(pool) => {
+                pool.call(|runtime| runtime.finish(&pool.name, &state.0))
+            }
+            _ => unimplemented!(),
+        }
+    }
 }
 
 #[cfg(test)]

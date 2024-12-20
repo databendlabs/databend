@@ -153,6 +153,7 @@ use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFField;
 use crate::plans::UDFLambdaCall;
+use crate::plans::UDFScriptCode;
 use crate::plans::UDFType;
 use crate::plans::Visitor as ScalarVisitor;
 use crate::plans::WindowFunc;
@@ -3834,6 +3835,7 @@ impl<'a> TypeChecker<'a> {
             return_type,
             runtime_version,
         } = udf_definition;
+        let language = language.parse()?;
         let mut arguments = Vec::with_capacity(args.len());
         for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
@@ -3846,7 +3848,11 @@ impl<'a> TypeChecker<'a> {
 
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script((language, runtime_version, code_blob.into()));
+        let udf_type = UDFType::Script(UDFScriptCode {
+            language,
+            runtime_version,
+            code: code_blob.into(),
+        });
 
         let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
@@ -3884,10 +3890,14 @@ impl<'a> TypeChecker<'a> {
             return_type,
             runtime_version,
         } = udf_definition;
-
+        let language = language.parse()?;
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script((language, runtime_version, code_blob.into()));
+        let udf_type = UDFType::Script(UDFScriptCode {
+            language,
+            runtime_version,
+            code: code_blob.into(),
+        });
 
         let mut arguments = Vec::with_capacity(arg_types.len());
         for (argument, dest_type) in args.iter().zip(arg_types.iter()) {

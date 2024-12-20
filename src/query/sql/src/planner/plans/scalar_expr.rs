@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::BinaryOperator;
@@ -31,7 +32,6 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::UDFLanguage;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -823,10 +823,49 @@ pub struct UDFField {
     pub data_type: DataType,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum UDFLanguage {
+    JavaScript,
+    WebAssembly,
+    Python,
+}
+
+impl FromStr for UDFLanguage {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "javascript" => Ok(Self::JavaScript),
+            "wasm" => Ok(Self::WebAssembly),
+            "python" => Ok(Self::Python),
+            _ => Err(ErrorCode::BadArguments(format!(
+                "Unsupported script language: {s}"
+            ))),
+        }
+    }
+}
+
+impl Display for UDFLanguage {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            UDFLanguage::JavaScript => write!(f, "javascript"),
+            UDFLanguage::WebAssembly => write!(f, "wasm"),
+            UDFLanguage::Python => write!(f, "python"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct UDFScriptCode {
+    pub language: UDFLanguage,
+    pub runtime_version: String,
+    pub code: Arc<Box<[u8]>>,
+}
+
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                                // server_addr
-    Script((UDFLanguage, String, Arc<Box<[u8]>>)), // Lang, Version, Code
+    Server(String), // server_addr
+    Script(UDFScriptCode),
 }
 
 impl UDFType {
