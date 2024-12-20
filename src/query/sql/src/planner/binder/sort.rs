@@ -312,7 +312,7 @@ impl Binder {
                     Ok(UDFCall {
                         span: udf.span,
                         name: udf.name.clone(),
-                        func_name: udf.func_name.clone(),
+                        handler: udf.handler.clone(),
                         display_name: udf.display_name.clone(),
                         udf_type: udf.udf_type.clone(),
                         arg_types: udf.arg_types.clone(),

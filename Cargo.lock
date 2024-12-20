@@ -4911,12 +4911,14 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
  "arrow-schema",
+ "arrow-select",
  "arrow-udf-js",
  "arrow-udf-python",
  "arrow-udf-wasm",

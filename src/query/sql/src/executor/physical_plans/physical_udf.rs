@@ -128,7 +128,7 @@ impl PhysicalPlanBuilder {
 
                     let udf_func = UdfFunctionDesc {
                         name: func.name.clone(),
-                        func_name: func.func_name.clone(),
+                        func_name: func.handler.clone(),
                         output_column: item.index,
                         arg_indices,
                         arg_exprs,

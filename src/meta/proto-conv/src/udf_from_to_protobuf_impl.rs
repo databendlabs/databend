@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
 use databend_common_expression::TableDataType;
 use databend_common_meta_app::principal as mt;
 use databend_common_protos::pb;
@@ -164,6 +165,93 @@ impl FromToProto for mt::UDFScript {
     }
 }
 
+impl FromToProto for mt::UDAFScript {
+    type PB = pb::UdafScript;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::UdafScript) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let arg_types = p
+            .arg_types
+            .into_iter()
+            .map(|arg_type| Ok(DataType::from(&TableDataType::from_pb(arg_type)?)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let state_fields = p
+            .state_names
+            .iter()
+            .zip(p.state_types.into_iter())
+            .map(|(name, data_type)| {
+                Ok(DataField::new(
+                    name,
+                    DataType::from(&TableDataType::from_pb(data_type)?),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
+            || Incompatible {
+                reason: "UDAFScript.return_type can not be None".to_string(),
+            },
+        )?)?);
+
+        Ok(mt::UDAFScript {
+            code: p.code,
+            arg_types,
+            return_type,
+            language: p.language,
+            runtime_version: p.runtime_version,
+            state_fields,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::UdafScript, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for arg_type in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| Incompatible {
+                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                })?
+                .to_pb()?;
+            arg_types.push(arg_type);
+        }
+        let mut state_names = Vec::with_capacity(self.state_fields.len());
+        let mut state_types = Vec::with_capacity(self.state_fields.len());
+        for field in self.state_fields.iter() {
+            state_names.push(field.name().clone());
+            state_types.push(
+                infer_schema_type(field.data_type())
+                    .map_err(|e| Incompatible {
+                        reason: format!(
+                            "Convert DataType to TableDataType failed: {}",
+                            e.message()
+                        ),
+                    })?
+                    .to_pb()?,
+            );
+        }
+        let return_type = infer_schema_type(&self.return_type)
+            .map_err(|e| Incompatible {
+                reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+            })?
+            .to_pb()?;
+
+        Ok(pb::UdafScript {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            code: self.code.clone(),
+            language: self.language.clone(),
+            runtime_version: self.runtime_version.clone(),
+            arg_types,
+            state_names,
+            state_types,
+            return_type: Some(return_type),
+        })
+    }
+}
+
 impl FromToProto for mt::UserDefinedFunction {
     type PB = pb::UserDefinedFunction;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -180,6 +268,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             Some(pb::user_defined_function::Definition::UdfScript(udf_script)) => {
                 mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_script)?)
+            }
+            Some(pb::user_defined_function::Definition::UdafScript(udaf_script)) => {
+                mt::UDFDefinition::UDAFScript(mt::UDAFScript::from_pb(udaf_script)?)
             }
             None => {
                 return Err(Incompatible {
@@ -209,6 +300,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDFScript(udf_script) => {
                 pb::user_defined_function::Definition::UdfScript(udf_script.to_pb()?)
+            }
+            mt::UDFDefinition::UDAFScript(udaf_script) => {
+                pb::user_defined_function::Definition::UdafScript(udaf_script.to_pb()?)
             }
         };
 
