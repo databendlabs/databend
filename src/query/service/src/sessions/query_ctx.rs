@@ -429,7 +429,7 @@ impl QueryContext {
     }
 
     pub fn unload_spill_meta(&self) {
-        const SPILL_META_SUFFIX: &str = ".idx";
+        const SPILL_META_SUFFIX: &str = ".list";
         let mut w = self.shared.spilled_files.write();
         let mut remote_spill_files = w
             .iter()

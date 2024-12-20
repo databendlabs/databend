@@ -31,7 +31,7 @@ use opendal::ErrorKind;
 
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
-const SPILL_META_SUFFIX: &str = ".idx";
+const SPILL_META_SUFFIX: &str = ".list";
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
