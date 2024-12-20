@@ -70,7 +70,6 @@ criterion = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
-rmp-serde = { workspace = true }
 
 [[bench]]
 name = "bench"

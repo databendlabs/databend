@@ -32,8 +32,5 @@ snap = { workspace = true, optional = true }
 typetag = { workspace = true }
 zstd = { workspace = true }
 
-[dev-dependencies]
-pot = { workspace = true }
-
 [lints]
 workspace = true
