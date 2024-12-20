@@ -62,8 +62,9 @@ pub trait WarehouseApi: Sync + Send {
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
 
     async fn rename_warehouse(&self, cur: String, to: String) -> Result<()>;
-    // async fn list_warehouse_nodes(&self, warehouse: String) -> Result<()>;
-    //
+
+    async fn list_warehouse_nodes(&self, warehouse: String) -> Result<Vec<NodeInfo>>;
+
     async fn add_warehouse_cluster(
         &self,
         warehouse: String,
@@ -80,9 +81,19 @@ pub trait WarehouseApi: Sync + Send {
         to: String,
     ) -> Result<()>;
 
-    // async fn add_warehouse_cluster_node(&self, warehouse: &str, cluster: &str, added: SelectedNodes) -> Result<()>;
-    //
-    // async fn remove_warehouse_cluster_node(&self, warehouse: &str, cluster: &str, added: RemoveNodes) -> Result<()>;
+    async fn add_warehouse_cluster_node(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+        add_nodes: SelectedNodes,
+    ) -> Result<()>;
+
+    async fn drop_warehouse_cluster_node(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+        drop_nodes: Vec<String>,
+    ) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.
     async fn get_nodes(&self, warehouse: &str, cluster: &str) -> Result<Vec<NodeInfo>>;
