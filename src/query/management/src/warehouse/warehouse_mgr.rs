@@ -1495,7 +1495,7 @@ impl WarehouseApi for WarehouseMgr {
                                 }
 
                                 return Err(ErrorCode::ClusterUnknownNode(format!(
-                                    "Warehouse cluster {:?}.{:?} unknwon node {:?}",
+                                    "Warehouse cluster {:?}.{:?} unknown node {:?}",
                                     warehouse, cluster, remove_node
                                 )));
                             }
