@@ -30,7 +30,7 @@ pub enum WarehouseInfo {
     SystemManaged(SystemManagedWarehouse),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct SystemManagedCluster {
     pub nodes: Vec<SelectedNode>,
 }
