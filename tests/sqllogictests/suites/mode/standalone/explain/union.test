@@ -254,6 +254,7 @@ UnionAll
         ├── push downs: [filters: [is_true(t2.b (#3) > 2)], limit: NONE]
         └── estimated rows: 2.00
 
+# ISSUE 17096
 query II
 select b,a from (select * from t1 where a>1 union all select * from t2 where b>2)
 ----
