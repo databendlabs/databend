@@ -19,7 +19,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
@@ -277,12 +276,11 @@ impl SortPipelineBuilder {
 
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
+            let location_prefix = self.ctx.query_id_spill_prefix();
+
             let config = SpillerConfig {
                 spiller_type: SpillerType::OrderBy,
-                location_prefix: query_spill_prefix(
-                    self.ctx.get_tenant().tenant_name(),
-                    &self.ctx.get_id(),
-                ),
+                location_prefix,
                 disk_spill: None,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };

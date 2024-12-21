@@ -79,6 +79,7 @@ pub trait ClusterHelper {
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
+    fn ordered_index(&self) -> usize;
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 
@@ -113,6 +114,15 @@ impl ClusterHelper for Cluster {
 
     fn local_id(&self) -> String {
         self.local_id.clone()
+    }
+
+    fn ordered_index(&self) -> usize {
+        let mut nodes = self.get_nodes();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        nodes
+            .iter()
+            .position(|x| x.id == self.local_id)
+            .unwrap_or(0)
     }
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {

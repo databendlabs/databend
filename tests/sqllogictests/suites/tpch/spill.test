@@ -42,7 +42,7 @@ include ./queries.test
 query I
 SELECT    count(*),
           sum(p_size),
-          sum(l_linenumber)
+          sum(l_linenumber) > 30000000 -- cross join may have different order
 FROM      (
           SELECT    *
           FROM      lineitem,
@@ -50,7 +50,7 @@ FROM      (
           LIMIT     10000000
           );
 ----
-10000000 253667500 31260000
+10000000 253667500 1
 
 
 # INNER JOIN
@@ -69,8 +69,8 @@ WHERE     o_orderkey IN (
           FROM      lineitem
           GROUP BY  l_orderkey
           HAVING    sum(l_quantity) > 300
-          ) AND      
-          c_custkey=o_custkey AND      
+          ) AND
+          c_custkey=o_custkey AND
           o_orderkey=l_orderkey
 GROUP BY  c_name,
           c_custkey,
@@ -89,25 +89,25 @@ Customer#000011459 11459 551136 1993-05-19 386812.74 308.00
 
 # LEFT OUTER JOIN
 query I
-SELECT 
-  c_count, 
-  count(*) AS custdist 
-FROM 
+SELECT
+  c_count,
+  count(*) AS custdist
+FROM
   (
-    SELECT 
-      c_custkey, 
-      count(o_orderkey) AS c_count 
-    FROM 
-      customer 
-      RIGHT OUTER JOIN orders ON c_custkey = o_custkey 
-      AND o_comment NOT LIKE '%pending%deposits%' 
-    GROUP BY 
+    SELECT
+      c_custkey,
+      count(o_orderkey) AS c_count
+    FROM
+      customer
+      RIGHT OUTER JOIN orders ON c_custkey = o_custkey
+      AND o_comment NOT LIKE '%pending%deposits%'
+    GROUP BY
       c_custkey
-  ) c_orders 
-GROUP BY 
-  c_count 
-ORDER BY 
-  custdist DESC, 
+  ) c_orders
+GROUP BY
+  c_count
+ORDER BY
+  custdist DESC,
   c_count DESC;
 ----
 10 676
@@ -208,25 +208,25 @@ where lineitem.l_receiptdate > lineitem.l_commitdate and
 
 # RIGHT OUTER JOIN
 query I
-SELECT 
-  c_count, 
-  count(*) AS custdist 
-FROM 
+SELECT
+  c_count,
+  count(*) AS custdist
+FROM
   (
-    SELECT 
-      c_custkey, 
-      count(o_orderkey) AS c_count 
-    FROM 
-      customer 
-      LEFT OUTER JOIN orders ON c_custkey = o_custkey 
-      AND o_comment NOT LIKE '%pending%deposits%' 
-    GROUP BY 
+    SELECT
+      c_custkey,
+      count(o_orderkey) AS c_count
+    FROM
+      customer
+      LEFT OUTER JOIN orders ON c_custkey = o_custkey
+      AND o_comment NOT LIKE '%pending%deposits%'
+    GROUP BY
       c_custkey
-  ) c_orders 
-GROUP BY 
-  c_count 
-ORDER BY 
-  custdist DESC, 
+  ) c_orders
+GROUP BY
+  c_count
+ORDER BY
+  custdist DESC,
   c_count DESC;
 ----
 0 5000
@@ -270,38 +270,38 @@ ORDER BY
 
 # RIGHT SEMI JOIN
 query I
-select 
-  sum(numwait) 
-from 
+select
+  sum(numwait)
+from
   (
-    select 
-      s_name, 
+    select
+      s_name,
       truncate(
-        count(*), 
+        count(*),
         4
-      ) as numwait 
-    from 
-      supplier, 
-      lineitem l1, 
-      orders 
-    where 
-      s_suppkey = l1.l_suppkey 
-      and o_orderkey = l1.l_orderkey 
-      and o_orderstatus = 'F' 
-      and l1.l_receiptdate > l1.l_commitdate 
+      ) as numwait
+    from
+      supplier,
+      lineitem l1,
+      orders
+    where
+      s_suppkey = l1.l_suppkey
+      and o_orderkey = l1.l_orderkey
+      and o_orderstatus = 'F'
+      and l1.l_receiptdate > l1.l_commitdate
       and exists (
-        select 
-          * 
-        from 
-          lineitem l2 
-        where 
-          l2.l_orderkey = l1.l_orderkey 
+        select
+          *
+        from
+          lineitem l2
+        where
+          l2.l_orderkey = l1.l_orderkey
           and l2.l_suppkey <> l1.l_suppkey
-      ) 
-    group by 
-      s_name 
-    order by 
-      numwait desc, 
+      )
+    group by
+      s_name
+    order by
+      numwait desc,
       s_name
   );
 ----
@@ -310,39 +310,39 @@ from
 
 # RIGHT ANTI JOIN
 query I
-select 
-  sum(numwait) 
-from 
+select
+  sum(numwait)
+from
   (
-    select 
-      s_name, 
+    select
+      s_name,
       truncate(
-        count(*), 
+        count(*),
         4
-      ) as numwait 
-    from 
-      supplier, 
-      lineitem l1, 
-      orders 
-    where 
-      s_suppkey = l1.l_suppkey 
-      and o_orderkey = l1.l_orderkey 
-      and o_orderstatus = 'F' 
-      and l1.l_receiptdate > l1.l_commitdate 
+      ) as numwait
+    from
+      supplier,
+      lineitem l1,
+      orders
+    where
+      s_suppkey = l1.l_suppkey
+      and o_orderkey = l1.l_orderkey
+      and o_orderstatus = 'F'
+      and l1.l_receiptdate > l1.l_commitdate
       and not exists (
-        select 
-          * 
-        from 
-          lineitem l3 
-        where 
-          l3.l_orderkey = l1.l_orderkey 
-          and l3.l_suppkey <> l1.l_suppkey 
+        select
+          *
+        from
+          lineitem l3
+        where
+          l3.l_orderkey = l1.l_orderkey
+          and l3.l_suppkey <> l1.l_suppkey
           and l3.l_receiptdate > l3.l_commitdate
-      ) 
-    group by 
-      s_name 
-    order by 
-      numwait desc, 
+      )
+    group by
+      s_name
+    order by
+      numwait desc,
       s_name
   );
 ----
@@ -376,7 +376,7 @@ FROM      (
           SELECT    c_custkey,
                     count(o_orderkey) AS c_count
           FROM      customer
-          FULL      OUTER JOIN orders ON c_custkey=o_custkey AND      
+          FULL      OUTER JOIN orders ON c_custkey=o_custkey AND
                     o_comment NOT LIKE '%pending%deposits%'
           GROUP BY  c_custkey
           ) c_orders

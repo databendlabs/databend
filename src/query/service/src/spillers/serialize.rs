@@ -43,6 +43,7 @@ use parquet::format::FileMetaData;
 pub enum Layout {
     ArrowIpc(Box<[usize]>),
     Parquet,
+    Aggregate,
 }
 
 pub(super) struct BlocksEncoder {
@@ -116,6 +117,7 @@ pub(super) fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> Da
             DataBlock::new_from_columns(columns)
         }
         Layout::Parquet => bare_blocks_from_parquet(Reader(data)).unwrap(),
+        Layout::Aggregate => unreachable!(),
     }
 }
 
@@ -158,7 +160,7 @@ fn bare_blocks_to_parquet<W: Write + Send>(
     let table_schema = infer_table_schema(&data_schema)?;
 
     let props = WriterProperties::builder()
-        .set_compression(Compression::LZ4_RAW)
+        .set_compression(Compression::SNAPPY)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
         .build();

@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::CompressionType;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -57,20 +56,22 @@ use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStre
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerType;
 
 pub struct TransformExchangeAggregateSerializer {
     ctx: Arc<QueryContext>,
     local_pos: usize,
     options: IpcWriteOptions,
 
-    operator: Operator,
-    location_prefix: String,
     params: Arc<AggregatorParams>,
+    spiller: Arc<Spiller>,
 }
 
 impl TransformExchangeAggregateSerializer {
     #[allow(clippy::too_many_arguments)]
-    pub fn create(
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -81,7 +82,7 @@ impl TransformExchangeAggregateSerializer {
         compression: Option<FlightCompression>,
         _schema: DataSchemaRef,
         local_pos: usize,
-    ) -> Box<dyn Processor> {
+    ) -> Result<Box<dyn Processor>> {
         let compression = match compression {
             None => None,
             Some(compression) => match compression {
@@ -89,17 +90,27 @@ impl TransformExchangeAggregateSerializer {
                 FlightCompression::Zstd => Some(CompressionType::ZSTD),
             },
         };
-
-        BlockMetaTransformer::create(input, output, TransformExchangeAggregateSerializer {
-            ctx,
-            params,
-            operator,
+        let config = SpillerConfig {
+            spiller_type: SpillerType::Aggregation,
             location_prefix,
-            local_pos,
-            options: IpcWriteOptions::default()
-                .try_with_compression(compression)
-                .unwrap(),
-        })
+            disk_spill: None,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        };
+
+        let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
+        Ok(BlockMetaTransformer::create(
+            input,
+            output,
+            TransformExchangeAggregateSerializer {
+                ctx,
+                params,
+                local_pos,
+                spiller: spiller.into(),
+                options: IpcWriteOptions::default()
+                    .try_with_compression(compression)
+                    .unwrap(),
+            },
+        ))
     }
 }
 
@@ -125,14 +136,12 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         match index == self.local_pos {
                             true => local_agg_spilling_aggregate_payload(
                                 self.ctx.clone(),
-                                self.operator.clone(),
-                                &self.location_prefix,
+                                self.spiller.clone(),
                                 payload,
                             )?,
-                            false => agg_spilling_aggregate_payload(
+                            false => exchange_agg_spilling_aggregate_payload(
                                 self.ctx.clone(),
-                                self.operator.clone(),
-                                &self.location_prefix,
+                                self.spiller.clone(),
                                 payload,
                             )?,
                         },
@@ -175,15 +184,11 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
     }
 }
 
-fn agg_spilling_aggregate_payload(
+fn exchange_agg_spilling_aggregate_payload(
     ctx: Arc<QueryContext>,
-    operator: Operator,
-    location_prefix: &str,
+    spiller: Arc<Spiller>,
     partitioned_payload: PartitionedPayload,
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
-    let unique_name = GlobalUniqName::unique();
-    let location = format!("{}/{}", location_prefix, unique_name);
-
     let partition_count = partitioned_payload.partition_count();
     let mut write_size = 0;
     let mut write_data = Vec::with_capacity(partition_count);
@@ -225,21 +230,9 @@ fn agg_spilling_aggregate_payload(
     Ok(Box::pin(async move {
         if !write_data.is_empty() {
             let instant = Instant::now();
-
-            let mut write_bytes = 0;
-            let mut writer = operator
-                .writer_with(&location)
-                .chunk(8 * 1024 * 1024)
+            let (location, write_bytes) = spiller
+                .spill_stream_aggregate_buffer(None, write_data)
                 .await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
-                }
-            }
-
-            writer.close().await?;
-
             // perf
             {
                 Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);

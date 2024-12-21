@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -39,6 +38,9 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::sessions::QueryContext;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerType;
 
 pub struct TransformAggregateSpillWriter {
     ctx: Arc<QueryContext>,
@@ -46,33 +48,39 @@ pub struct TransformAggregateSpillWriter {
     output: Arc<OutputPort>,
     _params: Arc<AggregatorParams>,
 
-    operator: Operator,
-    location_prefix: String,
+    spiller: Arc<Spiller>,
     spilled_block: Option<DataBlock>,
     spilling_meta: Option<AggregateMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
 }
 
 impl TransformAggregateSpillWriter {
-    pub fn create(
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
         params: Arc<AggregatorParams>,
         location_prefix: String,
-    ) -> Box<dyn Processor> {
-        Box::new(TransformAggregateSpillWriter {
+    ) -> Result<Box<dyn Processor>> {
+        let config = SpillerConfig {
+            spiller_type: SpillerType::Aggregation,
+            location_prefix,
+            disk_spill: None,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        };
+
+        let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
+        Ok(Box::new(TransformAggregateSpillWriter {
             ctx,
             input,
             output,
             _params: params,
-            operator,
-            location_prefix,
+            spiller: Arc::new(spiller),
             spilled_block: None,
             spilling_meta: None,
             spilling_future: None,
-        })
+        }))
     }
 }
 
@@ -148,8 +156,7 @@ impl Processor for TransformAggregateSpillWriter {
                 AggregateMeta::AggregateSpilling(payload) => {
                     self.spilling_future = Some(agg_spilling_aggregate_payload(
                         self.ctx.clone(),
-                        self.operator.clone(),
-                        &self.location_prefix,
+                        self.spiller.clone(),
                         payload,
                     )?);
 
@@ -176,19 +183,16 @@ impl Processor for TransformAggregateSpillWriter {
 
 pub fn agg_spilling_aggregate_payload(
     ctx: Arc<QueryContext>,
-    operator: Operator,
-    location_prefix: &str,
+    spiller: Arc<Spiller>,
     partitioned_payload: PartitionedPayload,
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
-    let unique_name = GlobalUniqName::unique();
-    let location = format!("{}/{}", location_prefix, unique_name);
-
     let mut write_size = 0;
     let partition_count = partitioned_payload.partition_count();
     let mut write_data = Vec::with_capacity(partition_count);
     let mut spilled_buckets_payloads = Vec::with_capacity(partition_count);
     // Record how many rows are spilled.
     let mut rows = 0;
+    let location = spiller.create_unique_location();
     for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
         if payload.len() == 0 {
             continue;
@@ -221,50 +225,37 @@ pub fn agg_spilling_aggregate_payload(
 
     Ok(Box::pin(async move {
         let instant = Instant::now();
-
-        let mut write_bytes = 0;
-
         if !write_data.is_empty() {
-            let mut writer = operator
-                .writer_with(&location)
-                .chunk(8 * 1024 * 1024)
+            let (location, write_bytes) = spiller
+                .spill_stream_aggregate_buffer(Some(location), write_data)
                 .await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
-                }
+            // perf
+            {
+                Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::RemoteSpillWriteBytes,
+                    write_bytes,
+                );
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::RemoteSpillWriteTime,
+                    instant.elapsed().as_millis() as usize,
+                );
             }
 
-            writer.close().await?;
-        }
+            {
+                let progress_val = ProgressValues {
+                    rows,
+                    bytes: write_bytes,
+                };
+                ctx.get_aggregate_spill_progress().incr(&progress_val);
+            }
 
-        // perf
-        {
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteBytes,
-                write_bytes,
+            info!(
+                "Write aggregate spill {} successfully, elapsed: {:?}",
+                location,
+                instant.elapsed()
             );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteTime,
-                instant.elapsed().as_millis() as usize,
-            );
         }
-
-        {
-            let progress_val = ProgressValues {
-                rows,
-                bytes: write_bytes,
-            };
-            ctx.get_aggregate_spill_progress().incr(&progress_val);
-        }
-
-        info!(
-            "Write aggregate spill {} successfully, elapsed: {:?}",
-            location,
-            instant.elapsed()
-        );
 
         Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
             spilled_buckets_payloads,
