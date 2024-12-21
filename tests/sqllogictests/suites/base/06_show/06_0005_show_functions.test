@@ -5,7 +5,7 @@ today 0 (empty)
 
 
 query TBT
-SHOW FUNCTIONS LIKE 'to_day%'
+SHOW FUNCTIONS LIKE 'to_day_o%'
 ----
 to_day_of_month 0 (empty)
 to_day_of_week 0 (empty)
