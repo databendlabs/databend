@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -54,21 +56,33 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         union_all: &crate::plans::UnionAll,
-        required: ColumnSet,
+        mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
+        let metadata = self.metadata.read().clone();
+        let lazy_columns = metadata.lazy_columns();
+        required.extend(lazy_columns.clone());
         let indices: Vec<_> = union_all
             .left_outputs
             .iter()
             .enumerate()
             .filter_map(|(index, v)| required.contains(&v.0).then_some(index))
             .collect();
-        let left_required = required;
-        let right_required: ColumnSet = indices
+        let mut left_required: ColumnSet = indices
+            .iter()
+            .map(|index| union_all.left_outputs[*index].0)
+            .collect();
+        if left_required.is_empty() {
+            left_required = HashSet::from([union_all.left_outputs[0].0]);
+        }
+        let mut right_required: ColumnSet = indices
             .into_iter()
             .map(|index| union_all.right_outputs[index].0)
             .collect();
+        if right_required.is_empty() {
+            right_required = HashSet::from([union_all.right_outputs[0].0]);
+        }
 
         // 2. Build physical plan.
         let left_plan = self.build(s_expr.child(0)?, left_required.clone()).await?;
