@@ -39,6 +39,7 @@ use databend_common_metrics::external_server::record_running_requests_external_f
 use databend_common_metrics::external_server::record_running_requests_external_start;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
+use tokio::sync::Semaphore;
 
 use crate::sessions::QueryContext;
 
@@ -49,9 +50,9 @@ pub struct TransformUdfServer {
     request_timeout: u64,
     // request batch rows is used to split the block into smaller blocks and improve concurrency performance.
     request_batch_rows: usize,
-    // request max threads is used to control the total number of concurrent threads,
+    // semaphore is used to control the total number of concurrent threads,
     // avoid the case of too many flight connections caused by the small batch rows.
-    request_max_threads: usize,
+    semaphore: Arc<Semaphore>,
     retry_times: usize,
 }
 
@@ -63,6 +64,7 @@ impl TransformUdfServer {
         let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
         let request_max_threads = settings.get_external_server_request_max_threads()? as usize;
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
+        let semaphore = Arc::new(Semaphore::new(request_max_threads));
 
         let s = Self {
             ctx,
@@ -70,7 +72,7 @@ impl TransformUdfServer {
             connect_timeout,
             request_timeout,
             request_batch_rows,
-            request_max_threads,
+            semaphore,
             retry_times,
         };
         Ok(s)
@@ -79,12 +81,16 @@ impl TransformUdfServer {
     // data_block is spilt into multiple blocks, each block is processed by transform_inner
     async fn transform_inner(
         ctx: Arc<QueryContext>,
+        semaphore: Arc<Semaphore>,
         connect_timeout: u64,
         request_timeout: u64,
-        request_batch_rows: usize,
         func: UdfFunctionDesc,
         mut data_block: DataBlock,
     ) -> Result<DataBlock> {
+        // Must obtain the permit to execute, prevent too many connections being executed concurrently
+        let _permit = semaphore.acquire_owned().await.map_err(|e| {
+            ErrorCode::Internal(format!("Udf transformer acquire permit failure. {}", e))
+        })?;
         let server_addr = func.udf_type.as_server().unwrap();
         // construct input record_batch
         let num_rows = data_block.num_rows();
@@ -117,16 +123,12 @@ impl TransformUdfServer {
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
         let instant = Instant::now();
-        let mut client = UDFFlightClient::connect(
-            server_addr,
-            connect_timeout,
-            request_timeout,
-            request_batch_rows,
-        )
-        .await?
-        .with_tenant(ctx.get_tenant().tenant_name())?
-        .with_func_name(&func.func_name)?
-        .with_query_id(&ctx.get_id())?;
+        let mut client =
+            UDFFlightClient::connect(server_addr, connect_timeout, request_timeout, 65536)
+                .await?
+                .with_tenant(ctx.get_tenant().tenant_name())?
+                .with_func_name(&func.func_name)?
+                .with_query_id(&ctx.get_id())?;
 
         let connect_duration = instant.elapsed();
         record_connect_external_duration(func.func_name.clone(), connect_duration);
@@ -202,13 +204,7 @@ impl AsyncTransform for TransformUdfServer {
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
         let rows = data_block.num_rows();
-        // Use block row numbers and request max threads to calculate the number of rows for each threads.
-        // In each thread, the block is split by the batch rows and call the udf server serially,
-        // so that the flight connection can be reused.
-        let mut batch_rows = rows / self.request_max_threads;
-        if batch_rows < self.request_batch_rows {
-            batch_rows = self.request_batch_rows;
-        }
+        let batch_rows = self.request_batch_rows;
         let mut batch_blocks: Vec<DataBlock> = (0..rows)
             .step_by(batch_rows)
             .map(|start| data_block.slice(start..start + batch_rows.min(rows - start)))
@@ -221,7 +217,7 @@ impl AsyncTransform for TransformUdfServer {
                         let ctx = self.ctx.clone();
                         let connect_timeout = self.connect_timeout;
                         let request_timeout = self.request_timeout;
-                        let request_batch_rows = self.request_batch_rows;
+                        let semaphore = self.semaphore.clone();
                         let func = func.clone();
                         let name = func.name.clone();
 
@@ -229,9 +225,9 @@ impl AsyncTransform for TransformUdfServer {
                             move || {
                                 Self::transform_inner(
                                     ctx.clone(),
+                                    semaphore.clone(),
                                     connect_timeout,
                                     request_timeout,
-                                    request_batch_rows,
                                     func.clone(),
                                     mini_batch.clone(),
                                 )
