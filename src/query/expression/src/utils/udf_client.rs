@@ -54,7 +54,7 @@ const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
     inner: FlightServiceClient<Channel>,
-    batch_rows: u64,
+    batch_rows: usize,
     headers: MetadataMap,
 }
 
@@ -64,7 +64,7 @@ impl UDFFlightClient {
         addr: &str,
         conn_timeout: u64,
         request_timeout: u64,
-        batch_rows: u64,
+        batch_rows: usize,
     ) -> Result<UDFFlightClient> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
         let endpoint = Endpoint::from_shared(addr.to_string())
@@ -225,7 +225,7 @@ impl UDFFlightClient {
         input_batch: RecordBatch,
     ) -> Result<RecordBatch> {
         let descriptor = FlightDescriptor::new_path(vec![func_name.to_string()]);
-        let batch_rows = self.batch_rows as usize;
+        let batch_rows = self.batch_rows;
         let batches = (0..input_batch.num_rows())
             .step_by(batch_rows)
             .map(move |start| {

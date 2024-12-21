@@ -687,6 +687,10 @@ impl Settings {
         self.try_get_u64("external_server_request_batch_rows")
     }
 
+    pub fn get_external_server_request_max_threads(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_max_threads")
+    }
+
     pub fn get_external_server_request_retry_times(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_retry_times")
     }
