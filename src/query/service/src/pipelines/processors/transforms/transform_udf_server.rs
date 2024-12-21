@@ -88,9 +88,10 @@ impl TransformUdfServer {
         mut data_block: DataBlock,
     ) -> Result<DataBlock> {
         // Must obtain the permit to execute, prevent too many connections being executed concurrently
-        let _permit = semaphore.acquire_owned().await.map_err(|e| {
+        let permit = semaphore.acquire_owned().await.map_err(|e| {
             ErrorCode::Internal(format!("Udf transformer acquire permit failure. {}", e))
         })?;
+
         let server_addr = func.udf_type.as_server().unwrap();
         // construct input record_batch
         let num_rows = data_block.num_rows();
@@ -182,6 +183,7 @@ impl TransformUdfServer {
         };
 
         data_block.add_column(col);
+        drop(permit);
         Ok(data_block)
     }
 }
