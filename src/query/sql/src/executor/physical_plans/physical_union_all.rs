@@ -69,16 +69,24 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .filter_map(|(index, v)| required.contains(&v.0).then_some(index))
             .collect();
-        let left_required: ColumnSet = indices
-            .iter()
-            .map(|&index| union_all.left_outputs[index].0)
-            .chain(indices.is_empty().then_some(union_all.left_outputs[0].0))
-            .collect();
-        let right_required: ColumnSet = indices
-            .iter()
-            .map(|index| union_all.right_outputs[index].0)
-            .chain(indices.is_empty().then_some(union_all.right_outputs[0].0))
-            .collect();
+        let (left_required, right_required) = if indices.is_empty() {
+            (
+                HashSet::from([union_all.left_outputs[0].0]),
+                HashSet::from([union_all.right_outputs[0].0]),
+            )
+        } else {
+            indices.iter().fold(
+                (
+                    HashSet::with_capacity(indices.len()),
+                    HashSet::with_capacity(indices.len()),
+                ),
+                |(mut left, mut right), &index| {
+                    left.insert(union_all.left_outputs[index].0);
+                    right.insert(union_all.right_outputs[index].0);
+                    (left, right)
+                },
+            )
+        };
 
         // 2. Build physical plan.
         let left_plan = self.build(s_expr.child(0)?, left_required.clone()).await?;
