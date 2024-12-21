@@ -484,10 +484,6 @@ impl Spiller {
         BlocksEncoder::new(self.use_parquet, align, 8 * 1024 * 1024)
     }
 
-    pub(crate) fn spilled_files(&self) -> Vec<Location> {
-        self.ctx.get_spilled_files()
-    }
-
     pub(crate) fn private_spilled_files(&self) -> Vec<Location> {
         let r = self.private_spilled_files.read();
         r.keys().cloned().collect()

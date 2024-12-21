@@ -186,8 +186,9 @@ impl HashJoinSpiller {
         } else {
             // Cross join.
             let spilled_files = self.spiller.private_spilled_files();
-            if !spilled_files.is_empty() {
-                let file_index = self.next_restore_file;
+            let file_index = self.next_restore_file;
+
+            if file_index < spilled_files.len() {
                 let spilled_data = self
                     .spiller
                     .read_spilled_file(&spilled_files[file_index])
@@ -248,7 +249,7 @@ impl HashJoinSpiller {
     }
 
     pub fn has_next_restore_file(&self) -> bool {
-        self.next_restore_file < self.spiller.spilled_files().len()
+        self.next_restore_file < self.spiller.private_spilled_files().len()
             || (self.next_restore_file == 0 && !self.partition_buffer.is_partition_empty(0))
     }
 
