@@ -15,6 +15,7 @@ test = true
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-meta-types = { workspace = true }
 fastrace = { workspace = true }
 futures-util = { workspace = true }

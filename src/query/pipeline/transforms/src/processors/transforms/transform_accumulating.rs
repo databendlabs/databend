@@ -66,6 +66,7 @@ impl<T: AccumulatingTransform + 'static> Drop for AccumulatingTransformer<T> {
     fn drop(&mut self) {
         drop_guard(move || {
             if !self.called_on_finish {
+                self.called_on_finish = true;
                 self.inner.on_finish(false).unwrap();
             }
         })

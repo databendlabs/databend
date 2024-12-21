@@ -117,6 +117,10 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   🖥 server: add `txn_condition::Target::KeysWithPrefix`,
 ///              to support matching the key count by a prefix.
 ///
+/// - 2024-12-1*: since 1.2.*
+///   🖥 server: add `TxnRequest::condition_tree`,
+///              to specify a complex bool expression.
+///
 ///
 /// Server feature set:
 /// ```yaml
