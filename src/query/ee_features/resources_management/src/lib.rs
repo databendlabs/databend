@@ -12,25 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod dictionary;
-mod dynamic_table;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod sequence;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
-mod warehouse;
+mod resources_management;
+
+pub use resources_management::DummyResourcesManagement;
+pub use resources_management::ResourcesManagement;

@@ -12,18 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod aggregating_index;
-pub mod attach_table;
-pub mod background_service;
-pub mod data_mask;
-pub mod enterprise_services;
-pub mod fail_safe;
-pub mod inverted_index;
-pub mod license;
-pub mod resource_management;
-pub mod storage_encryption;
-pub mod storage_quota;
-pub mod storages;
-pub mod stream;
-pub mod test_kits;
-pub mod virtual_column;
+mod resources_management_kubernetes;
+mod resources_management_system;
+
+pub use resources_management_system::SystemResourcesManagement;

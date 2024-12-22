@@ -1378,6 +1378,8 @@ pub enum TokenKind {
     SUNDAY,
     #[token("WAREHOUSES", ignore(ascii_case))]
     WAREHOUSES,
+    #[token("INSPECT", ignore(ascii_case))]
+    INSPECT,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

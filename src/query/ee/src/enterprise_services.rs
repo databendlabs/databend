@@ -23,6 +23,7 @@ use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
 use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::license_mgr::RealLicenseManager;
+use crate::resource_management::SystemResourcesManagement;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
@@ -45,6 +46,7 @@ impl EnterpriseServices {
         RealInvertedIndexHandler::init()?;
         RealStorageQuotaHandler::init(&cfg)?;
         RealFailSafeHandler::init()?;
+        SystemResourcesManagement::init(&cfg).await?;
         Ok(())
     }
 }

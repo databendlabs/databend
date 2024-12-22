@@ -1255,6 +1255,18 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ShowWarehouses => {}
+            Plan::DropWarehouse(_) => {}
+            Plan::ResumeWarehouse(_) => {}
+            Plan::SuspendWarehouse(_) => {}
+            Plan::RenameWarehouse(_) => {}
+            Plan::InspectWarehouse(_) => {}
+            Plan::DropWarehouseCluster(_) => {}
+            Plan::RenameWarehouseCluster(_) => {}
+            Plan::CreateWarehouse(_) => {}
+            Plan::AddWarehouseCluster(_) => {}
+            Plan::AddWarehouseClusterNode(_) => {}
+            Plan::DropWarehouseClusterNode(_) => {}
         }
 
         Ok(())

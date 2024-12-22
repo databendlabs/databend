@@ -204,7 +204,7 @@ impl<'a> Binder {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze {partial, graphical, query } => {
+            Statement::ExplainAnalyze { partial, graphical, query } => {
                 if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref() {
                     return Err(ErrorCode::SyntaxException("Invalid statement"));
                 }
@@ -254,7 +254,7 @@ impl<'a> Binder {
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
             Statement::CreateCatalog(stmt) => self.bind_create_catalog(stmt).await?,
             Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
-            Statement::UseCatalog {catalog} => {
+            Statement::UseCatalog { catalog } => {
                 let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
                 Plan::UseCatalog(Box::new(UseCatalogPlan {
                     catalog,
@@ -352,9 +352,10 @@ impl<'a> Binder {
                     ));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {
-                if_not_exists: *if_not_exists,
-                role_name: role_name.to_string(),
-            }))},
+                    if_not_exists: *if_not_exists,
+                    role_name: role_name.to_string(),
+                }))
+            }
             Statement::DropRole {
                 if_exists,
                 role_name,
@@ -386,9 +387,10 @@ impl<'a> Binder {
                     ));
                 }
                 Plan::DropStage(Box::new(DropStagePlan {
-                if_exists: *if_exists,
-                name: stage_name.clone(),
-            }))},
+                    if_exists: *if_exists,
+                    name: stage_name.clone(),
+                }))
+            }
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
@@ -453,7 +455,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: FileFormatParams::try_from_reader( FileFormatOptionsReader::from_ast(file_format_options), false)?,
+                    file_format_params: FileFormatParams::try_from_reader(FileFormatOptionsReader::from_ast(file_format_options), false)?,
                 }))
             }
             Statement::DropFileFormat {
@@ -474,7 +476,7 @@ impl<'a> Binder {
             Statement::DescribeConnection(stmt) => Plan::DescConnection(Box::new(DescConnectionPlan {
                 name: stmt.name.to_string(),
             })),
-            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan{})),
+            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan {})),
 
             // UDFs
             Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
@@ -493,7 +495,7 @@ impl<'a> Binder {
                     .await?
             }
 
-            Statement::UnSetStmt{settings } => {
+            Statement::UnSetStmt { settings } => {
                 let Settings { set_type, identifiers, .. } = settings;
                 self.bind_unset(bind_context, *set_type, identifiers)
                     .await?
@@ -550,7 +552,7 @@ impl<'a> Binder {
             Statement::DescPasswordPolicy(stmt) => {
                 self.bind_desc_password_policy(stmt).await?
             }
-            Statement::ShowPasswordPolicies{ show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
+            Statement::ShowPasswordPolicies { show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
             Statement::CreateTask(stmt) => {
                 self.bind_create_task(stmt).await?
             }
@@ -613,48 +615,55 @@ impl<'a> Binder {
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
             Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
-            Statement::SetPriority {priority, object_id} => {
+            Statement::SetPriority { priority, object_id } => {
                 self.bind_set_priority(priority, object_id).await?
-            },
+            }
             Statement::System(stmt) => self.bind_system(stmt).await?,
-            Statement::CreateProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                self.bind_create_procedure(stmt).await?
-            } else {
-                return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+            Statement::CreateProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_create_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+                }
             }
+            Statement::DropProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_drop_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
+                }
             }
-            Statement::DropProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                self.bind_drop_procedure(stmt).await?
-            } else {
-                return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
-            }  }
-            Statement::ShowProcedures { show_options } => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                self.bind_show_procedures(bind_context, show_options).await?
-            } else {
-                return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
-            }  }
-            Statement::DescProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                self.bind_desc_procedure(stmt).await?
-            } else {
-                return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
-            }  }
+            Statement::ShowProcedures { show_options } => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_show_procedures(bind_context, show_options).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
+                }
+            }
+            Statement::DescProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_desc_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+                }
+            }
             Statement::CallProcedure(stmt) => {
                 if self.ctx.get_settings().get_enable_experimental_procedure()? {
                     self.bind_call_procedure(bind_context, stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
                 }
-                }
-            Statement::ShowWarehouses(_) => unimplemented!(),
-            Statement::DropWarehouse(_) => unimplemented!(),
+            }
+            Statement::ShowWarehouses(v) => self.bind_show_warehouses(v)?,
+            Statement::DropWarehouse(v) => self.bind_drop_warehouse(v)?,
             Statement::CreateWarehouse(_) => unimplemented!(),
-            Statement::RenameWarehouse(_) => unimplemented!(),
-            Statement::ResumeWarehouse(_) => unimplemented!(),
-            Statement::SuspendWarehouse(_) => unimplemented!(),
-            Statement::InspectWarehouse(_) => unimplemented!(),
+            Statement::RenameWarehouse(v) => self.bind_rename_warehouse(v)?,
+            Statement::ResumeWarehouse(v) => self.bind_resume_warehouse(v)?,
+            Statement::SuspendWarehouse(v) => self.bind_suspend_warehouse(v)?,
+            Statement::InspectWarehouse(v) => self.bind_inspect_warehouse(v)?,
             Statement::AddWarehouseCluster(_) => unimplemented!(),
-            Statement::DropWarehouseCluster(_) => unimplemented!(),
-            Statement::RenameWarehouseCluster(_) => unimplemented!(),
+            Statement::DropWarehouseCluster(v) => self.bind_drop_warehouse_cluster(v)?,
+            Statement::RenameWarehouseCluster(v) => self.bind_rename_warehouse_cluster(v)?,
             Statement::AddWarehouseClusterNode(_) => unimplemented!(),
             Statement::DropWarehouseClusterNode(_) => unimplemented!(),
         };

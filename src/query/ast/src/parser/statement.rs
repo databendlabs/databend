@@ -530,14 +530,74 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
     );
 
-    // let create_warehouse = map(
-    //     rule! {
-    //         CREATE ~ WAREHOUSE ~ #ident
-    //     },
-    //     |(_, _, name)| {
-    //         Statement::ShowWarehouses(ShowWarehousesStmt {})
-    //     },
-    // );
+    let _create_warehouse = map(
+        rule! {
+            CREATE ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::CreateWarehouse(CreateWarehouseStmt { warehouse }),
+    );
+
+    let drop_warehouse = map(
+        rule! {
+            DROP ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let rename_warehouse = map(
+        rule! {
+            RENAME ~ WAREHOUSE ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, new_warehouse)| {
+            Statement::RenameWarehouse(RenameWarehouseStmt {
+                warehouse,
+                new_warehouse,
+            })
+        },
+    );
+
+    let resume_warehouse = map(
+        rule! {
+            RESUME ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::ResumeWarehouse(ResumeWarehouseStmt { warehouse }),
+    );
+
+    let suspend_warehouse = map(
+        rule! {
+            SUSPEND ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::SuspendWarehouse(SuspendWarehouseStmt { warehouse }),
+    );
+
+    let inspect_warehouse = map(
+        rule! {
+            INSPECT ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let drop_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ DROP ~ CLUSTER ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster)| {
+            Statement::DropWarehouseCluster(DropWarehouseClusterStmt { warehouse, cluster })
+        },
+    );
+
+    let rename_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ RENAME ~ CLUSTER ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster, _, new_cluster)| {
+            Statement::RenameWarehouseCluster(RenameWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                new_cluster,
+            })
+        },
+    );
 
     let show_databases = map(
         rule! {
@@ -2311,6 +2371,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         // warehouse
         rule!(
             #show_warehouses: "`SHOW WAREHOUSES`"
+            | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+            | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
+            | #resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
+            | #suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
+            | #inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
+            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
         ),
         // database
         rule!(

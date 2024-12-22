@@ -1,0 +1,136 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::SelectedNode;
+use databend_common_meta_types::NodeInfo;
+
+#[async_trait::async_trait]
+pub trait ResourcesManagement: Sync + Send + 'static {
+    async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()>;
+
+    async fn drop_warehouse(&self, name: String) -> Result<()>;
+
+    async fn resume_warehouse(&self, name: String) -> Result<()>;
+
+    async fn suspend_warehouse(&self, name: String) -> Result<()>;
+
+    async fn rename_warehouse(&self, name: String, to: String) -> Result<()>;
+
+    async fn inspect_warehouse(&self, name: String) -> Result<Vec<NodeInfo>>;
+
+    async fn add_warehouse_cluster(
+        &self,
+        name: String,
+        cluster: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<()>;
+
+    async fn rename_warehouse_cluster(
+        &self,
+        name: String,
+        cluster: String,
+        new_cluster: String,
+    ) -> Result<()>;
+
+    async fn drop_warehouse_cluster(&self, name: String, cluster: String) -> Result<()>;
+
+    async fn add_warehouse_cluster_node(
+        &self,
+        name: String,
+        cluster: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<()>;
+
+    async fn drop_warehouse_cluster_node(
+        &self,
+        name: String,
+        cluster: String,
+        nodes: Vec<String>,
+    ) -> Result<()>;
+}
+
+pub struct DummyResourcesManagement;
+
+#[async_trait::async_trait]
+impl ResourcesManagement for DummyResourcesManagement {
+    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn drop_warehouse(&self, _: String) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn resume_warehouse(&self, _: String) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn suspend_warehouse(&self, _: String) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn rename_warehouse(&self, _: String, _: String) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn inspect_warehouse(&self, _: String) -> Result<Vec<NodeInfo>> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn add_warehouse_cluster(
+        &self,
+        _: String,
+        _: String,
+        _: Vec<SelectedNode>,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn rename_warehouse_cluster(&self, _: String, _: String, _: String) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn drop_warehouse_cluster(&self, _: String, _: String) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn add_warehouse_cluster_node(
+        &self,
+        _: String,
+        _: String,
+        _: Vec<SelectedNode>,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn drop_warehouse_cluster_node(
+        &self,
+        _: String,
+        _: String,
+        _: Vec<String>,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+}
+
+impl DummyResourcesManagement {
+    pub fn init() -> Result<()> {
+        let instance: Box<dyn ResourcesManagement> = Box::new(DummyResourcesManagement);
+        GlobalInstance::set(instance);
+        Ok(())
+    }
+}

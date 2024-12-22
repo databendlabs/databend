@@ -36,6 +36,8 @@ use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
+use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_add_warehouse_cluster_node::AddWarehouseClusterNodeInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
@@ -43,9 +45,14 @@ use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
+use crate::interpreters::interpreter_create_warehouses::CreateWarehouseInterpreter;
+use crate::interpreters::interpreter_drop_warehouse_cluster::DropWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_drop_warehouse_cluster_node::DropWarehouseClusterNodeInterpreter;
+use crate::interpreters::interpreter_drop_warehouses::DropWarehouseInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
+use crate::interpreters::interpreter_inspect_warehouse::InspectWarehouseInterpreter;
 use crate::interpreters::interpreter_notification_alter::AlterNotificationInterpreter;
 use crate::interpreters::interpreter_notification_create::CreateNotificationInterpreter;
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
@@ -54,8 +61,13 @@ use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
+use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
+use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
+use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
@@ -631,6 +643,43 @@ impl InterpreterFactory {
             // ctx,
             // p.clone(),
             // )?)),
+            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create()?)),
+            Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
+                ctx,
+                *v.clone(),
+            )?)),
+            Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
+                ctx,
+                *v.clone(),
+            )?)),
+            Plan::ResumeWarehouse(v) => Ok(Arc::new(ResumeWarehouseInterpreter::try_create(
+                *v.clone(),
+            )?)),
+            Plan::SuspendWarehouse(v) => Ok(Arc::new(SuspendWarehouseInterpreter::try_create(
+                *v.clone(),
+            )?)),
+            Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
+                ctx,
+                *v.clone(),
+            )?)),
+            Plan::InspectWarehouse(v) => Ok(Arc::new(InspectWarehouseInterpreter::try_create(
+                *v.clone(),
+            )?)),
+            Plan::AddWarehouseCluster(v) => Ok(Arc::new(
+                AddWarehouseClusterInterpreter::try_create(ctx, *v.clone())?,
+            )),
+            Plan::DropWarehouseCluster(v) => Ok(Arc::new(
+                DropWarehouseClusterInterpreter::try_create(ctx, *v.clone())?,
+            )),
+            Plan::RenameWarehouseCluster(v) => Ok(Arc::new(
+                RenameWarehouseClusterInterpreter::try_create(*v.clone())?,
+            )),
+            Plan::AddWarehouseClusterNode(v) => Ok(Arc::new(
+                AddWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
+            )),
+            Plan::DropWarehouseClusterNode(v) => Ok(Arc::new(
+                DropWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
+            )),
         }
     }
 }
