@@ -15,6 +15,13 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
+    - name: Start UDF Server
+      shell: bash
+      run: |
+        pip install databend-udf>=0.2.6
+        python3 tests/udf/udf_server.py &
+        sleep 2
+
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
       run: |

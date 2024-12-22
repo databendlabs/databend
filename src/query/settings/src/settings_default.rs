@@ -875,7 +875,7 @@ impl DefaultSettings {
                     desc: "Request maximum number of threads to external server",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(16..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("external_server_request_retry_times", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8),
