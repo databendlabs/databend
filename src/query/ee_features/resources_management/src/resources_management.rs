@@ -16,6 +16,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
+use databend_common_management::WarehouseInfo;
 use databend_common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
@@ -31,6 +32,8 @@ pub trait ResourcesManagement: Sync + Send + 'static {
     async fn rename_warehouse(&self, name: String, to: String) -> Result<()>;
 
     async fn inspect_warehouse(&self, name: String) -> Result<Vec<NodeInfo>>;
+
+    async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>>;
 
     async fn add_warehouse_cluster(
         &self,
@@ -88,6 +91,10 @@ impl ResourcesManagement for DummyResourcesManagement {
     }
 
     async fn inspect_warehouse(&self, _: String) -> Result<Vec<NodeInfo>> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }
 

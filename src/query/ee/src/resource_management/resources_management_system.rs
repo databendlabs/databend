@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseApi;
+use databend_common_management::WarehouseInfo;
 use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
@@ -54,6 +55,10 @@ impl ResourcesManagement for SystemResourcesManagement {
 
     async fn inspect_warehouse(&self, name: String) -> Result<Vec<NodeInfo>> {
         self.warehouse_manager.list_warehouse_nodes(name).await
+    }
+
+    async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
+        self.warehouse_manager.list_warehouses().await
     }
 
     async fn add_warehouse_cluster(

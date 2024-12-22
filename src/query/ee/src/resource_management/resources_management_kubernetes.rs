@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
+use databend_common_management::WarehouseInfo;
 use databend_common_meta_types::NodeInfo;
 use databend_enterprise_resources_management::ResourcesManagement;
 
@@ -53,6 +54,12 @@ impl ResourcesManagement for KubernetesResourcesManagement {
     }
 
     async fn inspect_warehouse(&self, _: String) -> Result<Vec<NodeInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented kubernetes resources management",
+        ))
+    }
+
+    async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",
         ))

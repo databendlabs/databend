@@ -521,6 +521,11 @@ impl Plan {
             Plan::DescUser(plan) => plan.schema(),
             Plan::Insert(plan) => plan.schema(),
             Plan::InspectWarehouse(plan) => plan.schema(),
+            Plan::ShowWarehouses => DataSchemaRefExt::create(vec![
+                DataField::new("warehouse", DataType::String),
+                DataField::new("type", DataType::String),
+                DataField::new("status", DataType::String),
+            ]),
 
             _ => Arc::new(DataSchema::empty()),
         }

@@ -2955,21 +2955,13 @@ pub struct SpillConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
 #[serde(default, deny_unknown_fields)]
-pub struct ResourceManagerConfig {
-    #[clap(
-        long = "cluster-type",
-        value_name = "VALUE",
-        default_value = "system-managed"
-    )]
+pub struct ResourcesManagementConfig {
+    #[clap(long = "type", value_name = "VALUE", default_value = "system")]
     #[serde(rename = "type")]
     pub typ: String,
 
     #[clap(long, value_name = "VALUE")]
     pub instance_type: Option<String>,
-
-    #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
-    /// Allow space in bytes to spill to local disk.
-    pub spill_local_disk_max_bytes: u64,
 }
 
 mod cache_config_converters {

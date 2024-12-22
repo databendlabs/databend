@@ -12,7 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_management::WarehouseInfo;
+use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -37,7 +46,33 @@ impl Interpreter for ShowWarehousesInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // WarehouseMgr::i
-        Ok(PipelineBuildResult::create())
+        let warehouses = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+            .list_warehouses()
+            .await?;
+        let mut warehouses_name = ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
+        let mut warehouses_type = ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
+        let mut warehouses_status =
+            ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
+
+        for warehouse in warehouses {
+            match warehouse {
+                WarehouseInfo::SelfManaged(name) => {
+                    warehouses_name.push(Scalar::String(name).as_ref());
+                    warehouses_type.push(Scalar::String(String::from("Self-Managed")).as_ref());
+                    warehouses_status.push(Scalar::String(String::from("Running")).as_ref());
+                }
+                WarehouseInfo::SystemManaged(v) => {
+                    warehouses_name.push(Scalar::String(v.display_name.clone()).as_ref());
+                    warehouses_type.push(Scalar::String(String::from("System-Managed")).as_ref());
+                    warehouses_status.push(Scalar::String(v.status.clone()).as_ref());
+                }
+            }
+        }
+
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            warehouses_name.build(),
+            warehouses_type.build(),
+            warehouses_status.build(),
+        ])])
     }
 }
