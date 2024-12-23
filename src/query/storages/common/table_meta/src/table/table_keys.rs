@@ -50,6 +50,8 @@ pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 // the following are used in for random engine
 pub const OPT_KEY_RANDOM_SEED: &str = "seed";
+pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
+pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
