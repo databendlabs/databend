@@ -41,6 +41,7 @@ use crate::parser::stage::file_location;
 use crate::parser::statement::hint;
 use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
+use crate::parser::ErrorKind;
 use crate::parser::Input;
 
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
@@ -51,7 +52,7 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
         }),
     ));
 
-    map(
+    map_res(
         rule! {
             #with? ~ COPY
             ~ #hint?
@@ -69,20 +70,15 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
                 files: Default::default(),
                 pattern: Default::default(),
                 file_format: Default::default(),
-                validation_mode: Default::default(),
-                size_limit: Default::default(),
-                max_files: Default::default(),
-                split_size: Default::default(),
-                purge: Default::default(),
-                force: Default::default(),
-                disable_variant_check: Default::default(),
-                on_error: "abort".to_string(),
-                return_failed_only: Default::default(),
+
+                options: Default::default(),
             };
             for opt in opts {
-                copy_stmt.apply_option(opt);
+                copy_stmt
+                    .apply_option(opt)
+                    .map_err(|e| nom::Err::Failure(ErrorKind::Other(e)))?;
             }
-            Statement::CopyIntoTable(copy_stmt)
+            Ok(Statement::CopyIntoTable(copy_stmt))
         },
     )(i)
 }
@@ -158,10 +154,6 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             CopyIntoTableOption::FileFormat(options)
         }),
         map(
-            rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
-            |(_, _, validation_mode)| CopyIntoTableOption::ValidationMode(validation_mode),
-        ),
-        map(
             rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
             |(_, _, size_limit)| CopyIntoTableOption::SizeLimit(size_limit as usize),
         ),
@@ -182,6 +174,10 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
         map(rule! { ON_ERROR ~ "=" ~ #ident }, |(_, _, on_error)| {
             CopyIntoTableOption::OnError(on_error.to_string())
         }),
+        map(
+            rule! { COLUMN_MATCH_MODE ~ "=" ~ #ident },
+            |(_, _, mode)| CopyIntoTableOption::ColumnMatchMode(mode.to_string()),
+        ),
         map(
             rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| {

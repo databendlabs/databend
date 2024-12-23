@@ -298,11 +298,7 @@ async fn benchmark_table_copy_file(
         serde_json::from_str(param).unwrap()
     };
 
-    let mut txn = TxnRequest {
-        condition: vec![],
-        if_then: vec![],
-        else_then: vec![],
-    };
+    let mut txn = TxnRequest::default();
 
     for file_index in 0..param.file_cnt {
         let copied_file_ident = TableCopiedFileNameIdent {

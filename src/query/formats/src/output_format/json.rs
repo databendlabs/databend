@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
@@ -99,6 +100,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             let dt = DateConverter::to_date(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap()
         }
+        ScalarRef::Interval(v) => serde_json::to_value(interval_to_string(&v).to_string()).unwrap(),
         ScalarRef::Timestamp(v) => {
             let dt = DateConverter::to_timestamp(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()
@@ -191,8 +193,7 @@ impl OutputFormat for JSONOutputFormat {
             }
             res.push(b'{');
             for (c, value) in data_block.columns().iter().enumerate() {
-                let value = value.value.as_ref();
-                let scalar = unsafe { value.index_unchecked(row) };
+                let scalar = unsafe { value.value.index_unchecked(row) };
                 let value = scalar_to_json(scalar, &self.format_settings);
 
                 res.push(b'\"');

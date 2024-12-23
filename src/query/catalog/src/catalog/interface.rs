@@ -135,8 +135,6 @@ pub trait CatalogCreator: Send + Sync + Debug {
 
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync + Debug {
-    /// Catalog itself
-
     // Get the name of the catalog.
     fn name(&self) -> String;
     // Get the info of the catalog.
@@ -148,8 +146,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             func_name!()
         )))
     }
-
-    /// Database.
 
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
@@ -210,8 +206,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply>;
-
-    /// Table.
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
@@ -453,8 +447,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()>;
 
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>>;
-
-    /// Table function
 
     // Get function by name.
     fn get_table_function(

@@ -31,6 +31,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
@@ -327,6 +328,14 @@ impl Processor for TransformSerializeBlock {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
                 let block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
+                let progress_values = ProgressValues {
+                    rows: block_meta.row_count as usize,
+                    bytes: block_meta.block_size as usize,
+                };
+                self.block_builder
+                    .ctx
+                    .get_write_progress()
+                    .incr(&progress_values);
 
                 let mutation_log_data_block = if let Some(index) = index {
                     // we are replacing the block represented by the `index`
@@ -336,19 +345,18 @@ impl Processor for TransformSerializeBlock {
                     })
                 } else {
                     // appending new data block
-                    let progress_values = ProgressValues {
-                        rows: block_meta.row_count as usize,
-                        bytes: block_meta.block_size as usize,
-                    };
-                    self.block_builder
-                        .ctx
-                        .get_write_progress()
-                        .incr(&progress_values);
-
-                    if let Some(tid) = self.table_id {
-                        self.block_builder
-                            .ctx
-                            .update_multi_table_insert_status(tid, block_meta.row_count);
+                    if matches!(self.kind, MutationKind::Insert) {
+                        if let Some(tid) = self.table_id {
+                            self.block_builder
+                                .ctx
+                                .update_multi_table_insert_status(tid, block_meta.row_count);
+                        } else {
+                            self.block_builder.ctx.add_mutation_status(MutationStatus {
+                                insert_rows: block_meta.row_count,
+                                update_rows: 0,
+                                deleted_rows: 0,
+                            });
+                        }
                     }
 
                     if matches!(self.kind, MutationKind::Recluster) {

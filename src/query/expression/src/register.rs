@@ -22,7 +22,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
-use crate::values::ValueRef;
 use crate::EvalContext;
 use crate::Function;
 use crate::FunctionContext;
@@ -214,7 +213,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O>
+        G: for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -267,7 +266,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, &mut EvalContext) -> Value<O>
+        G: for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -327,12 +326,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                &mut EvalContext,
-            ) -> Value<O>
+        G: for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -408,13 +402,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                ValueRef<'a, I4>,
-                &mut EvalContext,
-            ) -> Value<O>
+        G: for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -494,11 +482,11 @@ impl FunctionRegistry {
             + Send
             + Sync,
         G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                ValueRef<'a, I4>,
-                ValueRef<'a, I5>,
+                Value<I1>,
+                Value<I2>,
+                Value<I3>,
+                Value<I4>,
+                Value<I5>,
                 &mut EvalContext,
             ) -> Value<O>
             + 'static
@@ -564,7 +552,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<NullableType<O>>
+        G: for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>>
             + 'static
             + Clone
             + Copy
@@ -617,11 +605,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                &mut EvalContext,
-            ) -> Value<NullableType<O>>
+        G: for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<NullableType<O>>
             + 'static
             + Clone
             + Copy
@@ -686,12 +670,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                &mut EvalContext,
-            ) -> Value<NullableType<O>>
+        G: for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<NullableType<O>>
             + 'static
             + Clone
             + Copy
@@ -768,10 +747,10 @@ impl FunctionRegistry {
             + Send
             + Sync,
         G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                ValueRef<'a, I4>,
+                Value<I1>,
+                Value<I2>,
+                Value<I3>,
+                Value<I4>,
                 &mut EvalContext,
             ) -> Value<NullableType<O>>
             + 'static
@@ -853,11 +832,11 @@ impl FunctionRegistry {
             + Send
             + Sync,
         G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                ValueRef<'a, I4>,
-                ValueRef<'a, I5>,
+                Value<I1>,
+                Value<I2>,
+                Value<I3>,
+                Value<I4>,
+                Value<I5>,
                 &mut EvalContext,
             ) -> Value<NullableType<O>>
             + 'static
@@ -946,7 +925,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O>
+        G: for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -979,7 +958,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, &mut EvalContext) -> Value<O>
+        G: for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -1012,12 +991,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                &mut EvalContext,
-            ) -> Value<O>
+        G: for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -1066,13 +1040,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                ValueRef<'a, I4>,
-                &mut EvalContext,
-            ) -> Value<O>
+        G: for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>
             + 'static
             + Clone
             + Copy
@@ -1129,11 +1097,11 @@ impl FunctionRegistry {
             + Send
             + Sync,
         G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                ValueRef<'a, I3>,
-                ValueRef<'a, I4>,
-                ValueRef<'a, I5>,
+                Value<I1>,
+                Value<I2>,
+                Value<I3>,
+                Value<I4>,
+                Value<I5>,
                 &mut EvalContext,
             ) -> Value<O>
             + 'static
@@ -1167,10 +1135,10 @@ impl FunctionRegistry {
 
 pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
-) -> impl Fn(ValueRef<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
+) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, ctx| match (arg1) {
-        (ValueRef::Scalar(arg1)) => Value::Scalar(func(arg1, ctx)),
-        (ValueRef::Column(arg1)) => {
+        (Value::Scalar(arg1)) => Value::Scalar(func(I1::to_scalar_ref(&arg1), ctx)),
+        (Value::Column(arg1)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter.map(|arg1| func(arg1, ctx));
@@ -1182,27 +1150,31 @@ pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
 
 pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
+        + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Value::Scalar(func(arg1, arg2, ctx)),
-        (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(func(
+            I1::to_scalar_ref(&arg1),
+            I2::to_scalar_ref(&arg2),
+            ctx,
+        )),
+        (Value::Column(arg1), Value::Scalar(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
-            let iter = arg1_iter.map(|arg1| func(arg1, arg2.clone(), ctx));
+            let iter = arg1_iter.map(|arg1| func(arg1, I2::to_scalar_ref(&arg2), ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+        (Value::Scalar(arg1), Value::Column(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
-            let iter = arg2_iter.map(|arg2| func(arg1.clone(), arg2, ctx));
+            let iter = arg2_iter.map(|arg2| func(I1::to_scalar_ref(&arg1), arg2, ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+        (Value::Column(arg1), Value::Column(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -1216,73 +1188,91 @@ pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        &mut EvalContext,
-    ) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
-{
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
+        + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
-            Value::Scalar(func(arg1, arg2, arg3, ctx))
-        }
-        (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3)) => Value::Scalar(func(
+            I1::to_scalar_ref(&arg1),
+            I2::to_scalar_ref(&arg2),
+            I3::to_scalar_ref(&arg3),
+            ctx,
+        )),
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
-            let iter = arg1_iter.map(|arg1| func(arg1, arg2.clone(), arg3.clone(), ctx));
+            let iter = arg1_iter.map(|arg1| {
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
-            let iter = arg2_iter.map(|arg2| func(arg1.clone(), arg2, arg3.clone(), ctx));
+            let iter = arg2_iter.map(|arg2| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter
                 .zip(arg2_iter)
-                .map(|(arg1, arg2)| func(arg1, arg2, arg3.clone(), ctx));
+                .map(|(arg1, arg2)| func(arg1, arg2, I3::to_scalar_ref(&arg3), ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
-            let iter = arg3_iter.map(|arg3| func(arg1.clone(), arg2.clone(), arg3, ctx));
+            let iter = arg3_iter.map(|arg3| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter
                 .zip(arg3_iter)
-                .map(|(arg1, arg3)| func(arg1, arg2.clone(), arg3, ctx));
+                .map(|(arg1, arg3)| func(arg1, I2::to_scalar_ref(&arg2), arg3, ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter
                 .zip(arg3_iter)
-                .map(|(arg2, arg3)| func(arg1.clone(), arg2, arg3, ctx));
+                .map(|(arg2, arg3)| func(I1::to_scalar_ref(&arg1), arg2, arg3, ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -1299,176 +1289,180 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
 
 pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        &mut EvalContext,
-    ) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, ValueRef<I4>, &mut EvalContext) -> Value<O>
-+ Copy
-+ Send
-+ Sync {
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            &mut EvalContext,
+        ) -> O::Scalar
+        + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
+{
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => Value::Scalar(func(arg1, arg2, arg3, arg4, ctx)),
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
+            Value::Scalar(func(
+                I1::to_scalar_ref(&arg1),
+                I2::to_scalar_ref(&arg2),
+                I3::to_scalar_ref(&arg3),
+                I4::to_scalar_ref(&arg4),
+                ctx,
+            ))
+        }
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
-            let iter =
-                arg1_iter.map(|arg1| func(arg1, arg2.clone(), arg3.clone(), arg4.clone(), ctx));
+            let iter = arg1_iter.map(|arg1| {
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
-            let iter =
-                arg2_iter.map(|arg2| func(arg1.clone(), arg2, arg3.clone(), arg4.clone(), ctx));
+            let iter = arg2_iter.map(|arg2| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
+            let iter = arg1_iter.zip(arg2_iter).map(|(arg1, arg2)| {
+                func(
+                    arg1,
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    ctx,
+                )
+            });
+            let col = O::column_from_iter(iter, generics);
+            Value::Column(col)
+        }
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
+            let generics = &(ctx.generics.to_owned());
+            let arg3_iter = I3::iter_column(&arg3);
+            let iter = arg3_iter.map(|arg3| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    ctx,
+                )
+            });
+            let col = O::column_from_iter(iter, generics);
+            Value::Column(col)
+        }
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
+            let generics = &(ctx.generics.to_owned());
+            let arg1_iter = I1::iter_column(&arg1);
+            let arg3_iter = I3::iter_column(&arg3);
+            let iter = arg1_iter.zip(arg3_iter).map(|(arg1, arg3)| {
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    ctx,
+                )
+            });
+            let col = O::column_from_iter(iter, generics);
+            Value::Column(col)
+        }
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
+            let generics = &(ctx.generics.to_owned());
+            let arg2_iter = I2::iter_column(&arg2);
+            let arg3_iter = I3::iter_column(&arg3);
+            let iter = arg2_iter.zip(arg3_iter).map(|(arg2, arg3)| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    ctx,
+                )
+            });
+            let col = O::column_from_iter(iter, generics);
+            Value::Column(col)
+        }
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
+            let generics = &(ctx.generics.to_owned());
+            let arg1_iter = I1::iter_column(&arg1);
+            let arg2_iter = I2::iter_column(&arg2);
+            let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter
                 .zip(arg2_iter)
-                .map(|(arg1, arg2)| func(arg1, arg2, arg3.clone(), arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
-        }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
-            let generics = &(ctx.generics.to_owned());
-            let arg3_iter = I3::iter_column(&arg3);
-            let iter =
-                arg3_iter.map(|arg3| func(arg1.clone(), arg2.clone(), arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
-            let generics = &(ctx.generics.to_owned());
-            let arg1_iter = I1::iter_column(&arg1);
-            let arg3_iter = I3::iter_column(&arg3);
-            let iter = arg1_iter
                 .zip(arg3_iter)
-                .map(|(arg1, arg3)| func(arg1, arg2.clone(), arg3, arg4.clone(), ctx));
+                .map(|((arg1, arg2), arg3)| func(arg1, arg2, arg3, I4::to_scalar_ref(&arg4), ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
-            let generics = &(ctx.generics.to_owned());
-            let arg2_iter = I2::iter_column(&arg2);
-            let arg3_iter = I3::iter_column(&arg3);
-            let iter = arg2_iter
-                .zip(arg3_iter)
-                .map(|(arg2, arg3)| func(arg1.clone(), arg2, arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
-            let generics = &(ctx.generics.to_owned());
-            let arg1_iter = I1::iter_column(&arg1);
-            let arg2_iter = I2::iter_column(&arg2);
-            let arg3_iter = I3::iter_column(&arg3);
-            let iter = arg1_iter
-                .zip(arg2_iter)
-                .zip(arg3_iter)
-                .map(|((arg1, arg2), arg3)| func(arg1, arg2, arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
-        }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
-            let iter =
-                arg4_iter.map(|arg4| func(arg1.clone(), arg2.clone(), arg3.clone(), arg4, ctx));
+            let iter = arg4_iter.map(|arg4| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
-            let iter = arg1_iter
-                .zip(arg4_iter)
-                .map(|(arg1, arg4)| func(arg1, arg2.clone(), arg3.clone(), arg4, ctx));
+            let iter = arg1_iter.zip(arg4_iter).map(|(arg1, arg4)| {
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
-            let iter = arg2_iter
-                .zip(arg4_iter)
-                .map(|(arg2, arg4)| func(arg1.clone(), arg2, arg3.clone(), arg4, ctx));
+            let iter = arg2_iter.zip(arg4_iter).map(|(arg2, arg4)| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -1476,31 +1470,27 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             let iter = arg1_iter
                 .zip(arg2_iter)
                 .zip(arg4_iter)
-                .map(|((arg1, arg2), arg4)| func(arg1, arg2, arg3.clone(), arg4, ctx));
+                .map(|((arg1, arg2), arg4)| func(arg1, arg2, I3::to_scalar_ref(&arg3), arg4, ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
-            let iter = arg3_iter
-                .zip(arg4_iter)
-                .map(|(arg3, arg4)| func(arg1.clone(), arg2.clone(), arg3, arg4, ctx));
+            let iter = arg3_iter.zip(arg4_iter).map(|(arg3, arg4)| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    arg4,
+                    ctx,
+                )
+            });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1508,16 +1498,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             let iter = arg1_iter
                 .zip(arg3_iter)
                 .zip(arg4_iter)
-                .map(|((arg1, arg3), arg4)| func(arg1, arg2.clone(), arg3, arg4, ctx));
+                .map(|((arg1, arg3), arg4)| func(arg1, I2::to_scalar_ref(&arg2), arg3, arg4, ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1525,16 +1510,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             let iter = arg2_iter
                 .zip(arg3_iter)
                 .zip(arg4_iter)
-                .map(|((arg2, arg3), arg4)| func(arg1.clone(), arg2, arg3, arg4, ctx));
+                .map(|((arg2, arg3), arg4)| func(I1::to_scalar_ref(&arg1), arg2, arg3, arg4, ctx));
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -1560,51 +1540,51 @@ pub fn vectorize_5_arg<
     O: ArgType,
 >(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        I5::ScalarRef<'_>,
-        &mut EvalContext,
-    ) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
-) -> impl Fn(
-    ValueRef<I1>,
-    ValueRef<I2>,
-    ValueRef<I3>,
-    ValueRef<I4>,
-    ValueRef<I5>,
-    &mut EvalContext,
-) -> Value<O>
-+ Copy
-+ Send
-+ Sync {
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            I5::ScalarRef<'_>,
+            &mut EvalContext,
+        ) -> O::Scalar
+        + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, Value<I5>, &mut EvalContext) -> Value<O>
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
-        ) => Value::Scalar(func(arg1, arg2, arg3, arg4, arg5, ctx)),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
+        ) => Value::Scalar(func(
+            I1::to_scalar_ref(&arg1),
+            I2::to_scalar_ref(&arg2),
+            I3::to_scalar_ref(&arg3),
+            I4::to_scalar_ref(&arg4),
+            I5::to_scalar_ref(&arg5),
+            ctx,
+        )),
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter.map(|arg1| {
                 func(
                     arg1,
-                    arg2.clone(),
-                    arg3.clone(),
-                    arg4.clone(),
-                    arg5.clone(),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     ctx,
                 )
             });
@@ -1612,21 +1592,21 @@ pub fn vectorize_5_arg<
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter.map(|arg2| {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
-                    arg3.clone(),
-                    arg4.clone(),
-                    arg5.clone(),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     ctx,
                 )
             });
@@ -1634,37 +1614,22 @@ pub fn vectorize_5_arg<
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter).map(|(arg1, arg2)| {
-                func(arg1, arg2, arg3.clone(), arg4.clone(), arg5.clone(), ctx)
-            });
-            let col = O::column_from_iter(iter, generics);
-            Value::Column(col)
-        }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
-        ) => {
-            let generics = &(ctx.generics.to_owned());
-            let arg3_iter = I3::iter_column(&arg3);
-            let iter = arg3_iter.map(|arg3| {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3,
-                    arg4.clone(),
-                    arg5.clone(),
+                    arg1,
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     ctx,
                 )
             });
@@ -1672,43 +1637,79 @@ pub fn vectorize_5_arg<
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
+        ) => {
+            let generics = &(ctx.generics.to_owned());
+            let arg3_iter = I3::iter_column(&arg3);
+            let iter = arg3_iter.map(|arg3| {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
+                    ctx,
+                )
+            });
+            let col = O::column_from_iter(iter, generics);
+            Value::Column(col)
+        }
+        (
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter).map(|(arg1, arg3)| {
-                func(arg1, arg2.clone(), arg3, arg4.clone(), arg5.clone(), ctx)
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter).map(|(arg2, arg3)| {
-                func(arg1.clone(), arg2, arg3, arg4.clone(), arg5.clone(), ctx)
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -1718,27 +1719,34 @@ pub fn vectorize_5_arg<
                 .zip(arg2_iter)
                 .zip(arg3_iter)
                 .map(|((arg1, arg2), arg3)| {
-                    func(arg1, arg2, arg3, arg4.clone(), arg5.clone(), ctx)
+                    func(
+                        arg1,
+                        arg2,
+                        arg3,
+                        I4::to_scalar_ref(&arg4),
+                        I5::to_scalar_ref(&arg5),
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg4_iter.map(|arg4| {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     ctx,
                 )
             });
@@ -1746,43 +1754,57 @@ pub fn vectorize_5_arg<
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg4_iter).map(|(arg1, arg4)| {
-                func(arg1, arg2.clone(), arg3.clone(), arg4, arg5.clone(), ctx)
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    I5::to_scalar_ref(&arg5),
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg4_iter).map(|(arg2, arg4)| {
-                func(arg1.clone(), arg2, arg3.clone(), arg4, arg5.clone(), ctx)
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    I5::to_scalar_ref(&arg5),
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -1792,33 +1814,47 @@ pub fn vectorize_5_arg<
                 .zip(arg2_iter)
                 .zip(arg4_iter)
                 .map(|((arg1, arg2), arg4)| {
-                    func(arg1, arg2, arg3.clone(), arg4, arg5.clone(), ctx)
+                    func(
+                        arg1,
+                        arg2,
+                        I3::to_scalar_ref(&arg3),
+                        arg4,
+                        I5::to_scalar_ref(&arg5),
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg3_iter.zip(arg4_iter).map(|(arg3, arg4)| {
-                func(arg1.clone(), arg2.clone(), arg3, arg4, arg5.clone(), ctx)
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    arg4,
+                    I5::to_scalar_ref(&arg5),
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -1828,17 +1864,24 @@ pub fn vectorize_5_arg<
                 .zip(arg3_iter)
                 .zip(arg4_iter)
                 .map(|((arg1, arg3), arg4)| {
-                    func(arg1, arg2.clone(), arg3, arg4, arg5.clone(), ctx)
+                    func(
+                        arg1,
+                        I2::to_scalar_ref(&arg2),
+                        arg3,
+                        arg4,
+                        I5::to_scalar_ref(&arg5),
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -1848,17 +1891,24 @@ pub fn vectorize_5_arg<
                 .zip(arg3_iter)
                 .zip(arg4_iter)
                 .map(|((arg2, arg3), arg4)| {
-                    func(arg1.clone(), arg2, arg3, arg4, arg5.clone(), ctx)
+                    func(
+                        I1::to_scalar_ref(&arg1),
+                        arg2,
+                        arg3,
+                        arg4,
+                        I5::to_scalar_ref(&arg5),
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -1866,26 +1916,28 @@ pub fn vectorize_5_arg<
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg4_iter).map(
-                |(((arg1, arg2), arg3), arg4)| func(arg1, arg2, arg3, arg4, arg5.clone(), ctx),
+                |(((arg1, arg2), arg3), arg4)| {
+                    func(arg1, arg2, arg3, arg4, I5::to_scalar_ref(&arg5), ctx)
+                },
             );
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg5_iter.map(|arg5| {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3.clone(),
-                    arg4.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     ctx,
                 )
@@ -1894,43 +1946,57 @@ pub fn vectorize_5_arg<
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg5_iter).map(|(arg1, arg5)| {
-                func(arg1, arg2.clone(), arg3.clone(), arg4.clone(), arg5, ctx)
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    arg5,
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg5_iter).map(|(arg2, arg5)| {
-                func(arg1.clone(), arg2, arg3.clone(), arg4.clone(), arg5, ctx)
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    arg5,
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -1940,33 +2006,47 @@ pub fn vectorize_5_arg<
                 .zip(arg2_iter)
                 .zip(arg5_iter)
                 .map(|((arg1, arg2), arg5)| {
-                    func(arg1, arg2, arg3.clone(), arg4.clone(), arg5, ctx)
+                    func(
+                        arg1,
+                        arg2,
+                        I3::to_scalar_ref(&arg3),
+                        I4::to_scalar_ref(&arg4),
+                        arg5,
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg3_iter.zip(arg5_iter).map(|(arg3, arg5)| {
-                func(arg1.clone(), arg2.clone(), arg3, arg4.clone(), arg5, ctx)
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    arg5,
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -1976,17 +2056,24 @@ pub fn vectorize_5_arg<
                 .zip(arg3_iter)
                 .zip(arg5_iter)
                 .map(|((arg1, arg3), arg5)| {
-                    func(arg1, arg2.clone(), arg3, arg4.clone(), arg5, ctx)
+                    func(
+                        arg1,
+                        I2::to_scalar_ref(&arg2),
+                        arg3,
+                        I4::to_scalar_ref(&arg4),
+                        arg5,
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -1996,17 +2083,24 @@ pub fn vectorize_5_arg<
                 .zip(arg3_iter)
                 .zip(arg5_iter)
                 .map(|((arg2, arg3), arg5)| {
-                    func(arg1.clone(), arg2, arg3, arg4.clone(), arg5, ctx)
+                    func(
+                        I1::to_scalar_ref(&arg1),
+                        arg2,
+                        arg3,
+                        I4::to_scalar_ref(&arg4),
+                        arg5,
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2014,33 +2108,42 @@ pub fn vectorize_5_arg<
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg5_iter).map(
-                |(((arg1, arg2), arg3), arg5)| func(arg1, arg2, arg3, arg4.clone(), arg5, ctx),
+                |(((arg1, arg2), arg3), arg5)| {
+                    func(arg1, arg2, arg3, I4::to_scalar_ref(&arg4), arg5, ctx)
+                },
             );
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg4_iter.zip(arg5_iter).map(|(arg4, arg5)| {
-                func(arg1.clone(), arg2.clone(), arg3.clone(), arg4, arg5, ctx)
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    arg5,
+                    ctx,
+                )
             });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2050,17 +2153,24 @@ pub fn vectorize_5_arg<
                 .zip(arg4_iter)
                 .zip(arg5_iter)
                 .map(|((arg1, arg4), arg5)| {
-                    func(arg1, arg2.clone(), arg3.clone(), arg4, arg5, ctx)
+                    func(
+                        arg1,
+                        I2::to_scalar_ref(&arg2),
+                        I3::to_scalar_ref(&arg3),
+                        arg4,
+                        arg5,
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -2070,17 +2180,24 @@ pub fn vectorize_5_arg<
                 .zip(arg4_iter)
                 .zip(arg5_iter)
                 .map(|((arg2, arg4), arg5)| {
-                    func(arg1.clone(), arg2, arg3.clone(), arg4, arg5, ctx)
+                    func(
+                        I1::to_scalar_ref(&arg1),
+                        arg2,
+                        I3::to_scalar_ref(&arg3),
+                        arg4,
+                        arg5,
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2088,17 +2205,19 @@ pub fn vectorize_5_arg<
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter).zip(arg5_iter).map(
-                |(((arg1, arg2), arg4), arg5)| func(arg1, arg2, arg3.clone(), arg4, arg5, ctx),
+                |(((arg1, arg2), arg4), arg5)| {
+                    func(arg1, arg2, I3::to_scalar_ref(&arg3), arg4, arg5, ctx)
+                },
             );
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
@@ -2108,17 +2227,24 @@ pub fn vectorize_5_arg<
                 .zip(arg4_iter)
                 .zip(arg5_iter)
                 .map(|((arg3, arg4), arg5)| {
-                    func(arg1.clone(), arg2.clone(), arg3, arg4, arg5, ctx)
+                    func(
+                        I1::to_scalar_ref(&arg1),
+                        I2::to_scalar_ref(&arg2),
+                        arg3,
+                        arg4,
+                        arg5,
+                        ctx,
+                    )
                 });
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2126,17 +2252,19 @@ pub fn vectorize_5_arg<
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter).map(
-                |(((arg1, arg3), arg4), arg5)| func(arg1, arg2.clone(), arg3, arg4, arg5, ctx),
+                |(((arg1, arg3), arg4), arg5)| {
+                    func(arg1, I2::to_scalar_ref(&arg2), arg3, arg4, arg5, ctx)
+                },
             );
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -2144,17 +2272,19 @@ pub fn vectorize_5_arg<
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter).map(
-                |(((arg2, arg3), arg4), arg5)| func(arg1.clone(), arg2, arg3, arg4, arg5, ctx),
+                |(((arg2, arg3), arg4), arg5)| {
+                    func(I1::to_scalar_ref(&arg1), arg2, arg3, arg4, arg5, ctx)
+                },
             );
             let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2178,15 +2308,15 @@ pub fn vectorize_5_arg<
 
 pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext) + Copy + Send + Sync,
-) -> impl Fn(ValueRef<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
+) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, ctx| match (arg1) {
-        (ValueRef::Scalar(arg1)) => {
+        (Value::Scalar(arg1)) => {
             let generics = &(ctx.generics.to_owned());
             let mut builder = O::create_builder(1, generics);
-            func(arg1, &mut builder, ctx);
+            func(I1::to_scalar_ref(&arg1), &mut builder, ctx);
             Value::Scalar(O::build_scalar(builder))
         }
-        (ValueRef::Column(arg1)) => {
+        (Value::Column(arg1)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
@@ -2201,38 +2331,43 @@ pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
 
 pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext)
-    + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
+        + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let mut builder = O::create_builder(1, generics);
-            func(arg1, arg2, &mut builder, ctx);
+            func(
+                I1::to_scalar_ref(&arg1),
+                I2::to_scalar_ref(&arg2),
+                &mut builder,
+                ctx,
+            );
             Value::Scalar(O::build_scalar(builder))
         }
-        (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
+        (Value::Column(arg1), Value::Scalar(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
-                func(arg1, arg2.clone(), &mut builder, ctx);
+                func(arg1, I2::to_scalar_ref(&arg2), &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+        (Value::Scalar(arg1), Value::Column(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
-                func(arg1.clone(), arg2, &mut builder, ctx);
+                func(I1::to_scalar_ref(&arg1), arg2, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+        (Value::Column(arg1), Value::Column(arg2)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -2248,87 +2383,110 @@ pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 
 pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        &mut O::ColumnBuilder,
-        &mut EvalContext,
-    ) + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
-{
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            &mut O::ColumnBuilder,
+            &mut EvalContext,
+        ) + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let mut builder = O::create_builder(1, generics);
-            func(arg1, arg2, arg3, &mut builder, ctx);
+            func(
+                I1::to_scalar_ref(&arg1),
+                I2::to_scalar_ref(&arg2),
+                I3::to_scalar_ref(&arg3),
+                &mut builder,
+                ctx,
+            );
             Value::Scalar(O::build_scalar(builder))
         }
-        (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
-                func(arg1, arg2.clone(), arg3.clone(), &mut builder, ctx);
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
-                func(arg1.clone(), arg2, arg3.clone(), &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
-                func(arg1, arg2, arg3.clone(), &mut builder, ctx);
+                func(arg1, arg2, I3::to_scalar_ref(&arg3), &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg3_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg3 in iter {
-                func(arg1.clone(), arg2.clone(), arg3, &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg3) in iter {
-                func(arg1, arg2.clone(), arg3, &mut builder, ctx);
+                func(arg1, I2::to_scalar_ref(&arg2), arg3, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg3) in iter {
-                func(arg1.clone(), arg2, arg3, &mut builder, ctx);
+                func(I1::to_scalar_ref(&arg1), arg2, arg3, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -2351,37 +2509,32 @@ pub fn vectorize_with_builder_4_arg<
     O: ArgType,
 >(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        &mut O::ColumnBuilder,
-        &mut EvalContext,
-    ) + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, ValueRef<I4>, &mut EvalContext) -> Value<O>
-+ Copy
-+ Send
-+ Sync {
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            &mut O::ColumnBuilder,
+            &mut EvalContext,
+        ) + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
+{
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let mut builder = O::create_builder(1, generics);
-            func(arg1, arg2, arg3, arg4, &mut builder, ctx);
+            func(
+                I1::to_scalar_ref(&arg1),
+                I2::to_scalar_ref(&arg2),
+                I3::to_scalar_ref(&arg3),
+                I4::to_scalar_ref(&arg4),
+                &mut builder,
+                ctx,
+            );
             Value::Scalar(O::build_scalar(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
@@ -2389,113 +2542,104 @@ pub fn vectorize_with_builder_4_arg<
             for arg1 in iter {
                 func(
                     arg1,
-                    arg2.clone(),
-                    arg3.clone(),
-                    arg4.clone(),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     &mut builder,
                     ctx,
                 );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
-                    arg3.clone(),
-                    arg4.clone(),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     &mut builder,
                     ctx,
                 );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
-                func(arg1, arg2, arg3.clone(), arg4.clone(), &mut builder, ctx);
-            }
-            Value::Column(O::build_column(builder))
-        }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
-            let generics = &(ctx.generics.to_owned());
-            let arg3_iter = I3::iter_column(&arg3);
-            let iter = arg3_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, generics);
-            for arg3 in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3,
-                    arg4.clone(),
+                    arg1,
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     &mut builder,
                     ctx,
                 );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
+            let generics = &(ctx.generics.to_owned());
+            let arg3_iter = I3::iter_column(&arg3);
+            let iter = arg3_iter;
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
+            for arg3 in iter {
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    &mut builder,
+                    ctx,
+                );
+            }
+            Value::Column(O::build_column(builder))
+        }
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg3) in iter {
-                func(arg1, arg2.clone(), arg3, arg4.clone(), &mut builder, ctx);
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg3) in iter {
-                func(arg1.clone(), arg2, arg3, arg4.clone(), &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3), Value::Scalar(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -2503,25 +2647,27 @@ pub fn vectorize_with_builder_4_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg3) in iter {
-                func(arg1, arg2, arg3, arg4.clone(), &mut builder, ctx);
+                func(
+                    arg1,
+                    arg2,
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg4_iter;
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg4 in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
                     &mut builder,
                     ctx,
@@ -2529,44 +2675,43 @@ pub fn vectorize_with_builder_4_arg<
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg4) in iter {
-                func(arg1, arg2.clone(), arg3.clone(), arg4, &mut builder, ctx);
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg4) in iter {
-                func(arg1.clone(), arg2, arg3.clone(), arg4, &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -2574,32 +2719,36 @@ pub fn vectorize_with_builder_4_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg4) in iter {
-                func(arg1, arg2, arg3.clone(), arg4, &mut builder, ctx);
+                func(
+                    arg1,
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg3_iter.zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg3, arg4) in iter {
-                func(arg1.clone(), arg2.clone(), arg3, arg4, &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    arg4,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Scalar(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
@@ -2607,16 +2756,18 @@ pub fn vectorize_with_builder_4_arg<
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg3), arg4) in iter {
-                func(arg1, arg2.clone(), arg3, arg4, &mut builder, ctx);
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    arg4,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Scalar(arg1), Value::Column(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -2624,16 +2775,18 @@ pub fn vectorize_with_builder_4_arg<
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg3), arg4) in iter {
-                func(arg1.clone(), arg2, arg3, arg4, &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    arg3,
+                    arg4,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
@@ -2658,46 +2811,47 @@ pub fn vectorize_with_builder_5_arg<
     O: ArgType,
 >(
     func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        I3::ScalarRef<'_>,
-        I4::ScalarRef<'_>,
-        I5::ScalarRef<'_>,
-        &mut O::ColumnBuilder,
-        &mut EvalContext,
-    ) + Copy
-    + Send
-    + Sync,
-) -> impl Fn(
-    ValueRef<I1>,
-    ValueRef<I2>,
-    ValueRef<I3>,
-    ValueRef<I4>,
-    ValueRef<I5>,
-    &mut EvalContext,
-) -> Value<O>
-+ Copy
-+ Send
-+ Sync {
+            I1::ScalarRef<'_>,
+            I2::ScalarRef<'_>,
+            I3::ScalarRef<'_>,
+            I4::ScalarRef<'_>,
+            I5::ScalarRef<'_>,
+            &mut O::ColumnBuilder,
+            &mut EvalContext,
+        ) + Copy
+        + Send
+        + Sync,
+) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, Value<I5>, &mut EvalContext) -> Value<O>
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let mut builder = O::create_builder(1, generics);
-            func(arg1, arg2, arg3, arg4, arg5, &mut builder, ctx);
+            func(
+                I1::to_scalar_ref(&arg1),
+                I2::to_scalar_ref(&arg2),
+                I3::to_scalar_ref(&arg3),
+                I4::to_scalar_ref(&arg4),
+                I5::to_scalar_ref(&arg5),
+                &mut builder,
+                ctx,
+            );
             Value::Scalar(O::build_scalar(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2706,10 +2860,10 @@ pub fn vectorize_with_builder_5_arg<
             for arg1 in iter {
                 func(
                     arg1,
-                    arg2.clone(),
-                    arg3.clone(),
-                    arg4.clone(),
-                    arg5.clone(),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2717,11 +2871,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -2729,11 +2883,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
-                    arg3.clone(),
-                    arg4.clone(),
-                    arg5.clone(),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2741,11 +2895,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2756,9 +2910,9 @@ pub fn vectorize_with_builder_5_arg<
                 func(
                     arg1,
                     arg2,
-                    arg3.clone(),
-                    arg4.clone(),
-                    arg5.clone(),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2766,11 +2920,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
@@ -2778,11 +2932,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg3 in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
-                    arg4.clone(),
-                    arg5.clone(),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2790,11 +2944,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2804,10 +2958,10 @@ pub fn vectorize_with_builder_5_arg<
             for (arg1, arg3) in iter {
                 func(
                     arg1,
-                    arg2.clone(),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
-                    arg4.clone(),
-                    arg5.clone(),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2815,11 +2969,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -2828,11 +2982,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg3) in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
                     arg3,
-                    arg4.clone(),
-                    arg5.clone(),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2840,11 +2994,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2857,8 +3011,8 @@ pub fn vectorize_with_builder_5_arg<
                     arg1,
                     arg2,
                     arg3,
-                    arg4.clone(),
-                    arg5.clone(),
+                    I4::to_scalar_ref(&arg4),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2866,11 +3020,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
@@ -2878,11 +3032,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg4 in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2890,11 +3044,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2904,10 +3058,10 @@ pub fn vectorize_with_builder_5_arg<
             for (arg1, arg4) in iter {
                 func(
                     arg1,
-                    arg2.clone(),
-                    arg3.clone(),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2915,11 +3069,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -2928,11 +3082,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg4) in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
-                    arg3.clone(),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2940,11 +3094,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -2956,9 +3110,9 @@ pub fn vectorize_with_builder_5_arg<
                 func(
                     arg1,
                     arg2,
-                    arg3.clone(),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2966,11 +3120,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
@@ -2979,11 +3133,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg3, arg4) in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -2991,11 +3145,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3006,10 +3160,10 @@ pub fn vectorize_with_builder_5_arg<
             for ((arg1, arg3), arg4) in iter {
                 func(
                     arg1,
-                    arg2.clone(),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -3017,11 +3171,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -3031,11 +3185,11 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg3), arg4) in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
                     arg3,
                     arg4,
-                    arg5.clone(),
+                    I5::to_scalar_ref(&arg5),
                     &mut builder,
                     ctx,
                 );
@@ -3043,11 +3197,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3057,16 +3211,24 @@ pub fn vectorize_with_builder_5_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg4_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg3), arg4) in iter {
-                func(arg1, arg2, arg3, arg4, arg5.clone(), &mut builder, ctx);
+                func(
+                    arg1,
+                    arg2,
+                    arg3,
+                    arg4,
+                    I5::to_scalar_ref(&arg5),
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg5_iter = I5::iter_column(&arg5);
@@ -3074,10 +3236,10 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg5 in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3.clone(),
-                    arg4.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3086,11 +3248,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3100,9 +3262,9 @@ pub fn vectorize_with_builder_5_arg<
             for (arg1, arg5) in iter {
                 func(
                     arg1,
-                    arg2.clone(),
-                    arg3.clone(),
-                    arg4.clone(),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3111,11 +3273,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -3124,10 +3286,10 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg5) in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
-                    arg3.clone(),
-                    arg4.clone(),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3136,11 +3298,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3152,8 +3314,8 @@ pub fn vectorize_with_builder_5_arg<
                 func(
                     arg1,
                     arg2,
-                    arg3.clone(),
-                    arg4.clone(),
+                    I3::to_scalar_ref(&arg3),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3162,11 +3324,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
@@ -3175,10 +3337,10 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg3, arg5) in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
-                    arg4.clone(),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3187,11 +3349,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3202,9 +3364,9 @@ pub fn vectorize_with_builder_5_arg<
             for ((arg1, arg3), arg5) in iter {
                 func(
                     arg1,
-                    arg2.clone(),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
-                    arg4.clone(),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3213,11 +3375,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -3227,10 +3389,10 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg3), arg5) in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
                     arg3,
-                    arg4.clone(),
+                    I4::to_scalar_ref(&arg4),
                     arg5,
                     &mut builder,
                     ctx,
@@ -3239,11 +3401,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3253,16 +3415,24 @@ pub fn vectorize_with_builder_5_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg5_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg3), arg5) in iter {
-                func(arg1, arg2, arg3, arg4.clone(), arg5, &mut builder, ctx);
+                func(
+                    arg1,
+                    arg2,
+                    arg3,
+                    I4::to_scalar_ref(&arg4),
+                    arg5,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
@@ -3271,9 +3441,9 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg4, arg5) in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
-                    arg3.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
                     arg5,
                     &mut builder,
@@ -3283,11 +3453,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3298,8 +3468,8 @@ pub fn vectorize_with_builder_5_arg<
             for ((arg1, arg4), arg5) in iter {
                 func(
                     arg1,
-                    arg2.clone(),
-                    arg3.clone(),
+                    I2::to_scalar_ref(&arg2),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
                     arg5,
                     &mut builder,
@@ -3309,11 +3479,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -3323,9 +3493,9 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg4), arg5) in iter {
                 func(
-                    arg1.clone(),
+                    I1::to_scalar_ref(&arg1),
                     arg2,
-                    arg3.clone(),
+                    I3::to_scalar_ref(&arg3),
                     arg4,
                     arg5,
                     &mut builder,
@@ -3335,11 +3505,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3349,16 +3519,24 @@ pub fn vectorize_with_builder_5_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter).zip(arg5_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg4), arg5) in iter {
-                func(arg1, arg2, arg3.clone(), arg4, arg5, &mut builder, ctx);
+                func(
+                    arg1,
+                    arg2,
+                    I3::to_scalar_ref(&arg3),
+                    arg4,
+                    arg5,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
@@ -3368,8 +3546,8 @@ pub fn vectorize_with_builder_5_arg<
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg3, arg4), arg5) in iter {
                 func(
-                    arg1.clone(),
-                    arg2.clone(),
+                    I1::to_scalar_ref(&arg1),
+                    I2::to_scalar_ref(&arg2),
                     arg3,
                     arg4,
                     arg5,
@@ -3380,11 +3558,11 @@ pub fn vectorize_with_builder_5_arg<
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3394,16 +3572,24 @@ pub fn vectorize_with_builder_5_arg<
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg3), arg4), arg5) in iter {
-                func(arg1, arg2.clone(), arg3, arg4, arg5, &mut builder, ctx);
+                func(
+                    arg1,
+                    I2::to_scalar_ref(&arg2),
+                    arg3,
+                    arg4,
+                    arg5,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Scalar(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
@@ -3413,16 +3599,24 @@ pub fn vectorize_with_builder_5_arg<
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter);
             let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg2, arg3), arg4), arg5) in iter {
-                func(arg1.clone(), arg2, arg3, arg4, arg5, &mut builder, ctx);
+                func(
+                    I1::to_scalar_ref(&arg1),
+                    arg2,
+                    arg3,
+                    arg4,
+                    arg5,
+                    &mut builder,
+                    ctx,
+                );
             }
             Value::Column(O::build_column(builder))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
@@ -3445,17 +3639,17 @@ pub fn vectorize_with_builder_5_arg<
 }
 
 pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
-) -> impl for<'a> Fn(ValueRef<'a, NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+    func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
+) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
+       + Copy
+       + Send
+       + Sync {
     move |arg1, ctx| match (arg1) {
-        (ValueRef::Scalar(None)) => Value::Scalar(None),
-        (ValueRef::Scalar(Some(arg1))) => Value::Scalar(Some(
-            func(ValueRef::Scalar(arg1), ctx).into_scalar().unwrap(),
-        )),
-        (ValueRef::Column(arg1)) => {
+        (Value::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(Some(arg1))) => {
+            Value::Scalar(Some(func(Value::Scalar(arg1), ctx).into_scalar().unwrap()))
+        }
+        (Value::Column(arg1)) => {
             let and_validity = arg1.validity;
             let validity = ctx
                 .validity
@@ -3463,35 +3657,30 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let column = func(ValueRef::Column(arg1.column), ctx)
-                .into_column()
-                .unwrap();
+            let column = func(Value::Column(arg1.column), ctx).into_column().unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
 
 pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, &mut EvalContext) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
-        (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => Value::Scalar(Some(
-            func(ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ctx)
+        (Value::Scalar(None), _) | (_, Value::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2))) => Value::Scalar(Some(
+            func(Value::Scalar(arg1), Value::Scalar(arg2), ctx)
                 .into_scalar()
                 .unwrap(),
         )),
-        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2))) => {
+        (Value::Column(arg1), Value::Scalar(Some(arg2))) => {
             let and_validity = arg1.validity;
             let validity = ctx
                 .validity
@@ -3499,12 +3688,12 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let column = func(ValueRef::Column(arg1.column), ValueRef::Scalar(arg2), ctx)
+            let column = func(Value::Column(arg1.column), Value::Scalar(arg2), ctx)
                 .into_column()
                 .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
+        (Value::Scalar(Some(arg1)), Value::Column(arg2)) => {
             let and_validity = arg2.validity;
             let validity = ctx
                 .validity
@@ -3512,12 +3701,12 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let column = func(ValueRef::Scalar(arg1), ValueRef::Column(arg2.column), ctx)
+            let column = func(Value::Scalar(arg1), Value::Column(arg2.column), ctx)
                 .into_column()
                 .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+        (Value::Column(arg1), Value::Column(arg2)) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
                 .validity
@@ -3525,56 +3714,45 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
+            let column = func(Value::Column(arg1.column), Value::Column(arg2.column), ctx)
+                .into_column()
+                .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
 
 pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        &mut EvalContext,
-    ) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
-    ValueRef<'a, NullableType<I3>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
+    Value<NullableType<I3>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
-        (ValueRef::Scalar(None), _, _)
-        | (_, ValueRef::Scalar(None), _)
-        | (_, _, ValueRef::Scalar(None)) => Value::Scalar(None),
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-        ) => Value::Scalar(Some(
-            func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ctx,
-            )
-            .into_scalar()
-            .unwrap(),
-        )),
-        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Scalar(Some(arg3))) => {
+        (Value::Scalar(None), _, _) | (_, Value::Scalar(None), _) | (_, _, Value::Scalar(None)) => {
+            Value::Scalar(None)
+        }
+        (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2)), Value::Scalar(Some(arg3))) => {
+            Value::Scalar(Some(
+                func(
+                    Value::Scalar(arg1),
+                    Value::Scalar(arg2),
+                    Value::Scalar(arg3),
+                    ctx,
+                )
+                .into_scalar()
+                .unwrap(),
+            ))
+        }
+        (Value::Column(arg1), Value::Scalar(Some(arg2)), Value::Scalar(Some(arg3))) => {
             let and_validity = arg1.validity;
             let validity = ctx
                 .validity
@@ -3583,16 +3761,16 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+        (Value::Scalar(Some(arg1)), Value::Column(arg2), Value::Scalar(Some(arg3))) => {
             let and_validity = arg2.validity;
             let validity = ctx
                 .validity
@@ -3601,16 +3779,16 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(Some(arg3))) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
                 .validity
@@ -3619,16 +3797,16 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+        (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2)), Value::Column(arg3)) => {
             let and_validity = arg3.validity;
             let validity = ctx
                 .validity
@@ -3637,16 +3815,16 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Scalar(Some(arg2)), Value::Column(arg3)) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg3.validity);
             let validity = ctx
                 .validity
@@ -3655,16 +3833,16 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Scalar(Some(arg1)), Value::Column(arg2), Value::Column(arg3)) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg3.validity);
             let validity = ctx
                 .validity
@@ -3673,16 +3851,16 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3)) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg3.validity,
@@ -3694,9 +3872,9 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
@@ -3713,52 +3891,46 @@ pub fn passthrough_nullable_4_arg<
     I4: ArgType,
     O: ArgType,
 >(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        ValueRef<'a, I4>,
-        &mut EvalContext,
-    ) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
-    ValueRef<'a, NullableType<I3>>,
-    ValueRef<'a, NullableType<I4>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
+    Value<NullableType<I3>>,
+    Value<NullableType<I4>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
-        (ValueRef::Scalar(None), _, _, _)
-        | (_, ValueRef::Scalar(None), _, _)
-        | (_, _, ValueRef::Scalar(None), _)
-        | (_, _, _, ValueRef::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(None), _, _, _)
+        | (_, Value::Scalar(None), _, _)
+        | (_, _, Value::Scalar(None), _)
+        | (_, _, _, Value::Scalar(None)) => Value::Scalar(None),
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => Value::Scalar(Some(
             func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_scalar()
             .unwrap(),
         )),
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = arg1.validity;
             let validity = ctx
@@ -3768,10 +3940,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3779,10 +3951,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = arg2.validity;
             let validity = ctx
@@ -3792,10 +3964,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3803,10 +3975,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
@@ -3816,10 +3988,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3827,10 +3999,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = arg3.validity;
             let validity = ctx
@@ -3840,10 +4012,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3851,10 +4023,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg3.validity);
             let validity = ctx
@@ -3864,10 +4036,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3875,10 +4047,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg3.validity);
             let validity = ctx
@@ -3888,10 +4060,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3899,10 +4071,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -3915,10 +4087,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -3926,10 +4098,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = arg4.validity;
             let validity = ctx
@@ -3939,10 +4111,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -3950,10 +4122,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg4.validity);
             let validity = ctx
@@ -3963,10 +4135,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -3974,10 +4146,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg4.validity);
             let validity = ctx
@@ -3987,10 +4159,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -3998,10 +4170,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4014,10 +4186,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -4025,10 +4197,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg3.validity, &arg4.validity);
             let validity = ctx
@@ -4038,10 +4210,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -4049,10 +4221,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg3.validity),
@@ -4065,10 +4237,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -4076,10 +4248,10 @@ pub fn passthrough_nullable_4_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg3.validity),
@@ -4092,22 +4264,17 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
             .unwrap();
             Value::Column(NullableColumn::new(column, validity))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
                     &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4122,10 +4289,10 @@ pub fn passthrough_nullable_4_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -4144,57 +4311,57 @@ pub fn passthrough_nullable_5_arg<
     O: ArgType,
 >(
     func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        ValueRef<'a, I4>,
-        ValueRef<'a, I5>,
-        &mut EvalContext,
-    ) -> Value<O>
-    + Copy
-    + Send
-    + Sync,
+            Value<I1>,
+            Value<I2>,
+            Value<I3>,
+            Value<I4>,
+            Value<I5>,
+            &mut EvalContext,
+        ) -> Value<O>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
-    ValueRef<'a, NullableType<I3>>,
-    ValueRef<'a, NullableType<I4>>,
-    ValueRef<'a, NullableType<I5>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
+    Value<NullableType<I3>>,
+    Value<NullableType<I4>>,
+    Value<NullableType<I5>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
-        (ValueRef::Scalar(None), _, _, _, _)
-        | (_, ValueRef::Scalar(None), _, _, _)
-        | (_, _, ValueRef::Scalar(None), _, _)
-        | (_, _, _, ValueRef::Scalar(None), _)
-        | (_, _, _, _, ValueRef::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(None), _, _, _, _)
+        | (_, Value::Scalar(None), _, _, _)
+        | (_, _, Value::Scalar(None), _, _)
+        | (_, _, _, Value::Scalar(None), _)
+        | (_, _, _, _, Value::Scalar(None)) => Value::Scalar(None),
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => Value::Scalar(Some(
             func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_scalar()
             .unwrap(),
         )),
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg1.validity;
             let validity = ctx
@@ -4204,11 +4371,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4216,11 +4383,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg2.validity;
             let validity = ctx
@@ -4230,11 +4397,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4242,11 +4409,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
@@ -4256,11 +4423,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4268,11 +4435,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg3.validity;
             let validity = ctx
@@ -4282,11 +4449,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4294,11 +4461,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg3.validity);
             let validity = ctx
@@ -4308,11 +4475,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4320,11 +4487,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg3.validity);
             let validity = ctx
@@ -4334,11 +4501,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4346,11 +4513,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4363,11 +4530,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4375,11 +4542,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg4.validity;
             let validity = ctx
@@ -4389,11 +4556,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4401,11 +4568,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg4.validity);
             let validity = ctx
@@ -4415,11 +4582,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4427,11 +4594,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg4.validity);
             let validity = ctx
@@ -4441,11 +4608,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4453,11 +4620,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4470,11 +4637,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4482,11 +4649,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg3.validity, &arg4.validity);
             let validity = ctx
@@ -4496,11 +4663,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4508,11 +4675,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg3.validity),
@@ -4525,11 +4692,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4537,11 +4704,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg3.validity),
@@ -4554,11 +4721,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4566,11 +4733,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -4586,11 +4753,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -4598,11 +4765,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = arg5.validity;
             let validity = ctx
@@ -4612,11 +4779,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4624,11 +4791,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg5.validity);
             let validity = ctx
@@ -4638,11 +4805,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4650,11 +4817,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg5.validity);
             let validity = ctx
@@ -4664,11 +4831,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4676,11 +4843,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4693,11 +4860,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4705,11 +4872,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg3.validity, &arg5.validity);
             let validity = ctx
@@ -4719,11 +4886,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4731,11 +4898,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg3.validity),
@@ -4748,11 +4915,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4760,11 +4927,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg3.validity),
@@ -4777,11 +4944,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4789,11 +4956,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -4809,11 +4976,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4821,11 +4988,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg4.validity, &arg5.validity);
             let validity = ctx
@@ -4835,11 +5002,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4847,11 +5014,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg4.validity),
@@ -4864,11 +5031,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4876,11 +5043,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg4.validity),
@@ -4893,11 +5060,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4905,11 +5072,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -4925,11 +5092,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4937,11 +5104,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg3.validity, &arg4.validity),
@@ -4954,11 +5121,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4966,11 +5133,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -4986,11 +5153,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -4998,11 +5165,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -5018,11 +5185,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -5030,11 +5197,11 @@ pub fn passthrough_nullable_5_arg<
             Value::Column(NullableColumn::new(column, validity))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -5053,11 +5220,11 @@ pub fn passthrough_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -5068,20 +5235,17 @@ pub fn passthrough_nullable_5_arg<
 }
 
 pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
-) -> impl for<'a> Fn(ValueRef<'a, NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+    func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync,
+) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
+       + Copy
+       + Send
+       + Sync {
     move |arg1, ctx| match (arg1) {
-        (ValueRef::Scalar(None)) => Value::Scalar(None),
-        (ValueRef::Scalar(Some(arg1))) => {
-            Value::Scalar(func(ValueRef::Scalar(arg1), ctx).into_scalar().unwrap())
+        (Value::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(Some(arg1))) => {
+            Value::Scalar(func(Value::Scalar(arg1), ctx).into_scalar().unwrap())
         }
-        (ValueRef::Column(arg1)) => {
+        (Value::Column(arg1)) => {
             let and_validity = arg1.validity;
             let validity = ctx
                 .validity
@@ -5089,9 +5253,7 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let nullable_column = func(ValueRef::Column(arg1.column), ctx)
-                .into_column()
-                .unwrap();
+            let nullable_column = func(Value::Column(arg1.column), ctx).into_column().unwrap();
             let combine_validity =
                 databend_common_column::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn::new(
@@ -5103,30 +5265,26 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
 }
 
 pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        &mut EvalContext,
-    ) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<NullableType<O>>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
-        (ValueRef::Scalar(None), _) | (_, ValueRef::Scalar(None)) => Value::Scalar(None),
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2))) => Value::Scalar(
-            func(ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ctx)
+        (Value::Scalar(None), _) | (_, Value::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2))) => Value::Scalar(
+            func(Value::Scalar(arg1), Value::Scalar(arg2), ctx)
                 .into_scalar()
                 .unwrap(),
         ),
-        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2))) => {
+        (Value::Column(arg1), Value::Scalar(Some(arg2))) => {
             let and_validity = arg1.validity;
             let validity = ctx
                 .validity
@@ -5134,7 +5292,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let nullable_column = func(ValueRef::Column(arg1.column), ValueRef::Scalar(arg2), ctx)
+            let nullable_column = func(Value::Column(arg1.column), Value::Scalar(arg2), ctx)
                 .into_column()
                 .unwrap();
             let combine_validity =
@@ -5144,7 +5302,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 combine_validity,
             ))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
+        (Value::Scalar(Some(arg1)), Value::Column(arg2)) => {
             let and_validity = arg2.validity;
             let validity = ctx
                 .validity
@@ -5152,7 +5310,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let nullable_column = func(ValueRef::Scalar(arg1), ValueRef::Column(arg2.column), ctx)
+            let nullable_column = func(Value::Scalar(arg1), Value::Column(arg2.column), ctx)
                 .into_column()
                 .unwrap();
             let combine_validity =
@@ -5162,7 +5320,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 combine_validity,
             ))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+        (Value::Column(arg1), Value::Column(arg2)) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
                 .validity
@@ -5170,13 +5328,9 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .map(|valid| valid & (&and_validity))
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
+            let nullable_column = func(Value::Column(arg1.column), Value::Column(arg2.column), ctx)
+                .into_column()
+                .unwrap();
             let combine_validity =
                 databend_common_column::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn::new(
@@ -5188,43 +5342,36 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        &mut EvalContext,
-    ) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<NullableType<O>>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
-    ValueRef<'a, NullableType<I3>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
+    Value<NullableType<I3>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
-        (ValueRef::Scalar(None), _, _)
-        | (_, ValueRef::Scalar(None), _)
-        | (_, _, ValueRef::Scalar(None)) => Value::Scalar(None),
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-        ) => Value::Scalar(
-            func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ctx,
+        (Value::Scalar(None), _, _) | (_, Value::Scalar(None), _) | (_, _, Value::Scalar(None)) => {
+            Value::Scalar(None)
+        }
+        (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2)), Value::Scalar(Some(arg3))) => {
+            Value::Scalar(
+                func(
+                    Value::Scalar(arg1),
+                    Value::Scalar(arg2),
+                    Value::Scalar(arg3),
+                    ctx,
+                )
+                .into_scalar()
+                .unwrap(),
             )
-            .into_scalar()
-            .unwrap(),
-        ),
-        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Scalar(Some(arg3))) => {
+        }
+        (Value::Column(arg1), Value::Scalar(Some(arg2)), Value::Scalar(Some(arg3))) => {
             let and_validity = arg1.validity;
             let validity = ctx
                 .validity
@@ -5233,9 +5380,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
                 ctx,
             )
             .into_column()
@@ -5247,7 +5394,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 combine_validity,
             ))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+        (Value::Scalar(Some(arg1)), Value::Column(arg2), Value::Scalar(Some(arg3))) => {
             let and_validity = arg2.validity;
             let validity = ctx
                 .validity
@@ -5256,9 +5403,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
                 ctx,
             )
             .into_column()
@@ -5270,7 +5417,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 combine_validity,
             ))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Scalar(Some(arg3))) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
                 .validity
@@ -5279,9 +5426,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
                 ctx,
             )
             .into_column()
@@ -5293,7 +5440,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 combine_validity,
             ))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+        (Value::Scalar(Some(arg1)), Value::Scalar(Some(arg2)), Value::Column(arg3)) => {
             let and_validity = arg3.validity;
             let validity = ctx
                 .validity
@@ -5302,9 +5449,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
@@ -5316,7 +5463,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 combine_validity,
             ))
         }
-        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Scalar(Some(arg2)), Value::Column(arg3)) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg3.validity);
             let validity = ctx
                 .validity
@@ -5325,9 +5472,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
@@ -5339,7 +5486,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 combine_validity,
             ))
         }
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Scalar(Some(arg1)), Value::Column(arg2), Value::Column(arg3)) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg3.validity);
             let validity = ctx
                 .validity
@@ -5348,9 +5495,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
@@ -5362,7 +5509,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 combine_validity,
             ))
         }
-        (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3)) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg3.validity,
@@ -5374,9 +5521,9 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
                 ctx,
             )
             .into_column()
@@ -5393,51 +5540,51 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
 
 pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
     func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        ValueRef<'a, I4>,
-        &mut EvalContext,
-    ) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+            Value<I1>,
+            Value<I2>,
+            Value<I3>,
+            Value<I4>,
+            &mut EvalContext,
+        ) -> Value<NullableType<O>>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
-    ValueRef<'a, NullableType<I3>>,
-    ValueRef<'a, NullableType<I4>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
+    Value<NullableType<I3>>,
+    Value<NullableType<I4>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, ctx| match (arg1, arg2, arg3, arg4) {
-        (ValueRef::Scalar(None), _, _, _)
-        | (_, ValueRef::Scalar(None), _, _)
-        | (_, _, ValueRef::Scalar(None), _)
-        | (_, _, _, ValueRef::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(None), _, _, _)
+        | (_, Value::Scalar(None), _, _)
+        | (_, _, Value::Scalar(None), _)
+        | (_, _, _, Value::Scalar(None)) => Value::Scalar(None),
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => Value::Scalar(
             func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_scalar()
             .unwrap(),
         ),
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = arg1.validity;
             let validity = ctx
@@ -5447,10 +5594,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5463,10 +5610,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = arg2.validity;
             let validity = ctx
@@ -5476,10 +5623,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5492,10 +5639,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
@@ -5505,10 +5652,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5521,10 +5668,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = arg3.validity;
             let validity = ctx
@@ -5534,10 +5681,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5550,10 +5697,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg3.validity);
             let validity = ctx
@@ -5563,10 +5710,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5579,10 +5726,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg3.validity);
             let validity = ctx
@@ -5592,10 +5739,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5608,10 +5755,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -5624,10 +5771,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
                 ctx,
             )
             .into_column()
@@ -5640,10 +5787,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = arg4.validity;
             let validity = ctx
@@ -5653,10 +5800,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5669,10 +5816,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg4.validity);
             let validity = ctx
@@ -5682,10 +5829,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5698,10 +5845,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg4.validity);
             let validity = ctx
@@ -5711,10 +5858,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5727,10 +5874,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -5743,10 +5890,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5759,10 +5906,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg3.validity, &arg4.validity);
             let validity = ctx
@@ -5772,10 +5919,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5788,10 +5935,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg3.validity),
@@ -5804,10 +5951,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5820,10 +5967,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg3.validity),
@@ -5836,10 +5983,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5851,12 +5998,7 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 combine_validity,
             ))
         }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+        (Value::Column(arg1), Value::Column(arg2), Value::Column(arg3), Value::Column(arg4)) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
                     &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -5871,10 +6013,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
                 ctx,
             )
             .into_column()
@@ -5898,57 +6040,57 @@ pub fn combine_nullable_5_arg<
     O: ArgType,
 >(
     func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        ValueRef<'a, I4>,
-        ValueRef<'a, I5>,
-        &mut EvalContext,
-    ) -> Value<NullableType<O>>
-    + Copy
-    + Send
-    + Sync,
+            Value<I1>,
+            Value<I2>,
+            Value<I3>,
+            Value<I4>,
+            Value<I5>,
+            &mut EvalContext,
+        ) -> Value<NullableType<O>>
+        + Copy
+        + Send
+        + Sync,
 ) -> impl for<'a> Fn(
-    ValueRef<'a, NullableType<I1>>,
-    ValueRef<'a, NullableType<I2>>,
-    ValueRef<'a, NullableType<I3>>,
-    ValueRef<'a, NullableType<I4>>,
-    ValueRef<'a, NullableType<I5>>,
+    Value<NullableType<I1>>,
+    Value<NullableType<I2>>,
+    Value<NullableType<I3>>,
+    Value<NullableType<I4>>,
+    Value<NullableType<I5>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-+ Copy
-+ Send
-+ Sync {
+       + Copy
+       + Send
+       + Sync {
     move |arg1, arg2, arg3, arg4, arg5, ctx| match (arg1, arg2, arg3, arg4, arg5) {
-        (ValueRef::Scalar(None), _, _, _, _)
-        | (_, ValueRef::Scalar(None), _, _, _)
-        | (_, _, ValueRef::Scalar(None), _, _)
-        | (_, _, _, ValueRef::Scalar(None), _)
-        | (_, _, _, _, ValueRef::Scalar(None)) => Value::Scalar(None),
+        (Value::Scalar(None), _, _, _, _)
+        | (_, Value::Scalar(None), _, _, _)
+        | (_, _, Value::Scalar(None), _, _)
+        | (_, _, _, Value::Scalar(None), _)
+        | (_, _, _, _, Value::Scalar(None)) => Value::Scalar(None),
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => Value::Scalar(
             func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_scalar()
             .unwrap(),
         ),
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg1.validity;
             let validity = ctx
@@ -5958,11 +6100,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -5975,11 +6117,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg2.validity;
             let validity = ctx
@@ -5989,11 +6131,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6006,11 +6148,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg2.validity);
             let validity = ctx
@@ -6020,11 +6162,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6037,11 +6179,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg3.validity;
             let validity = ctx
@@ -6051,11 +6193,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6068,11 +6210,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg3.validity);
             let validity = ctx
@@ -6082,11 +6224,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6099,11 +6241,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg3.validity);
             let validity = ctx
@@ -6113,11 +6255,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6130,11 +6272,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -6147,11 +6289,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6164,11 +6306,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = arg4.validity;
             let validity = ctx
@@ -6178,11 +6320,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6195,11 +6337,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg4.validity);
             let validity = ctx
@@ -6209,11 +6351,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6226,11 +6368,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg4.validity);
             let validity = ctx
@@ -6240,11 +6382,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6257,11 +6399,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -6274,11 +6416,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6291,11 +6433,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg3.validity, &arg4.validity);
             let validity = ctx
@@ -6305,11 +6447,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6322,11 +6464,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg3.validity),
@@ -6339,11 +6481,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6356,11 +6498,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg3.validity),
@@ -6373,11 +6515,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6390,11 +6532,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Scalar(Some(arg5)),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -6410,11 +6552,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Scalar(arg5),
                 ctx,
             )
             .into_column()
@@ -6427,11 +6569,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = arg5.validity;
             let validity = ctx
@@ -6441,11 +6583,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6458,11 +6600,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg1.validity, &arg5.validity);
             let validity = ctx
@@ -6472,11 +6614,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6489,11 +6631,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg2.validity, &arg5.validity);
             let validity = ctx
@@ -6503,11 +6645,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6520,11 +6662,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg2.validity),
@@ -6537,11 +6679,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6554,11 +6696,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg3.validity, &arg5.validity);
             let validity = ctx
@@ -6568,11 +6710,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6585,11 +6727,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg3.validity),
@@ -6602,11 +6744,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6619,11 +6761,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg3.validity),
@@ -6636,11 +6778,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6653,11 +6795,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Scalar(Some(arg4)),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -6673,11 +6815,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Scalar(arg4),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6690,11 +6832,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(&arg4.validity, &arg5.validity);
             let validity = ctx
@@ -6704,11 +6846,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6721,11 +6863,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg1.validity, &arg4.validity),
@@ -6738,11 +6880,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6755,11 +6897,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg2.validity, &arg4.validity),
@@ -6772,11 +6914,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6789,11 +6931,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Scalar(Some(arg3)),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -6809,11 +6951,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Scalar(arg3),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6826,11 +6968,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(&arg3.validity, &arg4.validity),
@@ -6843,11 +6985,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6860,11 +7002,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Scalar(Some(arg2)),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -6880,11 +7022,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Scalar(arg2),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6897,11 +7039,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Scalar(Some(arg1)),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -6917,11 +7059,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Scalar(arg1),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -6934,11 +7076,11 @@ pub fn combine_nullable_5_arg<
             ))
         }
         (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
+            Value::Column(arg1),
+            Value::Column(arg2),
+            Value::Column(arg3),
+            Value::Column(arg4),
+            Value::Column(arg5),
         ) => {
             let and_validity = databend_common_column::bitmap::and(
                 &databend_common_column::bitmap::and(
@@ -6957,11 +7099,11 @@ pub fn combine_nullable_5_arg<
                 .unwrap_or(and_validity);
             ctx.validity = Some(validity.clone());
             let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
+                Value::Column(arg1.column),
+                Value::Column(arg2.column),
+                Value::Column(arg3.column),
+                Value::Column(arg4.column),
+                Value::Column(arg5.column),
                 ctx,
             )
             .into_column()
@@ -7065,13 +7207,13 @@ fn erase_calc_domain_generic_5_arg<
 
 fn erase_function_generic_0_arg<O: ArgType>(
     func: impl for<'a> Fn(&mut EvalContext) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| Value::upcast(func(ctx))
 }
 
 fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+    func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O>,
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         Value::upcast(func(arg1, ctx))
@@ -7079,8 +7221,8 @@ fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
 }
 
 fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, &mut EvalContext) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O>,
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
@@ -7089,13 +7231,8 @@ fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 fn erase_function_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        &mut EvalContext,
-    ) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>,
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
@@ -7105,14 +7242,8 @@ fn erase_function_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgTyp
 }
 
 fn erase_function_generic_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        ValueRef<'a, I4>,
-        &mut EvalContext,
-    ) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+    func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>,
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
@@ -7131,14 +7262,14 @@ fn erase_function_generic_5_arg<
     O: ArgType,
 >(
     func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        ValueRef<'a, I3>,
-        ValueRef<'a, I4>,
-        ValueRef<'a, I5>,
+        Value<I1>,
+        Value<I2>,
+        Value<I3>,
+        Value<I4>,
+        Value<I5>,
         &mut EvalContext,
     ) -> Value<O>,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();

@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use databend_common_meta_types::sys_data::SysData;
+use databend_common_meta_types::Change;
 
 use crate::leveled_store::map_api::MapApi;
 use crate::state_machine::ExpireKey;
-use crate::state_machine::StateMachineSubscriber;
+
+/// Send a key-value change event to subscribers.
+pub trait SMEventSender: Debug + Sync + Send {
+    fn send(&self, change: Change<Vec<u8>, String>);
+}
 
 /// The API a state machine implements
 pub trait StateMachineApi: Send + Sync {
@@ -34,5 +41,5 @@ pub trait StateMachineApi: Send + Sync {
 
     fn sys_data_mut(&mut self) -> &mut SysData;
 
-    fn get_subscriber(&self) -> Option<&dyn StateMachineSubscriber>;
+    fn event_sender(&self) -> Option<&dyn SMEventSender>;
 }

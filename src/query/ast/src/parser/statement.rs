@@ -516,6 +516,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let use_catalog = map(
+        rule! {
+            USE ~ CATALOG ~ #ident
+        },
+        |(_, _, catalog)| Statement::UseCatalog { catalog },
+    );
 
     let show_databases = map(
         rule! {
@@ -1557,9 +1563,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #stage_name )
             ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
-            ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
-            ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
-            ~ ( VALIDATION_MODE ~ ^"=" ~ ^#ident )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1570,9 +1573,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             stage,
             url_opt,
             file_format_opt,
-            on_error_opt,
-            size_limit_opt,
-            validation_mode_opt,
             comment_opt,
         )| {
             let create_option =
@@ -1582,11 +1582,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 stage_name: stage.to_string(),
                 location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
-                on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
-                size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
-                validation_mode: validation_mode_opt
-                    .map(|v| v.2.to_string())
-                    .unwrap_or_default(),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
             }))
         },
@@ -2292,6 +2287,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
             | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
+        // use
+        rule!(
+                #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_database : "`USE <database>`"
+        ),
         // database
         rule!(
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
@@ -2301,7 +2301,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #use_database : "`USE <database>`"
         ),
         // network policy / password policy
         rule!(
@@ -3085,9 +3084,31 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let warehouse_privs = map(
+        rule! {
+            USAGE ~ ON ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Warehouse(w.to_string()),
+        },
+    );
+
+    let warehouse_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Warehouse(w.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
+        | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
+        | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3230,11 +3251,16 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
     let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
         AccountMgrLevel::Stage(stage_name.to_string())
     });
+
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        AccountMgrLevel::Warehouse(w.to_string())
+    });
     rule!(
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 
@@ -3751,11 +3777,12 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)? ~ FORCE?
         },
-        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
+        |(opt_dry_run, opt_limit, opt_force)| VacuumDropTableOption {
             dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
+            force: opt_force.is_some(),
         },
     ),))(i)
 }

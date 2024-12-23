@@ -79,7 +79,6 @@ impl AsyncSystemTable for StagesTable {
         let mut name: Vec<String> = Vec::with_capacity(stages.len());
         let mut stage_type: Vec<String> = Vec::with_capacity(stages.len());
         let mut stage_params: Vec<String> = Vec::with_capacity(stages.len());
-        let mut copy_options: Vec<String> = Vec::with_capacity(stages.len());
         let mut file_format_options: Vec<String> = Vec::with_capacity(stages.len());
         let mut comment: Vec<String> = Vec::with_capacity(stages.len());
         let mut number_of_files: Vec<Option<u64>> = Vec::with_capacity(stages.len());
@@ -97,7 +96,6 @@ impl AsyncSystemTable for StagesTable {
             );
             stage_type.push(stage.stage_type.clone().to_string());
             stage_params.push(format!("{:?}", stage.stage_params));
-            copy_options.push(format!("{:?}", stage.copy_options));
             file_format_options.push(format!("{:?}", stage.file_format_params));
             // TODO(xuanwo): we will remove this line.
             match stage.stage_type {
@@ -117,7 +115,6 @@ impl AsyncSystemTable for StagesTable {
             StringType::from_data(name),
             StringType::from_data(stage_type),
             StringType::from_data(stage_params),
-            StringType::from_data(copy_options),
             StringType::from_data(file_format_options),
             UInt64Type::from_opt_data(number_of_files),
             StringType::from_opt_data(creator),
@@ -134,7 +131,6 @@ impl StagesTable {
             TableField::new("name", TableDataType::String),
             TableField::new("stage_type", TableDataType::String),
             TableField::new("stage_params", TableDataType::String),
-            TableField::new("copy_options", TableDataType::String),
             TableField::new("file_format_options", TableDataType::String),
             // NULL for external stage
             TableField::new(

@@ -12,9 +12,9 @@ echo "CREATE or replace stage test_amend_stage URL='s3://testbucket/test_amend/'
 
 # generate multiple blocks & segments
 
-echo "insert into test_failsafe.t select * from numbers(11)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into test_failsafe.t select * from numbers(11)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into test_failsafe.t select * from numbers(11)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into test_failsafe.t select * from numbers(11)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "insert into test_failsafe.t select * from numbers(11)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "insert into test_failsafe.t select * from numbers(11)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "remove @test_amend_stage" | $BENDSQL_CLIENT_CONNECT
 

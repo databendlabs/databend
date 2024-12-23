@@ -32,7 +32,7 @@ pub struct DynIter<'a, V> {
     iter: Box<dyn Iterator<Item = V> + Send + Sync + 'a>,
 }
 
-impl<'a, V> Iterator for DynIter<'a, V> {
+impl<V> Iterator for DynIter<'_, V> {
     type Item = V;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -146,6 +146,14 @@ where
         TableDataType::Date => {
             init.push(InitNested::Primitive(is_nullable));
             DynIter::new(IntegerNestedIter::<_, DateType, i32>::new(
+                readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+            ))
+        }
+        TableDataType::Interval => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(IntervalNestedIter::<_>::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
                 init,

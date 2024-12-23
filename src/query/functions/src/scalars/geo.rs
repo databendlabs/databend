@@ -43,7 +43,6 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use geo::coord;
 use geo::Contains;
 use geo::Coord;
@@ -359,18 +358,18 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn get_coord(fields: &[ScalarRef]) -> Coord {
     let v = fields
         .iter()
-        .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
-        .map(|x: ValueRef<Float64Type>| match x {
-            ValueRef::Scalar(v) => *v,
+        .map(|s| Value::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
+        .map(|x: Value<Float64Type>| match x {
+            Value::Scalar(v) => *v,
             _ => 0_f64,
         })
         .collect::<Vec<_>>();
     Coord { x: v[0], y: v[1] }
 }
 
-fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+fn point_in_polygon_fn(args: &[Value<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
 
@@ -378,23 +377,21 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
     let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
     for idx in 0..input_rows {
         let arg0: Vec<f64> = match &args[0] {
-            ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
+            Value::Scalar(Scalar::Tuple(fields)) => fields
                 .iter()
                 .cloned()
-                .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
-                .map(|x: ValueRef<Float64Type>| match x {
-                    ValueRef::Scalar(v) => *v,
+                .map(|s| Value::Scalar(Float64Type::try_downcast_scalar(&s.as_ref()).unwrap()))
+                .map(|x: Value<Float64Type>| match x {
+                    Value::Scalar(v) => *v,
                     _ => unreachable!(),
                 })
                 .collect(),
-            ValueRef::Column(Column::Tuple(fields)) => fields
+            Value::Column(Column::Tuple(fields)) => fields
                 .iter()
                 .cloned()
-                .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
-                .map(|x: ValueRef<Float64Type>| match x {
-                    ValueRef::Column(c) => unsafe {
-                        Float64Type::index_column_unchecked(&c, idx).0
-                    },
+                .map(|c| Value::Column(Float64Type::try_downcast_column(&c).unwrap()))
+                .map(|x: Value<Float64Type>| match x {
+                    Value::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx).0 },
                     _ => unreachable!(),
                 })
                 .collect(),
@@ -405,7 +402,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
 
         let polys = if args.len() == 2 {
             let polys: Vec<Vec<Coord>> = match &args[1] {
-                ValueRef::Scalar(ScalarRef::Array(c)) => c
+                Value::Scalar(Scalar::Array(c)) => c
                     .iter()
                     .map(|s| match s {
                         // form type 1: ((x, y), [(x1, y1), (x2, y2), ...])
@@ -422,7 +419,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                         _ => unreachable!(),
                     })
                     .collect(),
-                ValueRef::Column(Column::Array(c)) => unsafe {
+                Value::Column(Column::Array(c)) => unsafe {
                     c.index_unchecked(idx)
                         .iter()
                         .map(|s| match s {
@@ -446,7 +443,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
             let mut polys: Vec<Vec<Coord>> = Vec::new();
             for arg in &args[1..] {
                 let hole: Vec<Coord> = match arg {
-                    ValueRef::Scalar(ScalarRef::Array(c)) => c
+                    Value::Scalar(Scalar::Array(c)) => c
                         .iter()
                         .map(|s| match s {
                             ScalarRef::Tuple(fields) => get_coord(&fields),
@@ -454,7 +451,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                             _ => unreachable!(),
                         })
                         .collect(),
-                    ValueRef::Column(Column::Array(c)) => unsafe {
+                    Value::Column(Column::Array(c)) => unsafe {
                         c.index_unchecked(idx)
                             .iter()
                             .map(|s| match s {
@@ -500,9 +497,9 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
     }
 }
 
-fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+fn point_in_ellipses_fn(args: &[Value<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let args = args
@@ -520,7 +517,7 @@ fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Valu
         for (idx, e_data) in ellipse_data.iter_mut().enumerate() {
             let arg_idx = 2 + 4 * ellipse_idx + idx;
             *e_data = match args[arg_idx] {
-                ValueRef::Scalar(v) => *v,
+                Value::Scalar(v) => *v,
                 _ => 0f64,
             };
         }
@@ -536,12 +533,12 @@ fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Valu
     let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
     for idx in 0..input_rows {
         let col_x = match &args[0] {
-            ValueRef::Scalar(v) => *v,
-            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(c, idx) },
+            Value::Scalar(v) => *v,
+            Value::Column(c) => unsafe { Float64Type::index_column_unchecked(c, idx) },
         };
         let col_y = match &args[1] {
-            ValueRef::Scalar(v) => *v,
-            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(c, idx) },
+            Value::Scalar(v) => *v,
+            Value::Column(c) => unsafe { Float64Type::index_column_unchecked(c, idx) },
         };
 
         let r = u8::from(is_point_in_ellipses(

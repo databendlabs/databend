@@ -36,6 +36,8 @@ impl ProjectSet {
     pub fn derive_project_set_stats(&self, input_stat: &mut StatInfo) -> Result<Arc<StatInfo>> {
         // ProjectSet is set-returning functions, precise_cardinality set None
         input_stat.statistics.precise_cardinality = None;
+        // We assume that the SRF function will expand by at least x3 per row.
+        input_stat.cardinality *= 3.0;
         Ok(Arc::new(input_stat.clone()))
     }
 }

@@ -111,10 +111,17 @@ message TxnCondition {
   string key = 1;
 
   oneof target {
-    // used when compare value
+    // Compare the stored value of `key` against the given value.
     bytes value = 2;
-    // used when compare seq
+
+    // Compare the stored seq of `key` against the given seq.
     uint64 seq = 3;
+
+    // Compare the count of keys having the prefix `key` against the given value.
+    //
+    // Usually when using this option, append a slash `/` to the end of the prefix `key`.
+    // For example, if you want to count the keys with prefix `foo`, you should use `foo/` as the `key`.
+    uint64 keys_with_prefix = 5;
   }
 
   // the expected result of condition, if `expected` match the condition result,
@@ -123,8 +130,31 @@ message TxnCondition {
   ConditionResult expected = 4;
 }
 
+// BooleanExpression represents a tree of transaction conditions combined with logical operators.
+// It enables complex condition checking by allowing both simple conditions and nested expressions.
+message BooleanExpression {
+  // Logical operator to combine multiple conditions, including sub compound conditions or simple conditions.
+  enum CombiningOperator {
+    AND = 0;
+    OR = 1;
+  }
+
+  // Operator determining how child expressions and conditions are combined
+  CombiningOperator operator = 1;
+
+  // Nested boolean expressions, allowing tree-like structure
+  // Example: (A AND B) OR (C AND D) where A,B,C,D are conditions
+  repeated BooleanExpression sub_expressions = 2;
+
+  // Leaf-level transaction conditions
+  // These are the actual checks performed against the state.
+  repeated TxnCondition conditions = 3;
+}
+
+
 message TxnOp {
   oneof request {
+    // TODO add Echo to get a response
     TxnGetRequest get = 1;
     TxnPutRequest put = 2;
     TxnDeleteRequest delete = 3;
@@ -141,7 +171,33 @@ message TxnOpResponse {
   }
 }
 
+// Represents a set of operations that execute only when specified conditions are met.
+message ConditionalOperation {
+  // Tree of conditions that must be satisfied for operations to execute
+  BooleanExpression predicate = 1;
+
+  // Operations to execute when condition_tree evaluates to true
+  // These operations are executed in sequence
+  repeated TxnOp operations = 2;
+}
+
+// A Transaction request sent to the databend-meta service.
+//
+// To provide backward compatibility, the `TxnRequest` is processed in the following order:
+//
+// - Loop and evaluate the condition in the `operations`, and execute the corresponding operation, if the condition is met.
+//   This will stop and return once a condition is met and one of the corresponding operations is executed.
+//
+// - If none of the conditions are met, the `condition` as the **last** condition will be evaluated.
+//   And the `if_then` will be executed and return.
+//
+// - If none operation are executed, `else_then` will be executed.
 message TxnRequest {
+
+  // Series of conditional operations to execute.
+  // It will stop once a condition is met and one of the corresponding operations is executed
+  repeated ConditionalOperation operations = 4;
+
   // `condition` is a list of predicates.
   // If all of them success, the `if_then` will be executed,
   // otherwise `else_then` op will be executed.
@@ -156,10 +212,24 @@ message TxnRequest {
   repeated TxnOp else_then = 3;
 }
 
+// TransactionResponse represents the result of executing a transaction.
+//
+// `execution_path` identifies condition that is executed and is identified as:
+// - "operation:{index}": executed operation at index
+// - "then": `condition` field were met, and the `if_then` operation is executed.
+// - "else": neither operations nor condition are met and `else_then` is executed.
+//
+// `success` is set to false only when `else_then` is executed.
 message TxnReply {
   bool success = 1;
+
   repeated TxnOpResponse responses = 2;
+
+  // Not used
   string error = 3;
+
+  // Identifies which execution path was taken
+  string execution_path = 4;
 }
 
 message ClusterStatus {

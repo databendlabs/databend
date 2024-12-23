@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_core::processors::create_resize_item;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -242,6 +243,18 @@ impl PipelineBuilder {
     ) -> Result<()> {
         // we should avoid too much little block write, because for s3 write, there are too many
         // little blocks, it will cause high latency.
+        let mut origin_len = transform_len;
+        let mut resize_len = 1;
+        let mut pipe_items = Vec::with_capacity(2);
+        if need_match {
+            origin_len += 1;
+            resize_len += 1;
+            pipe_items.push(create_dummy_item());
+        }
+        pipe_items.push(create_resize_item(transform_len, 1));
+        self.main_pipeline
+            .add_pipe(Pipe::create(origin_len, resize_len, pipe_items));
+
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
                 Ok(ProcessorPtr::create(AccumulatingTransformer::create(
@@ -250,12 +263,20 @@ impl PipelineBuilder {
                     BlockCompactBuilder::new(block_thresholds),
                 )))
             },
-            transform_len,
+            1,
         )?;
         if need_match {
             builder.add_items_prepend(vec![create_dummy_item()]);
         }
         self.main_pipeline.add_pipe(builder.finalize());
+
+        let mut pipe_items = Vec::with_capacity(2);
+        if need_match {
+            pipe_items.push(create_dummy_item());
+        }
+        pipe_items.push(create_resize_item(1, transform_len));
+        self.main_pipeline
+            .add_pipe(Pipe::create(resize_len, origin_len, pipe_items));
 
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {

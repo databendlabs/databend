@@ -52,6 +52,12 @@ impl From<std::net::AddrParseError> for ErrorCode {
     }
 }
 
+impl From<cidr::errors::NetworkParseError> for ErrorCode {
+    fn from(error: cidr::errors::NetworkParseError) -> Self {
+        ErrorCode::BadAddressFormat(format!("Bad network format, cause: {}", error))
+    }
+}
+
 impl From<std::str::Utf8Error> for ErrorCode {
     fn from(error: std::str::Utf8Error) -> Self {
         ErrorCode::Internal(format!("Invalid Utf8, cause: {}", error))
@@ -353,6 +359,13 @@ impl From<tonic::Status> for ErrorCode {
             tonic::Code::Unknown => {
                 let details = status.details();
                 if details.is_empty() {
+                    if status.source().is_some_and(|e| e.is::<hyper::Error>()) {
+                        return ErrorCode::CannotConnectNode(format!(
+                            "{}, source: {:?}",
+                            status.message(),
+                            status.source()
+                        ));
+                    }
                     return ErrorCode::UnknownException(format!(
                         "{}, source: {:?}",
                         status.message(),

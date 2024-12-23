@@ -35,7 +35,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -54,14 +54,12 @@ use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -81,6 +79,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogType;
+use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -109,11 +108,13 @@ use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
 use log::debug;
@@ -124,6 +125,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
+use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -141,7 +143,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
-#[derive(Clone)]
 pub struct QueryContext {
     version: String,
     mysql_version: String,
@@ -153,13 +154,16 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
+    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
+    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details
-    pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
+    pub fn create_from(other: &QueryContext) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
 
@@ -178,6 +182,7 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
+            m_cte_temp_table: Arc::new(Default::default()),
         })
     }
 
@@ -235,6 +240,14 @@ impl QueryContext {
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn set_current_catalog(&self, new_catalog_name: String) -> Result<()> {
+        let _catalog = self.get_catalog(&new_catalog_name).await?;
+        self.shared.set_current_catalog(new_catalog_name);
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -305,7 +318,8 @@ impl QueryContext {
         self.shared.set_affect(affect)
     }
 
-    pub fn set_id(&self, id: String) {
+    pub fn update_init_query_id(&self, id: String) {
+        self.shared.spilled_files.write().clear();
         *self.shared.init_query_id.write() = id;
     }
 
@@ -342,12 +356,46 @@ impl QueryContext {
         *self.shared.finish_time.write() = Some(time)
     }
 
-    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
+    }
+
+    pub fn add_spill_file(
+        &self,
+        location: crate::spillers::Location,
+        layout: crate::spillers::Layout,
+    ) {
+        let mut w = self.shared.spilled_files.write();
+        w.insert(location, layout);
+    }
+
+    pub fn get_spill_layout(
+        &self,
+        location: &crate::spillers::Location,
+    ) -> Option<crate::spillers::Layout> {
+        let r = self.shared.spilled_files.read();
+        r.get(location).cloned()
+    }
+
+    pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
+        let r = self.shared.spilled_files.read();
+        r.keys().cloned().collect()
+    }
+
+    pub fn query_tenant_spill_prefix(&self) -> String {
+        let tenant = self.get_tenant();
+        format!("_query_spill/{}", tenant.tenant_name())
+    }
+
+    pub fn query_id_spill_prefix(&self) -> String {
+        let tenant = self.get_tenant();
+        let node_index = self.get_cluster().ordered_index();
+        format!(
+            "_query_spill/{}/{}_{}",
+            tenant.tenant_name(),
+            self.get_id(),
+            node_index
+        )
     }
 
     #[async_backtrace::framed]
@@ -380,6 +428,49 @@ impl QueryContext {
             _ => table,
         };
         Ok(table)
+    }
+
+    pub fn unload_spill_meta(&self) {
+        const SPILL_META_SUFFIX: &str = ".list";
+        let mut w = self.shared.spilled_files.write();
+        let mut remote_spill_files = w
+            .iter()
+            .map(|(k, _)| k)
+            .filter_map(|l| match l {
+                crate::spillers::Location::Remote(r) => Some(r),
+                _ => None,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        w.clear();
+
+        if !remote_spill_files.is_empty() {
+            let location_prefix = self.query_tenant_spill_prefix();
+            let node_idx = self.get_cluster().ordered_index();
+            let meta_path = format!(
+                "{}/{}_{}{}",
+                location_prefix,
+                self.get_id(),
+                node_idx,
+                SPILL_META_SUFFIX
+            );
+            let op = DataOperator::instance().operator();
+            // append dir and current meta
+            remote_spill_files.push(meta_path.clone());
+            remote_spill_files.push(format!(
+                "{}/{}_{}/",
+                location_prefix,
+                self.get_id(),
+                node_idx
+            ));
+            let joined_contents = remote_spill_files.join("\n");
+
+            if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
+                Ok(op.write(&meta_path, joined_contents).await?)
+            }) {
+                log::error!("create spill meta file error: {}", e);
+            }
+        }
     }
 }
 
@@ -961,6 +1052,10 @@ impl TableContext for QueryContext {
             .await
     }
 
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
+
     #[async_backtrace::framed]
     async fn get_table_with_batch(
         &self,
@@ -1055,28 +1150,6 @@ impl TableContext for QueryContext {
             files_to_copy,
             duplicated_files,
         })
-    }
-
-    fn set_materialized_cte(
-        &self,
-        idx: (IndexType, IndexType),
-        blocks: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()> {
-        let mut ctes = self.shared.materialized_cte_tables.write();
-        ctes.insert(idx, blocks);
-        Ok(())
-    }
-
-    fn get_materialized_cte(
-        &self,
-        idx: (IndexType, IndexType),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
-        let ctes = self.shared.materialized_cte_tables.read();
-        Ok(ctes.get(&idx).cloned())
-    }
-
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
-        self.shared.materialized_cte_tables.clone()
     }
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
@@ -1355,6 +1428,7 @@ impl TableContext for QueryContext {
         files_info: StageFilesInfo,
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
+        case_sensitive: bool,
     ) -> Result<Arc<dyn Table>> {
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
@@ -1379,6 +1453,7 @@ impl TableContext for QueryContext {
                     files_to_copy,
                     self.get_settings(),
                     self.get_query_kind(),
+                    case_sensitive,
                 )
                 .await
             }
@@ -1393,6 +1468,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     default_values: None,
                     copy_into_location_options: Default::default(),
+                    copy_into_table_options: Default::default(),
                 };
                 OrcTable::try_create(info).await
             }
@@ -1410,6 +1486,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     default_values: None,
                     copy_into_location_options: Default::default(),
+                    copy_into_table_options: Default::default(),
                 };
                 StageTable::try_create(info)
             }
@@ -1445,6 +1522,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     default_values: None,
                     copy_into_location_options: Default::default(),
+                    copy_into_table_options: Default::default(),
                 };
                 StageTable::try_create(info)
             }
@@ -1505,8 +1583,74 @@ impl TableContext for QueryContext {
                 .is_temp_table(database_name, table_name)
     }
 
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
+    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
+        self.m_cte_temp_table
+            .write()
+            .push((database_name.to_string(), table_name.to_string()));
+    }
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
+        let m_cte_temp_table = self.m_cte_temp_table.read().clone();
+        let tenant = self.get_tenant();
+        for (db_name, table_name) in m_cte_temp_table.iter() {
+            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
+            let db = self
+                .get_catalog(CATALOG_DEFAULT)
+                .await?
+                .get_database(&tenant, db_name)
+                .await?;
+            let drop_table_req = DropTableByIdReq {
+                if_exists: true,
+                tenant: tenant.clone(),
+                tb_id: table.get_table_info().ident.table_id,
+                table_name: table_name.to_string(),
+                db_id: db.get_db_info().database_id.db_id,
+                engine: table.engine().to_string(),
+                session_id: table
+                    .options()
+                    .get(OPT_KEY_TEMP_PREFIX)
+                    .cloned()
+                    .unwrap_or_default(),
+            };
+            drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req).await?;
+        }
+        let mut m_cte_temp_table = self.m_cte_temp_table.write();
+        m_cte_temp_table.clear();
+        Ok(())
+    }
+
+    fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
+        let mut streams = self.shared.streams_refs.write();
+        let stream_key = (
+            catalog.to_string(),
+            database.to_string(),
+            stream.to_string(),
+        );
+        streams
+            .entry(stream_key)
+            .and_modify(|v| {
+                if consume {
+                    *v = true;
+                }
+            })
+            .or_insert(consume);
+    }
+
+    fn get_consume_streams(&self, query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        let streams_refs = self.shared.streams_refs.read();
+        let tables = self.shared.tables_refs.lock();
+        let mut streams_meta = Vec::with_capacity(streams_refs.len());
+        for (stream_key, consume) in streams_refs.iter() {
+            if query && !consume {
+                continue;
+            }
+            let stream = tables
+                .get(stream_key)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            streams_meta.push(stream.clone());
+        }
+        Ok(streams_meta)
     }
 }
 

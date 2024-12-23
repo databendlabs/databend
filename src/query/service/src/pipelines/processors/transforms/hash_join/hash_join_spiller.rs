@@ -20,7 +20,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
@@ -67,9 +66,12 @@ impl HashJoinSpiller {
         } else {
             SpillerType::HashJoinProbe
         };
+
+        let location_prefix = ctx.query_id_spill_prefix();
+
         let spill_config = SpillerConfig {
             spiller_type,
-            location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
+            location_prefix,
             disk_spill: None,
             use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
         };
@@ -183,9 +185,10 @@ impl HashJoinSpiller {
             }
         } else {
             // Cross join.
-            let spilled_files = self.spiller.spilled_files();
-            if !spilled_files.is_empty() {
-                let file_index = self.next_restore_file;
+            let spilled_files = self.spiller.private_spilled_files();
+            let file_index = self.next_restore_file;
+
+            if file_index < spilled_files.len() {
                 let spilled_data = self
                     .spiller
                     .read_spilled_file(&spilled_files[file_index])
@@ -246,7 +249,7 @@ impl HashJoinSpiller {
     }
 
     pub fn has_next_restore_file(&self) -> bool {
-        self.next_restore_file < self.spiller.spilled_files().len()
+        self.next_restore_file < self.spiller.private_spilled_files().len()
             || (self.next_restore_file == 0 && !self.partition_buffer.is_partition_empty(0))
     }
 

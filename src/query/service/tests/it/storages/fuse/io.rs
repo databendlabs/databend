@@ -47,6 +47,7 @@ async fn test_array_cache_of_nested_column_iusse_14502() -> Result<()> {
     // ~~~
 
     let mut config = InnerConfig::default();
+    config.query.cluster_id = String::from("test-cluster-id");
     // memory cache is not enabled by default, let's enable it
     config.cache.table_data_deserialized_data_bytes = 1024 * 1024 * 10;
     let fixture = TestFixture::setup_with_config(&config).await?;

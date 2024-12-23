@@ -18,4 +18,5 @@ mod spiller;
 
 pub use partition_buffer::PartitionBuffer;
 pub use partition_buffer::PartitionBufferFetchOption;
+pub use serialize::Layout;
 pub use spiller::*;

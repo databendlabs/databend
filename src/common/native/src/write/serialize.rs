@@ -67,7 +67,10 @@ pub fn write<W: Write>(
         Column::Date(column) => {
             write_primitive::<i32, W>(w, &column, validity, write_options, scratch)
         }
-
+        Column::Interval(column) => {
+            let column: Buffer<i128> = unsafe { std::mem::transmute(column) };
+            write_primitive::<i128, W>(w, &column, validity, write_options, scratch)
+        }
         Column::Binary(b)
         | Column::Bitmap(b)
         | Column::Variant(b)

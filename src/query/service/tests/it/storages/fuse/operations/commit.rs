@@ -21,7 +21,6 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -37,7 +36,6 @@ use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -243,7 +241,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     // check last snapshot hit file
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let last_snapshot_location = fuse_table.snapshot_loc().await?.unwrap();
+    let last_snapshot_location = fuse_table.snapshot_loc().unwrap();
     let operator = fuse_table.get_operator();
     let location = fuse_table
         .meta_location_generator()
@@ -698,6 +696,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+        todo!()
+    }
+
     async fn get_table_with_batch(
         &self,
         _catalog: &str,
@@ -727,25 +729,6 @@ impl TableContext for CtxDelegation {
 
     fn get_all_variables(&self) -> HashMap<String, Scalar> {
         HashMap::new()
-    }
-
-    fn set_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-        _blocks: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()> {
-        todo!()
-    }
-
-    fn get_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
-        todo!()
-    }
-
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
-        todo!()
     }
 
     fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
@@ -892,7 +875,11 @@ impl TableContext for CtxDelegation {
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
     }
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
 
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
     fn get_table_meta_timestamps(
         &self,
         table_id: u64,
@@ -900,10 +887,6 @@ impl TableContext for CtxDelegation {
     ) -> Result<TableMetaTimestamps> {
         self.ctx
             .get_table_meta_timestamps(table_id, previous_snapshot)
-    }
-
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        todo!()
     }
 }
 

@@ -60,6 +60,7 @@ itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
+parking_lot = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
@@ -75,9 +76,6 @@ thrift = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
-
-[dev-dependencies]
-criterion = { workspace = true }
 
 [lints]
 workspace = true

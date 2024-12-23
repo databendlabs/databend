@@ -45,7 +45,7 @@ use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
         self.cte_tables.clear();
         self.bound_tables.clear();
@@ -236,6 +236,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             orders.push(order_by_expr);
                         }
                     }
+                    _ => unimplemented!(),
                 }
             } else {
                 for _ in 0..order_nums {
@@ -351,12 +352,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             groupby_items.push(groupby_item);
         }
 
-        match self.rng.gen_range(0..=4) {
+        match self.rng.gen_range(0..=2) {
             0 => Some(GroupBy::Normal(groupby_items)),
             1 => Some(GroupBy::All),
             2 => Some(GroupBy::GroupingSets(vec![groupby_items])),
-            3 => Some(GroupBy::Cube(groupby_items)),
-            4 => Some(GroupBy::Rollup(groupby_items)),
             _ => unreachable!(),
         }
     }
@@ -370,9 +369,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         };
 
         match group_by {
-            Some(GroupBy::Normal(group_by))
-            | Some(GroupBy::Cube(group_by))
-            | Some(GroupBy::Rollup(group_by)) => {
+            Some(GroupBy::Normal(group_by)) => {
                 let ty = self.gen_data_type();
                 let agg_expr = self.gen_agg_func(&ty);
                 targets.push(SelectTarget::AliasedExpr {
@@ -409,7 +406,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     alias: None,
                 }));
             }
-            None => {
+            _ => {
                 let select_num = self.rng.gen_range(1..=7);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();

@@ -15,6 +15,7 @@
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::ptr_arg)]
+#![allow(clippy::type_complexity)]
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
@@ -70,6 +71,9 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "ntile",
     "cume_dist",
 ];
+
+pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
+    ["first_value", "first", "last_value", "last", "nth_value"];
 
 pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 16] = [
     "array_transform",

@@ -85,8 +85,6 @@ pub struct TransformSortSpill<A: SortAlgorithm> {
     /// If `ummerged_blocks.len()` < `num_merge`,
     /// we can use a final merger to merge the last few sorted streams to reduce IO.
     final_merger: Option<Merger<A, BlockStream>>,
-
-    sort_desc: Arc<Vec<SortColumnDescription>>,
 }
 
 #[inline(always)]
@@ -161,8 +159,6 @@ where
                         }
                         Some(None) => unreachable!(),
                         None => {
-                            // If we get a memory block at initial state, it means we will never spill data.
-                            debug_assert!(self.spiller.columns_layout.is_empty());
                             self.output_block(block);
                             self.state = State::NoSpill;
                             Ok(Event::NeedConsume)
@@ -244,7 +240,7 @@ where
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        _sort_desc: Arc<Vec<SortColumnDescription>>,
         limit: Option<usize>,
         spiller: Spiller,
         output_order_col: bool,
@@ -263,7 +259,6 @@ where
             unmerged_blocks: VecDeque::new(),
             final_merger: None,
             batch_rows: 0,
-            sort_desc,
         }
     }
 
@@ -299,20 +294,11 @@ where
         let spiller_snapshot = Arc::new(self.spiller.clone());
         for _ in 0..num_streams - streams.len() {
             let files = self.unmerged_blocks.pop_front().unwrap();
-            for file in files.iter() {
-                self.spiller.columns_layout.remove(file);
-            }
             let stream = BlockStream::Spilled((files, spiller_snapshot.clone()));
             streams.push(stream);
         }
 
-        Merger::<A, BlockStream>::create(
-            self.schema.clone(),
-            streams,
-            self.sort_desc.clone(),
-            self.batch_rows,
-            self.limit,
-        )
+        Merger::<A, BlockStream>::create(self.schema.clone(), streams, self.batch_rows, self.limit)
     }
 
     /// Do an external merge sort until there is only one sorted stream.

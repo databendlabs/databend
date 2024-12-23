@@ -57,7 +57,7 @@ use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
-use log::info;
+use log::error;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -109,7 +109,7 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
-        info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+        debug!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
         let m = &self.meta_node;
         let reply = match &req {
@@ -134,7 +134,7 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
         let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
 
-        info!("{}: Received ReadRequest: {:?}", func_name!(), req);
+        debug!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
         let req = ForwardRequest::new(1, req);
 
@@ -156,7 +156,7 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, TxnReply), Status> {
         let txn = request.into_inner();
 
-        info!("{}: Received TxnRequest: {}", func_name!(), txn);
+        debug!("{}: Received TxnRequest: {}", func_name!(), txn);
 
         let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
 
@@ -178,12 +178,8 @@ impl MetaServiceImpl {
                 (endpoint, txn_reply)
             }
             Err(err) => {
-                let txn_reply = TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                };
-                (None, txn_reply)
+                error!("txn request failed: {:?}", err);
+                return Err(Status::internal(err.to_string()));
             }
         };
 
@@ -394,18 +390,10 @@ impl MetaService for MetaServiceImpl {
 
         let mn = &self.meta_node;
 
-        let add_res = mn.add_watcher(request.into_inner(), tx).await;
+        let sender = mn.add_watcher(request.into_inner(), tx).await?;
 
-        match add_res {
-            Ok(watcher) => {
-                let stream = WatchStream::new(rx, watcher, mn.dispatcher_handle.clone());
-                Ok(Response::new(Box::pin(stream) as Self::WatchStream))
-            }
-            Err(e) => {
-                // TODO: test error return.
-                Err(Status::invalid_argument(e))
-            }
-        }
+        let stream = WatchStream::new(rx, sender, mn.subscriber_handle.clone());
+        Ok(Response::new(Box::pin(stream) as Self::WatchStream))
     }
 
     async fn member_list(

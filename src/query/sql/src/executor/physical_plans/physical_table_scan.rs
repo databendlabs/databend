@@ -29,6 +29,7 @@ use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
+use databend_common_expression::type_check::get_simple_cast_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -36,6 +37,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -476,51 +478,47 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        let order_by = scan
-            .order_by
-            .clone()
-            .map(|items| {
-                items
-                    .into_iter()
-                    .map(|item| {
-                        let metadata = self.metadata.read();
-                        let column = metadata.column(item.index);
-                        let (name, data_type) = match column {
-                            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                column_name,
-                                data_type,
-                                ..
-                            }) => (column_name.clone(), DataType::from(data_type)),
-                            ColumnEntry::DerivedColumn(DerivedColumn {
-                                alias, data_type, ..
-                            }) => (alias.clone(), data_type.clone()),
-                            ColumnEntry::InternalColumn(TableInternalColumn {
-                                internal_column,
-                                ..
-                            }) => (
-                                internal_column.column_name().to_owned(),
-                                internal_column.data_type(),
-                            ),
-                            ColumnEntry::VirtualColumn(VirtualColumn {
-                                column_name,
-                                data_type,
-                                ..
-                            }) => (column_name.clone(), DataType::from(data_type)),
-                        };
-
-                        // sort item is already a column
-                        let scalar = RemoteExpr::ColumnRef {
-                            span: None,
-                            id: name.clone(),
+        let order_by = scan.order_by.clone().map(|items| {
+            items
+                .into_iter()
+                .filter_map(|item| {
+                    let metadata = self.metadata.read();
+                    let column = metadata.column(item.index);
+                    let (name, data_type) = match column {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn {
+                            column_name,
                             data_type,
-                            display_name: name,
-                        };
+                            ..
+                        }) => (column_name.clone(), DataType::from(data_type)),
+                        ColumnEntry::InternalColumn(TableInternalColumn {
+                            internal_column,
+                            ..
+                        }) => (
+                            internal_column.column_name().to_owned(),
+                            internal_column.data_type(),
+                        ),
+                        ColumnEntry::VirtualColumn(VirtualColumn {
+                            column_name,
+                            data_type,
+                            ..
+                        }) => (column_name.clone(), DataType::from(data_type)),
+                        ColumnEntry::DerivedColumn(_) => {
+                            return None;
+                        }
+                    };
 
-                        Ok((scalar, item.asc, item.nulls_first))
-                    })
-                    .collect::<Result<Vec<_>>>()
-            })
-            .transpose()?;
+                    // sort item is already a column
+                    let scalar = RemoteExpr::ColumnRef {
+                        span: None,
+                        id: name.clone(),
+                        data_type,
+                        display_name: name,
+                    };
+
+                    Some((scalar, item.asc, item.nulls_first))
+                })
+                .collect::<Vec<_>>()
+        });
 
         let virtual_column = self.build_virtual_column(&scan.columns);
 
@@ -563,12 +561,20 @@ impl PhysicalPlanBuilder {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
                 source_column_ids.insert(virtual_column.source_column_id);
+                let cast_func_name =
+                    if virtual_column.data_type.remove_nullable() != TableDataType::Variant {
+                        let dest_type = DataType::from(&virtual_column.data_type.remove_nullable());
+                        get_simple_cast_function(true, &DataType::Variant, &dest_type)
+                    } else {
+                        None
+                    };
                 let virtual_column_field = VirtualColumnField {
                     source_column_id: virtual_column.source_column_id,
                     source_name: virtual_column.source_column_name.clone(),
                     column_id: virtual_column.column_id,
                     name: virtual_column.column_name.clone(),
                     key_paths: virtual_column.key_paths.clone(),
+                    cast_func_name,
                     data_type: Box::new(virtual_column.data_type.clone()),
                     is_created: virtual_column.is_created,
                 };

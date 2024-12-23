@@ -26,6 +26,7 @@ use crate::ChangeValue;
 use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 use crate::SettingMode;
+use crate::SettingScope;
 
 #[derive(Clone, Copy)]
 pub enum FlightCompression {
@@ -104,6 +105,7 @@ impl Settings {
 
     fn try_set_u64(&self, key: &str, val: u64) -> Result<()> {
         DefaultSettings::check_setting_mode(key, SettingMode::Write)?;
+        DefaultSettings::check_setting_scope(key, SettingScope::Session)?;
 
         unsafe { self.unchecked_try_set_u64(key, val) }
     }
@@ -147,6 +149,7 @@ impl Settings {
 
     pub fn set_setting(&self, k: String, v: String) -> Result<()> {
         DefaultSettings::check_setting_mode(&k, SettingMode::Write)?;
+        DefaultSettings::check_setting_scope(&k, SettingScope::Session)?;
 
         unsafe { self.unchecked_set_setting(k, v) }
     }
@@ -371,6 +374,10 @@ impl Settings {
         Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
     }
 
+    pub fn get_enable_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_materialized_cte")? != 0)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
@@ -484,6 +491,10 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_enable_experimental_stream_sort_spilling(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_stream_sort_spilling")? != 0)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
     }
@@ -498,10 +509,6 @@ impl Settings {
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
-    }
-
-    pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
-        self.try_set_u64("parquet_fast_read_bytes", value)
     }
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
@@ -531,11 +538,6 @@ impl Settings {
     /// # Safety
     pub unsafe fn get_enterprise_license(&self) -> Result<String> {
         self.unchecked_try_get_string("enterprise_license")
-    }
-
-    /// # Safety
-    pub unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
-        self.unchecked_set_setting("enterprise_license".to_string(), val)
     }
 
     /// # Safety
@@ -830,7 +832,27 @@ impl Settings {
         self.try_set_u64("max_delete_requests", val)
     }
 
+    pub fn get_enable_prune_pipeline(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
+    }
+
+    pub fn get_persist_materialized_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("persist_materialized_cte")? != 0)
+    }
+
+    pub fn get_flight_max_retry_times(&self) -> Result<u64> {
+        self.try_get_u64("flight_connection_max_retry_times")
+    }
+
+    pub fn get_flight_retry_interval(&self) -> Result<u64> {
+        self.try_get_u64("flight_connection_retry_interval")
+    }
+
+    pub fn get_network_policy(&self) -> Result<String> {
+        self.try_get_string("network_policy")
     }
 }

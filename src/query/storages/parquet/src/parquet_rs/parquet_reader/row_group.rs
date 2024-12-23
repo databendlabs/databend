@@ -318,7 +318,7 @@ impl Iterator for ColumnChunkIterator {
 
 impl PageIterator for ColumnChunkIterator {}
 
-impl<'a> RowGroups for InMemoryRowGroup<'a> {
+impl RowGroups for InMemoryRowGroup<'_> {
     fn num_rows(&self) -> usize {
         self.row_count
     }

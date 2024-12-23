@@ -436,7 +436,7 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        storage.get_table(table_info)
+        storage.get_table(table_info, self.disable_table_info_refresh)
     }
 
     #[async_backtrace::framed]
@@ -568,7 +568,7 @@ impl Catalog for MutableCatalog {
                 self.info(),
                 DatabaseType::NormalDB,
             );
-            tables.push(storage.get_table(&table_info)?);
+            tables.push(storage.get_table(&table_info, ctx.disable_table_info_refresh)?);
         }
         Ok((tables, drop_ids))
     }

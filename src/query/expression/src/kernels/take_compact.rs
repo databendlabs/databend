@@ -78,7 +78,7 @@ impl<'a> TakeCompactVisitor<'a> {
     }
 }
 
-impl<'a> ValueVisitor for TakeCompactVisitor<'a> {
+impl ValueVisitor for TakeCompactVisitor<'_> {
     fn visit_scalar(&mut self, scalar: crate::Scalar) -> Result<()> {
         self.result = Some(Value::Scalar(scalar));
         Ok(())
@@ -175,7 +175,7 @@ impl<'a> ValueVisitor for TakeCompactVisitor<'a> {
     }
 }
 
-impl<'a> TakeCompactVisitor<'a> {
+impl TakeCompactVisitor<'_> {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         let buffer = buffer.as_slice();
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);

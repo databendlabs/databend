@@ -22,9 +22,7 @@ use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -32,7 +30,6 @@ use crate::plans::RelOperator;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -40,7 +37,6 @@ use crate::ScalarExpr;
 pub struct CollectStatisticsOptimizer {
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
-    cte_statistics: HashMap<IndexType, Arc<StatInfo>>,
 }
 
 impl CollectStatisticsOptimizer {
@@ -48,7 +44,6 @@ impl CollectStatisticsOptimizer {
         CollectStatisticsOptimizer {
             table_ctx,
             metadata,
-            cte_statistics: HashMap::new(),
         }
     }
 
@@ -144,25 +139,6 @@ impl CollectStatisticsOptimizer {
                     }
                 }
                 Ok(s_expr)
-            }
-            RelOperator::MaterializedCte(materialized_cte) => {
-                // Collect the common table expression statistics first.
-                let right = Box::pin(self.collect(s_expr.child(1)?)).await?;
-                let cte_stat_info = RelExpr::with_s_expr(&right).derive_cardinality()?;
-                self.cte_statistics
-                    .insert(materialized_cte.cte_idx, cte_stat_info);
-                let left = Box::pin(self.collect(s_expr.child(0)?)).await?;
-                Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
-            }
-            RelOperator::CteScan(cte_scan) => {
-                let stat_info = self
-                    .cte_statistics
-                    .get(&cte_scan.cte_idx.0)
-                    .unwrap()
-                    .clone();
-                let mut cte_scan = cte_scan.clone();
-                cte_scan.stat = stat_info;
-                Ok(s_expr.replace_plan(Arc::new(RelOperator::CteScan(cte_scan))))
             }
             _ => {
                 let mut children = Vec::with_capacity(s_expr.arity());

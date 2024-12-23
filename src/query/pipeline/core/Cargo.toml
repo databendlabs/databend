@@ -24,7 +24,6 @@ serde = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 

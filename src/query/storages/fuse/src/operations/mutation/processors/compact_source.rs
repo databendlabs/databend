@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table_context::TableContext;
@@ -124,7 +125,7 @@ impl PrefetchAsyncSource for CompactSource {
 }
 
 pub struct CompactTransform {
-    ctx: Arc<dyn TableContext>,
+    scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     storage_format: FuseStorageFormat,
     stream_ctx: Option<StreamContext>,
@@ -138,7 +139,7 @@ impl CompactTransform {
         stream_ctx: Option<StreamContext>,
     ) -> Self {
         Self {
-            ctx,
+            scan_progress: ctx.get_scan_progress(),
             block_reader,
             storage_format,
             stream_ctx,
@@ -168,6 +169,10 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                             data,
                         )?;
 
+                        self.scan_progress.incr(&ProgressValues {
+                            rows: block.num_rows(),
+                            bytes: block.memory_size(),
+                        });
                         if let Some(stream_ctx) = &self.stream_ctx {
                             let stream_meta = gen_mutation_stream_meta(None, &meta.location.0)?;
                             block = stream_ctx.apply(block, &stream_meta)?;
@@ -188,12 +193,6 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     ClusterStatsGenType::Generally,
                 )));
                 let new_block = block.add_meta(Some(meta))?;
-
-                let progress_values = ProgressValues {
-                    rows: new_block.num_rows(),
-                    bytes: new_block.memory_size(),
-                };
-                self.ctx.get_write_progress().incr(&progress_values);
                 Ok(vec![new_block])
             }
             CompactSourceMeta::Extras(extra) => {

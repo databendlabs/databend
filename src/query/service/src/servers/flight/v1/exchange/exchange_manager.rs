@@ -52,6 +52,7 @@ use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -416,13 +417,17 @@ impl DataExchangeManager {
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_flight_max_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+        };
         let root_actions = actions.get_root_actions()?;
         let conf = GlobalConfig::instance();
 
         // Initialize query env between cluster nodes
         let query_env = actions.get_query_env()?;
-        query_env.init(&ctx, timeout).await?;
+        query_env.init(&ctx, flight_params).await?;
 
         // Submit distributed tasks to all nodes.
         let cluster = ctx.get_cluster();
@@ -431,7 +436,7 @@ impl DataExchangeManager {
         let local_fragments = query_fragments.remove(&conf.query.node_id);
 
         let _: HashMap<String, ()> = cluster
-            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
+            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
             .await?;
 
         self.set_ctx(&ctx.get_id(), ctx.clone())?;
@@ -444,7 +449,7 @@ impl DataExchangeManager {
 
         let prepared_query = actions.prepared_query()?;
         let _: HashMap<String, ()> = cluster
-            .do_action(START_PREPARED_QUERY, prepared_query, timeout)
+            .do_action(START_PREPARED_QUERY, prepared_query, flight_params)
             .await?;
 
         Ok(build_res)
@@ -960,7 +965,7 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            let pipeline_ctx = QueryContext::create_from(ctx.clone());
+            let pipeline_ctx = QueryContext::create_from(ctx.as_ref());
 
             unsafe {
                 pipeline_ctx

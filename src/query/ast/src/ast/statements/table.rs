@@ -745,6 +745,21 @@ impl Display for Engine {
     }
 }
 
+impl From<&str> for Engine {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "null" => Engine::Null,
+            "memory" => Engine::Memory,
+            "fuse" => Engine::Fuse,
+            "view" => Engine::View,
+            "random" => Engine::Random,
+            "iceberg" => Engine::Iceberg,
+            "delta" => Engine::Delta,
+            _ => unreachable!("invalid engine: {}", s),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum CompactTarget {
     Block,
@@ -774,6 +789,7 @@ pub struct VacuumDropTableOption {
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
     pub limit: Option<usize>,
+    pub force: bool,
 }
 
 impl Display for VacuumDropTableOption {
@@ -786,6 +802,9 @@ impl Display for VacuumDropTableOption {
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
+        }
+        if self.force {
+            write!(f, " FORCE")?;
         }
         Ok(())
     }

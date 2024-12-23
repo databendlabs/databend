@@ -27,6 +27,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -230,7 +231,9 @@ async fn plan_sql(
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
     let mut planner = Planner::new_with_query_executor(
         ctx.clone(),
-        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
+        Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
+            ctx.as_ref(),
+        ))),
     );
 
     // Parse the SQL query, get extract additional information.
@@ -289,7 +292,6 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
 pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);
-
     let query_profiles = query_ctx.get_query_profiles();
     if !query_profiles.is_empty() {
         has_profiles = true;
@@ -316,8 +318,8 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
         })?;
     }
 
+    hook_clear_m_cte_temp_table(&query_ctx)?;
     hook_vacuum_temp_files(&query_ctx)?;
-
     hook_disk_temp_dir(&query_ctx)?;
 
     let err_opt = match &info.res {
@@ -357,4 +359,12 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         ),
         _ => false,
     }
+}
+
+fn hook_clear_m_cte_temp_table(query_ctx: &Arc<QueryContext>) -> Result<()> {
+    let _ = GlobalIORuntime::instance().block_on(async move {
+        query_ctx.drop_m_cte_temp_table().await?;
+        Ok(())
+    });
+    Ok(())
 }

@@ -38,6 +38,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -48,7 +50,6 @@ use crate::planner::binder::Binder;
 use crate::planner::query_executor::QueryExecutor;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
-use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -99,6 +100,12 @@ impl Binder {
             self.bind_table_reference(bind_context, &cross_joins)?
         };
 
+        // whether allow rewrite virtual column and pushdown
+        let allow_pushdown = LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
+            .is_ok();
+        from_context.virtual_column_context.allow_pushdown = allow_pushdown;
+
         let mut rewriter = SelectRewriter::new(
             from_context.all_column_bindings(),
             self.name_resolution_ctx.unquoted_ident_case_sensitive,
@@ -134,10 +141,10 @@ impl Binder {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        // Check Set-returning functions, if the argument contains aggregation function or group item,
+        // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
         // set as lazy Set-returning functions.
         if !from_context.srf_info.srfs.is_empty() {
-            self.check_project_set_select(&mut from_context)?;
+            self.rewrite_project_set_select(&mut from_context)?;
         }
 
         // Bind Set-returning functions before filter plan and aggregate plan.
@@ -248,9 +255,13 @@ impl Binder {
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
         // rewrite variant inner fields as virtual columns
-        let mut virtual_column_rewriter =
-            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
-        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+        if !from_context
+            .virtual_column_context
+            .virtual_column_indices
+            .is_empty()
+        {
+            s_expr = self.rewrite_virtual_column(&mut from_context, s_expr)?;
+        }
 
         // add internal column binding into expr
         s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
@@ -279,7 +290,7 @@ struct SelectRewriter<'a> {
 }
 
 // helper functions to SelectRewriter
-impl<'a> SelectRewriter<'a> {
+impl SelectRewriter<'_> {
     fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
         if self.is_unquoted_ident_case_sensitive {
             a == b

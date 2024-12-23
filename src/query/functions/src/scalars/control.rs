@@ -29,7 +29,6 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("if", |_, args_type| {
@@ -122,12 +121,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |arg, _| match &arg {
-            ValueRef::Column(NullableColumn { validity, .. }) => {
+            Value::Column(NullableColumn { validity, .. }) => {
                 let bitmap = validity.clone();
                 Value::Column(bitmap)
             }
-            ValueRef::Scalar(None) => Value::Scalar(false),
-            ValueRef::Scalar(Some(_)) => Value::Scalar(true),
+            Value::Scalar(None) => Value::Scalar(false),
+            Value::Scalar(Some(_)) => Value::Scalar(true),
         },
     );
 
@@ -136,8 +135,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |arg, ctx| match ctx.errors.take() {
             Some((bitmap, _)) => match arg {
-                ValueRef::Column(_) => Value::Column(bitmap.into()),
-                ValueRef::Scalar(_) => Value::Scalar(bitmap.get(0)),
+                Value::Column(_) => Value::Column(bitmap.into()),
+                Value::Scalar(_) => Value::Scalar(bitmap.get(0)),
             },
             None => Value::Scalar(true),
         },

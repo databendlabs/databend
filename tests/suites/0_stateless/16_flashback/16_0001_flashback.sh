@@ -6,10 +6,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "create table t16(c int not null)" | $BENDSQL_CLIENT_CONNECT
 # the first snapshot contains 2 rows
-echo "insert into t16 values(1),(2)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into t16 values(1),(2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 # the second(last) snapshot should contain 3 rows
-echo "insert into t16 values(3)" | $BENDSQL_CLIENT_CONNECT
+echo "insert into t16 values(3)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 # flash back to the second(last) snapshot should be ok, and have no effects
 SNAPSHOT_ID=$(echo "select snapshot_id from fuse_snapshot('default','t16') where row_count=3" | $BENDSQL_CLIENT_CONNECT)

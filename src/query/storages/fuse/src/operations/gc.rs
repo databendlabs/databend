@@ -298,7 +298,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         put_cache: bool,
     ) -> Result<Option<RootSnapshotInfo>> {
-        let root_snapshot_location_op = self.snapshot_loc().await?;
+        let root_snapshot_location_op = self.snapshot_loc();
         if root_snapshot_location_op.is_none() {
             return Ok(None);
         }

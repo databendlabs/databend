@@ -402,7 +402,7 @@ impl CreateTableInterpreter {
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key) {
+            if !is_valid_create_opt(&key, &self.plan.engine) {
                 error!("invalid opt for fuse table in create table statement");
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "table option {key} is invalid for create table statement",

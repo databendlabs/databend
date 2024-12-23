@@ -202,7 +202,7 @@ impl LicenseInfo {
         /// sort all features in alphabet order and ignore test feature
         struct DisplayFeatures<'a>(&'a LicenseInfo);
 
-        impl<'a> fmt::Display for DisplayFeatures<'a> {
+        impl fmt::Display for DisplayFeatures<'_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let Some(features) = self.0.features.clone() else {
                     return write!(f, "Unlimited");

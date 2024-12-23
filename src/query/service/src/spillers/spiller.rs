@@ -35,6 +35,7 @@ use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 use super::serialize::*;
 use crate::sessions::QueryContext;
@@ -46,8 +47,7 @@ pub enum SpillerType {
     HashJoinProbe,
     Window,
     OrderBy,
-    // Todo: Add more spillers type
-    // Aggregation
+    Aggregation,
 }
 
 impl Display for SpillerType {
@@ -57,6 +57,7 @@ impl Display for SpillerType {
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
             SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
+            SpillerType::Aggregation => write!(f, "Aggregation"),
         }
     }
 }
@@ -92,11 +93,12 @@ pub struct Spiller {
     local_operator: Option<Operator>,
     use_parquet: bool,
     _spiller_type: SpillerType,
+
+    // Stores the spilled files that controlled by current spiller
+    private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<usize, Vec<Location>>,
-    /// Record columns layout for spilled data, will be used when read data from disk
-    pub columns_layout: HashMap<Location, Layout>,
     /// Record how many bytes have been spilled for each partition.
     pub partition_spilled_bytes: HashMap<usize, u64>,
 }
@@ -132,9 +134,9 @@ impl Spiller {
             local_operator,
             use_parquet,
             _spiller_type: spiller_type,
+            private_spilled_files: Default::default(),
             join_spilling_partition_bits: settings.get_join_spilling_partition_bits()?,
             partition_location: Default::default(),
-            columns_layout: Default::default(),
             partition_spilled_bytes: Default::default(),
         })
     }
@@ -143,8 +145,19 @@ impl Spiller {
         self.partition_location.keys().copied().collect()
     }
 
-    /// Spill a [`DataBlock`] to storage.
-    pub async fn spill(&mut self, data_block: Vec<DataBlock>) -> Result<Location> {
+    /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
+    pub async fn spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+        let (location, layout) = self.spill_unmanage(data_block).await?;
+
+        // Record columns layout for spilled data.
+        self.ctx.add_spill_file(location.clone(), layout.clone());
+        self.private_spilled_files
+            .write()
+            .insert(location.clone(), layout);
+        Ok(location)
+    }
+
+    async fn spill_unmanage(&self, data_block: Vec<DataBlock>) -> Result<(Location, Layout)> {
         debug_assert!(!data_block.is_empty());
         let instant = Instant::now();
 
@@ -162,12 +175,43 @@ impl Spiller {
 
         // Record statistics.
         record_write_profile(&location, &instant, data_size);
+        let layout = columns_layout.pop().unwrap();
+        Ok((location, layout))
+    }
 
-        // Record columns layout for spilled data.
-        self.columns_layout
-            .insert(location.clone(), columns_layout.pop().unwrap());
+    pub fn create_unique_location(&self) -> String {
+        format!("{}/{}", self.location_prefix, GlobalUniqName::unique())
+    }
 
-        Ok(location)
+    pub async fn spill_stream_aggregate_buffer(
+        &self,
+        location: Option<String>,
+        write_data: Vec<Vec<Vec<u8>>>,
+    ) -> Result<(String, usize)> {
+        let mut write_bytes = 0;
+        let location = location
+            .unwrap_or_else(|| format!("{}/{}", self.location_prefix, GlobalUniqName::unique()));
+
+        let mut writer = self
+            .operator
+            .writer_with(&location)
+            .chunk(8 * 1024 * 1024)
+            .await?;
+        for write_bucket_data in write_data.into_iter() {
+            for data in write_bucket_data.into_iter() {
+                write_bytes += data.len();
+                writer.write(data).await?;
+            }
+        }
+
+        writer.close().await?;
+        self.ctx
+            .add_spill_file(Location::Remote(location.clone()), Layout::Aggregate);
+
+        self.private_spilled_files
+            .write()
+            .insert(Location::Remote(location.clone()), Layout::Aggregate);
+        Ok((location, write_bytes))
     }
 
     #[async_backtrace::framed]
@@ -227,6 +271,7 @@ impl Spiller {
             ..
         } = encoder;
 
+        let layout = columns_layout.last().unwrap().clone();
         let partitions = partition_ids
             .into_iter()
             .zip(
@@ -241,10 +286,13 @@ impl Spiller {
         // Spill data to storage.
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
-
         // Record statistics.
         record_write_profile(&location, &instant, write_bytes);
 
+        self.ctx.add_spill_file(location.clone(), layout.clone());
+        self.private_spilled_files
+            .write()
+            .insert(location.clone(), layout);
         Ok(MergedPartition {
             location,
             partitions,
@@ -254,8 +302,15 @@ impl Spiller {
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
-        let columns_layout = self.columns_layout.get(location).unwrap();
+        let layout = self.ctx.get_spill_layout(location).unwrap();
+        self.read_unmanage_spilled_file(location, &layout).await
+    }
 
+    async fn read_unmanage_spilled_file(
+        &self,
+        location: &Location,
+        columns_layout: &Layout,
+    ) -> Result<DataBlock> {
         // Read spilled data from storage.
         let instant = Instant::now();
         let data = match location {
@@ -265,6 +320,7 @@ impl Spiller {
                         debug_assert_eq!(path.size(), layout.iter().sum::<usize>())
                     }
                     Layout::Parquet => {}
+                    Layout::Aggregate => {}
                 }
 
                 match self.local_operator {
@@ -381,7 +437,7 @@ impl Spiller {
         Ok(deserialize_block(layout, data))
     }
 
-    async fn write_encodes(&mut self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
+    async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
         let location = match &self.temp_dir {
             None => None,
             Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
@@ -428,8 +484,9 @@ impl Spiller {
         BlocksEncoder::new(self.use_parquet, align, 8 * 1024 * 1024)
     }
 
-    pub(crate) fn spilled_files(&self) -> Vec<Location> {
-        self.columns_layout.keys().cloned().collect()
+    pub(crate) fn private_spilled_files(&self) -> Vec<Location> {
+        let r = self.private_spilled_files.read();
+        r.keys().cloned().collect()
     }
 }
 

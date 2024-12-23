@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,6 +51,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
@@ -124,31 +126,6 @@ impl MemoryTable {
 
         Arc::new(Mutex::new(read_data_blocks))
     }
-
-    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
-        let part_size = total / workers;
-        let part_remain = total % workers;
-
-        let mut partitions = Vec::with_capacity(workers);
-        if part_size == 0 {
-            partitions.push(MemoryPartInfo::create(start, total, total));
-        } else {
-            for part in 0..workers {
-                let mut part_begin = part * part_size;
-                if part == 0 && start > 0 {
-                    part_begin = start;
-                }
-                let mut part_end = (part + 1) * part_size;
-                if part == (workers - 1) && part_remain > 0 {
-                    part_end += part_remain;
-                }
-
-                partitions.push(MemoryPartInfo::create(part_begin, part_end, total));
-            }
-        }
-
-        Partitions::create(PartitionsShuffleKind::Seq, partitions)
-    }
 }
 
 #[async_trait::async_trait]
@@ -159,6 +136,12 @@ impl Table for MemoryTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    /// MemoryTable could be distributed table, yet we only insert data in one node per query
+    /// Because commit_insert did not support distributed transaction
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn support_column_projection(&self) -> bool {
@@ -177,8 +160,7 @@ impl Table for MemoryTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
-
-        let statistics = match push_downs {
+        let mut statistics = match push_downs {
             Some(push_downs) => {
                 let projection_filter: Box<dyn Fn(usize) -> bool> = match push_downs.projection {
                     Some(prj) => {
@@ -215,12 +197,19 @@ impl Table for MemoryTable {
             }
         };
 
-        let parts = Self::generate_memory_parts(
-            0,
-            ctx.get_settings().get_max_threads()? as usize,
-            blocks.len(),
-        );
-        Ok((statistics, parts))
+        let cluster = ctx.get_cluster();
+        if !cluster.is_empty() {
+            statistics.read_bytes = statistics.read_bytes.max(cluster.nodes.len());
+            statistics.read_rows = statistics.read_rows.max(cluster.nodes.len());
+            statistics.partitions_total = statistics.partitions_total.max(cluster.nodes.len());
+            statistics.partitions_scanned = statistics.partitions_scanned.max(cluster.nodes.len());
+        }
+
+        let parts = vec![MemoryPartInfo::create()];
+        return Ok((
+            statistics,
+            Partitions::create(PartitionsShuffleKind::Broadcast, parts),
+        ));
     }
 
     fn read_data(
@@ -283,6 +272,25 @@ impl Table for MemoryTable {
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         self.truncate();
         Ok(())
+    }
+
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
+        _change_type: Option<ChangeType>,
+    ) -> Result<Option<TableStatistics>> {
+        let blocks = self.blocks.read();
+        let num_rows = blocks.iter().map(|b| b.num_rows() as u64).sum();
+        let data_bytes = blocks.iter().map(|b| b.memory_size() as u64).sum();
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            data_size: Some(data_bytes),
+            data_size_compressed: Some(data_bytes),
+            index_size: None,
+            number_of_blocks: None,
+            number_of_segments: None,
+        }))
     }
 }
 

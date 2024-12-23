@@ -65,7 +65,7 @@ pub async fn get_snapshot_referenced_files(
     ctx: &Arc<dyn TableContext>,
 ) -> Result<Option<SnapshotReferencedFiles>> {
     // 1. Read the root snapshot.
-    let root_snapshot_location_op = fuse_table.snapshot_loc().await?;
+    let root_snapshot_location_op = fuse_table.snapshot_loc();
     if root_snapshot_location_op.is_none() {
         return Ok(None);
     }

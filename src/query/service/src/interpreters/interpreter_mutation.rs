@@ -14,18 +14,20 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::ProgressValues;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::EmptySink;
+use databend_common_pipeline_sources::EmptySource;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
@@ -36,6 +38,7 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
+use databend_common_storage::MutationStatus;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
@@ -187,8 +190,7 @@ impl MutationInterpreter {
         table_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<MutationBuildInfo> {
         let table_info = fuse_table.get_table_info().clone();
-        let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let partitions = self
             .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
             .await?;
@@ -253,14 +255,10 @@ impl MutationInterpreter {
         let mut columns = Vec::new();
         for field in self.schema.as_ref().fields() {
             match field.name().as_str() {
-                plans::INSERT_NAME => {
-                    columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
-                }
-                plans::UPDATE_NAME => {
-                    columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
-                }
+                plans::INSERT_NAME => columns.push(UInt64Type::from_data(vec![status.insert_rows])),
+                plans::UPDATE_NAME => columns.push(UInt64Type::from_data(vec![status.update_rows])),
                 plans::DELETE_NAME => {
-                    columns.push(UInt32Type::from_data(vec![status.deleted_rows as u32]))
+                    columns.push(UInt64Type::from_data(vec![status.deleted_rows]))
                 }
                 _ => unreachable!(),
             }
@@ -274,8 +272,6 @@ impl MutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
-        let mut build_res = PipelineBuildResult::create();
-
         // Check if the filter is a constant.
         let mut truncate_table = mutation.truncate_table;
         if let Some(filter) = &mutation.direct_filter
@@ -292,7 +288,7 @@ impl MutationInterpreter {
                 truncate_table = true;
             } else if !filter_result {
                 // The update/delete condition is always false, do nothing.
-                return Ok(Some(build_res));
+                return self.no_effect_mutation();
             }
         }
 
@@ -303,20 +299,21 @@ impl MutationInterpreter {
         // Check if table is empty.
         let Some(snapshot) = snapshot else {
             // No snapshot, no mutation.
-            return Ok(Some(build_res));
+            return self.no_effect_mutation();
         };
         if snapshot.summary.row_count == 0 {
             // Empty snapshot, no mutation.
-            return Ok(Some(build_res));
+            return self.no_effect_mutation();
         }
 
         if mutation.mutation_type == MutationType::Delete {
             if truncate_table {
-                let progress_values = ProgressValues {
-                    rows: snapshot.summary.row_count as usize,
-                    bytes: snapshot.summary.uncompressed_byte_size as usize,
-                };
-                self.ctx.get_write_progress().incr(&progress_values);
+                let mut build_res = PipelineBuildResult::create();
+                self.ctx.add_mutation_status(MutationStatus {
+                    insert_rows: 0,
+                    deleted_rows: snapshot.summary.row_count,
+                    update_rows: 0,
+                });
                 // deleting the whole table... just a truncate
                 fuse_table
                     .do_truncate(
@@ -332,6 +329,15 @@ impl MutationInterpreter {
         } else {
             Ok(None)
         }
+    }
+
+    fn no_effect_mutation(&self) -> Result<Option<PipelineBuildResult>> {
+        let mut build_res = PipelineBuildResult::create();
+        build_res.main_pipeline.add_source(EmptySource::create, 1)?;
+        build_res
+            .main_pipeline
+            .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        Ok(Some(build_res))
     }
 
     async fn mutation_source_partitions(

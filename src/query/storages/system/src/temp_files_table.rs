@@ -43,7 +43,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::StreamSource;
@@ -152,7 +151,7 @@ impl TempFilesTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         let tenant = ctx.get_tenant();
-        let location_prefix = format!("{}/", query_spill_prefix(tenant.tenant_name(), ""));
+        let location_prefix = format!("_query_spill/{}/", tenant.tenant_name());
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
         let operator = DataOperator::instance().operator();
@@ -253,11 +252,6 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
             limit: None,
             chunk_size: MAX_BATCH_SIZE,
         }
-    }
-
-    pub fn limit(mut self, limit: usize) -> Self {
-        self.limit = Some(limit);
-        self
     }
 
     pub fn limit_opt(mut self, limit: Option<usize>) -> Self {

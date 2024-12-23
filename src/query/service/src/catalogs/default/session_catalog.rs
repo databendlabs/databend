@@ -137,8 +137,6 @@ impl SessionCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for SessionCatalog {
-    /// Catalog itself
-
     // Get the name of the catalog.
     fn name(&self) -> String {
         self.inner.name()
@@ -147,8 +145,6 @@ impl Catalog for SessionCatalog {
     fn info(&self) -> Arc<CatalogInfo> {
         self.inner.info()
     }
-
-    /// Database.
 
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
@@ -267,8 +263,6 @@ impl Catalog for SessionCatalog {
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         self.inner.rename_database(req).await
     }
-
-    /// Table.
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
@@ -593,8 +587,6 @@ impl Catalog for SessionCatalog {
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>> {
         self.inner.list_locks(req).await
     }
-
-    /// Table function
 
     // Get function by name.
     fn get_table_function(

@@ -13,14 +13,12 @@
 // limitations under the License.
 
 mod method;
-mod method_dict_serializer;
 mod method_fixed_keys;
 mod method_serializer;
 mod method_single_string;
 mod utils;
 
 pub use method::*;
-pub use method_dict_serializer::*;
 pub use method_fixed_keys::*;
 pub use method_serializer::*;
 pub use method_single_string::*;

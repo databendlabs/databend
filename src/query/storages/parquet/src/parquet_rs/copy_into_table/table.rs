@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
@@ -127,6 +128,8 @@ impl ParquetTableForCopy {
                     "bug: ParquetTableForCopy::read_data must be called with StageSource",
                 ));
             };
+        let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
 
         let fmt = match &stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(fmt) => fmt,
@@ -155,6 +158,7 @@ impl ParquetTableForCopy {
                             stage_table_info.schema.clone(),
                             stage_table_info.default_values.clone(),
                             &fmt.missing_field_as,
+                            case_sensitive,
                         )?);
                     }
                 }

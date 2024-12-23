@@ -1,0 +1,64 @@
+query T
+SELECT jaro_winkler(NULL, 'hello')
+----
+NULL
+
+query T
+SELECT jaro_winkler('hello', NULL)
+----
+NULL
+
+query T
+SELECT jaro_winkler(NULL, NULL)
+----
+NULL
+
+query T
+SELECT jaro_winkler('', '')
+----
+1.0
+
+query T
+SELECT jaro_winkler('hello', 'hello')
+----
+1.0
+
+query T
+SELECT jaro_winkler('hello', 'helo')
+----
+0.9533333333333333
+
+query T
+SELECT jaro_winkler('martha', 'marhta')
+----
+0.9611111111111111
+
+query T
+SELECT jaro_winkler('你好', '你好啊')
+----
+0.9333333333333333
+
+query T
+SELECT jaro_winkler('🦀hello', '🦀helo')
+----
+0.9777777777777777
+
+query T
+SELECT jaro_winkler('dixon', 'dicksonx')
+----
+0.8133333333333332
+
+query T
+SELECT jaro_winkler('duane', 'dwayne')
+----
+0.8400000000000001
+
+query T
+select jaro_winkler('asdf', 'as x  c f');
+----
+0.6592592592592592
+
+query T
+SELECT jaro_winkler('', 'hello')
+----
+0.0

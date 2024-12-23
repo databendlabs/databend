@@ -1,0 +1,30 @@
+onlyif http
+statement ok
+create or replace table t(c1 interval, c2 interval);
+
+onlyif http
+statement ok
+insert into t values('1 year 1 month ago', '1'),('1 month 1 hour ago', '1000');
+
+onlyif http
+query TT
+select * from t order by c1;
+----
+-1 year -1 month 0:00:00.000001
+-1 month -1:00:00 0:00:00.001
+
+onlyif http
+statement error 1006
+select to_interval('1 month 1 hour ago 1 micros');
+
+onlyif http
+query T
+select to_interval('1 month 1 hour 1 microsecond');
+----
+1 month 1:00:00.000001
+
+onlyif http
+query T
+select to_interval('1 month 1 hour 1 microsecond ago');
+----
+-1 month -1:00:00.000001

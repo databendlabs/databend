@@ -20,6 +20,7 @@ use std::time::Duration;
 use anyerror::AnyError;
 use databend_common_base::base::StopHandle;
 use databend_common_base::base::Stoppable;
+use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -56,8 +57,9 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf).await {
         return Ok(());
     }
+    let binary_version = DATABEND_COMMIT_VERSION.clone();
 
-    set_panic_hook();
+    set_panic_hook(binary_version);
 
     // app name format: node_id@cluster_id
     let app_name_shuffle = format!(

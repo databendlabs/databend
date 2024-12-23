@@ -287,9 +287,10 @@ impl BlockReader {
 
     pub(crate) fn build_virtual_column_iter(
         name: String,
+        data_type: TableDataType,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ColumnIter<'static>> {
-        let field = TableField::new(&name, TableDataType::Variant.wrap_nullable());
+        let field = TableField::new(&name, data_type);
 
         let native_column_reader = NativeColumnsReader::new()?;
         match native_column_reader.column_iters(readers, field, vec![]) {
