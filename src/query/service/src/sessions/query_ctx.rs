@@ -404,6 +404,23 @@ impl QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        let max_batch_size = {
+            match max_batch_size {
+                Some(v) => {
+                    // use the batch size specified in the statement
+                    Some(v)
+                }
+                None => {
+                    if let Some(v) = self.get_settings().get_stream_consume_batch_size()? {
+                        info!("overriding max_batch_size of stream consumption using value specified in setting: {}", v);
+                        Some(v)
+                    } else {
+                        None
+                    }
+                }
+            }
+        };
+
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)

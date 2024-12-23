@@ -843,4 +843,9 @@ impl Settings {
     pub fn get_network_policy(&self) -> Result<String> {
         self.try_get_string("network_policy")
     }
+
+    pub fn get_stream_consume_batch_size(&self) -> Result<Option<u64>> {
+        let v = self.try_get_u64("stream_consume_batch_size")?;
+        Ok(if v == u64::MAX { None } else { Some(v) })
+    }
 }
