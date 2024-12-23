@@ -97,6 +97,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    pub(in crate::sessions) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -141,6 +142,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
+
+    pub(in crate::sessions) spilled_files:
+        Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
 }
 
 impl QueryContextShared {
@@ -168,6 +172,7 @@ impl QueryContextShared {
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
@@ -196,6 +201,7 @@ impl QueryContextShared {
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
+            spilled_files: Default::default(),
         }))
     }
 
@@ -337,7 +343,6 @@ impl QueryContextShared {
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
-
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };

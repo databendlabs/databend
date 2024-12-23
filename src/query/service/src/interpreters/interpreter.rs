@@ -232,7 +232,7 @@ async fn plan_sql(
     let mut planner = Planner::new_with_query_executor(
         ctx.clone(),
         Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
-            ctx.clone(),
+            ctx.as_ref(),
         ))),
     );
 
@@ -292,7 +292,6 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
 pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);
-
     let query_profiles = query_ctx.get_query_profiles();
     if !query_profiles.is_empty() {
         has_profiles = true;
@@ -320,9 +319,7 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
     }
 
     hook_clear_m_cte_temp_table(&query_ctx)?;
-
     hook_vacuum_temp_files(&query_ctx)?;
-
     hook_disk_temp_dir(&query_ctx)?;
 
     let err_opt = match &info.res {

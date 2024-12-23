@@ -579,10 +579,3 @@ impl Drop for Pipeline {
         })
     }
 }
-
-pub fn query_spill_prefix(tenant: &str, query_id: &str) -> String {
-    match query_id.is_empty() {
-        true => format!("_query_spill/{}", tenant),
-        false => format!("_query_spill/{}/{}", tenant, query_id),
-    }
-}

@@ -11,19 +11,19 @@ statement ok
 drop table if exists t
 
 statement ok
-create table t as select number as a from numbers(1)
+settings (ddl_column_type_nullable=0) create table t as select number as a from numbers(1)
 
 statement ok
 drop table if exists t1
 
 statement ok
-create table t1 as select number as a from numbers(10)
+settings (ddl_column_type_nullable=0) create table t1 as select number as a from numbers(10)
 
 statement ok
 drop table if exists t2
 
 statement ok
-create table t2 as select number as a from numbers(100)
+settings (ddl_column_type_nullable=0) create table t2 as select number as a from numbers(100)
 
 query T
 explain select * from t, t1, t2 where t.a = t1.a and t1.a = t2.a
@@ -317,41 +317,10 @@ query T
 explain select * from t left join t1 on t1.a = t.a
 ----
 HashJoin
-├── output columns: [t1.a (#1), t.a (#0)]
+├── output columns: [a (#2), t.a (#0)]
 ├── join type: RIGHT OUTER
 ├── build keys: [CAST(t.a (#0) AS UInt64 NULL)]
-├── probe keys: [t1.a (#1)]
-├── filters: []
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.join_reorder.t
-│   ├── output columns: [a (#0)]
-│   ├── read rows: 1
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.join_reorder.t1
-    ├── output columns: [a (#1)]
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
-
-query T
-explain select * from t right join t1 on t1.a = t.a
-----
-HashJoin
-├── output columns: [t1.a (#1), t.a (#0)]
-├── join type: LEFT OUTER
-├── build keys: [t.a (#0)]
-├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
+├── probe keys: [t1.a (#2)]
 ├── filters: []
 ├── estimated rows: 10.00
 ├── TableScan(Build)
@@ -364,6 +333,45 @@ HashJoin
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
+└── EvalScalar(Probe)
+    ├── output columns: [a (#2)]
+    ├── expressions: [CAST(t1.a (#1) AS UInt64 NULL)]
+    ├── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.join_reorder.t1
+        ├── output columns: [a (#1)]
+        ├── read rows: 10
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
+
+query T
+explain select * from t right join t1 on t1.a = t.a
+----
+HashJoin
+├── output columns: [t1.a (#1), a (#2)]
+├── join type: LEFT OUTER
+├── build keys: [t.a (#2)]
+├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
+├── filters: []
+├── estimated rows: 10.00
+├── EvalScalar(Build)
+│   ├── output columns: [a (#2)]
+│   ├── expressions: [CAST(t.a (#0) AS UInt64 NULL)]
+│   ├── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.join_reorder.t
+│       ├── output columns: [a (#0)]
+│       ├── read rows: 1
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]

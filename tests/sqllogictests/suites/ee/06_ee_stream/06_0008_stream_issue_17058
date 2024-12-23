@@ -13,38 +13,36 @@
 ## limitations under the License.
 
 statement ok
-create or replace table t(a int);
+create or replace table t_17058(a int not null);
 
 statement ok
-create or replace table t1(a int);
+insert into t_17058 values(1),(2);
 
 statement ok
-create or replace stream s on table t;
+create stream s_17058 on table t_17058 append_only=false;
 
 statement ok
-insert into t values(1);
-
-statement ok 
-begin;
+insert into t_17058 values(3);
 
 statement ok
-insert into t1 select a from s;
+optimize table t_17058 compact;
 
 statement ok
-create or replace table t2 as select a from s;
+create or replace table t1_17058(a int not null);
 
 statement ok
-commit;
+insert into t1_17058 select a from s_17058 where change$action = 'INSERT';
 
 query I
-select * from t1;
+select a from t1_17058;
 ----
-1
+3
 
+statement ok
+drop stream s_17058;
 
-query I
-select count(*) from t2;
-----
-0
+statement ok
+drop table t1_17058 all;
 
-
+statement ok
+drop table t_17058 all;

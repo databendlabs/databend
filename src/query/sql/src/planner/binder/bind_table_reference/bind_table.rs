@@ -63,7 +63,7 @@ impl Binder {
             check_with_opt_valid(with_options)?;
             let consume = get_with_opt_consume(with_options)?;
             let max_batch_size = get_with_opt_max_batch_size(with_options)?;
-            let with_opts_str = format!(" {with_options}");
+            let with_opts_str = with_options.to_change_query_with_clause();
             (consume, max_batch_size, with_opts_str)
         } else {
             (false, None, String::new())
@@ -74,7 +74,7 @@ impl Binder {
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                cte_suffix_name = Some(self.ctx.get_id().replace("-", "_"));
+                cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
                 if self
                     .metadata
@@ -105,7 +105,7 @@ impl Binder {
         // Resolve table with catalog
         let table_meta = {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
-                format!("{}_{}", &table_name, cte_suffix_name)
+                format!("{}${}", &table_name, cte_suffix_name)
             } else {
                 table_name.clone()
             };
@@ -161,7 +161,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    consume,
                     None,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -186,6 +185,10 @@ impl Binder {
                     &with_opts_str,
                 ))?;
 
+            if table_meta.is_stream() {
+                self.ctx
+                    .add_streams_ref(&catalog, &database, &table_name, consume);
+            }
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
             let tokens = tokenize_sql(query.as_str())?;
             let (stmt, _) = parse_sql(&tokens, self.dialect)?;
@@ -193,6 +196,9 @@ impl Binder {
                 unreachable!()
             };
             let (s_expr, mut new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
+            bind_context
+                .cte_context
+                .set_cte_context(new_bind_context.cte_context.clone());
 
             let cols = table_meta
                 .schema()
@@ -240,7 +246,6 @@ impl Binder {
                         false,
                         false,
                         false,
-                        false,
                         None,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -272,7 +277,6 @@ impl Binder {
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
-                    false,
                     false,
                     cte_suffix_name,
                 );

@@ -148,7 +148,11 @@ impl AccumulatingTransform for BlockBuilder {
         Ok(blocks)
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        self.flush_block(true)
+    fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
+        if output {
+            return self.flush_block(true);
+        }
+
+        Ok(vec![])
     }
 }

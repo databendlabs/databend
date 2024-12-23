@@ -3224,10 +3224,23 @@ impl<'a> TypeChecker<'a> {
                 ]))
             }
             ("ifnull" | "nvl", args) => {
-                // Rewrite ifnull(x, y) to coalesce(x, y)
-                // Rewrite nvl(x, y) to coalesce(x, y)
-                // nvl is essentially an alias for ifnull.
-                Some(self.resolve_function(span, "coalesce", vec![], args))
+                if args.len() == 2 {
+                    // Rewrite ifnull(x, y) | nvl(x, y) to if(is_null(x), y, x)
+                    Some(self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(args[0].clone()),
+                            not: false,
+                        },
+                        args[1],
+                        args[0],
+                    ]))
+                } else {
+                    // Rewrite ifnull(args) to coalesce(x, y)
+                    // Rewrite nvl(args) to coalesce(args)
+                    // nvl is essentially an alias for ifnull.
+                    Some(self.resolve_function(span, "coalesce", vec![], args))
+                }
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
                 // Rewrite nvl2(x, y, z) to if(is_not_null(x), y, z)

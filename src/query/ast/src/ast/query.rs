@@ -619,6 +619,28 @@ impl Display for WithOptions {
     }
 }
 
+impl WithOptions {
+    /// Used for build change query.
+    pub fn to_change_query_with_clause(&self) -> String {
+        let mut result = String::from(" WITH (");
+        for (i, (k, v)) in self.options.iter().enumerate() {
+            if i > 0 {
+                result.push_str(", ");
+            }
+
+            if k == "consume" {
+                // The consume stream will be recorded in QueryContext.
+                // Skip 'consume' to avoid unnecessary operations.
+                result.push_str("consume = false");
+            } else {
+                result.push_str(&format!("{k} = '{v}'"));
+            }
+        }
+        result.push(')');
+        result
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
     pub append_only: bool,

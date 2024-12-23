@@ -65,7 +65,7 @@ impl PipelineBuilder {
         range_join: &RangeJoin,
         state: Arc<RangeJoinState>,
     ) -> Result<()> {
-        let right_side_context = QueryContext::create_from(self.ctx.clone());
+        let right_side_context = QueryContext::create_from(self.ctx.as_ref());
         let mut right_side_builder = PipelineBuilder::create(
             self.func_ctx.clone(),
             self.settings.clone(),
@@ -134,7 +134,7 @@ impl PipelineBuilder {
         hash_join_plan: &HashJoin,
         join_state: Arc<HashJoinState>,
     ) -> Result<()> {
-        let build_side_context = QueryContext::create_from(self.ctx.clone());
+        let build_side_context = QueryContext::create_from(self.ctx.as_ref());
         let mut build_side_builder = PipelineBuilder::create(
             self.func_ctx.clone(),
             self.settings.clone(),

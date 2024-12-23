@@ -179,19 +179,15 @@ xorf = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
-criterion = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
 jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
-num = { workspace = true }
-ordered-float = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
-rmp-serde = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }

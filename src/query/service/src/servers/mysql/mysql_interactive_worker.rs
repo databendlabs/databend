@@ -384,7 +384,7 @@ impl InteractiveWorkerBase {
             None => {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
-                context.set_id(query_id);
+                context.update_init_query_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
                 let (plan, _, _guard) = interpreter_plan_sql(context.clone(), query, true).await?;
