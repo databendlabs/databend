@@ -349,6 +349,12 @@ select a, b, change$action, change$is_update from s3 as _change_delete order by 
 4 4 INSERT 0
 6 5 INSERT 0
 
+# ISSUE 17085
+query I
+select a from s3 where a > 5
+----
+6
+
 statement ok
 create table t4(a int, b int)
 

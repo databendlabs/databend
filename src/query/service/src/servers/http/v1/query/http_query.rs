@@ -485,7 +485,7 @@ impl HttpQuery {
         }
 
         // TODO: validate the query_id to be uuid format
-        ctx.set_id(query_id.clone());
+        ctx.update_init_query_id(query_id.clone());
 
         let session_id = session.get_id().clone();
         let node_id = ctx.get_cluster().local_id.clone();

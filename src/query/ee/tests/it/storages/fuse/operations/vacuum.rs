@@ -29,6 +29,7 @@ use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::d
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -147,7 +148,7 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     let r = do_vacuum_temporary_files(
         Arc::new(AbortRightNow),
         "test_dir/".to_string(),
-        Some(Duration::from_secs(2)),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
         1,
     )
     .await;
@@ -159,7 +160,7 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        Some(Duration::from_secs(2)),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
         1,
     )
     .await?;
@@ -176,7 +177,7 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        Some(Duration::from_secs(2)),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
         2,
     )
     .await?;
@@ -187,7 +188,7 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        Some(Duration::from_secs(3)),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3))),
         1000,
     )
     .await?;
