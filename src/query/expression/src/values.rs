@@ -176,6 +176,7 @@ pub enum Column {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RandomOptions {
     pub seed: Option<u64>,
+    pub min_string_len: usize,
     pub max_string_len: usize,
     pub max_array_len: usize,
 }
@@ -184,6 +185,7 @@ impl Default for RandomOptions {
     fn default() -> Self {
         RandomOptions {
             seed: None,
+            min_string_len: 0,
             max_string_len: 5,
             max_array_len: 3,
         }
@@ -1225,6 +1227,7 @@ impl Column {
             _ => SmallRng::from_entropy(),
         };
 
+        let min_string_len = options.as_ref().map(|opt| opt.min_string_len).unwrap_or(0);
         let max_string_len = options.as_ref().map(|opt| opt.max_string_len).unwrap_or(5);
         let max_arr_len = options.as_ref().map(|opt| opt.max_array_len).unwrap_or(3);
 
@@ -1244,7 +1247,7 @@ impl Column {
                             }) => SmallRng::seed_from_u64(*seed),
                             _ => SmallRng::from_entropy(),
                         };
-                        let str_len = rng.gen_range(0..=max_string_len);
+                        let str_len = rng.gen_range(min_string_len..=max_string_len);
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
                             .take(str_len)
@@ -1262,7 +1265,7 @@ impl Column {
                             }) => SmallRng::seed_from_u64(*seed),
                             _ => SmallRng::from_entropy(),
                         };
-                        let str_len = rng.gen_range(0..=max_string_len);
+                        let str_len = rng.gen_range(min_string_len..=max_string_len);
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
                             .take(str_len)

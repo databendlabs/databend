@@ -256,6 +256,18 @@ SELECT 3 AS id,
 ----
 3 10086 1111
 
+query II
+SELECT * FROM (SELECT 3,
+          user_id AS r_uid,
+          user_id AS w_uid
+   FROM test3) t
+UNION
+SELECT 3 AS id,
+       10086 AS r_uid,
+       1111 AS w_uid;
+----
+3 10086 1111
+
 statement ok
 drop table test3;
 

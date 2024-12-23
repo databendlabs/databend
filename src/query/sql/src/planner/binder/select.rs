@@ -280,6 +280,7 @@ impl Binder {
             right_outputs,
             cte_scan_names,
         };
+
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
             Arc::new(left_expr),
@@ -440,18 +441,10 @@ impl Binder {
                     left_col.index,
                     Some(ScalarExpr::CastExpr(left_coercion_expr)),
                 ));
-                let column_binding = ColumnBindingBuilder::new(
-                    left_col.column_name.clone(),
-                    left_col.index,
-                    Box::new(coercion_types[idx].clone()),
-                    Visibility::Visible,
-                )
-                .build();
-                new_bind_context.add_column_binding(column_binding);
             } else {
                 left_outputs.push((left_col.index, None));
-                new_bind_context.add_column_binding(left_col.clone());
             }
+
             if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {
                     span: right_span,
@@ -472,7 +465,18 @@ impl Binder {
             } else {
                 right_outputs.push((right_col.index, None));
             }
+
+            let index = new_bind_context.columns.len();
+            let column_binding = ColumnBindingBuilder::new(
+                left_col.column_name.clone(),
+                index,
+                Box::new(coercion_types[idx].clone()),
+                Visibility::Visible,
+            )
+            .build();
+            new_bind_context.add_column_binding(column_binding);
         }
+
         Ok((new_bind_context, left_outputs, right_outputs))
     }
 

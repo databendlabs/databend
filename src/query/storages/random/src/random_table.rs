@@ -39,6 +39,9 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 
 use crate::RandomPartInfo;
@@ -56,11 +59,15 @@ impl RandomTable {
             random_options.seed = Some(seed);
         }
 
-        if let Some(s) = table_info.meta.options.get("max_string_len") {
+        if let Some(s) = table_info.meta.options.get(OPT_KEY_RANDOM_MIN_STRING_LEN) {
+            random_options.min_string_len = s.parse::<usize>()?;
+        }
+
+        if let Some(s) = table_info.meta.options.get(OPT_KEY_RANDOM_MAX_STRING_LEN) {
             random_options.max_string_len = s.parse::<usize>()?;
         }
 
-        if let Some(s) = table_info.meta.options.get("max_array_len") {
+        if let Some(s) = table_info.meta.options.get(OPT_KEY_RANDOM_MAX_ARRAY_LEN) {
             random_options.max_array_len = s.parse::<usize>()?;
         }
 
