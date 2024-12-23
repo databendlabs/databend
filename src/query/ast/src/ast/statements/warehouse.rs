@@ -219,29 +219,57 @@ impl Display for RenameWarehouseClusterStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct AddWarehouseClusterNodeStmt {
+pub struct AssignWarehouseNodesStmt {
     pub warehouse: Identifier,
-    pub cluster: Identifier,
-    pub node_list: Vec<(Option<String>, u64)>,
-    pub options: BTreeMap<String, String>,
+    pub node_list: Vec<(Identifier, Option<String>, u64)>,
 }
 
-impl Display for AddWarehouseClusterNodeStmt {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+impl Display for AssignWarehouseNodesStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER WAREHOUSE {} ASSIGN NODES (", self.warehouse)?;
+
+        for (idx, (cluster, group, nodes)) in self.node_list.iter().enumerate() {
+            if idx != 0 {
+                write!(f, ", ")?;
+            }
+
+            write!(f, "ASSIGN {} NODES", nodes)?;
+
+            if let Some(group) = group {
+                write!(f, " FROM '{}'", group)?;
+            }
+
+            write!(f, " FOR {}", cluster)?;
+        }
+
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct DropWarehouseClusterNodeStmt {
+pub struct UnassignWarehouseNodesStmt {
     pub warehouse: Identifier,
-    pub cluster: Identifier,
-    // warehouse:String,
-    // cluster: String,
+    pub node_list: Vec<(Identifier, Option<String>, u64)>,
 }
 
-impl Display for DropWarehouseClusterNodeStmt {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+impl Display for UnassignWarehouseNodesStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER WAREHOUSE {} UNASSIGN NODES (", self.warehouse)?;
+
+        for (idx, (cluster, group, nodes)) in self.node_list.iter().enumerate() {
+            if idx != 0 {
+                write!(f, ", ")?;
+            }
+
+            write!(f, "UNASSIGN {} NODES", nodes)?;
+
+            if let Some(group) = group {
+                write!(f, " FROM '{}'", group)?;
+            }
+
+            write!(f, " FOR {}", cluster)?;
+        }
+
+        Ok(())
     }
 }

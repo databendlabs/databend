@@ -14,8 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::SelectedNode;
 use databend_common_sql::plans::AddWarehouseClusterPlan;
+use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -24,7 +28,6 @@ use crate::sessions::QueryContext;
 pub struct AddWarehouseClusterInterpreter {
     #[allow(dead_code)]
     ctx: Arc<QueryContext>,
-    #[allow(dead_code)]
     plan: AddWarehouseClusterPlan,
 }
 
@@ -46,9 +49,45 @@ impl Interpreter for AddWarehouseClusterInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-        //     .drop_warehouse_cluster(self.plan.warehouse.clone(), self.plan.cluster.clone())
-        //     .await?;
+        if let Some(cluster_size) = self.plan.options.get("CLUSTER_SIZE") {
+            if !self.plan.nodes.is_empty() {
+                return Err(ErrorCode::InvalidArgument(format!("")));
+            }
+
+            let Ok(cluster_size) = cluster_size.parse::<usize>() else {
+                return Err(ErrorCode::InvalidArgument(""));
+            };
+
+            GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .add_warehouse_cluster(
+                    self.plan.warehouse.clone(),
+                    self.plan.cluster.clone(),
+                    vec![SelectedNode::Random(None); cluster_size],
+                )
+                .await?;
+
+            return Ok(PipelineBuildResult::create());
+        }
+
+        if self.plan.nodes.is_empty() {
+            return Err(ErrorCode::InvalidArgument(""));
+        }
+
+        let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());
+        for (group, nodes) in &self.plan.nodes {
+            for _ in 0..*nodes {
+                selected_nodes.push(SelectedNode::Random(group.clone()));
+            }
+        }
+
+        GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+            .add_warehouse_cluster(
+                self.plan.warehouse.clone(),
+                self.plan.cluster.clone(),
+                selected_nodes,
+            )
+            .await?;
+
         Ok(PipelineBuildResult::create())
     }
 }

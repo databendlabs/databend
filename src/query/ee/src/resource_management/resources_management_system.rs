@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -89,25 +90,23 @@ impl ResourcesManagement for SystemResourcesManagement {
             .await
     }
 
-    async fn add_warehouse_cluster_node(
+    async fn assign_warehouse_nodes(
         &self,
         name: String,
-        cluster: String,
-        nodes: Vec<SelectedNode>,
+        nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
         self.warehouse_manager
-            .add_warehouse_cluster_node(&name, &cluster, nodes)
+            .assign_warehouse_nodes(name, nodes)
             .await
     }
 
-    async fn drop_warehouse_cluster_node(
+    async fn unassign_warehouse_nodes(
         &self,
         name: String,
-        cluster: String,
-        nodes: Vec<String>,
+        nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
         self.warehouse_manager
-            .drop_warehouse_cluster_node(&name, &cluster, nodes)
+            .unassign_warehouse_nodes(&name, nodes)
             .await
     }
 }

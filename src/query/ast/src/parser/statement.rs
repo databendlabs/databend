@@ -619,6 +619,30 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let assign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ASSIGN ~ NODES ~ "(" ~ #assign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::AssignWarehouseNodes(AssignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
+    );
+
+    let unassign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ UNASSIGN ~ NODES ~ "(" ~ #unassign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::UnassignWarehouseNodes(UnassignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
+    );
+
     let show_databases = map(
         rule! {
             SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
@@ -2400,6 +2424,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <resources_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
             | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
             | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
+            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <resources_group>] FOR <cluster> [, ...] )`"
+            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <resources_group>] FOR <cluster> [, ...] )`"
         ),
         // database
         rule!(
@@ -4069,6 +4095,36 @@ pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
             ASSIGN ~ #literal_u64 ~ (FROM ~ #option_to_string)?
         },
         |(_, node_size, resources_group)| (resources_group.map(|(_, x)| x), node_size),
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn assign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, resources_group, _, cluster)| {
+            (cluster, resources_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn unassign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            UNASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, resources_group, _, cluster)| {
+            (cluster, resources_group.map(|(_, x)| x), node_size)
+        },
     );
 
     map(comma_separated_list1(nodes_list), |opts| {

@@ -90,11 +90,14 @@ pub struct NodeInfo {
     pub discovery_address: String,
     pub binary_version: String,
     pub node_type: NodeType,
+    pub resource_group: Option<String>,
 
     #[serde(skip_serializing_if = "String::is_empty")]
     pub cluster_id: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub warehouse_id: String,
+
+    pub runtime_resource_group: Option<String>,
 }
 
 impl NodeInfo {
@@ -119,6 +122,8 @@ impl NodeInfo {
             cluster_id: "".to_string(),
             warehouse_id: "".to_string(),
             node_type: NodeType::SystemManaged,
+            resource_group: None,
+            runtime_resource_group: None,
         }
     }
 

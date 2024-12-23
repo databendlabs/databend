@@ -85,18 +85,16 @@ pub trait WarehouseApi: Sync + Send {
         to: String,
     ) -> Result<()>;
 
-    async fn add_warehouse_cluster_node(
+    async fn assign_warehouse_nodes(
         &self,
-        warehouse: &str,
-        cluster: &str,
-        add_nodes: SelectedNodes,
+        name: String,
+        nodes: HashMap<String, SelectedNodes>,
     ) -> Result<()>;
 
-    async fn drop_warehouse_cluster_node(
+    async fn unassign_warehouse_nodes(
         &self,
         warehouse: &str,
-        cluster: &str,
-        drop_nodes: Vec<String>,
+        nodes: HashMap<String, SelectedNodes>,
     ) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.

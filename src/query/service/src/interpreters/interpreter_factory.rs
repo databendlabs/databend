@@ -37,7 +37,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
-use crate::interpreters::interpreter_add_warehouse_cluster_node::AddWarehouseClusterNodeInterpreter;
+use crate::interpreters::interpreter_assign_warehouse_nodes::AssignWarehouseNodesInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
@@ -674,10 +674,10 @@ impl InterpreterFactory {
             Plan::RenameWarehouseCluster(v) => Ok(Arc::new(
                 RenameWarehouseClusterInterpreter::try_create(*v.clone())?,
             )),
-            Plan::AddWarehouseClusterNode(v) => Ok(Arc::new(
-                AddWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
+            Plan::AssignWarehouseNodes(v) => Ok(Arc::new(
+                AssignWarehouseNodesInterpreter::try_create(*v.clone())?,
             )),
-            Plan::DropWarehouseClusterNode(v) => Ok(Arc::new(
+            Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
                 DropWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
             )),
         }

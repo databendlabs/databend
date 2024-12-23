@@ -140,8 +140,8 @@ pub enum Statement {
     AddWarehouseCluster(AddWarehouseClusterStmt),
     DropWarehouseCluster(DropWarehouseClusterStmt),
     RenameWarehouseCluster(RenameWarehouseClusterStmt),
-    AddWarehouseClusterNode(AddWarehouseClusterNodeStmt),
-    DropWarehouseClusterNode(DropWarehouseClusterNodeStmt),
+    AssignWarehouseNodes(AssignWarehouseNodesStmt),
+    UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -560,8 +560,8 @@ impl Statement {
             | Statement::AddWarehouseCluster(..)
             | Statement::DropWarehouseCluster(..)
             | Statement::RenameWarehouseCluster(..)
-            | Statement::AddWarehouseClusterNode(..)
-            | Statement::DropWarehouseClusterNode(..)
+            | Statement::AssignWarehouseNodes(..)
+            | Statement::UnassignWarehouseNodes(..)
             | Statement::ResumeWarehouse(..)
             | Statement::SuspendWarehouse(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
@@ -985,8 +985,8 @@ impl Display for Statement {
             Statement::AddWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::DropWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
-            Statement::AddWarehouseClusterNode(stmt) => write!(f, "{stmt}")?,
-            Statement::DropWarehouseClusterNode(stmt) => write!(f, "{stmt}")?,
+            Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

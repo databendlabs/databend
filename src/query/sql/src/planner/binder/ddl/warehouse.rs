@@ -15,6 +15,8 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use databend_common_ast::ast::AddWarehouseClusterStmt;
+use databend_common_ast::ast::AssignWarehouseNodesStmt;
 use databend_common_ast::ast::CreateWarehouseStmt;
 use databend_common_ast::ast::DropWarehouseClusterStmt;
 use databend_common_ast::ast::DropWarehouseStmt;
@@ -24,8 +26,11 @@ use databend_common_ast::ast::RenameWarehouseStmt;
 use databend_common_ast::ast::ResumeWarehouseStmt;
 use databend_common_ast::ast::ShowWarehousesStmt;
 use databend_common_ast::ast::SuspendWarehouseStmt;
+use databend_common_ast::ast::UnassignWarehouseNodesStmt;
 use databend_common_exception::Result;
 
+use crate::plans::AddWarehouseClusterPlan;
+use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CreateWarehousePlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
@@ -35,6 +40,7 @@ use crate::plans::RenameWarehouseClusterPlan;
 use crate::plans::RenameWarehousePlan;
 use crate::plans::ResumeWarehousePlan;
 use crate::plans::SuspendWarehousePlan;
+use crate::plans::UnassignWarehouseNodesPlan;
 use crate::Binder;
 
 impl Binder {
@@ -51,21 +57,21 @@ impl Binder {
     ) -> Result<Plan> {
         let mut nodes = HashMap::with_capacity(stmt.node_list.len());
 
-        for (group, nodes_num) in stmt.node_list {
-            match nodes.entry(group) {
-                Entry::Vacant(mut v) => {
-                    v.insert(nodes_num);
+        for (group, nodes_num) in &stmt.node_list {
+            match nodes.entry(group.clone()) {
+                Entry::Vacant(v) => {
+                    v.insert(*nodes_num);
                 }
                 Entry::Occupied(mut v) => {
-                    *v.get_mut() += nodes_num;
+                    *v.get_mut() += *nodes_num;
                 }
             }
         }
 
         Ok(Plan::CreateWarehouse(Box::new(CreateWarehousePlan {
+            nodes,
             warehouse: stmt.warehouse.to_string(),
-            nodes: Default::default(),
-            options: stmt.options,
+            options: stmt.options.clone(),
         })))
     }
 
@@ -115,6 +121,33 @@ impl Binder {
         })))
     }
 
+    pub(in crate::planner::binder) fn bind_add_warehouse_cluster(
+        &mut self,
+        stmt: &AddWarehouseClusterStmt,
+    ) -> Result<Plan> {
+        let mut nodes = HashMap::with_capacity(stmt.node_list.len());
+
+        for (group, nodes_num) in &stmt.node_list {
+            match nodes.entry(group.clone()) {
+                Entry::Vacant(v) => {
+                    v.insert(*nodes_num);
+                }
+                Entry::Occupied(mut v) => {
+                    *v.get_mut() += *nodes_num;
+                }
+            }
+        }
+
+        Ok(Plan::AddWarehouseCluster(Box::new(
+            AddWarehouseClusterPlan {
+                nodes,
+                options: stmt.options.clone(),
+                cluster: stmt.cluster.to_string(),
+                warehouse: stmt.warehouse.to_string(),
+            },
+        )))
+    }
+
     pub(in crate::planner::binder) fn bind_drop_warehouse_cluster(
         &mut self,
         stmt: &DropWarehouseClusterStmt,
@@ -136,6 +169,64 @@ impl Binder {
                 warehouse: stmt.warehouse.to_string(),
                 cluster: stmt.cluster.to_string(),
                 new_cluster: stmt.new_cluster.to_string(),
+            },
+        )))
+    }
+
+    pub(in crate::planner::binder) fn bind_assign_warehouse_nodes(
+        &mut self,
+        stmt: &AssignWarehouseNodesStmt,
+    ) -> Result<Plan> {
+        let mut assign_clusters = HashMap::with_capacity(stmt.node_list.len());
+        for (cluster, group, num) in &stmt.node_list {
+            match assign_clusters.entry(cluster.to_string()) {
+                Entry::Vacant(v) => {
+                    v.insert(HashMap::from([(group.clone(), *num as usize)]));
+                }
+                Entry::Occupied(mut v) => match v.get_mut().entry(group.clone()) {
+                    Entry::Vacant(v) => {
+                        v.insert(*num as usize);
+                    }
+                    Entry::Occupied(mut v) => {
+                        *v.get_mut() += *num as usize;
+                    }
+                },
+            }
+        }
+
+        Ok(Plan::AssignWarehouseNodes(Box::new(
+            AssignWarehouseNodesPlan {
+                assign_clusters,
+                warehouse: stmt.warehouse.to_string(),
+            },
+        )))
+    }
+
+    pub(in crate::planner::binder) fn bind_unassign_warehouse_nodes(
+        &mut self,
+        stmt: &UnassignWarehouseNodesStmt,
+    ) -> Result<Plan> {
+        let mut unassign_clusters = HashMap::with_capacity(stmt.node_list.len());
+        for (cluster, group, num) in &stmt.node_list {
+            match unassign_clusters.entry(cluster.to_string()) {
+                Entry::Vacant(v) => {
+                    v.insert(HashMap::from([(group.clone(), *num as usize)]));
+                }
+                Entry::Occupied(mut v) => match v.get_mut().entry(group.clone()) {
+                    Entry::Vacant(v) => {
+                        v.insert(*num as usize);
+                    }
+                    Entry::Occupied(mut v) => {
+                        *v.get_mut() += *num as usize;
+                    }
+                },
+            }
+        }
+
+        Ok(Plan::UnassignWarehouseNodes(Box::new(
+            UnassignWarehouseNodesPlan {
+                unassign_clusters,
+                warehouse: stmt.warehouse.to_string(),
             },
         )))
     }

@@ -32,7 +32,6 @@ use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
-use crate::plans::AddWarehouseClusterNodePlan;
 use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
@@ -44,6 +43,7 @@ use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -102,7 +102,6 @@ use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
-use crate::plans::DropWarehouseClusterNodePlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
 use crate::plans::Exchange;
@@ -151,6 +150,7 @@ use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
+use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
@@ -213,8 +213,8 @@ pub enum Plan {
     AddWarehouseCluster(Box<AddWarehouseClusterPlan>),
     DropWarehouseCluster(Box<DropWarehouseClusterPlan>),
     RenameWarehouseCluster(Box<RenameWarehouseClusterPlan>),
-    AddWarehouseClusterNode(Box<AddWarehouseClusterNodePlan>),
-    DropWarehouseClusterNode(Box<DropWarehouseClusterNodePlan>),
+    AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
+    UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),

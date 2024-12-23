@@ -656,16 +656,16 @@ impl<'a> Binder {
             }
             Statement::ShowWarehouses(v) => self.bind_show_warehouses(v)?,
             Statement::DropWarehouse(v) => self.bind_drop_warehouse(v)?,
-            Statement::CreateWarehouse(_) => unimplemented!(),
+            Statement::CreateWarehouse(v) => self.bind_create_warehouse(v)?,
             Statement::RenameWarehouse(v) => self.bind_rename_warehouse(v)?,
             Statement::ResumeWarehouse(v) => self.bind_resume_warehouse(v)?,
             Statement::SuspendWarehouse(v) => self.bind_suspend_warehouse(v)?,
             Statement::InspectWarehouse(v) => self.bind_inspect_warehouse(v)?,
-            Statement::AddWarehouseCluster(_) => unimplemented!(),
+            Statement::AddWarehouseCluster(v) => self.bind_add_warehouse_cluster(v)?,
             Statement::DropWarehouseCluster(v) => self.bind_drop_warehouse_cluster(v)?,
             Statement::RenameWarehouseCluster(v) => self.bind_rename_warehouse_cluster(v)?,
-            Statement::AddWarehouseClusterNode(_) => unimplemented!(),
-            Statement::DropWarehouseClusterNode(_) => unimplemented!(),
+            Statement::AssignWarehouseNodes(v) => self.bind_assign_warehouse_nodes(v)?,
+            Statement::UnassignWarehouseNodes(v) => self.bind_unassign_warehouse_nodes(v)?,
         };
 
         match plan.kind() {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -51,18 +53,16 @@ pub trait ResourcesManagement: Sync + Send + 'static {
 
     async fn drop_warehouse_cluster(&self, name: String, cluster: String) -> Result<()>;
 
-    async fn add_warehouse_cluster_node(
+    async fn assign_warehouse_nodes(
         &self,
         name: String,
-        cluster: String,
-        nodes: Vec<SelectedNode>,
+        nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()>;
 
-    async fn drop_warehouse_cluster_node(
+    async fn unassign_warehouse_nodes(
         &self,
         name: String,
-        cluster: String,
-        nodes: Vec<String>,
+        nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()>;
 }
 
@@ -115,20 +115,18 @@ impl ResourcesManagement for DummyResourcesManagement {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }
 
-    async fn add_warehouse_cluster_node(
+    async fn assign_warehouse_nodes(
         &self,
         _: String,
-        _: String,
-        _: Vec<SelectedNode>,
+        _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }
 
-    async fn drop_warehouse_cluster_node(
+    async fn unassign_warehouse_nodes(
         &self,
         _: String,
-        _: String,
-        _: Vec<String>,
+        _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }

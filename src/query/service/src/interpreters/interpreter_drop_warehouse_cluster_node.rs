@@ -13,18 +13,18 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::plans::DropWarehouseClusterNodePlan;
+use databend_common_sql::plans::UnassignWarehouseNodesPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 
 pub struct DropWarehouseClusterNodeInterpreter {
     #[allow(dead_code)]
-    plan: DropWarehouseClusterNodePlan,
+    plan: UnassignWarehouseNodesPlan,
 }
 
 impl DropWarehouseClusterNodeInterpreter {
-    pub fn try_create(plan: DropWarehouseClusterNodePlan) -> Result<Self> {
+    pub fn try_create(plan: UnassignWarehouseNodesPlan) -> Result<Self> {
         Ok(DropWarehouseClusterNodeInterpreter { plan })
     }
 }

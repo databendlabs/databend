@@ -65,9 +65,10 @@ impl InspectWarehousePlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AddWarehouseClusterPlan {
-    warehouse: String,
-    cluster: String,
-    // nodes:Vec<Selected>
+    pub warehouse: String,
+    pub cluster: String,
+    pub nodes: HashMap<Option<String>, u64>,
+    pub options: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,7 +85,13 @@ pub struct RenameWarehouseClusterPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AddWarehouseClusterNodePlan {}
+pub struct AssignWarehouseNodesPlan {
+    pub warehouse: String,
+    pub assign_clusters: HashMap<String, HashMap<Option<String>, usize>>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropWarehouseClusterNodePlan {}
+pub struct UnassignWarehouseNodesPlan {
+    pub warehouse: String,
+    pub unassign_clusters: HashMap<String, HashMap<Option<String>, usize>>,
+}

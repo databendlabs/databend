@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
@@ -88,22 +90,20 @@ impl ResourcesManagement for KubernetesResourcesManagement {
         ))
     }
 
-    async fn add_warehouse_cluster_node(
+    async fn assign_warehouse_nodes(
         &self,
         _: String,
-        _: String,
-        _: Vec<SelectedNode>,
+        _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",
         ))
     }
 
-    async fn drop_warehouse_cluster_node(
+    async fn unassign_warehouse_nodes(
         &self,
         _: String,
-        _: String,
-        _: Vec<String>,
+        _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",

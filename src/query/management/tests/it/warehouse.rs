@@ -885,8 +885,10 @@ fn system_managed_node(id: &str) -> NodeInfo {
         discovery_address: "".to_string(),
         binary_version: "".to_string(),
         node_type: NodeType::SystemManaged,
+        resource_group: None,
         cluster_id: "".to_string(),
         warehouse_id: "".to_string(),
+        runtime_resource_group: None,
     }
 }
 
@@ -901,8 +903,10 @@ fn self_managed_node(node_id: &str) -> NodeInfo {
         discovery_address: "ip2:port".to_string(),
         binary_version: "binary_version".to_string(),
         node_type: NodeType::SelfManaged,
+        resource_group: None,
         cluster_id: "test-cluster-id".to_string(),
         warehouse_id: "test-cluster-id".to_string(),
+        runtime_resource_group: None,
     }
 }
 

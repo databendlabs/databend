@@ -73,9 +73,9 @@ impl Interpreter for CreateWarehouseInterpreter {
         }
 
         let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());
-        for (group, nodes) in self.plan.nodes {
-            for _ in 0..nodes {
-                selected_nodes.push(SelectedNode::Random(group));
+        for (group, nodes) in &self.plan.nodes {
+            for _ in 0..*nodes {
+                selected_nodes.push(SelectedNode::Random(group.clone()));
             }
         }
 

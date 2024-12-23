@@ -223,8 +223,8 @@ impl Plan {
             Plan::RenameWarehouseCluster(_) => Ok("RenameWarehouseCluster".to_string()),
             Plan::CreateWarehouse(_) => Ok("CreateWarehouse".to_string()),
             Plan::AddWarehouseCluster(_) => Ok("AddWarehouseCluster".to_string()),
-            Plan::AddWarehouseClusterNode(_) => Ok("AddWarehouseClusterNode".to_string()),
-            Plan::DropWarehouseClusterNode(_) => Ok("DropWarehouseClusterNode".to_string()),
+            Plan::AssignWarehouseNodes(_) => Ok("AddWarehouseClusterNode".to_string()),
+            Plan::UnassignWarehouseNodes(_) => Ok("DropWarehouseClusterNode".to_string()),
         }
     }
 }

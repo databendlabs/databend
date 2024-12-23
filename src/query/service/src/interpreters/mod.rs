@@ -17,7 +17,7 @@ pub(crate) mod common;
 mod hook;
 mod interpreter;
 mod interpreter_add_warehouse_cluster;
-mod interpreter_add_warehouse_cluster_node;
+mod interpreter_assign_warehouse_nodes;
 mod interpreter_catalog_create;
 mod interpreter_catalog_drop;
 mod interpreter_catalog_show_create;
