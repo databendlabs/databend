@@ -29,7 +29,7 @@ iceberg-catalog-glue = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true }
+serde_json = { workspace = true }
 typetag = { workspace = true }
 
 [lints]

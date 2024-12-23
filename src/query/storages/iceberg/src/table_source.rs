@@ -135,11 +135,17 @@ impl Processor for IcebergTableSource {
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             let part = IcebergPartInfo::from_part(&part)?;
-            // TODO: enable row filter?
-            let reader = self.table.table().await?.reader_builder().build();
+            let reader = self
+                .table
+                .table
+                .reader_builder()
+                .with_batch_size(self.ctx.get_settings().get_parquet_max_block_size()? as usize)
+                .with_row_group_filtering_enabled(true)
+                .build();
             // TODO: don't use stream here.
             let stream = reader
                 .read(Box::pin(stream::iter([Ok(part.to_task())])))
+                .await
                 .map_err(|err| ErrorCode::Internal(format!("iceberg data stream read: {err:?}")))?;
             self.stream = Some(stream);
         } else {
