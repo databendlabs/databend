@@ -18,6 +18,7 @@ use futures::future::BoxFuture;
 use crate::watcher::subscriber::EventSubscriber;
 
 /// An event sent to EventDispatcher.
+#[allow(clippy::type_complexity)]
 pub(crate) enum Command {
     /// Submit a kv change event to dispatcher
     KVChange(Change<Vec<u8>, String>),

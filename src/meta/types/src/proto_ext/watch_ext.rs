@@ -15,6 +15,7 @@
 use std::collections::Bound;
 
 use crate::protobuf as pb;
+use crate::protobuf::watch_request::FilterType;
 use crate::protobuf::WatchRequest;
 use crate::protobuf::WatchResponse;
 use crate::Change;
@@ -36,6 +37,20 @@ impl WatchRequest {
             }
             None => Ok((left.clone(), left)),
         }
+    }
+
+    pub fn new(key: String, key_end: Option<String>) -> Self {
+        WatchRequest {
+            key,
+            key_end,
+            filter_type: FilterType::All as _,
+            initial_flush: false,
+        }
+    }
+
+    pub fn with_filter(mut self, filter_type: FilterType) -> Self {
+        self.filter_type = filter_type as _;
+        self
     }
 
     pub fn key_range(&self) -> Result<(Bound<String>, Bound<String>), &'static str> {
