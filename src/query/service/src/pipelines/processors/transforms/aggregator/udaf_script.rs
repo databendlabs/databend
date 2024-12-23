@@ -47,6 +47,7 @@ pub struct AggregateUdfScript {
     display_name: String,
     runtime: UDAFRuntime,
     argument_schema: DataSchema,
+    init_state: UdfAggState,
 }
 
 impl AggregateFunction for AggregateUdfScript {
@@ -59,12 +60,7 @@ impl AggregateFunction for AggregateUdfScript {
     }
 
     fn init_state(&self, place: StateAddr) {
-        let state = self
-            .runtime
-            .create_state()
-            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to create state: {e}")))
-            .unwrap(); // todo
-        place.write_state(state);
+        place.write_state(UdfAggState(self.init_state.0.clone()));
     }
 
     fn state_layout(&self) -> Layout {
@@ -289,8 +285,7 @@ pub fn create_udaf_script_function(
             UDAFRuntime::Python(PythonInfo { name, output_type })
         }
     };
-    // check if the runtime is valid
-    runtime
+    let init_state = runtime
         .create_state()
         .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to create state: {e}")))?;
 
@@ -298,6 +293,7 @@ pub fn create_udaf_script_function(
         display_name,
         runtime,
         argument_schema: DataSchema::new(arguments),
+        init_state,
     }))
 }
 
