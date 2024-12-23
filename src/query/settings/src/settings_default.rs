@@ -1144,12 +1144,12 @@ impl DefaultSettings {
                     scope: SettingScope::Global,
                     range: None,
                 }),
-                ("stream_consume_batch_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(u64::MAX),
-                    desc: "Hint for batch size during stream consumption. Larger values may improve throughput but could impose greater pressure on stream consumers.",
+                ("stream_consume_batch_size_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Hint for batch size during stream consumption. Set it to 0 to disable it. Larger values may improve throughput but could impose greater pressure on stream consumers.",
                     mode: SettingMode::Both,
-                    scope: SettingScope::Global,
-                    range: Some(SettingRange::Numeric(5000..=u64::MAX)),
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
             ]);
 

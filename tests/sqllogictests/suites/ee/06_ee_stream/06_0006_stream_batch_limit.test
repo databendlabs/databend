@@ -282,7 +282,57 @@ select a from s order by a;
 statement error 2735
 select a from s with (xx = 2);
 
+#################################################
+# test setting `stream_consume_batch_size_hint` #
+#################################################
 
+statement ok
+create table t_settings (c int);
+
+statement ok
+CREATE STREAM s_t_settings ON TABLE t_settings;
+
+statement ok
+INSERT INTO t_settings values(1);
+
+statement ok
+INSERT INTO t_settings values(2);
+
+statement ok
+INSERT INTO t_settings values(3);
+
+#####################################
+# expect 2 rows, without batch size #
+#####################################
+query I
+select c from s_t_settings order by c;
+----
+1
+2
+3
+
+############################################
+# set max_batch_size using session setting #
+# expects 2 rows                           #
+############################################
+
+statement ok
+set stream_consume_batch_size_hint = 2;
+
+query I
+select c from s_t_settings order by c;
+----
+1
+2
+
+#######################################################
+# max_batch_size specified in query has high priority #
+#######################################################
+
+query I
+select c from s_t_settings with (max_batch_size = 1);
+----
+1
 
 statement ok
 DROP STREAM s;
