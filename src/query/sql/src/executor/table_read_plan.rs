@@ -35,8 +35,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use log::info;
@@ -117,7 +115,8 @@ impl ToReadDataSourcePlan for dyn Table {
         });
 
         // We need the partition sha256 to specify the result cache.
-        if ctx.get_settings().get_enable_query_result_cache()? {
+        let settings = ctx.get_settings();
+        if settings.get_enable_query_result_cache()? {
             let sha = parts.compute_sha256()?;
             ctx.add_partitions_sha(sha);
         }
@@ -221,10 +220,8 @@ impl ToReadDataSourcePlan for dyn Table {
 
                                 let body = &policy.body;
                                 let tokens = tokenize_sql(body)?;
-                                let ast_expr =
-                                    parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
+                                let ast_expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
-                                let settings = Settings::create(Tenant::new_literal("dummy"));
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
