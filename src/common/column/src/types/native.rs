@@ -326,7 +326,7 @@ impl months_days_micros {
 }
 
 impl NativeType for months_days_micros {
-    const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayNano;
+    const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayMicros;
     type Bytes = [u8; 16];
     #[inline]
     fn to_le_bytes(&self) -> Self::Bytes {

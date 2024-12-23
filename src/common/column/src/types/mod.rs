@@ -85,8 +85,8 @@ pub enum PrimitiveType {
     Float64,
     /// Two i32 representing days and ms
     DaysMs,
-    /// months_days_ns(i32, i32, i64)
-    MonthDayNano,
+    /// months_days_micros(i32, i32, i64)
+    MonthDayMicros,
 }
 
 mod private {
