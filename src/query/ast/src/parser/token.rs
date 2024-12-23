@@ -1380,6 +1380,8 @@ pub enum TokenKind {
     WAREHOUSES,
     #[token("INSPECT", ignore(ascii_case))]
     INSPECT,
+    #[token("ASSIGN", ignore(ascii_case))]
+    ASSIGN,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -32,11 +33,45 @@ impl Display for ShowWarehousesStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateWarehouseStmt {
     pub warehouse: Identifier,
+    pub node_list: Vec<(Option<String>, u64)>,
+    pub options: BTreeMap<String, String>,
 }
 
 impl Display for CreateWarehouseStmt {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CREATE WAREHOUSE {}", self.warehouse)?;
+
+        if !self.node_list.is_empty() {
+            write!(f, "(")?;
+
+            for (idx, (resources_group, nodes)) in self.node_list.iter().enumerate() {
+                if idx != 0 {
+                    write!(f, ",")?;
+                }
+
+                write!(f, " ASSIGN {} NODES", nodes)?;
+
+                if let Some(resources_group) = resources_group {
+                    write!(f, " FROM '{}'", resources_group)?;
+                }
+            }
+
+            write!(f, "(")?;
+        }
+
+        if !self.options.is_empty() {
+            write!(f, " WITH ")?;
+
+            for (idx, (key, value)) in self.options.iter().enumerate() {
+                if idx != 0 {
+                    write!(f, ",")?;
+                }
+
+                write!(f, " {} = '{}'", key, value)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -101,11 +136,52 @@ impl Display for InspectWarehouseStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct AddWarehouseClusterStmt {}
+pub struct AddWarehouseClusterStmt {
+    pub warehouse: Identifier,
+    pub cluster: Identifier,
+    pub node_list: Vec<(Option<String>, u64)>,
+    pub options: BTreeMap<String, String>,
+}
 
 impl Display for AddWarehouseClusterStmt {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ALTER WAREHOUSE {} ADD CLUSTER {}",
+            self.warehouse, self.cluster
+        )?;
+
+        if !self.node_list.is_empty() {
+            write!(f, "(")?;
+
+            for (idx, (resources_group, nodes)) in self.node_list.iter().enumerate() {
+                if idx != 0 {
+                    write!(f, ",")?;
+                }
+
+                write!(f, " ASSIGN {} NODES", nodes)?;
+
+                if let Some(resources_group) = resources_group {
+                    write!(f, " FROM '{}'", resources_group)?;
+                }
+            }
+
+            write!(f, "(")?;
+        }
+
+        if !self.options.is_empty() {
+            write!(f, " WITH ")?;
+
+            for (idx, (key, value)) in self.options.iter().enumerate() {
+                if idx != 0 {
+                    write!(f, ",")?;
+                }
+
+                write!(f, " {} = '{}'", key, value)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -143,7 +219,12 @@ impl Display for RenameWarehouseClusterStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct AddWarehouseClusterNodeStmt {}
+pub struct AddWarehouseClusterNodeStmt {
+    pub warehouse: Identifier,
+    pub cluster: Identifier,
+    pub node_list: Vec<(Option<String>, u64)>,
+    pub options: BTreeMap<String, String>,
+}
 
 impl Display for AddWarehouseClusterNodeStmt {
     fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -153,6 +234,8 @@ impl Display for AddWarehouseClusterNodeStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropWarehouseClusterNodeStmt {
+    pub warehouse: Identifier,
+    pub cluster: Identifier,
     // warehouse:String,
     // cluster: String,
 }

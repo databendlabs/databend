@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -20,6 +23,8 @@ use databend_common_expression::DataSchemaRefExt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateWarehousePlan {
     pub warehouse: String,
+    pub nodes: HashMap<Option<String>, u64>,
+    pub options: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

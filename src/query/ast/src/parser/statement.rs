@@ -125,7 +125,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #warehouse_option
+            ~ #task_warehouse_option
             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
             ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
             ~ ( WHEN ~ #expr )?
@@ -530,11 +530,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
     );
 
-    let _create_warehouse = map(
+    let create_warehouse = map(
         rule! {
-            CREATE ~ WAREHOUSE ~ #ident
+            CREATE ~ WAREHOUSE ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
         },
-        |(_, _, warehouse)| Statement::CreateWarehouse(CreateWarehouseStmt { warehouse }),
+        |(_, _, warehouse, nodes, options)| {
+            Statement::CreateWarehouse(CreateWarehouseStmt {
+                warehouse,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
     );
 
     let drop_warehouse = map(
@@ -575,6 +581,20 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             INSPECT ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let add_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ADD ~ CLUSTER ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, _, _, cluster, nodes, options)| {
+            Statement::AddWarehouseCluster(AddWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
     );
 
     let drop_warehouse_cluster = map(
@@ -2371,11 +2391,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         // warehouse
         rule!(
             #show_warehouses: "`SHOW WAREHOUSES`"
+            | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <resources_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
             | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
             | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
             | #resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
             | #suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
             | #inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
+            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <resources_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
             | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
             | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
         ),
@@ -4026,7 +4048,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     )(i)
 }
 
-pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
             (WAREHOUSE  ~ "=" ~ #literal_string)?
@@ -4039,6 +4061,33 @@ pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
             WarehouseOptions { warehouse }
         },
     ),))(i)
+}
+
+pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ (FROM ~ #option_to_string)?
+        },
+        |(_, node_size, resources_group)| (resources_group.map(|(_, x)| x), node_size),
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    let option = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {

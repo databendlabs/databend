@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
+use databend_common_ast::ast::CreateWarehouseStmt;
 use databend_common_ast::ast::DropWarehouseClusterStmt;
 use databend_common_ast::ast::DropWarehouseStmt;
 use databend_common_ast::ast::InspectWarehouseStmt;
@@ -22,6 +26,7 @@ use databend_common_ast::ast::ShowWarehousesStmt;
 use databend_common_ast::ast::SuspendWarehouseStmt;
 use databend_common_exception::Result;
 
+use crate::plans::CreateWarehousePlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
 use crate::plans::InspectWarehousePlan;
@@ -38,6 +43,30 @@ impl Binder {
         _stmt: &ShowWarehousesStmt,
     ) -> Result<Plan> {
         Ok(Plan::ShowWarehouses)
+    }
+
+    pub(in crate::planner::binder) fn bind_create_warehouse(
+        &mut self,
+        stmt: &CreateWarehouseStmt,
+    ) -> Result<Plan> {
+        let mut nodes = HashMap::with_capacity(stmt.node_list.len());
+
+        for (group, nodes_num) in stmt.node_list {
+            match nodes.entry(group) {
+                Entry::Vacant(mut v) => {
+                    v.insert(nodes_num);
+                }
+                Entry::Occupied(mut v) => {
+                    *v.get_mut() += nodes_num;
+                }
+            }
+        }
+
+        Ok(Plan::CreateWarehouse(Box::new(CreateWarehousePlan {
+            warehouse: stmt.warehouse.to_string(),
+            nodes: Default::default(),
+            options: stmt.options,
+        })))
     }
 
     pub(in crate::planner::binder) fn bind_drop_warehouse(
