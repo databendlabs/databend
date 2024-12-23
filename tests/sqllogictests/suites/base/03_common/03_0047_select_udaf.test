@@ -24,7 +24,17 @@ export function finish(state) {
 }
 $$;
 
-query IT
+query R
 select weighted_avg(number+1, number*2) from numbers(10);
 ----
 7.3333335
+
+query RIR
+select weighted_avg(number+1, number*2), sum(number), avg(number) from numbers(10);
+----
+7.3333335 45 4.5
+
+query R
+select a + b from ( select weighted_avg(number+1, number*2) a, avg(number) b from numbers(10) );
+----
+11.833333492279053
