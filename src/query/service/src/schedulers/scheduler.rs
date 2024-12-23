@@ -17,8 +17,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::EmptySink;
 use databend_common_sql::planner::query_executor::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
@@ -49,23 +47,6 @@ pub async fn build_query_pipeline(
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
     let input_schema = plan.output_schema()?;
 
-    if matches!(plan, PhysicalPlan::UnionAll { .. })
-        && result_columns.len() == input_schema.num_fields()
-        && result_columns
-            .iter()
-            .zip(input_schema.fields().iter())
-            .all(|(r, f)| format!("{}", r.index).as_str() == f.name().as_str())
-    {
-        // Union doesn't need to add extra processor to project the result.
-        // It will be handled in union processor.
-        if ignore_result {
-            build_res
-                .main_pipeline
-                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
-        }
-        return Ok(build_res);
-    }
-    let input_schema = plan.output_schema()?;
     PipelineBuilder::build_result_projection(
         &ctx.get_function_context()?,
         input_schema,
