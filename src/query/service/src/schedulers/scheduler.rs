@@ -47,7 +47,15 @@ pub async fn build_query_pipeline(
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
-    if matches!(plan, PhysicalPlan::UnionAll { .. }) {
+    let input_schema = plan.output_schema()?;
+
+    if matches!(plan, PhysicalPlan::UnionAll { .. })
+        && result_columns.len() == input_schema.num_fields()
+        && result_columns
+            .iter()
+            .zip(input_schema.fields().iter())
+            .all(|(r, f)| format!("{}", r.index).as_str() == f.name().as_str())
+    {
         // Union doesn't need to add extra processor to project the result.
         // It will be handled in union processor.
         if ignore_result {
