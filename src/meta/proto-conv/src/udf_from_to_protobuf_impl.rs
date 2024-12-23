@@ -180,12 +180,11 @@ impl FromToProto for mt::UDAFScript {
             .collect::<Result<Vec<_>, _>>()?;
 
         let state_fields = p
-            .state_names
-            .iter()
-            .zip(p.state_types.into_iter())
+            .state_fields
+            .into_iter()
             .map(|(name, data_type)| {
                 Ok(DataField::new(
-                    name,
+                    &name,
                     (&TableDataType::from_pb(data_type)?).into(),
                 ))
             })
@@ -217,21 +216,25 @@ impl FromToProto for mt::UDAFScript {
                 .to_pb()?;
             arg_types.push(arg_type);
         }
-        let mut state_names = Vec::with_capacity(self.state_fields.len());
-        let mut state_types = Vec::with_capacity(self.state_fields.len());
-        for field in self.state_fields.iter() {
-            state_names.push(field.name().clone());
-            state_types.push(
-                infer_schema_type(field.data_type())
-                    .map_err(|e| Incompatible {
-                        reason: format!(
-                            "Convert DataType to TableDataType failed: {}",
-                            e.message()
-                        ),
-                    })?
-                    .to_pb()?,
-            );
-        }
+
+        let state_fields = self
+            .state_fields
+            .iter()
+            .map(|field| {
+                Ok((
+                    field.name().clone(),
+                    infer_schema_type(field.data_type())
+                        .map_err(|e| Incompatible {
+                            reason: format!(
+                                "Convert DataType to TableDataType failed: {}",
+                                e.message()
+                            ),
+                        })?
+                        .to_pb()?,
+                ))
+            })
+            .collect::<Result<_, _>>()?;
+
         let return_type = infer_schema_type(&self.return_type)
             .map_err(|e| Incompatible {
                 reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
@@ -245,8 +248,7 @@ impl FromToProto for mt::UDAFScript {
             language: self.language.clone(),
             runtime_version: self.runtime_version.clone(),
             arg_types,
-            state_names,
-            state_types,
+            state_fields,
             return_type: Some(return_type),
         })
     }

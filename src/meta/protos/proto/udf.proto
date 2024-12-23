@@ -58,8 +58,7 @@ message UDAFScript {
   string runtime_version = 3;
   DataType return_type = 4;
   repeated DataType arg_types = 5;
-  repeated string state_names = 6;
-  repeated DataType state_types = 7;
+  map<string, DataType> state_fields = 6;
 }
 
 message UserDefinedFunction {
