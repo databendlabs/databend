@@ -176,7 +176,7 @@ impl FromToProto for mt::UDAFScript {
         let arg_types = p
             .arg_types
             .into_iter()
-            .map(|arg_type| Ok(DataType::from(&TableDataType::from_pb(arg_type)?)))
+            .map(|arg_type| Ok((&TableDataType::from_pb(arg_type)?).into()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let state_fields = p
@@ -186,16 +186,16 @@ impl FromToProto for mt::UDAFScript {
             .map(|(name, data_type)| {
                 Ok(DataField::new(
                     name,
-                    DataType::from(&TableDataType::from_pb(data_type)?),
+                    (&TableDataType::from_pb(data_type)?).into(),
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
-            || Incompatible {
+        let return_type =
+            (&TableDataType::from_pb(p.return_type.ok_or_else(|| Incompatible {
                 reason: "UDAFScript.return_type can not be None".to_string(),
-            },
-        )?)?);
+            })?)?)
+                .into();
 
         Ok(mt::UDAFScript {
             code: p.code,

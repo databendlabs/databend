@@ -49,7 +49,9 @@ pub struct UDFScript {
 pub struct UDAFScript {
     pub code: String,
     pub language: String,
+    // aggregate function input types
     pub arg_types: Vec<DataType>,
+    // aggregate function state fields
     pub state_fields: Vec<DataField>,
     pub return_type: DataType,
     pub runtime_version: String,

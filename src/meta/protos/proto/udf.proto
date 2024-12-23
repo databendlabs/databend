@@ -63,6 +63,8 @@ message UDAFScript {
 }
 
 message UserDefinedFunction {
+  reserved 7; // reserved for upcoming UDAFServer
+
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
