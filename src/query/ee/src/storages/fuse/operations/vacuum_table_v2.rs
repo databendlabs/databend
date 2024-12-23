@@ -363,16 +363,15 @@ async fn select_gc_root<'a>(
 ) -> Result<Option<(Arc<TableSnapshot>, &'a [String])>> {
     let gc_root_path = if is_vacuum_all {
         // safe to unwrap, or we should have stopped vacuuming in set_lvt()
-        fuse_table.snapshot_loc().await?.unwrap()
+        fuse_table.snapshot_loc().unwrap()
     } else if respect_flash_back {
-        let latest_location = fuse_table.snapshot_loc().await?.unwrap();
+        let latest_location = fuse_table.snapshot_loc().unwrap();
         let gc_root = fuse_table
             .find(latest_location, abort_checker, |snapshot| {
                 snapshot.timestamp.is_some_and(|ts| ts <= lvt)
             })
             .await?
-            .snapshot_loc()
-            .await?;
+            .snapshot_loc();
         let Some(gc_root) = gc_root else {
             info!("no gc_root found, stop vacuuming");
             return Ok(None);

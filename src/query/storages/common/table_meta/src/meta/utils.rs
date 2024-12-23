@@ -158,7 +158,11 @@ pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -
 pub fn trim_object_prefix(key: &str) -> &str {
     // if object key (the file_name/stem part only) starts with a char which is larger
     // than 'f', strip it off
-    if key > "f" { &key[1..] } else { key }
+    if key > "f" {
+        &key[1..]
+    } else {
+        key
+    }
 }
 
 #[cfg(test)]

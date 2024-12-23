@@ -96,7 +96,6 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
-use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
@@ -820,6 +819,7 @@ impl Table for FuseTable {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
+    }
     fn build_prune_pipeline(
         &self,
         table_ctx: Arc<dyn TableContext>,
@@ -827,10 +827,6 @@ impl Table for FuseTable {
         source_pipeline: &mut Pipeline,
     ) -> Result<Option<Pipeline>> {
         self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
-    }
-
-    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
-        self.do_append_data(ctx, pipeline)
     }
 
     fn commit_insertion(

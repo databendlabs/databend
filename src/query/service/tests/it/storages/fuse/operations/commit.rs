@@ -880,6 +880,8 @@ impl TableContext for CtxDelegation {
     }
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
     fn get_table_meta_timestamps(
         &self,
         table_id: u64,

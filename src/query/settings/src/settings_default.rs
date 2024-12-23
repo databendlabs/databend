@@ -183,6 +183,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(72),
                     desc: "Sets the maximum retryable transaction duration in hours.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=240)),
                 }),
                 ("max_spill_io_requests", DefaultSettingValue {
@@ -203,6 +204,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets the maximum number of concurrent delete files requests in fuse_vacuum2().",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("storage_io_min_bytes_for_seek", DefaultSettingValue {
