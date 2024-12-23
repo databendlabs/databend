@@ -59,7 +59,7 @@ impl FlightSqlServiceImpl {
     pub fn create() -> Self {
         FlightSqlServiceImpl {
             sessions: Mutex::new(Default::default()),
-            statements: Arc::new(Default::default()),
+            statements: Default::default(),
         }
     }
 }

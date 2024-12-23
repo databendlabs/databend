@@ -15,6 +15,8 @@
 use databend_common_expression::hilbert_index;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::GenericType;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -56,12 +58,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     }
 
-    registry.register_passthrough_nullable_2_arg::<ArrayType<BinaryType>, NumberType<u64>, BinaryType, _, _>(
+    registry.register_combine_nullable_2_arg::<ArrayType<NullableType<BinaryType>>, NumberType<u64>, BinaryType, _, _>(
         "hilbert_index",
         |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<BinaryType>, NumberType<u64>, BinaryType>(
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<BinaryType>>, NumberType<u64>, NullableType<BinaryType>>(
             |val, len, builder, ctx| {
-                let points = val.iter().collect::<Vec<_>>();
+                let mut points = Vec::with_capacity(val.len());
+                for a in val.iter() {
+                    if a.is_none() {
+                        builder.push_null();
+                        return;
+                    }
+                    points.push(a.unwrap());
+                }
                 let dimension = points.len();
 
                 if std::intrinsics::unlikely(len > 64) {
@@ -70,11 +79,28 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ctx.set_error(builder.len(), "Dimension must between 2 and 5");
                 } else {
                     let slice = hilbert_index(&points, len as usize);
-                    builder.put_slice(&slice);
+                    builder.push(&slice);
                 }
-
-                builder.commit_row();
             },
         ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
+        "range_partition_id",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, NumberType<u64>>(|val, arr, builder, _| {
+            let mut low = 0;
+            let mut high = arr.len();
+            while low < high {
+                let mid = (high + low) / 2;
+                let bound = unsafe {arr.index_unchecked(mid)};
+                if val > bound {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+            builder.push(low as u64);
+        }),
     );
 }

@@ -406,8 +406,28 @@ impl FuseTable {
         self.cluster_key_meta.clone().map(|v| v.0)
     }
 
-    pub fn cluster_key_meta(&self) -> Option<ClusterKey> {
-        self.cluster_key_meta.clone()
+    pub fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
+        let Some(cluster_keys) = self.resolve_cluster_keys(ctx.clone()) else {
+            return vec![];
+        };
+        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        let table_meta = Arc::new(self.clone());
+        let cluster_keys = match cluster_type {
+            ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), cluster_keys),
+            ClusterType::Hilbert => {
+                parse_hilbert_cluster_key(ctx, table_meta.clone(), cluster_keys)
+            }
+        }
+        .unwrap();
+
+        let cluster_keys = cluster_keys
+            .iter()
+            .map(|k| {
+                k.project_column_ref(|index| table_meta.schema().field(*index).name().to_string())
+                    .as_remote_expr()
+            })
+            .collect();
+        cluster_keys
     }
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
@@ -422,7 +442,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
+        let Some(ast_exprs) = self.resolve_cluster_keys(ctx.clone()) else {
             return vec![];
         };
         let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
@@ -430,7 +450,7 @@ impl FuseTable {
             ClusterType::Hilbert => vec![DataType::Binary],
             ClusterType::Linear => {
                 let cluster_keys =
-                    parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+                    parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
                 cluster_keys
                     .into_iter()
                     .map(|v| v.data_type().clone())
@@ -626,28 +646,8 @@ impl Table for FuseTable {
         matches!(self.storage_format, FuseStorageFormat::Parquet)
     }
 
-    fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        let table_meta = Arc::new(self.clone());
-        if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
-            let cluster_keys = match cluster_type {
-                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
-                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
-            }
-            .unwrap();
-
-            let cluster_keys = cluster_keys
-                .iter()
-                .map(|k| {
-                    k.project_column_ref(|index| {
-                        table_meta.schema().field(*index).name().to_string()
-                    })
-                    .as_remote_expr()
-                })
-                .collect();
-            return cluster_keys;
-        }
-        vec![]
+    fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        self.cluster_key_meta.clone()
     }
 
     fn change_tracking_enabled(&self) -> bool {
