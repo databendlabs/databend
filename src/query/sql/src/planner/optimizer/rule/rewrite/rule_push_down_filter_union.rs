@@ -78,30 +78,37 @@ impl Rule for RulePushDownFilterUnion {
             return Ok(());
         }
 
-        // Create a filter which matches union's right child.
-        let index_pairs: HashMap<IndexType, IndexType> = union
-            .left_outputs
-            .iter()
-            .zip(union.right_outputs.iter())
-            .map(|(left, right)| (left.0, right.0))
-            .collect();
-        let new_predicates = filter
-            .predicates
-            .iter()
-            .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
-            .collect::<Result<Vec<_>>>()?;
-        let right_filer = Filter {
-            predicates: new_predicates,
-        };
-
         let mut union_left_child = union_s_expr.child(0)?.clone();
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add filter to union children
-        union_left_child = SExpr::create_unary(Arc::new(filter.into()), Arc::new(union_left_child));
-        union_right_child =
-            SExpr::create_unary(Arc::new(right_filer.into()), Arc::new(union_right_child));
+        for (union_side, union_sexpr) in [&union.left_outputs, &union.right_outputs]
+            .iter()
+            .zip([&mut union_left_child, &mut union_right_child].iter_mut())
+        {
+            // Create a filter which matches union's right child.
+            let index_pairs: HashMap<IndexType, IndexType> = union
+                .output_indexes
+                .iter()
+                .zip(union_side.iter())
+                .map(|(index, side)| (*index, side.0))
+                .collect();
 
+            let new_predicates = filter
+                .predicates
+                .iter()
+                .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
+                .collect::<Result<Vec<_>>>()?;
+
+            let filter = Filter {
+                predicates: new_predicates,
+            };
+
+            let s = (*union_sexpr).clone();
+            **union_sexpr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s));
+        }
+
+        // Create a filter which matches union's right child.
         let result = SExpr::create_binary(
             Arc::new(union.into()),
             Arc::new(union_left_child),
