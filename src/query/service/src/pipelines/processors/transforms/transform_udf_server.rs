@@ -72,8 +72,7 @@ impl TransformUdfServer {
         let mut endpoints: BTreeMap<String, Arc<Endpoint>> = BTreeMap::new();
         for func in funcs.iter() {
             let server_addr = func.udf_type.as_server().unwrap();
-            if let Some(endpoint) = endpoints.get(server_addr) {
-                endpoints.insert(server_addr.clone(), endpoint.clone());
+            if endpoints.contains_key(server_addr) {
                 continue;
             }
             let endpoint =
