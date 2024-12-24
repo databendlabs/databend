@@ -176,11 +176,13 @@ impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
 
         if let ScalarExpr::AggregateFunction(agg_func) = expr {
             self.is_lazy_srf = true;
-            if let Some(agg_item) = self
+            if let Some(index) = self
                 .bind_context
                 .aggregate_info
-                .get_aggregate_function(&agg_func.display_name)
+                .aggregate_functions_map
+                .get(&agg_func.display_name)
             {
+                let agg_item = &self.bind_context.aggregate_info.aggregate_functions[*index];
                 let column_binding = ColumnBindingBuilder::new(
                     agg_func.display_name.clone(),
                     agg_item.index,

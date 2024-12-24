@@ -699,12 +699,6 @@ impl NumberColumn {
             ))),
         }
     }
-
-    pub fn data_type(&self) -> NumberDataType {
-        crate::with_number_type!(|NUM_TYPE| match self {
-            NumberColumn::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
-        })
-    }
 }
 
 impl NumberColumnBuilder {
@@ -771,8 +765,8 @@ impl NumberColumnBuilder {
             }
             (this, other) => unreachable!(
                 "unable append column(data type: {:?}) into builder(data type: {:?})",
-                other.data_type(),
-                this.data_type()
+                type_name_of(other),
+                type_name_of(this)
             ),
         })
     }
@@ -794,12 +788,6 @@ impl NumberColumnBuilder {
     pub fn pop(&mut self) -> Option<NumberScalar> {
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumnBuilder::NUM_TYPE(builder) => builder.pop().map(NumberScalar::NUM_TYPE),
-        })
-    }
-
-    pub fn data_type(&self) -> NumberDataType {
-        crate::with_number_type!(|NUM_TYPE| match self {
-            NumberColumnBuilder::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
         })
     }
 }
@@ -832,6 +820,10 @@ fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> Op
     // It will have errors if the src type is Inf/NaN
     let dest: U = num_traits::cast(src_clamp)?;
     Some((dest, overflowing))
+}
+
+fn type_name_of<T>(_: T) -> &'static str {
+    std::any::type_name::<T>()
 }
 
 #[macro_export]

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -80,7 +79,7 @@ impl AsyncSystemTable for UserFunctionsTable {
 
         for user_function in &user_functions {
             names.push(user_function.name.as_str());
-            is_aggregate.push(Some(user_function.is_aggregate));
+            is_aggregate.push(None);
             languages.push(user_function.language.as_str());
             descriptions.push(user_function.description.as_str());
             arguments.push(serde_json::to_vec(&user_function.arguments)?);
@@ -108,8 +107,6 @@ pub struct UserFunctionArguments {
     return_type: Option<String>,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
     parameters: Vec<String>,
-    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    states: BTreeMap<String, String>,
 }
 
 #[derive(serde::Serialize)]
@@ -162,18 +159,12 @@ impl UserFunctionsTable {
             .into_iter()
             .map(|user_function| UserFunction {
                 name: user_function.name,
-                is_aggregate: match user_function.definition {
-                    UDFDefinition::LambdaUDF(_)
-                    | UDFDefinition::UDFServer(_)
-                    | UDFDefinition::UDFScript(_) => false,
-                    UDFDefinition::UDAFScript(_) => true,
-                },
+                is_aggregate: false,
                 description: user_function.description,
                 language: match &user_function.definition {
                     UDFDefinition::LambdaUDF(_) => String::from("SQL"),
                     UDFDefinition::UDFServer(x) => x.language.clone(),
-                    UDFDefinition::UDFScript(x) => x.language.to_string(),
-                    UDFDefinition::UDAFScript(x) => x.language.to_string(),
+                    UDFDefinition::UDFScript(x) => x.language.clone(),
                 },
                 definition: user_function.definition.to_string(),
                 created_on: user_function.created_on,
@@ -182,29 +173,16 @@ impl UserFunctionsTable {
                         return_type: None,
                         arg_types: vec![],
                         parameters: x.parameters.clone(),
-                        states: BTreeMap::new(),
                     },
                     UDFDefinition::UDFServer(x) => UserFunctionArguments {
                         parameters: vec![],
                         return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
-                        states: BTreeMap::new(),
                     },
                     UDFDefinition::UDFScript(x) => UserFunctionArguments {
                         parameters: vec![],
                         return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
-                        states: BTreeMap::new(),
-                    },
-                    UDFDefinition::UDAFScript(x) => UserFunctionArguments {
-                        parameters: vec![],
-                        return_type: Some(x.return_type.to_string()),
-                        arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
-                        states: x
-                            .state_fields
-                            .iter()
-                            .map(|f| (f.name().to_string(), f.data_type().to_string()))
-                            .collect(),
                     },
                 },
             })

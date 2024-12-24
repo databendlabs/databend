@@ -260,17 +260,6 @@ impl ScalarExpr {
                 scalar.as_raw_expr()
             }
 
-            ScalarExpr::UDAFCall(udaf) => RawExpr::ColumnRef {
-                span: None,
-                id: ColumnBinding::new_dummy_column(
-                    udaf.display_name.clone(),
-                    Box::new(udaf.return_type.as_ref().clone()),
-                    DummyColumnType::UDF,
-                ),
-                data_type: udaf.return_type.as_ref().clone(),
-                display_name: udaf.display_name.clone(),
-            },
-
             ScalarExpr::AsyncFunctionCall(async_func) => RawExpr::ColumnRef {
                 span: None,
                 id: ColumnBinding::new_dummy_column(

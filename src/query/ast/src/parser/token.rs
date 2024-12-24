@@ -1302,8 +1302,6 @@ pub enum TokenKind {
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
-    #[token("STATE", ignore(ascii_case))]
-    STATE,
     #[token("TASK", ignore(ascii_case))]
     TASK,
     #[token("TASKS", ignore(ascii_case))]

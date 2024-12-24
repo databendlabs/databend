@@ -590,29 +590,31 @@ pub struct WindowAggregateRewriter<'a> {
 impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::AggregateFunction(agg_func) = expr {
-            let Some(agg) = self
+            if let Some(index) = self
                 .bind_context
                 .aggregate_info
-                .get_aggregate_function(&agg_func.display_name)
-            else {
+                .aggregate_functions_map
+                .get(&agg_func.display_name)
+            {
+                let agg = &self.bind_context.aggregate_info.aggregate_functions[*index];
+                let column_binding = ColumnBindingBuilder::new(
+                    agg_func.display_name.clone(),
+                    agg.index,
+                    agg_func.return_type.clone(),
+                    Visibility::Visible,
+                )
+                .build();
+
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }
+                .into();
+
+                return Ok(());
+            } else {
                 return Err(ErrorCode::BadArguments("Invalid window function argument"));
-            };
-
-            let column_binding = ColumnBindingBuilder::new(
-                agg_func.display_name.clone(),
-                agg.index,
-                agg_func.return_type.clone(),
-                Visibility::Visible,
-            )
-            .build();
-
-            *expr = BoundColumnRef {
-                span: None,
-                column: column_binding,
             }
-            .into();
-
-            return Ok(());
         }
 
         walk_expr_mut(self, expr)
