@@ -262,7 +262,7 @@ async fn test_empty_system_managed_warehouse() -> Result<()> {
             String::from("XLargeNode"),
         ))]);
 
-    assert_eq!(create_warehouse.await.unwrap_err().code(), 1002);
+    assert_eq!(create_warehouse.await.unwrap_err().code(), 2404);
     Ok(())
 }
 
