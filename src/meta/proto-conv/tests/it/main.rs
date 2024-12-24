@@ -112,4 +112,4 @@ mod v111_add_glue_as_iceberg_catalog_option;
 mod v112_virtual_column;
 mod v113_warehouse_grantobject;
 mod v114_interval_datatype;
-mod v115_add_udaf;
+mod v115_add_udaf_script;

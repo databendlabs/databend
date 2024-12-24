@@ -3719,7 +3719,6 @@ impl<'a> TypeChecker<'a> {
             UDFDefinition::UDFScript(udf_def) => Ok(Some(
                 self.resolve_udf_script(span, name, arguments, udf_def)?,
             )),
-            UDFDefinition::UDAFServer(_) => unimplemented!(),
             UDFDefinition::UDAFScript(udf_def) => Ok(Some(
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
