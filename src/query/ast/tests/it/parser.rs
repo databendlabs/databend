@@ -1237,6 +1237,7 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"INTERVAL '1 YEAR'"#,
     ];
 
     for case in cases {

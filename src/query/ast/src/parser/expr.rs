@@ -1312,6 +1312,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
+    let interval_expr = map(
+        rule! {
+            INTERVAL ~ #consumed(literal_string)
+        },
+        |(_, (span, date))| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
+            }),
+            target_type: TypeName::Interval,
+        },
+    );
+
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -1360,6 +1373,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #date_expr : "`DATE <str_literal>`"
                 | #timestamp_expr : "`TIMESTAMP <str_literal>`"
                 | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+                | #interval_expr : "`INTERVAL <str_literal>`"
                 | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
                 | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
 

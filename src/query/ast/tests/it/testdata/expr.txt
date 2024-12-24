@@ -5034,3 +5034,25 @@ FunctionCall {
 }
 
 
+---------- Input ----------
+INTERVAL '1 YEAR'
+---------- Output ---------
+CAST('1 YEAR' AS INTERVAL)
+---------- AST ------------
+Cast {
+    span: Some(
+        0..17,
+    ),
+    expr: Literal {
+        span: Some(
+            9..17,
+        ),
+        value: String(
+            "1 YEAR",
+        ),
+    },
+    target_type: Interval,
+    pg_style: false,
+}
+
+
