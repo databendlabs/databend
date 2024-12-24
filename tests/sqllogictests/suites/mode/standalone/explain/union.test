@@ -26,7 +26,7 @@ query T
 explain select * from v where a > b
 ----
 UnionAll
-├── output columns: [t1.a (#0), t1.b (#1)]
+├── output columns: [a (#4), b (#5)]
 ├── estimated rows: 0.80
 ├── Filter
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -61,7 +61,7 @@ query T
 explain select * from v where a > 1
 ----
 UnionAll
-├── output columns: [t1.a (#0), t1.b (#1)]
+├── output columns: [a (#4), b (#5)]
 ├── estimated rows: 2.00
 ├── Filter
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -96,12 +96,12 @@ query T
 explain select * from v limit 3
 ----
 Limit
-├── output columns: [t1.a (#0), t1.b (#1)]
+├── output columns: [a (#4), b (#5)]
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 3.00
 └── UnionAll
-    ├── output columns: [t1.a (#0), t1.b (#1)]
+    ├── output columns: [a (#4), b (#5)]
     ├── estimated rows: 4.00
     ├── Limit
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -138,12 +138,12 @@ query T
 explain select * from v limit 3 offset 1
 ----
 Limit
-├── output columns: [t1.a (#0), t1.b (#1)]
+├── output columns: [a (#4), b (#5)]
 ├── limit: 3
 ├── offset: 1
 ├── estimated rows: 3.00
 └── UnionAll
-    ├── output columns: [t1.a (#0), t1.b (#1)]
+    ├── output columns: [a (#4), b (#5)]
     ├── estimated rows: 4.00
     ├── Limit
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -180,12 +180,12 @@ query T
 explain select * from t1 union all select * from t2 limit 1
 ----
 Limit
-├── output columns: [t1.a (#0), t1.b (#1)]
+├── output columns: [a (#4), b (#5)]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
 └── UnionAll
-    ├── output columns: [t1.a (#0), t1.b (#1)]
+    ├── output columns: [a (#4), b (#5)]
     ├── estimated rows: 2.00
     ├── Limit
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -223,7 +223,7 @@ query T
 explain select b from (select * from t1 where a>1 union all select * from t2 where b>2)
 ----
 UnionAll
-├── output columns: [t1.b (#1)]
+├── output columns: [b (#5)]
 ├── estimated rows: 2.00
 ├── Filter
 │   ├── output columns: [t1.b (#1)]
@@ -277,7 +277,7 @@ query T
 explain select * from t1 where t1.a < 0 union all select * from t2 ;
 ----
 UnionAll
-├── output columns: [t1.a (#0)]
+├── output columns: [a (#2)]
 ├── estimated rows: 10000.00
 ├── EmptyResultScan
 └── TableScan
@@ -297,9 +297,9 @@ explain select * from t1 union all select * from t2 where t2.b < 0;
 ----
 TableScan
 ├── table: default.default.t1
-├── output columns: [a (#0)]
+├── output columns: []
 ├── read rows: 10000
-├── read size: 10.59 KiB
+├── read size: 0
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]

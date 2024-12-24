@@ -443,6 +443,9 @@ impl SubqueryRewriter {
         let mut correlated_columns = correlated_columns.clone().into_iter().collect::<Vec<_>>();
         correlated_columns.sort();
         for correlated_column in correlated_columns.iter() {
+            if !self.derived_columns.contains_key(correlated_column) {
+                continue;
+            }
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {

@@ -361,8 +361,15 @@ create table t4(a int, b int)
 statement ok
 insert into t4 values(1,1),(2,2),(3,3)
 
+statement ok
+explain merge into t4 using (select a, b from ( select 1 a, 2 b union all select 1 a, 3 b)) as t3 on t3.a=t4.a when matched  then delete
+
+statement ok
+explain merge into t4 using (select 1 a, 2 b union all select 1 a, 3 b) as t3 on t3.a=t4.a when matched  then delete
+
+
 query II
-merge into t4 using (select a, b, change$action from s3) as t3 on t3.a=t4.a when matched and change$action = 'DELETE' then delete 
+merge into t4 using (select a, b, change$action from s3) as t3 on t3.a=t4.a when matched and change$action = 'DELETE' then delete
 when not matched and change$action = 'INSERT' then insert (a,b) values(t3.a,t3.b)
 ----
 3 2

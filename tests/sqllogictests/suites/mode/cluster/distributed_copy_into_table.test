@@ -6,7 +6,7 @@ statement ok
 create or replace stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create or replace table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
+create or replace table table_random(a int not null,b string not null,c string not null) ENGINE = Random min_string_len = 1;
 
 statement ok
 copy into @st from (select a,b,c from table_random limit 1000000);

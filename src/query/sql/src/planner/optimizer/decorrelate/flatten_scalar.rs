@@ -34,7 +34,9 @@ impl SubqueryRewriter {
         match scalar {
             ScalarExpr::BoundColumnRef(bound_column) => {
                 let column_binding = bound_column.column.clone();
-                if correlated_columns.contains(&column_binding.index) {
+                if correlated_columns.contains(&column_binding.index)
+                    && self.derived_columns.contains_key(&column_binding.index)
+                {
                     let index = self.derived_columns.get(&column_binding.index).unwrap();
                     let metadata = self.metadata.read();
                     let column_entry = metadata.column(*index);

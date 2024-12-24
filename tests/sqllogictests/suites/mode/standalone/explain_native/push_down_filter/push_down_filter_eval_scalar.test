@@ -52,16 +52,16 @@ query T
 explain select distinct t.sc from v2 t where t.sc = 1;
 ----
 AggregateFinal
-├── output columns: [t.id (#0)]
-├── group by: [id]
+├── output columns: [sc (#9)]
+├── group by: [sc]
 ├── aggregate functions: []
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── group by: [id]
+    ├── group by: [sc]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
     └── UnionAll
-        ├── output columns: [t.id (#0)]
+        ├── output columns: [sc (#9)]
         ├── estimated rows: 0.00
         ├── AggregateFinal
         │   ├── output columns: [t.id (#0)]
