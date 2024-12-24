@@ -302,7 +302,7 @@ statement ok
 INSERT INTO t_settings values(3);
 
 #####################################
-# expect 2 rows, without batch size #
+# expect 3 rows, without batch size #
 #####################################
 query I
 select c from s_t_settings order by c;
@@ -333,6 +333,22 @@ query I
 select c from s_t_settings with (max_batch_size = 1);
 ----
 1
+
+##################################
+# set hint to 0, will disable it #
+##################################
+
+statement ok
+set stream_consume_batch_size_hint = 0;
+
+# expects 3 rows
+query I
+select c from s_t_settings order by c;
+----
+1
+2
+3
+
 
 statement ok
 DROP STREAM s;
