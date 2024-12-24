@@ -1046,7 +1046,8 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.get_table_from_shared(catalog, database, table, None)
+        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
+        self.get_table_from_shared(catalog, database, table, batch_size)
             .await
     }
 
@@ -1062,6 +1063,23 @@ impl TableContext for QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        let max_batch_size = {
+            match max_batch_size {
+                Some(v) => {
+                    // use the batch size specified in the statement
+                    Some(v)
+                }
+                None => {
+                    if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
+                        info!("overriding max_batch_size of stream consumption using value specified in setting: {}", v);
+                        Some(v)
+                    } else {
+                        None
+                    }
+                }
+            }
+        };
+
         let table = self
             .get_table_from_shared(catalog, database, table, max_batch_size)
             .await?;
@@ -1070,7 +1088,11 @@ impl TableContext for QueryContext {
             let actual_batch_limit = stream.max_batch_size();
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
-                    "Within the same transaction, the batch size for a stream must remain consistent",
+                    format!(
+                    "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        actual_batch_limit, max_batch_size
+                    )
+
                 ));
             }
         } else if max_batch_size.is_some() {

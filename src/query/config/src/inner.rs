@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -719,7 +718,7 @@ impl Default for CacheConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
-    pub path: OsString,
+    pub path: String,
 
     /// Ratio of the reserve of the disk space.
     pub reserved_disk_ratio: OrderedFloat<f64>,
@@ -731,7 +730,7 @@ pub struct SpillConfig {
 impl Default for SpillConfig {
     fn default() -> Self {
         Self {
-            path: OsString::from(""),
+            path: "".to_string(),
             reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,
         }
