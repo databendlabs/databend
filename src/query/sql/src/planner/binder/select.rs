@@ -260,6 +260,7 @@ impl Binder {
             right_context.clone(),
             coercion_types,
         )?;
+
         if let Some(cte_name) = &cte_name {
             for (col, cte_col) in new_bind_context.columns.iter_mut().zip(
                 new_bind_context
@@ -275,10 +276,13 @@ impl Binder {
             }
         }
 
+        let output_indexes = new_bind_context.columns.iter().map(|x| x.index).collect();
+
         let union_plan = UnionAll {
             left_outputs,
             right_outputs,
             cte_scan_names,
+            output_indexes,
         };
 
         let mut new_expr = SExpr::create_binary(
@@ -400,7 +404,7 @@ impl Binder {
     #[allow(clippy::type_complexity)]
     #[allow(clippy::too_many_arguments)]
     fn coercion_union_type(
-        &self,
+        &mut self,
         left_span: Span,
         right_span: Span,
         left_bind_context: BindContext,
@@ -414,6 +418,7 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
+
         new_bind_context
             .cte_context
             .set_cte_context(right_bind_context.cte_context);
@@ -466,14 +471,11 @@ impl Binder {
                 right_outputs.push((right_col.index, None));
             }
 
-            let index = new_bind_context.columns.len();
-            let column_binding = ColumnBindingBuilder::new(
+            let column_binding = self.create_derived_column_binding(
                 left_col.column_name.clone(),
-                index,
-                Box::new(coercion_types[idx].clone()),
-                Visibility::Visible,
-            )
-            .build();
+                coercion_types[idx].clone(),
+                None,
+            );
             new_bind_context.add_column_binding(column_binding);
         }
 

@@ -64,8 +64,8 @@ impl PhysicalPlanBuilder {
         let lazy_columns = metadata.lazy_columns();
         required.extend(lazy_columns.clone());
 
-        let indices: Vec<_> = (0..union_all.left_outputs.len())
-            .filter(|i| required.contains(i))
+        let indices: Vec<usize> = (0..union_all.left_outputs.len())
+            .filter(|index| required.contains(&union_all.output_indexes[*index]))
             .collect();
 
         let (left_required, right_required) = if indices.is_empty() {
@@ -108,7 +108,8 @@ impl PhysicalPlanBuilder {
                         .data_type()
                         .clone()
                 };
-                Ok(DataField::new(&i.to_string(), data_type))
+                let output_index = union_all.output_indexes[i];
+                Ok(DataField::new(&output_index.to_string(), data_type))
             })
             .collect::<Result<Vec<_>>>()?;
 

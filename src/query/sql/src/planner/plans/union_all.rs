@@ -41,6 +41,7 @@ pub struct UnionAll {
     // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
     // The `cte_scan_names` are `m` and `f`
     pub cte_scan_names: Vec<String>,
+    pub output_indexes: Vec<IndexType>,
 }
 
 impl UnionAll {
