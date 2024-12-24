@@ -62,6 +62,7 @@ impl PipelineBuilder {
                     table,
                     cluster_stats_gen.clone(),
                     MutationKind::Delete,
+                    column_mutation.table_meta_timestamps,
                 )?;
                 proc.into_processor()
             })?;
@@ -81,6 +82,7 @@ impl PipelineBuilder {
                     table,
                     cluster_stats_gen.clone(),
                     MutationKind::Update,
+                    column_mutation.table_meta_timestamps,
                 )?;
                 proc.into_processor()
             })?;
