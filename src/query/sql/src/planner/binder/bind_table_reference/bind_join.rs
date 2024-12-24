@@ -377,7 +377,16 @@ impl Binder {
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
         let mut is_lateral = false;
         let mut is_null_equal = Vec::new();
-        if !right_prop.outer_columns.is_empty() {
+
+        // Some outer columns maybe from union plan
+        let need_correlated = {
+            let metadata = self.metadata.read();
+            metadata
+                .table_index_by_column_indexes(&right_prop.outer_columns)
+                .is_some()
+        };
+
+        if need_correlated {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let mut decorrelator = SubqueryRewriter::new(self.metadata.clone(), Some(self.clone()));
             right_child = decorrelator.flatten_plan(
