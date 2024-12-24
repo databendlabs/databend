@@ -16,8 +16,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::DataField;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_meta_app::principal as mt;
 use databend_common_protos::pb;
 
@@ -182,12 +182,7 @@ impl FromToProto for mt::UDAFScript {
         let state_fields = p
             .state_fields
             .into_iter()
-            .map(|(name, data_type)| {
-                Ok(DataField::new(
-                    &name,
-                    (&TableDataType::from_pb(data_type)?).into(),
-                ))
-            })
+            .map(|field| TableField::from_pb(field).map(|field| (&field).into()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let return_type =
@@ -221,17 +216,16 @@ impl FromToProto for mt::UDAFScript {
             .state_fields
             .iter()
             .map(|field| {
-                Ok((
-                    field.name().clone(),
-                    infer_schema_type(field.data_type())
-                        .map_err(|e| Incompatible {
-                            reason: format!(
-                                "Convert DataType to TableDataType failed: {}",
-                                e.message()
-                            ),
-                        })?
-                        .to_pb()?,
-                ))
+                TableField::new(
+                    field.name(),
+                    infer_schema_type(field.data_type()).map_err(|e| Incompatible {
+                        reason: format!(
+                            "Convert DataType to TableDataType failed: {}",
+                            e.message()
+                        ),
+                    })?,
+                )
+                .to_pb()
             })
             .collect::<Result<_, _>>()?;
 
@@ -247,6 +241,87 @@ impl FromToProto for mt::UDAFScript {
             code: self.code.clone(),
             language: self.language.clone(),
             runtime_version: self.runtime_version.clone(),
+            arg_types,
+            state_fields,
+            return_type: Some(return_type),
+        })
+    }
+}
+
+impl FromToProto for mt::UDAFServer {
+    type PB = pb::UdafServer;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::UdafServer) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let arg_types = p
+            .arg_types
+            .into_iter()
+            .map(|arg_type| Ok((&TableDataType::from_pb(arg_type)?).into()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let state_fields = p
+            .state_fields
+            .into_iter()
+            .map(|field| TableField::from_pb(field).map(|field| (&field).into()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let return_type =
+            (&TableDataType::from_pb(p.return_type.ok_or_else(|| Incompatible {
+                reason: "UDAFScript.return_type can not be None".to_string(),
+            })?)?)
+                .into();
+
+        Ok(mt::UDAFServer {
+            address: p.address,
+            arg_types,
+            return_type,
+            language: p.language,
+            state_fields,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for arg_type in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| Incompatible {
+                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                })?
+                .to_pb()?;
+            arg_types.push(arg_type);
+        }
+
+        let state_fields = self
+            .state_fields
+            .iter()
+            .map(|field| {
+                TableField::new(
+                    field.name(),
+                    infer_schema_type(field.data_type()).map_err(|e| Incompatible {
+                        reason: format!(
+                            "Convert DataType to TableDataType failed: {}",
+                            e.message()
+                        ),
+                    })?,
+                )
+                .to_pb()
+            })
+            .collect::<Result<_, _>>()?;
+
+        let return_type = infer_schema_type(&self.return_type)
+            .map_err(|e| Incompatible {
+                reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+            })?
+            .to_pb()?;
+
+        Ok(pb::UdafServer {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            address: self.address.clone(),
+            language: self.language.clone(),
             arg_types,
             state_fields,
             return_type: Some(return_type),
@@ -270,6 +345,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             Some(pb::user_defined_function::Definition::UdfScript(udf_script)) => {
                 mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_script)?)
+            }
+            Some(pb::user_defined_function::Definition::UdafServer(udaf_server)) => {
+                mt::UDFDefinition::UDAFServer(mt::UDAFServer::from_pb(udaf_server)?)
             }
             Some(pb::user_defined_function::Definition::UdafScript(udaf_script)) => {
                 mt::UDFDefinition::UDAFScript(mt::UDAFScript::from_pb(udaf_script)?)
@@ -302,6 +380,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDFScript(udf_script) => {
                 pb::user_defined_function::Definition::UdfScript(udf_script.to_pb()?)
+            }
+            mt::UDFDefinition::UDAFServer(udaf_server) => {
+                pb::user_defined_function::Definition::UdafServer(udaf_server.to_pb()?)
             }
             mt::UDFDefinition::UDAFScript(udaf_script) => {
                 pb::user_defined_function::Definition::UdafScript(udaf_script.to_pb()?)

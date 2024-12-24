@@ -17,6 +17,7 @@ syntax = "proto3";
 package databend_proto;
 
 import "datatype.proto";
+import "metadata.proto";
 
 message LambdaUDF {
   uint64 ver = 100;
@@ -58,12 +59,21 @@ message UDAFScript {
   string runtime_version = 3;
   DataType return_type = 4;
   repeated DataType arg_types = 5;
-  map<string, DataType> state_fields = 6;
+  repeated DataField state_fields = 6;
+}
+
+message UDAFServer {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string address = 1;
+  string language = 2;
+  DataType return_type = 3;
+  repeated DataType arg_types = 4;
+  repeated DataField state_fields = 5;
 }
 
 message UserDefinedFunction {
-  reserved 7; // reserved for upcoming UDAFServer
-
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
@@ -73,7 +83,7 @@ message UserDefinedFunction {
     LambdaUDF lambda_udf = 3;
     UDFServer udf_server = 4;
     UDFScript udf_script = 6;
-    // UDAFServer udaf_server = 7;
+    UDAFServer udaf_server = 7;
     UDAFScript udaf_script = 8;
   }
   // The time udf created.

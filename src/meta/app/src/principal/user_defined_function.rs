@@ -58,10 +58,22 @@ pub struct UDAFScript {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UDAFServer {
+    pub address: String,
+    pub language: String,
+    // aggregate function input types
+    pub arg_types: Vec<DataType>,
+    // aggregate function state fields
+    pub state_fields: Vec<DataField>,
+    pub return_type: DataType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
     UDFScript(UDFScript),
+    UDAFServer(UDAFServer),
     UDAFScript(UDAFScript),
 }
 
@@ -193,6 +205,31 @@ impl Display for UDFDefinition {
                     ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
             }
+            UDFDefinition::UDAFServer(UDAFServer {
+                address,
+                arg_types,
+                state_fields,
+                return_type,
+                language,
+            }) => {
+                for (i, item) in arg_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, ") STATE {{ ")?;
+                for (i, item) in state_fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{} {}", item.name(), item.data_type())?;
+                }
+                write!(
+                    f,
+                    " }} RETURNS {return_type} LANGUAGE {language} ADDRESS = {address}"
+                )?;
+            }
             UDFDefinition::UDAFScript(UDAFScript {
                 code,
                 arg_types,
@@ -207,7 +244,7 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{item}")?;
                 }
-                write!(f, " STATE {{ ")?;
+                write!(f, ") STATE {{ ")?;
                 for (i, item) in state_fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
