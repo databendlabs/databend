@@ -23,6 +23,7 @@ logos = { workspace = true }
 nom = { workspace = true }
 nom-rule = { workspace = true }
 ordered-float = { workspace = true }
+percent-encoding = { workspace = true }
 pratt = { workspace = true }
 pretty = { workspace = true }
 pretty_assertions = { workspace = true }
