@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod warehouse_api;
-mod warehouse_mgr;
+mod resources_management;
 
-pub use warehouse_api::SelectedNode;
-pub use warehouse_api::SystemManagedCluster;
-pub use warehouse_api::SystemManagedWarehouse;
-pub use warehouse_api::WarehouseApi;
-pub use warehouse_api::WarehouseInfo;
-pub use warehouse_mgr::WarehouseMgr;
+pub use resources_management::DummyResourcesManagement;
+pub use resources_management::ResourcesManagement;

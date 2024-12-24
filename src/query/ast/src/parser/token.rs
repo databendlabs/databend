@@ -1376,6 +1376,16 @@ pub enum TokenKind {
     SQL,
     #[token("SUNDAY", ignore(ascii_case))]
     SUNDAY,
+    #[token("WAREHOUSES", ignore(ascii_case))]
+    WAREHOUSES,
+    #[token("INSPECT", ignore(ascii_case))]
+    INSPECT,
+    #[token("ASSIGN", ignore(ascii_case))]
+    ASSIGN,
+    #[token("NODES", ignore(ascii_case))]
+    NODES,
+    #[token("UNASSIGN", ignore(ascii_case))]
+    UNASSIGN,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

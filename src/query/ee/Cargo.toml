@@ -27,6 +27,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-license = { workspace = true }
+databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
@@ -48,6 +49,7 @@ databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-fail-safe = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-storage-quota = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }

@@ -38,7 +38,7 @@ use crate::parser::statement::cluster_type;
 use crate::parser::statement::create_table_source;
 use crate::parser::statement::parse_create_option;
 use crate::parser::statement::table_option;
-use crate::parser::statement::warehouse_option;
+use crate::parser::statement::task_warehouse_option;
 use crate::parser::token::TokenKind::*;
 use crate::parser::Input;
 
@@ -145,7 +145,7 @@ fn dynamic_table_options(
 
     permutation((
         target_lag,
-        warehouse_option,
+        task_warehouse_option,
         refresh_mode_opt,
         initialize_opt,
     ))(i)

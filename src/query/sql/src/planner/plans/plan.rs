@@ -32,6 +32,7 @@ use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
@@ -42,6 +43,7 @@ use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -67,6 +69,7 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
+use crate::plans::CreateWarehousePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
@@ -99,6 +102,8 @@ use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::DropWarehouseClusterPlan;
+use crate::plans::DropWarehousePlan;
 use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::ExecuteTaskPlan;
@@ -107,6 +112,7 @@ use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
+use crate::plans::InspectWarehousePlan;
 use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -121,7 +127,10 @@ use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
+use crate::plans::RenameWarehouseClusterPlan;
+use crate::plans::RenameWarehousePlan;
 use crate::plans::Replace;
+use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
@@ -138,8 +147,10 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowTasksPlan;
+use crate::plans::SuspendWarehousePlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
+use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
@@ -190,6 +201,20 @@ pub enum Plan {
     CreateCatalog(Box<CreateCatalogPlan>),
     DropCatalog(Box<DropCatalogPlan>),
     UseCatalog(Box<UseCatalogPlan>),
+
+    // Warehouses
+    ShowWarehouses,
+    CreateWarehouse(Box<CreateWarehousePlan>),
+    DropWarehouse(Box<DropWarehousePlan>),
+    ResumeWarehouse(Box<ResumeWarehousePlan>),
+    SuspendWarehouse(Box<SuspendWarehousePlan>),
+    RenameWarehouse(Box<RenameWarehousePlan>),
+    InspectWarehouse(Box<InspectWarehousePlan>),
+    AddWarehouseCluster(Box<AddWarehouseClusterPlan>),
+    DropWarehouseCluster(Box<DropWarehouseClusterPlan>),
+    RenameWarehouseCluster(Box<RenameWarehouseClusterPlan>),
+    AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
+    UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
@@ -495,6 +520,12 @@ impl Plan {
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
             Plan::Insert(plan) => plan.schema(),
+            Plan::InspectWarehouse(plan) => plan.schema(),
+            Plan::ShowWarehouses => DataSchemaRefExt::create(vec![
+                DataField::new("warehouse", DataType::String),
+                DataField::new("type", DataType::String),
+                DataField::new("status", DataType::String),
+            ]),
 
             _ => Arc::new(DataSchema::empty()),
         }
