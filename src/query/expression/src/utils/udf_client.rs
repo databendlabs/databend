@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use arrow_array::RecordBatch;
@@ -59,13 +60,11 @@ pub struct UDFFlightClient {
 }
 
 impl UDFFlightClient {
-    #[async_backtrace::framed]
-    pub async fn connect(
+    pub fn build_endpoint(
         addr: &str,
         conn_timeout: u64,
         request_timeout: u64,
-        batch_rows: usize,
-    ) -> Result<UDFFlightClient> {
+    ) -> Result<Arc<Endpoint>> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
@@ -86,6 +85,15 @@ impl UDFFlightClient {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Client TLS Config: {err}"))
             })?;
 
+        Ok(Arc::new(endpoint))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn connect(
+        endpoint: Arc<Endpoint>,
+        conn_timeout: u64,
+        batch_rows: usize,
+    ) -> Result<UDFFlightClient> {
         let mut connector = HttpConnector::new_with_resolver(DNSService);
         connector.enforce_http(false);
         connector.set_nodelay(true);
@@ -99,7 +107,8 @@ impl UDFFlightClient {
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(
                     "Cannot connect to UDF Server {}: {:?}",
-                    addr, err
+                    endpoint.uri(),
+                    err
                 ))
             })?;
         let inner =

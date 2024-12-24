@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -40,6 +41,7 @@ use databend_common_metrics::external_server::record_running_requests_external_s
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use tokio::sync::Semaphore;
+use tonic::transport::Endpoint;
 
 use crate::sessions::QueryContext;
 
@@ -47,12 +49,13 @@ pub struct TransformUdfServer {
     ctx: Arc<QueryContext>,
     funcs: Vec<UdfFunctionDesc>,
     connect_timeout: u64,
-    request_timeout: u64,
     // request batch rows is used to split the block into smaller blocks and improve concurrency performance.
     request_batch_rows: usize,
     // semaphore is used to control the total number of concurrent threads,
     // avoid the case of too many flight connections caused by the small batch rows.
     semaphore: Arc<Semaphore>,
+    // key is the index of udf, value is the endpoint of the udf server.
+    endpoints: BTreeMap<usize, Arc<Endpoint>>,
     retry_times: usize,
 }
 
@@ -66,24 +69,37 @@ impl TransformUdfServer {
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
         let semaphore = Arc::new(Semaphore::new(request_max_threads));
 
-        let s = Self {
+        let mut endpoint_map: BTreeMap<String, Arc<Endpoint>> = BTreeMap::new();
+        let mut endpoints = BTreeMap::new();
+        for (i, func) in funcs.iter().enumerate() {
+            let server_addr = func.udf_type.as_server().unwrap();
+            if let Some(endpoint) = endpoint_map.get(server_addr) {
+                endpoints.insert(i, endpoint.clone());
+                continue;
+            }
+            let endpoint =
+                UDFFlightClient::build_endpoint(server_addr, connect_timeout, request_timeout)?;
+            endpoint_map.insert(server_addr.clone(), endpoint.clone());
+            endpoints.insert(i, endpoint);
+        }
+
+        Ok(Self {
             ctx,
             funcs,
             connect_timeout,
-            request_timeout,
             request_batch_rows,
             semaphore,
+            endpoints,
             retry_times,
-        };
-        Ok(s)
+        })
     }
 
     // data_block is spilt into multiple blocks, each block is processed by transform_inner
     async fn transform_inner(
         ctx: Arc<QueryContext>,
+        endpoint: Arc<Endpoint>,
         semaphore: Arc<Semaphore>,
         connect_timeout: u64,
-        request_timeout: u64,
         func: UdfFunctionDesc,
         mut data_block: DataBlock,
     ) -> Result<DataBlock> {
@@ -92,7 +108,6 @@ impl TransformUdfServer {
             ErrorCode::Internal(format!("Udf transformer acquire permit failure. {}", e))
         })?;
 
-        let server_addr = func.udf_type.as_server().unwrap();
         // construct input record_batch
         let num_rows = data_block.num_rows();
         let block_entries = func
@@ -124,12 +139,11 @@ impl TransformUdfServer {
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
         let instant = Instant::now();
-        let mut client =
-            UDFFlightClient::connect(server_addr, connect_timeout, request_timeout, 65536)
-                .await?
-                .with_tenant(ctx.get_tenant().tenant_name())?
-                .with_func_name(&func.func_name)?
-                .with_query_id(&ctx.get_id())?;
+        let mut client = UDFFlightClient::connect(endpoint, connect_timeout, 65536)
+            .await?
+            .with_tenant(ctx.get_tenant().tenant_name())?
+            .with_func_name(&func.func_name)?
+            .with_query_id(&ctx.get_id())?;
 
         let connect_duration = instant.elapsed();
         record_connect_external_duration(func.func_name.clone(), connect_duration);
@@ -211,14 +225,15 @@ impl AsyncTransform for TransformUdfServer {
             .step_by(batch_rows)
             .map(|start| data_block.slice(start..start + batch_rows.min(rows - start)))
             .collect();
-        for func in self.funcs.iter() {
+        for (i, func) in self.funcs.iter().enumerate() {
+            let endpoint = self.endpoints.get(&i).unwrap();
             let tasks: Vec<_> = batch_blocks
                 .into_iter()
                 .map(|mini_batch| {
                     databend_common_base::runtime::spawn({
                         let ctx = self.ctx.clone();
+                        let endpoint = endpoint.clone();
                         let connect_timeout = self.connect_timeout;
-                        let request_timeout = self.request_timeout;
                         let semaphore = self.semaphore.clone();
                         let func = func.clone();
                         let name = func.name.clone();
@@ -227,9 +242,9 @@ impl AsyncTransform for TransformUdfServer {
                             move || {
                                 Self::transform_inner(
                                     ctx.clone(),
+                                    endpoint.clone(),
                                     semaphore.clone(),
                                     connect_timeout,
-                                    request_timeout,
                                     func.clone(),
                                     mini_batch.clone(),
                                 )
