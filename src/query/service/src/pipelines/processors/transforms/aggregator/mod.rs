@@ -21,6 +21,7 @@ mod transform_aggregate_expand;
 mod transform_aggregate_final;
 mod transform_aggregate_partial;
 mod transform_single_key;
+mod udaf_script;
 mod utils;
 
 pub use aggregate_exchange_injector::AggregateInjector;
@@ -32,6 +33,7 @@ pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
+pub use udaf_script::*;
 pub use utils::*;
 
 pub use self::serde::*;
