@@ -54,8 +54,8 @@ pub struct TransformUdfServer {
     // semaphore is used to control the total number of concurrent threads,
     // avoid the case of too many flight connections caused by the small batch rows.
     semaphore: Arc<Semaphore>,
-    // key is the index of udf, value is the endpoint of the udf server.
-    endpoints: BTreeMap<usize, Arc<Endpoint>>,
+    // key is the server address of udf, value is the endpoint.
+    endpoints: BTreeMap<String, Arc<Endpoint>>,
     retry_times: usize,
 }
 
@@ -69,18 +69,16 @@ impl TransformUdfServer {
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
         let semaphore = Arc::new(Semaphore::new(request_max_threads));
 
-        let mut endpoint_map: BTreeMap<String, Arc<Endpoint>> = BTreeMap::new();
-        let mut endpoints = BTreeMap::new();
-        for (i, func) in funcs.iter().enumerate() {
+        let mut endpoints: BTreeMap<String, Arc<Endpoint>> = BTreeMap::new();
+        for func in funcs.iter() {
             let server_addr = func.udf_type.as_server().unwrap();
-            if let Some(endpoint) = endpoint_map.get(server_addr) {
-                endpoints.insert(i, endpoint.clone());
+            if let Some(endpoint) = endpoints.get(server_addr) {
+                endpoints.insert(server_addr.clone(), endpoint.clone());
                 continue;
             }
             let endpoint =
                 UDFFlightClient::build_endpoint(server_addr, connect_timeout, request_timeout)?;
-            endpoint_map.insert(server_addr.clone(), endpoint.clone());
-            endpoints.insert(i, endpoint);
+            endpoints.insert(server_addr.clone(), endpoint);
         }
 
         Ok(Self {
@@ -107,7 +105,6 @@ impl TransformUdfServer {
         let permit = semaphore.acquire_owned().await.map_err(|e| {
             ErrorCode::Internal(format!("Udf transformer acquire permit failure. {}", e))
         })?;
-
         // construct input record_batch
         let num_rows = data_block.num_rows();
         let block_entries = func
@@ -225,8 +222,9 @@ impl AsyncTransform for TransformUdfServer {
             .step_by(batch_rows)
             .map(|start| data_block.slice(start..start + batch_rows.min(rows - start)))
             .collect();
-        for (i, func) in self.funcs.iter().enumerate() {
-            let endpoint = self.endpoints.get(&i).unwrap();
+        for func in self.funcs.iter() {
+            let server_addr = func.udf_type.as_server().unwrap();
+            let endpoint = self.endpoints.get(server_addr).unwrap();
             let tasks: Vec<_> = batch_blocks
                 .into_iter()
                 .map(|mini_batch| {
