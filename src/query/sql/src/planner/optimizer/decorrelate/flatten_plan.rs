@@ -71,9 +71,12 @@ impl SubqueryRewriter {
             let mut metadata = self.metadata.write();
             // Currently, we don't support left plan's from clause contains subquery.
             // Such as: select t2.a from (select a + 1 as a from t) as t2 where (select sum(a) from t as t1 where t1.a < t2.a) = 1;
-            let table_index = metadata
-                .table_index_by_column_indexes(correlated_columns)
-                .unwrap();
+            let table_index = metadata.table_index_by_column_indexes(correlated_columns);
+            if table_index.is_none() {
+                return Ok(plan.clone());
+            }
+
+            let table_index = table_index.unwrap();
             let mut data_types = Vec::with_capacity(correlated_columns.len());
             let mut scalar_items = vec![];
             let mut scan_columns = ColumnSet::new();
