@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -125,6 +127,7 @@ async fn test_watch_single_key() -> anyhow::Result<()> {
         key: s("a"),
         key_end: None,
         filter_type: FilterType::All.into(),
+        initial_flush: false,
     };
 
     let key_a = s("a");
@@ -168,6 +171,7 @@ async fn test_watch() -> anyhow::Result<()> {
             key: "a".to_string(),
             key_end: Some("z".to_string()),
             filter_type: FilterType::All.into(),
+            initial_flush: false,
         };
 
         let key_a = s("a");
@@ -226,6 +230,7 @@ async fn test_watch() -> anyhow::Result<()> {
             key_end: None,
             // filter only delete events
             filter_type: FilterType::Delete.into(),
+            initial_flush: false,
         };
 
         let key = s(key_str);
@@ -289,6 +294,7 @@ async fn test_watch() -> anyhow::Result<()> {
             key: start,
             key_end: Some(end),
             filter_type: FilterType::All.into(),
+            initial_flush: false,
         };
 
         let conditions = vec![TxnCondition {
@@ -331,6 +337,76 @@ async fn test_watch() -> anyhow::Result<()> {
 
         test_watch_txn_main(addr.clone(), watch, watch_events, txn).await?;
     }
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_watch_initial_flush() -> anyhow::Result<()> {
+    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let updates = vec![
+        UpsertKV::update("a", b"a"),
+        UpsertKV::update("b", b"b"),
+        UpsertKV::update("c", b"c"),
+        UpsertKV::update("d", b"d"),
+        UpsertKV::update("z", b"z"),
+    ];
+
+    let client = tc.grpc_client().await?;
+    for update in updates.iter() {
+        client.upsert_kv(update.clone()).await?;
+    }
+
+    let mut strm = {
+        let watch = WatchRequest {
+            key: s("a"),
+            key_end: Some(s("e")),
+            filter_type: FilterType::All.into(),
+            initial_flush: true,
+        };
+        client.request(watch).await?
+    };
+
+    let cache = Arc::new(Mutex::new(BTreeMap::new()));
+
+    let c = cache.clone();
+    let cache_updater = async move {
+        while let Ok(Some(resp)) = strm.message().await {
+            let event = resp.event.unwrap();
+
+            let mut cache = c.lock().unwrap();
+            if let Some(value) = event.current {
+                cache.insert(event.key, value);
+            } else {
+                cache.remove(&event.key);
+            }
+        }
+    };
+
+    let _h = databend_common_base::runtime::spawn(cache_updater);
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let keys = {
+        let cache = cache.lock().unwrap();
+        cache.keys().cloned().collect::<Vec<_>>()
+    };
+
+    assert_eq!(vec![s("a"), s("b"), s("c"), s("d")], keys);
+
+    client.upsert_kv(UpsertKV::update("a", b"a2")).await?;
+    client.upsert_kv(UpsertKV::delete("c")).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let values = {
+        let cache = cache.lock().unwrap();
+        cache
+            .values()
+            .map(|seqv| seqv.data.clone())
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(vec![b("a2"), b("b"), b("d")], values);
 
     Ok(())
 }
@@ -386,6 +462,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
             key: start,
             key_end: Some(end),
             filter_type: FilterType::All.into(),
+            initial_flush: false,
         };
         watch_client.request(watch).await?
     };
@@ -482,6 +559,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         key: "a".to_string(),
         key_end: Some("z".to_string()),
         filter_type: FilterType::All.into(),
+        initial_flush: false,
     };
 
     let client1 = make_client(&addr)?;
