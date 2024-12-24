@@ -55,7 +55,7 @@ impl AggregateFinal {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            let data_type = agg.sig.return_type.clone();
+            let data_type = agg.sig.return_type()?;
             fields.push(DataField::new(&agg.output_column.to_string(), data_type));
         }
         for id in self.group_by.iter() {
@@ -120,90 +120,38 @@ impl PhysicalPlanBuilder {
                     .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg
-                    .aggregate_functions
-                    .iter()
-                    .map(|v| match &v.scalar {
-                        ScalarExpr::AggregateFunction(agg) => {
-                            let arg_indices = agg
-                                .args
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
+                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                    if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
+                        Ok(AggregateFunctionDesc {
+                            sig: AggregateFunctionSignature {
+                                name: agg.func_name.clone(),
+                                args: agg.args.iter().map(|s| {
+                                    if let ScalarExpr::BoundColumnRef(col) = s {
+                                        Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
                                     } else {
                                         Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
+                                            "Aggregate function argument must be a BoundColumnRef".to_string()
                                         ))
                                     }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: agg.func_name.clone(),
-                                    udaf: None,
-                                    return_type: *agg.return_type.clone(),
-                                    args,
-                                    params: agg.params.clone(),
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        ScalarExpr::UDAFCall(udaf) => {
-                            let arg_indices = udaf
-                                .arguments
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: udaf.name.clone(),
-                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
-                                    return_type: *udaf.return_type.clone(),
-                                    args,
-                                    params: vec![],
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        _ => Err(ErrorCode::Internal(
-                            "Expected aggregate function".to_string(),
-                        )),
-                    })
-                    .collect::<Result<_>>()?;
+                                }).collect::<Result<_>>()?,
+                                params: agg.params.clone(),
+                            },
+                            output_column: v.index,
+                            arg_indices: agg.args.iter().map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal(
+                                        "Aggregate function argument must be a BoundColumnRef".to_string()
+                                    ))
+                                }
+                            }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
+                        })
+                    } else {
+                        Err(ErrorCode::Internal("Expected aggregate function".to_string()))
+                    }
+                }).collect::<Result<_>>()?;
 
                 let settings = self.ctx.get_settings();
                 let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
@@ -354,90 +302,38 @@ impl PhysicalPlanBuilder {
                     }
                 };
 
-                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg
-                    .aggregate_functions
-                    .iter()
-                    .map(|v| match &v.scalar {
-                        ScalarExpr::AggregateFunction(agg) => {
-                            let arg_indices = agg
-                                .args
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
+                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                    if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
+                        Ok(AggregateFunctionDesc {
+                            sig: AggregateFunctionSignature {
+                                name: agg.func_name.clone(),
+                                args: agg.args.iter().map(|s| {
+                                    if let ScalarExpr::BoundColumnRef(col) = s {
+                                        Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
                                     } else {
                                         Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
+                                            "Aggregate function argument must be a BoundColumnRef".to_string()
                                         ))
                                     }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: agg.func_name.clone(),
-                                    udaf: None,
-                                    return_type: *agg.return_type.clone(),
-                                    args,
-                                    params: agg.params.clone(),
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        ScalarExpr::UDAFCall(udaf) => {
-                            let arg_indices = udaf
-                                .arguments
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: udaf.name.clone(),
-                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
-                                    return_type: *udaf.return_type.clone(),
-                                    args,
-                                    params: vec![],
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        _ => Err(ErrorCode::Internal(
-                            "Expected aggregate function".to_string(),
-                        )),
-                    })
-                    .collect::<Result<_>>()?;
+                                }).collect::<Result<_>>()?,
+                                params: agg.params.clone(),
+                            },
+                            output_column: v.index,
+                            arg_indices: agg.args.iter().map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal(
+                                        "Aggregate function argument must be a BoundColumnRef".to_string()
+                                    ))
+                                }
+                            }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
+                        })
+                    } else {
+                        Err(ErrorCode::Internal("Expected aggregate function".to_string()))
+                    }
+                }).collect::<Result<_>>()?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.

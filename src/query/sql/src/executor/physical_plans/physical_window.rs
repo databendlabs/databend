@@ -85,19 +85,18 @@ pub enum WindowFunction {
 
 impl WindowFunction {
     fn data_type(&self) -> Result<DataType> {
-        let return_type = match self {
-            WindowFunction::Aggregate(agg) => agg.sig.return_type.clone(),
+        match self {
+            WindowFunction::Aggregate(agg) => agg.sig.return_type(),
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
-                DataType::Number(NumberDataType::UInt64)
+                Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank | WindowFunction::CumeDist => {
-                DataType::Number(NumberDataType::Float64)
+                Ok(DataType::Number(NumberDataType::Float64))
             }
-            WindowFunction::LagLead(f) => f.return_type.clone(),
-            WindowFunction::NthValue(f) => f.return_type.clone(),
-            WindowFunction::Ntile(f) => f.return_type.clone(),
-        };
-        Ok(return_type)
+            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
+            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
+            WindowFunction::Ntile(f) => Ok(f.return_type.clone()),
+        }
     }
 }
 
@@ -263,8 +262,6 @@ impl PhysicalPlanBuilder {
             WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
                 sig: AggregateFunctionSignature {
                     name: agg.func_name.clone(),
-                    udaf: None,
-                    return_type: *agg.return_type.clone(),
                     args: agg
                         .args
                         .iter()

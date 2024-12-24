@@ -212,10 +212,6 @@ build_exceptions! {
     // Geometry errors.
     GeometryError(1801),
     InvalidGeometryFormat(1802),
-
-    // UDF errors.
-    UDFRuntimeError(1810),
-
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),

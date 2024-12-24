@@ -1290,7 +1290,7 @@ fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr
         }
         ScalarExpr::UDFCall(udf) => format!(
             "{}({})",
-            &udf.handler,
+            &udf.func_name,
             udf.arguments
                 .iter()
                 .map(|arg| { format_scalar(arg, column_map) })

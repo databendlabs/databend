@@ -43,7 +43,6 @@ pub use name_resolution::NameResolutionSuggest;
 pub use name_resolution::VariableNormalizer;
 pub use type_check::resolve_type_name;
 pub use type_check::resolve_type_name_by_str;
-pub use type_check::resolve_type_name_udf;
 pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;
 pub(crate) use udf_rewriter::UdfRewriter;

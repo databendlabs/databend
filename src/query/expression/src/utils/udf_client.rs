@@ -189,7 +189,7 @@ impl UDFFlightClient {
         }
 
         let (input_fields, output_fields) = schema.fields().split_at(fields_num - 1);
-        let remote_arg_types = input_fields
+        let expect_arg_types = input_fields
             .iter()
             .map(|f| f.data_type().clone())
             .collect::<Vec<_>>();
@@ -197,15 +197,10 @@ impl UDFFlightClient {
             .iter()
             .map(|f| f.data_type().clone())
             .collect::<Vec<_>>();
-        if remote_arg_types != arg_types {
+        if expect_arg_types != arg_types {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF arg types mismatch, remote arg types: ({:?}), defined arg types: ({:?})",
-                remote_arg_types
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                arg_types
+                "UDF arg types mismatch, actual arg types: ({:?})",
+                expect_arg_types
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
