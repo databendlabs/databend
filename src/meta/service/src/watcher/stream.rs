@@ -27,6 +27,7 @@ use crate::watcher::SubscriberHandle;
 #[derive(Debug)]
 pub(crate) struct WatchStream<T> {
     rx: Receiver<T>,
+    // TODO: use a Box<dyn Fn> to replace these two fields
     /// Hold a clone of the sender to remove itself from the dispatcher when dropped.
     sender: Arc<StreamSender>,
     subscriber_handle: SubscriberHandle,
