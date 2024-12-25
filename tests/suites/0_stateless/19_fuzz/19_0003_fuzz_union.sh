@@ -8,8 +8,8 @@ rows=1000
 
 
 echo """
-create or replace table union_fuzz(a int, b string, c bool, d variant, e int, f Decimal(15, 2), g Decimal(39,2), h Array(String), i Array(Decimal(15, 2)));
-create or replace table union_fuzz2(a int, b string, c bool, d variant, e int, f Decimal(15, 2), g Decimal(39,2), h Array(String), i Array(Decimal(15, 2)));
+create or replace table union_fuzz(a int, b string, c bool, d variant, e int64, f Decimal(15, 2), g Decimal(39,2), h Array(String), i Array(Decimal(15, 2)));
+create or replace table union_fuzz2(a int, b string, c bool, d variant, e int64, f Decimal(15, 2), g Decimal(39,2), h Array(String), i Array(Decimal(15, 2)));
 create or replace table union_fuzz_r like union_fuzz Engine = Random max_string_len = 5 max_array_len = 2;
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
@@ -39,14 +39,14 @@ for ((i=0; i<$length; i++)); do
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo """
-	select if(count() == 0, 'Eq', 'NotEq') from (
-		SELECT * FROM union_fuzz_result1
+	select count() + 1 from (
+		(SELECT $x, $y FROM union_fuzz_result1
 		EXCEPT
-		SELECT * FROM union_fuzz_result2
+		SELECT $x, $y FROM union_fuzz_result2)
 		UNION ALL
-		SELECT * FROM union_fuzz_result2
+		(SELECT $x, $y FROM union_fuzz_result2
 		EXCEPT
-		SELECT * FROM union_fuzz_result1
+		SELECT $x, $y FROM union_fuzz_result1)
 	);
 	""" | $BENDSQL_CLIENT_CONNECT
 

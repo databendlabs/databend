@@ -216,6 +216,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
 
     fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
         let affix = match &input.elem {
+            // https://learn.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-except-and-intersect-transact-sql?view=sql-server-2017
+            // If EXCEPT or INTERSECT is used together with other operators in an expression, it's evaluated in the context of the following precedence:
+            // 1. Expressions in parentheses
+            // 2. The INTERSECT operator
+            // 3. EXCEPT and UNION evaluated from left to right based on their position in the expression
             SetOperationElement::SetOperation { op, .. } => match op {
                 SetOperator::Union | SetOperator::Except => {
                     Affix::Infix(Precedence(10), Associativity::Left)

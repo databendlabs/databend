@@ -41,7 +41,7 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
 	echo """
-	select if(count() == 0, 'Eq', 'NotEq') from (
+	select count() + 1 from (
 		SELECT * FROM agg_fuzz_result1
 		EXCEPT
 		SELECT * FROM agg_fuzz_result2
@@ -49,6 +49,18 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 		SELECT * FROM agg_fuzz_result2
 		EXCEPT
 		SELECT * FROM agg_fuzz_result1
+	);
+	""" | $BENDSQL_CLIENT_CONNECT
+
+	echo """
+	select count() + 1 from (
+		(SELECT * FROM agg_fuzz_result1
+		EXCEPT
+		SELECT * FROM agg_fuzz_result2)
+		UNION ALL
+		(SELECT * FROM agg_fuzz_result2
+		EXCEPT
+		SELECT * FROM agg_fuzz_result1)
 	);
 	""" | $BENDSQL_CLIENT_CONNECT
 done
