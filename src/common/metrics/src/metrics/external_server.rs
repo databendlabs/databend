@@ -69,11 +69,11 @@ pub fn record_request_external_duration(function_name: impl Into<String>, durati
         .observe(duration.as_millis_f64());
 }
 
-pub fn record_request_external_block_rows(function_name: impl Into<String>, numbers: usize) {
+pub fn record_request_external_block_rows(function_name: impl Into<String>, rows: usize) {
     let labels = &vec![(LABEL_FUNCTION_NAME, function_name.into())];
     EXTERNAL_BLOCK_ROWS
         .get_or_create(labels)
-        .observe(numbers as f64);
+        .observe(rows as f64);
 }
 
 pub fn record_retry_external(function_name: impl Into<String>, error_kind: impl Into<String>) {
