@@ -28,6 +28,8 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::resource_management::resources_management_self_managed::SelfManagedResourcesManagement;
+
 pub struct SystemResourcesManagement {
     warehouse_manager: Arc<dyn WarehouseApi>,
 }
@@ -113,23 +115,34 @@ impl ResourcesManagement for SystemResourcesManagement {
 
 impl SystemResourcesManagement {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
-        match meta_api_provider.create_meta_store().await {
-            Err(cause) => {
-                Err(ErrorCode::from(cause).add_message_back("(while create resources management)."))
-            }
-            Ok(metastore) => {
-                let tenant_id = &cfg.query.tenant_id;
-                let lift_time = Duration::from_secs(60);
-                let warehouse_manager =
-                    WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
-
-                let service: Arc<dyn ResourcesManagement> = Arc::new(SystemResourcesManagement {
-                    warehouse_manager: Arc::new(warehouse_manager),
-                });
-                GlobalInstance::set(service);
-                Ok(())
-            }
+        if !cfg.query.cluster_id.is_empty() && cfg.query.resources_management.is_some() {
+            return Err(ErrorCode::InvalidConfig("Configuration error, cannot set both cluster_id and resources_management at the same time"));
         }
+
+        let service: Arc<dyn ResourcesManagement> = match &cfg.query.resources_management {
+            None => Arc::new(SelfManagedResourcesManagement {}),
+            Some(_resources_management) => {
+                let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
+                match meta_api_provider.create_meta_store().await {
+                    Err(cause) => {
+                        return Err(ErrorCode::from(cause)
+                            .add_message_back("(while create resources management)."))
+                    }
+                    Ok(metastore) => {
+                        let tenant_id = &cfg.query.tenant_id;
+                        let lift_time = Duration::from_secs(60);
+                        let warehouse_manager =
+                            WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
+
+                        Arc::new(SystemResourcesManagement {
+                            warehouse_manager: Arc::new(warehouse_manager),
+                        })
+                    }
+                }
+            }
+        };
+
+        GlobalInstance::set(service);
+        Ok(())
     }
 }

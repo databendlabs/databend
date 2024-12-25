@@ -36,6 +36,7 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::config::Commands;
 use super::config::Config;
+use super::config::ResourcesManagementConfig;
 use crate::background_config::InnerBackgroundConfig;
 use crate::BuiltInConfig;
 
@@ -247,6 +248,7 @@ pub struct QueryConfig {
     pub cloud_control_grpc_timeout: u64,
     pub max_cached_queries_profiles: usize,
     pub settings: HashMap<String, UserSettingValue>,
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -323,6 +325,7 @@ impl Default for QueryConfig {
             data_retention_time_in_days_max: 90,
             max_cached_queries_profiles: 50,
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }

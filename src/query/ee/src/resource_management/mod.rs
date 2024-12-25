@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod resources_management_kubernetes;
+mod resources_management_self_managed;
 mod resources_management_system;
 
 pub use resources_management_system::SystemResourcesManagement;

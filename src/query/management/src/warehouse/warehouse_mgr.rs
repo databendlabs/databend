@@ -1932,6 +1932,17 @@ impl WarehouseApi for WarehouseMgr {
         Ok(self.metastore.get_local_addr().await?)
     }
 
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
+        let reply = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
+        let mut online_nodes = Vec::with_capacity(reply.len());
+
+        for (_, seq_data) in reply {
+            online_nodes.push(serde_json::from_slice::<NodeInfo>(&seq_data.data)?);
+        }
+
+        Ok(online_nodes)
+    }
+
     async fn get_node_info(&self, node_id: &str) -> Result<NodeInfo> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
         let node_info = self.metastore.get_kv(&node_key).await?;

@@ -152,7 +152,6 @@ pub struct Config {
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
-    // #[clap(flatten)]
 }
 
 #[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -1690,6 +1689,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
+
+    #[clap(skip)]
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -1782,6 +1784,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            resources_management: self.resources_management,
         })
     }
 }
@@ -1880,6 +1883,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }

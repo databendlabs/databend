@@ -65,7 +65,7 @@ pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
     heartbeat: Mutex<ClusterHeartbeat>,
-    api_provider: Arc<dyn WarehouseApi>,
+    warehouse_manager: Arc<dyn WarehouseApi>,
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
@@ -215,7 +215,7 @@ impl ClusterDiscovery {
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
             local_secret: cfg.query.node_secret.clone(),
-            api_provider: provider.clone(),
+            warehouse_manager: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
                 provider,
@@ -248,7 +248,7 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self
-            .api_provider
+            .warehouse_manager
             .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
             .await
         {
@@ -324,11 +324,7 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
-        let current_nodes_info = match self
-            .api_provider
-            .list_warehouse_cluster_nodes(&node_info.warehouse_id, &node_info.cluster_id)
-            .await
-        {
+        let online_nodes = match self.warehouse_manager.list_online_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
                 metric_incr_cluster_error_count(
@@ -342,11 +338,11 @@ impl ClusterDiscovery {
             }
         };
 
-        for before_node in current_nodes_info {
+        for before_node in online_nodes {
             // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
             // lead to some invalid information
             if before_node.flight_address.eq(&node_info.flight_address) {
-                let drop_invalid_node = self.api_provider.shutdown_node(before_node.id);
+                let drop_invalid_node = self.warehouse_manager.shutdown_node(before_node.id);
                 if let Err(cause) = drop_invalid_node.await {
                     warn!("Drop invalid node failure: {:?}", cause);
                 }
@@ -369,7 +365,7 @@ impl ClusterDiscovery {
 
         let mut mut_signal_pin = signal.as_mut();
         let signal_future = Box::pin(mut_signal_pin.next());
-        let drop_node = Box::pin(self.api_provider.shutdown_node(self.local_id.clone()));
+        let drop_node = Box::pin(self.warehouse_manager.shutdown_node(self.local_id.clone()));
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
@@ -412,7 +408,7 @@ impl ClusterDiscovery {
             if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
                 if ip_addr.is_loopback() || ip_addr.is_unspecified() {
-                    if let Some(local_addr) = self.api_provider.get_local_addr().await? {
+                    if let Some(local_addr) = self.warehouse_manager.get_local_addr().await? {
                         let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                         let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
                         warn!(
@@ -443,7 +439,8 @@ impl ClusterDiscovery {
         node_info.node_type = NodeType::SelfManaged;
 
         self.drop_invalid_nodes(&node_info).await?;
-        match self.api_provider.start_node(node_info.clone()).await {
+
+        match self.warehouse_manager.start_node(node_info.clone()).await {
             Ok(seq) => self.start_heartbeat(node_info, seq).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }

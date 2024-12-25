@@ -106,5 +106,7 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn get_local_addr(&self) -> Result<Option<String>>;
 
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>>;
+
     async fn get_node_info(&self, node_id: &str) -> Result<NodeInfo>;
 }
