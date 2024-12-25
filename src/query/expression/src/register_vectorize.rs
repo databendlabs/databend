@@ -124,6 +124,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
         let process_rows = if arg1.as_scalar().is_some()
             && arg2.as_scalar().is_some()
             && arg3.as_scalar().is_some()
+            && arg4.as_scalar().is_some()
         {
             1
         } else {
