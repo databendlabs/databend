@@ -44,7 +44,7 @@ impl Settings {
 
         UserApiProvider::instance()
             .setting_api(&self.tenant)
-            .try_drop_setting(key, MatchSeq::GE(1))
+            .try_drop_setting(key)
             .await
     }
 

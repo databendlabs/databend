@@ -44,7 +44,6 @@ pub use role::RoleMgr;
 pub use serde::check_and_upgrade_to_pb;
 pub use serde::deserialize_struct;
 pub use serde::serialize_struct;
-pub use setting::SettingApi;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;

@@ -28,7 +28,6 @@ use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::kvapi;
-use crate::kvapi::GetKVReply;
 use crate::kvapi::ListKVReply;
 use crate::kvapi::MGetKVReply;
 use crate::kvapi::UpsertKVReply;
@@ -61,7 +60,7 @@ pub trait KVApi: Send + Sync {
 
     /// Get a key-value record by key.
     // TODO: #[deprecated(note = "use get_kv_stream() instead")]
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
+    async fn get_kv(&self, key: &str) -> Result<Option<SeqV>, Self::Error> {
         let mut strm = self.get_kv_stream(&[key.to_string()]).await?;
 
         let strm_item = strm
