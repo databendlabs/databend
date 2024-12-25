@@ -98,12 +98,7 @@ impl Operator for UnionAll {
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
         // Derive output columns
-        let mut output_columns = left_prop.output_columns.clone();
-        output_columns = output_columns
-            .union(&right_prop.output_columns)
-            .cloned()
-            .collect();
-
+        let output_columns = self.output_indexes.iter().cloned().collect();
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
         outer_columns = outer_columns
