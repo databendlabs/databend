@@ -38,17 +38,17 @@ for ((i=0; i<$length; i++)); do
 	select $y, $x from (select $x, $y from union_fuzz2 union all select $x, $y from union_fuzz);
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
-
-	echo """
-	SELECT
-    CASE
-        WHEN
-            (SELECT MD5(STRING_AGG(x.$x::STRING, '')  || STRING_AGG(x.$y::STRING, '')) FROM (select * from union_fuzz_result1  order by $x, $y) x) =
-            (SELECT MD5(STRING_AGG(y.$x::STRING, '')  || STRING_AGG(y.$y::STRING, '')) FROM (select * from union_fuzz_result2  order by $x, $y) y)
-        THEN 'Eq'
-        ELSE 'NotEq'
-    END AS comparison_result;
-""" | $BENDSQL_CLIENT_CONNECT
+echo """
+	select if(count() == 0, 'Eq', 'NotEq') from (
+		SELECT * FROM union_fuzz_result1
+		EXCEPT
+		SELECT * FROM union_fuzz_result2
+		UNION ALL
+		SELECT * FROM union_fuzz_result2
+		EXCEPT
+		SELECT * FROM union_fuzz_result1
+	);
+	""" | $BENDSQL_CLIENT_CONNECT
 
     done
 done

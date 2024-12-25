@@ -40,26 +40,15 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 ) group by all;
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
-	## judge the result are same, except has bugs
-	# echo """
-	# SELECT * FROM agg_fuzz_result1
-	# EXCEPT
-	# SELECT * FROM agg_fuzz_result2
-	# UNION ALL
-	# SELECT * FROM agg_fuzz_result2
-	# EXCEPT
-	# SELECT * FROM agg_fuzz_result1;
-	# """ | $BENDSQL_CLIENT_CONNECT
-
 	echo """
-	SELECT
-    CASE
-        WHEN
-            (SELECT MD5(STRING_AGG(x.a::STRING, '')  || STRING_AGG(x.e::STRING, '') || STRING_AGG(x.f::STRING, '') || STRING_AGG(x.g::STRING, '')) FROM (SELECT * FROM agg_fuzz_result1 ORDER BY a, e, f, g) x) =
-            (SELECT MD5(STRING_AGG(y.a::STRING, '')  || STRING_AGG(y.e::STRING, '') || STRING_AGG(y.f::STRING, '') || STRING_AGG(y.g::STRING, '')) FROM (SELECT * FROM agg_fuzz_result1 ORDER BY a, e, f, g) y)
-        THEN 'Eq'
-        ELSE 'NotEq'
-    END AS comparison_result;
-""" | $BENDSQL_CLIENT_CONNECT
-
+	select if(count() == 0, 'Eq', 'NotEq') from (
+		SELECT * FROM agg_fuzz_result1
+		EXCEPT
+		SELECT * FROM agg_fuzz_result2
+		UNION ALL
+		SELECT * FROM agg_fuzz_result2
+		EXCEPT
+		SELECT * FROM agg_fuzz_result1
+	);
+	""" | $BENDSQL_CLIENT_CONNECT
 done
