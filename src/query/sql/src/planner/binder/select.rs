@@ -382,14 +382,21 @@ impl Binder {
                 .into(),
             );
         }
+        let is_null_equal = (0..left_conditions.len()).collect();
         let join_conditions = JoinConditions {
             left_conditions,
             right_conditions,
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        let s_expr =
-            self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
+        let s_expr = self.bind_join_with_type(
+            join_type,
+            join_conditions,
+            left_expr,
+            right_expr,
+            is_null_equal,
+            None,
+        )?;
         left_context
             .cte_context
             .set_cte_context(right_context.cte_context);
