@@ -61,6 +61,13 @@ pub struct TransformUdfServer {
 }
 
 impl TransformUdfServer {
+    pub fn init_semaphore(ctx: Arc<QueryContext>) -> Result<Arc<Semaphore>> {
+        let settings = ctx.get_settings();
+        let request_max_threads = settings.get_external_server_request_max_threads()? as usize;
+        let semaphore = Arc::new(Semaphore::new(request_max_threads));
+        Ok(semaphore)
+    }
+
     pub fn init_endpoints(
         ctx: Arc<QueryContext>,
         funcs: &[UdfFunctionDesc],
@@ -84,14 +91,13 @@ impl TransformUdfServer {
     pub fn new(
         ctx: Arc<QueryContext>,
         funcs: Vec<UdfFunctionDesc>,
+        semaphore: Arc<Semaphore>,
         endpoints: BTreeMap<String, Arc<Endpoint>>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
-        let request_max_threads = settings.get_external_server_request_max_threads()? as usize;
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
-        let semaphore = Arc::new(Semaphore::new(request_max_threads));
 
         Ok(Self {
             ctx,
