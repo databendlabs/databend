@@ -204,7 +204,7 @@ impl ShowCreateTableInterpreter {
                 let column_str = format!(
                     "  {} {}{}{}{}{}",
                     display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
-                    field.data_type().remove_recursive_nullable().sql_name(),
+                    field.data_type().remove_nullable().sql_name(),
                     nullable,
                     default_expr,
                     computed_expr,
