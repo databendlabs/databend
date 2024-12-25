@@ -82,14 +82,27 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| {
         let generics = ctx.generics.to_vec();
-        let iter = (0..ctx.num_rows).map(|index| {
+        let process_rows = if arg1.as_scalar().is_some()
+            && arg2.as_scalar().is_some()
+            && arg3.as_scalar().is_some()
+        {
+            1
+        } else {
+            ctx.num_rows
+        };
+
+        let iter = (0..process_rows).map(|index| {
             let arg1 = unsafe { arg1.index_unchecked(index) };
             let arg2 = unsafe { arg2.index_unchecked(index) };
             let arg3 = unsafe { arg3.index_unchecked(index) };
             func(arg1, arg2, arg3, ctx)
         });
         let col = O::column_from_iter(iter, &generics);
-        Value::Column(col)
+        if process_rows == 1 {
+            Value::Scalar(unsafe { O::index_column_unchecked_scalar(&col, 0) })
+        } else {
+            Value::Column(col)
+        }
     }
 }
 
@@ -108,7 +121,16 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
 {
     move |arg1, arg2, arg3, arg4, ctx| {
         let generics = ctx.generics.to_vec();
-        let iter = (0..ctx.num_rows).map(|index| {
+        let process_rows = if arg1.as_scalar().is_some()
+            && arg2.as_scalar().is_some()
+            && arg3.as_scalar().is_some()
+        {
+            1
+        } else {
+            ctx.num_rows
+        };
+
+        let iter = (0..process_rows).map(|index| {
             let arg1 = unsafe { arg1.index_unchecked(index) };
             let arg2 = unsafe { arg2.index_unchecked(index) };
             let arg3 = unsafe { arg3.index_unchecked(index) };
@@ -116,7 +138,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             func(arg1, arg2, arg3, arg4, ctx)
         });
         let col = O::column_from_iter(iter, &generics);
-        Value::Column(col)
+        if process_rows == 1 {
+            Value::Scalar(unsafe { O::index_column_unchecked_scalar(&col, 0) })
+        } else {
+            Value::Column(col)
+        }
     }
 }
 
@@ -125,12 +151,23 @@ pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
 ) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, ctx| {
         let generics = ctx.generics.to_vec();
-        let mut builder = O::create_builder(ctx.num_rows, &generics);
-        for index in 0..ctx.num_rows {
+        let process_rows = if arg1.as_scalar().is_some() {
+            1
+        } else {
+            ctx.num_rows
+        };
+
+        let mut builder = O::create_builder(process_rows, &generics);
+
+        for index in 0..process_rows {
             let arg1 = unsafe { arg1.index_unchecked(index) };
             func(arg1, &mut builder, ctx);
         }
-        Value::Column(O::build_column(builder))
+        if process_rows == 1 {
+            Value::Scalar(O::build_scalar(builder))
+        } else {
+            Value::Column(O::build_column(builder))
+        }
     }
 }
 
@@ -142,13 +179,22 @@ pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| {
         let generics = ctx.generics.to_vec();
-        let mut builder = O::create_builder(ctx.num_rows, &generics);
-        for index in 0..ctx.num_rows {
+        let process_rows = if arg1.as_scalar().is_some() && arg2.as_scalar().is_some() {
+            1
+        } else {
+            ctx.num_rows
+        };
+        let mut builder = O::create_builder(process_rows, &generics);
+        for index in 0..process_rows {
             let arg1 = unsafe { arg1.index_unchecked(index) };
             let arg2 = unsafe { arg2.index_unchecked(index) };
             func(arg1, arg2, &mut builder, ctx);
         }
-        Value::Column(O::build_column(builder))
+        if process_rows == 1 {
+            Value::Scalar(O::build_scalar(builder))
+        } else {
+            Value::Column(O::build_column(builder))
+        }
     }
 }
 
@@ -165,14 +211,26 @@ pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: Ar
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| {
         let generics = ctx.generics.to_vec();
-        let mut builder = O::create_builder(ctx.num_rows, &generics);
-        for index in 0..ctx.num_rows {
+        let process_rows = if arg1.as_scalar().is_some()
+            && arg2.as_scalar().is_some()
+            && arg3.as_scalar().is_some()
+        {
+            1
+        } else {
+            ctx.num_rows
+        };
+        let mut builder = O::create_builder(process_rows, &generics);
+        for index in 0..process_rows {
             let arg1 = unsafe { arg1.index_unchecked(index) };
             let arg2 = unsafe { arg2.index_unchecked(index) };
             let arg3 = unsafe { arg3.index_unchecked(index) };
             func(arg1, arg2, arg3, &mut builder, ctx);
         }
-        Value::Column(O::build_column(builder))
+        if process_rows == 1 {
+            Value::Scalar(O::build_scalar(builder))
+        } else {
+            Value::Column(O::build_column(builder))
+        }
     }
 }
 
@@ -197,15 +255,28 @@ pub fn vectorize_with_builder_4_arg<
 {
     move |arg1, arg2, arg3, arg4, ctx| {
         let generics = ctx.generics.to_vec();
-        let mut builder = O::create_builder(ctx.num_rows, &generics);
-        for index in 0..ctx.num_rows {
+        let process_rows = if arg1.as_scalar().is_some()
+            && arg2.as_scalar().is_some()
+            && arg3.as_scalar().is_some()
+            && arg4.as_scalar().is_some()
+        {
+            1
+        } else {
+            ctx.num_rows
+        };
+        let mut builder = O::create_builder(process_rows, &generics);
+        for index in 0..process_rows {
             let arg1 = unsafe { arg1.index_unchecked(index) };
             let arg2 = unsafe { arg2.index_unchecked(index) };
             let arg3 = unsafe { arg3.index_unchecked(index) };
             let arg4 = unsafe { arg4.index_unchecked(index) };
             func(arg1, arg2, arg3, arg4, &mut builder, ctx);
         }
-        Value::Column(O::build_column(builder))
+        if process_rows == 1 {
+            Value::Scalar(O::build_scalar(builder))
+        } else {
+            Value::Column(O::build_column(builder))
+        }
     }
 }
 

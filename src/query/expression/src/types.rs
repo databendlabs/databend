@@ -390,6 +390,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
+
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
+    }
+
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
