@@ -146,7 +146,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC)
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [rank() OVER ( PARTITION BY v ORDER BY v DESC ) (#6) = 1, is_true(t1.k (#4) = 12)]
+├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER ( PARTITION BY v ORDER BY v DESC ) (#6)]
@@ -186,7 +186,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (ORDER BY v DESC) AS rank FROM (
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [rank() OVER ( ORDER BY v DESC ) (#6) = 1, is_true(t1.k (#4) = 12)]
+├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER ( ORDER BY v DESC ) (#6)]
@@ -582,7 +582,7 @@ CompoundBlockOperator(Project) × 1
 ## explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number + 1) a
 ##    from numbers(50)) t(number, a);
 query T
-explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number + 1) a 
+explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number + 1) a
     from numbers(50));
 ----
 Window
