@@ -91,19 +91,23 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
 
-                let mut client = UDFFlightClient::connect(
-                    address,
+                let connect_timeout = self
+                    .ctx
+                    .get_settings()
+                    .get_external_server_connect_timeout_secs()?;
+                let request_timeout = self
+                    .ctx
+                    .get_settings()
+                    .get_external_server_request_timeout_secs()?;
+                let batch_rows =
                     self.ctx
                         .get_settings()
-                        .get_external_server_connect_timeout_secs()?,
-                    self.ctx
-                        .get_settings()
-                        .get_external_server_request_timeout_secs()?,
-                    self.ctx
-                        .get_settings()
-                        .get_external_server_request_batch_rows()? as usize,
-                )
-                .await?;
+                        .get_external_server_request_batch_rows()? as usize;
+
+                let endpoint =
+                    UDFFlightClient::build_endpoint(address, connect_timeout, request_timeout)?;
+                let mut client =
+                    UDFFlightClient::connect(endpoint, connect_timeout, batch_rows).await?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
