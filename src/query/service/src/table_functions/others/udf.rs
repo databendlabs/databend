@@ -146,12 +146,13 @@ impl Table for UdfEchoTable {
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
-        let mut client =
-            UDFFlightClient::connect(&self.address, connect_timeout, request_timeout, 65536)
-                .await?
-                .with_tenant(ctx.get_tenant().tenant_name())?
-                .with_func_name("builtin_echo")?
-                .with_query_id(&ctx.get_id())?;
+        let endpoint =
+            UDFFlightClient::build_endpoint(&self.address, connect_timeout, request_timeout)?;
+        let mut client = UDFFlightClient::connect(endpoint, connect_timeout, 65536)
+            .await?
+            .with_tenant(ctx.get_tenant().tenant_name())?
+            .with_func_name("builtin_echo")?
+            .with_query_id(&ctx.get_id())?;
 
         let array = arrow_array::LargeStringArray::from(vec![self.arg.clone()]);
         let schema = Schema::new(vec![Field::new(

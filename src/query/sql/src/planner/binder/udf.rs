@@ -18,12 +18,16 @@ use chrono::Utc;
 use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::UDAFStateField;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_expression::DataField;
 use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -31,23 +35,18 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::planner::resolve_type_name;
+use crate::planner::resolve_type_name_udf;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
+use crate::plans::UDFLanguage;
 use crate::BindContext;
 use crate::Binder;
 use crate::UdfRewriter;
 
 impl Binder {
-    fn is_allowed_language(language: &str) -> bool {
-        let allowed_languages: HashSet<&str> =
-            ["javascript", "wasm", "python"].iter().cloned().collect();
-        allowed_languages.contains(&language.to_lowercase().as_str())
-    }
-
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
         udf_name: &Identifier,
@@ -55,6 +54,7 @@ impl Binder {
         udf_definition: &UDFDefinition,
     ) -> Result<UserDefinedFunction> {
         let name = normalize_identifier(udf_name, &self.name_resolution_ctx).to_string();
+        let description = udf_description.clone().unwrap_or_default();
         match udf_definition {
             UDFDefinition::LambdaUDF {
                 parameters,
@@ -68,7 +68,7 @@ impl Binder {
                 validator.verify_definition_expr(definition)?;
                 Ok(UserDefinedFunction {
                     name: validator.name,
-                    description: udf_description.clone().unwrap_or_default(),
+                    description,
                     definition: PlanUDFDefinition::LambdaUDF(LambdaUDF {
                         parameters: validator.parameters,
                         definition: definition.to_string(),
@@ -87,30 +87,34 @@ impl Binder {
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, true)?));
+                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
                 }
-                let return_type = DataType::from(&resolve_type_name(return_type, true)?);
+                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
 
-                let mut client = UDFFlightClient::connect(
-                    address,
+                let connect_timeout = self
+                    .ctx
+                    .get_settings()
+                    .get_external_server_connect_timeout_secs()?;
+                let request_timeout = self
+                    .ctx
+                    .get_settings()
+                    .get_external_server_request_timeout_secs()?;
+                let batch_rows =
                     self.ctx
                         .get_settings()
-                        .get_external_server_connect_timeout_secs()?,
-                    self.ctx
-                        .get_settings()
-                        .get_external_server_request_timeout_secs()?,
-                    self.ctx
-                        .get_settings()
-                        .get_external_server_request_batch_rows()? as usize,
-                )
-                .await?;
+                        .get_external_server_request_batch_rows()? as usize;
+
+                let endpoint =
+                    UDFFlightClient::build_endpoint(address, connect_timeout, request_timeout)?;
+                let mut client =
+                    UDFFlightClient::connect(endpoint, connect_timeout, batch_rows).await?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
 
                 Ok(UserDefinedFunction {
                     name,
-                    description: udf_description.clone().unwrap_or_default(),
+                    description,
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
                         address: address.clone(),
                         arg_types: arg_datatypes,
@@ -121,6 +125,7 @@ impl Binder {
                     created_on: Utc::now(),
                 })
             }
+            UDFDefinition::UDAFServer { .. } => unimplemented!(),
             UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
@@ -129,34 +134,43 @@ impl Binder {
                 language,
                 runtime_version,
             } => {
-                let mut arg_datatypes = Vec::with_capacity(arg_types.len());
-                for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, true)?));
-                }
-                let return_type = DataType::from(&resolve_type_name(return_type, true)?);
-
-                if !Self::is_allowed_language(language) {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be python, javascript or wasm"
-                    )));
-                }
-
-                let mut runtime_version = runtime_version.to_string();
-                if runtime_version.is_empty() && language.to_lowercase() == "python" {
-                    runtime_version = "3.12.2".to_string();
-                }
-
+                let definition = create_udf_definition_script(
+                    arg_types,
+                    None,
+                    return_type,
+                    runtime_version,
+                    handler,
+                    language,
+                    code,
+                )?;
                 Ok(UserDefinedFunction {
                     name,
-                    description: udf_description.clone().unwrap_or_default(),
-                    definition: PlanUDFDefinition::UDFScript(UDFScript {
-                        code: code.clone(),
-                        arg_types: arg_datatypes,
-                        return_type,
-                        handler: handler.clone(),
-                        language: language.clone(),
-                        runtime_version,
-                    }),
+                    description,
+                    definition,
+                    created_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDAFScript {
+                arg_types,
+                state_fields,
+                return_type,
+                code,
+                language,
+                runtime_version,
+            } => {
+                let definition = create_udf_definition_script(
+                    arg_types,
+                    Some(state_fields),
+                    return_type,
+                    runtime_version,
+                    "",
+                    language,
+                    code,
+                )?;
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition,
                     created_on: Utc::now(),
                 })
             }
@@ -219,5 +233,74 @@ impl Binder {
             s_expr = udf_rewriter.rewrite(&s_expr)?;
         }
         Ok(s_expr)
+    }
+}
+
+fn create_udf_definition_script(
+    arg_types: &[TypeName],
+    state_fields: Option<&[UDAFStateField]>,
+    return_type: &TypeName,
+    runtime_version: &str,
+    handler: &str,
+    language: &str,
+    code: &str,
+) -> Result<PlanUDFDefinition> {
+    let Ok(language) = language.parse::<UDFLanguage>() else {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Unallowed UDF language {language:?}, must be python, javascript or wasm"
+        )));
+    };
+
+    let arg_types = arg_types
+        .iter()
+        .map(|arg_type| Ok(DataType::from(&resolve_type_name_udf(arg_type)?)))
+        .collect::<Result<Vec<_>>>()?;
+
+    let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+
+    let mut runtime_version = runtime_version.to_string();
+    if runtime_version.is_empty() && language == UDFLanguage::Python {
+        runtime_version = "3.12.2".to_string();
+    }
+
+    match state_fields {
+        Some(fields) => {
+            let state_fields = fields
+                .iter()
+                .map(|field| {
+                    Ok(DataField::new(
+                        &field.name.name,
+                        DataType::from(&resolve_type_name_udf(&field.type_name)?),
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            let state_field_names = state_fields
+                .iter()
+                .map(|f| f.name())
+                .collect::<HashSet<_>>();
+            if state_field_names.len() != state_fields.len() {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Duplicate state field name in UDAF script"
+                )));
+            }
+
+            Ok(PlanUDFDefinition::UDAFScript(UDAFScript {
+                code: code.to_string(),
+                arg_types,
+                state_fields,
+                return_type,
+                language: language.to_string(),
+                runtime_version,
+            }))
+        }
+        None => Ok(PlanUDFDefinition::UDFScript(UDFScript {
+            code: code.to_string(),
+            arg_types,
+            return_type,
+            handler: handler.to_string(),
+            language: language.to_string(),
+            runtime_version,
+        })),
     }
 }

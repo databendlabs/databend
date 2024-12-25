@@ -153,6 +153,7 @@ impl Binder {
             join_conditions,
             left_child,
             right_child,
+            vec![],
             build_side_cache_info,
         )?;
 
@@ -212,6 +213,7 @@ impl Binder {
             join_conditions,
             left_child,
             right_child,
+            vec![],
             None,
         )?;
         let bind_context = join_bind_context(
@@ -352,6 +354,7 @@ impl Binder {
         join_conditions: JoinConditions,
         mut left_child: SExpr,
         mut right_child: SExpr,
+        mut is_null_equal: Vec<usize>,
         build_side_cache_info: Option<HashJoinBuildCacheInfo>,
     ) -> Result<SExpr> {
         let mut left_conditions = join_conditions.left_conditions;
@@ -376,8 +379,6 @@ impl Binder {
 
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
         let mut is_lateral = false;
-        let mut is_null_equal = Vec::new();
-
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let mut decorrelator = SubqueryRewriter::new(self.metadata.clone(), Some(self.clone()));

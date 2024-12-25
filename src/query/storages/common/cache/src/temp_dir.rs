@@ -62,7 +62,7 @@ impl TempDirManager {
             if let Err(e) = remove_dir_all(&path) {
                 if !matches!(e.kind(), ErrorKind::NotFound) {
                     return Err(ErrorCode::StorageUnavailable(format!(
-                        "can't clean temp dir: {e}",
+                        "can't clean temp dir {path:?}: {e}",
                     )));
                 }
             }
@@ -373,7 +373,6 @@ impl Drop for InnerPath {
 #[cfg(test)]
 mod tests {
     use std::assert_matches::assert_matches;
-    use std::ffi::OsString;
     use std::fs;
     use std::sync::atomic::Ordering;
 
@@ -385,7 +384,7 @@ mod tests {
         GlobalInstance::init_testing(thread.name().unwrap());
 
         let config = SpillConfig {
-            path: OsString::from("test_data"),
+            path: "test_data".to_string(),
             reserved_disk_ratio: 0.01.into(),
             global_bytes_limit: 1 << 30,
         };
@@ -425,7 +424,7 @@ mod tests {
         GlobalInstance::init_testing(thread.name().unwrap());
 
         let config = SpillConfig {
-            path: OsString::from("test_data2"),
+            path: "test_data2".to_string(),
             reserved_disk_ratio: 0.99.into(),
             global_bytes_limit: 1 << 30,
         };

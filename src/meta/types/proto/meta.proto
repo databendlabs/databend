@@ -82,6 +82,12 @@ message WatchRequest {
     DELETE = 2;
   }
   FilterType filter_type = 3;
+
+  // Whether to send current values of all watched keys when watch starts
+  // Useful for initializing client-side caches. The client:
+  // - first get a full copy of the key-values,
+  // - then update every time a key-value is changed.
+  bool initial_flush = 4;
 }
 
 message Event {

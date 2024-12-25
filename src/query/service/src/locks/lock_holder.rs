@@ -122,11 +122,8 @@ impl LockHolder {
             let watch_delete_ident = TableLockIdent::new(tenant, table_id, prev_revision);
 
             // Get the previous revision, watch the delete event.
-            let req = WatchRequest {
-                key: watch_delete_ident.to_string_key(),
-                key_end: None,
-                filter_type: FilterType::Delete.into(),
-            };
+            let req = WatchRequest::new(watch_delete_ident.to_string_key(), None)
+                .with_filter(FilterType::Delete);
             let mut watch_stream = meta_api.watch(req).await?;
 
             let lock_meta = meta_api.get_pb(&watch_delete_ident).await?;

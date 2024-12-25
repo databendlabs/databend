@@ -133,15 +133,15 @@ fn build_proto() {
         )
         .type_attribute(
             "WatchRequest",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+            "#[derive(Eq, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "WatchResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+            "#[derive(Eq, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "Event",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+            "#[derive(Eq, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "KVMeta",

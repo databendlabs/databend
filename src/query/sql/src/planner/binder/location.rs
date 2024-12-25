@@ -42,7 +42,6 @@ use databend_common_storage::STDIN_FD;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 use opendal::Scheme;
-use percent_encoding::percent_decode_str;
 
 /// secure_omission will fix omitted endpoint url schemes into 'https://'
 #[inline]
@@ -538,10 +537,9 @@ pub async fn parse_uri_location(
         Scheme::Cos => parse_cos_params(l, root)?,
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
-            let path = percent_decode_str(&l.path).decode_utf8_lossy();
             let cfg = StorageHttpConfig {
                 endpoint_url: format!("{}://{}", l.protocol, l.name),
-                paths: globiter::Pattern::parse(&path)
+                paths: globiter::Pattern::parse(&l.path)
                     .map_err(|err| {
                         Error::new(
                             ErrorKind::InvalidInput,

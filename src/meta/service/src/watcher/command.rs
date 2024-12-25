@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use databend_common_meta_types::Change;
+use futures::future::BoxFuture;
 
 use crate::watcher::subscriber::EventSubscriber;
 
 /// An event sent to EventDispatcher.
+#[allow(clippy::type_complexity)]
 pub(crate) enum Command {
     /// Submit a kv change event to dispatcher
     KVChange(Change<Vec<u8>, String>),
@@ -26,5 +28,10 @@ pub(crate) enum Command {
     /// The function will be called with a mutable reference to the dispatcher.
     Request {
         req: Box<dyn FnOnce(&mut EventSubscriber) + Send + 'static>,
+    },
+
+    /// Send a fn to [`EventSubscriber`] to run it asynchronously.
+    RequestAsync {
+        req: Box<dyn FnOnce(&mut EventSubscriber) -> BoxFuture<'static, ()> + Send + 'static>,
     },
 }
