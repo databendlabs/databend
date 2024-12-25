@@ -39,6 +39,11 @@ pub static BUCKET_MILLISECONDS: [f64; 15] = [
     300000.0, 600000.0, 1800000.0,
 ];
 
+pub static BUCKET_ROWS: [f64; 12] = [
+    1.0, 10.0, 100.0, 1000.0, 10000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 5000000.0,
+    10000000.0, 50000000.0,
+];
+
 /// Histogram is a port of prometheus-client's Histogram. The only difference is that
 /// we can reset the histogram.
 #[derive(Debug)]

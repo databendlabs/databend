@@ -41,8 +41,9 @@ impl PipelineBuilder {
                 ))
             })
         } else {
+            let endpoints = TransformUdfServer::init_endpoints(self.ctx.clone(), &udf.udf_funcs)?;
             self.main_pipeline.try_add_async_transformer(|| {
-                TransformUdfServer::new(self.ctx.clone(), udf.udf_funcs.clone())
+                TransformUdfServer::new(self.ctx.clone(), udf.udf_funcs.clone(), endpoints.clone())
             })
         }
     }
