@@ -137,7 +137,7 @@ use crate::sessions::SessionType;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
-const MYSQL_VERSION: &str = "8.0.26";
+const MYSQL_VERSION: &str = "8.0.90";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
