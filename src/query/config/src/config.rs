@@ -2920,7 +2920,7 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
@@ -2952,7 +2952,13 @@ pub struct DiskCacheConfig {
     pub sync_data: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+impl Default for DiskCacheConfig {
+    fn default() -> Self {
+        inner::DiskCacheConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
@@ -2966,6 +2972,12 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+}
+
+impl Default for SpillConfig {
+    fn default() -> Self {
+        inner::SpillConfig::default().into()
+    }
 }
 
 mod cache_config_converters {
