@@ -159,6 +159,8 @@ where
                         }
                         Some(None) => unreachable!(),
                         None => {
+                            // If we get a memory block at initial state, it means we will never spill data.
+                            debug_assert!(self.spiller.columns_layout.is_empty());
                             self.output_block(block);
                             self.state = State::NoSpill;
                             Ok(Event::NeedConsume)
@@ -294,6 +296,9 @@ where
         let spiller_snapshot = Arc::new(self.spiller.clone());
         for _ in 0..num_streams - streams.len() {
             let files = self.unmerged_blocks.pop_front().unwrap();
+            for file in files.iter() {
+                self.spiller.columns_layout.remove(file);
+            }
             let stream = BlockStream::Spilled((files, spiller_snapshot.clone()));
             streams.push(stream);
         }

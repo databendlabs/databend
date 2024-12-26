@@ -242,8 +242,7 @@ impl AsyncSource for SuggestedBackgroundTasksSource {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::BackgroundService)?;
 
-        let ctx = QueryContext::create_from(ctx);
-        let suggestions = Self::all_suggestions(ctx).await?;
+        let suggestions = Self::all_suggestions(Arc::new(ctx.clone())).await?;
         Ok(Some(self.to_block(suggestions)?))
     }
 }

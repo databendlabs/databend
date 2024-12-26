@@ -35,7 +35,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -123,7 +122,6 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
-use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -141,6 +139,7 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
+#[derive(Clone)]
 pub struct QueryContext {
     version: String,
     mysql_version: String,
@@ -161,7 +160,7 @@ impl QueryContext {
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details
-    pub fn create_from(other: &QueryContext) -> Arc<QueryContext> {
+    pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
 
@@ -316,8 +315,7 @@ impl QueryContext {
         self.shared.set_affect(affect)
     }
 
-    pub fn update_init_query_id(&self, id: String) {
-        self.shared.spilled_files.write().clear();
+    pub fn set_id(&self, id: String) {
         *self.shared.init_query_id.write() = id;
     }
 
@@ -358,44 +356,6 @@ impl QueryContext {
         self.shared.clear_tables_cache()
     }
 
-    pub fn add_spill_file(
-        &self,
-        location: crate::spillers::Location,
-        layout: crate::spillers::Layout,
-    ) {
-        let mut w = self.shared.spilled_files.write();
-        w.insert(location, layout);
-    }
-
-    pub fn get_spill_layout(
-        &self,
-        location: &crate::spillers::Location,
-    ) -> Option<crate::spillers::Layout> {
-        let r = self.shared.spilled_files.read();
-        r.get(location).cloned()
-    }
-
-    pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
-        let r = self.shared.spilled_files.read();
-        r.keys().cloned().collect()
-    }
-
-    pub fn query_tenant_spill_prefix(&self) -> String {
-        let tenant = self.get_tenant();
-        format!("_query_spill/{}", tenant.tenant_name())
-    }
-
-    pub fn query_id_spill_prefix(&self) -> String {
-        let tenant = self.get_tenant();
-        let node_index = self.get_cluster().ordered_index();
-        format!(
-            "_query_spill/{}/{}_{}",
-            tenant.tenant_name(),
-            self.get_id(),
-            node_index
-        )
-    }
-
     #[async_backtrace::framed]
     async fn get_table_from_shared(
         &self,
@@ -426,49 +386,6 @@ impl QueryContext {
             _ => table,
         };
         Ok(table)
-    }
-
-    pub fn unload_spill_meta(&self) {
-        const SPILL_META_SUFFIX: &str = ".list";
-        let mut w = self.shared.spilled_files.write();
-        let mut remote_spill_files = w
-            .iter()
-            .map(|(k, _)| k)
-            .filter_map(|l| match l {
-                crate::spillers::Location::Remote(r) => Some(r),
-                _ => None,
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        w.clear();
-
-        if !remote_spill_files.is_empty() {
-            let location_prefix = self.query_tenant_spill_prefix();
-            let node_idx = self.get_cluster().ordered_index();
-            let meta_path = format!(
-                "{}/{}_{}{}",
-                location_prefix,
-                self.get_id(),
-                node_idx,
-                SPILL_META_SUFFIX
-            );
-            let op = DataOperator::instance().operator();
-            // append dir and current meta
-            remote_spill_files.push(meta_path.clone());
-            remote_spill_files.push(format!(
-                "{}/{}_{}/",
-                location_prefix,
-                self.get_id(),
-                node_idx
-            ));
-            let joined_contents = remote_spill_files.join("\n");
-
-            if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
-                Ok(op.write(&meta_path, joined_contents).await?)
-            }) {
-                log::error!("create spill meta file error: {}", e);
-            }
-        }
     }
 }
 

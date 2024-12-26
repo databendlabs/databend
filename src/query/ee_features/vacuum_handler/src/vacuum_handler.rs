@@ -51,16 +51,9 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         abort_checker: AbortChecker,
         temporary_dir: String,
-        options: &VacuumTempOptions,
+        retain: Option<Duration>,
         vacuum_limit: usize,
     ) -> Result<usize>;
-}
-
-#[derive(Debug, Clone)]
-pub enum VacuumTempOptions {
-    // nodes_num, query_id
-    QueryHook(usize, String),
-    VacuumCommand(Option<Duration>),
 }
 
 pub struct VacuumHandlerWrapper {
@@ -102,11 +95,11 @@ impl VacuumHandlerWrapper {
         &self,
         abort_checker: AbortChecker,
         temporary_dir: String,
-        options: &VacuumTempOptions,
+        retain: Option<Duration>,
         vacuum_limit: usize,
     ) -> Result<usize> {
         self.handler
-            .do_vacuum_temporary_files(abort_checker, temporary_dir, options, vacuum_limit)
+            .do_vacuum_temporary_files(abort_checker, temporary_dir, retain, vacuum_limit)
             .await
     }
 }

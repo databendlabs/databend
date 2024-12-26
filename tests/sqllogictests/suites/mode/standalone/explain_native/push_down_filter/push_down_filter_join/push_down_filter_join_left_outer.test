@@ -222,7 +222,7 @@ HashJoin
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true(if(CAST(NOT is_not_null(m1.context (#1)) AS Boolean NULL), '', m1.context (#1)) = '')], limit: NONE]
+    ├── push downs: [filters: [is_true(if(CAST(is_not_null(m1.context (#1)) AS Boolean NULL), CAST(assume_not_null(m1.context (#1)) AS String NULL), true, '', NULL) = '')], limit: NONE]
     └── estimated rows: 0.00
 
 statement ok

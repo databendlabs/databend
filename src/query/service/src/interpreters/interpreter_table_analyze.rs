@@ -228,7 +228,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                         histogram_plan = remove_exchange(histogram_plan);
                     }
                     let mut histogram_build_res = build_query_pipeline(
-                        &QueryContext::create_from(self.ctx.as_ref()),
+                        &QueryContext::create_from(self.ctx.clone()),
                         &bind_context.columns,
                         &histogram_plan,
                         false,

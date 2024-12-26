@@ -47,6 +47,7 @@ use databend_common_pipeline_transforms::processors::SortSpillParams;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use crate::spillers::Layout;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
 
@@ -693,7 +694,7 @@ where
 struct SpillableBlock {
     data: Option<DataBlock>,
     rows: usize,
-    location: Option<Location>,
+    location: Option<(Location, Layout)>,
     domain: Column,
     processed: usize,
 }
@@ -731,7 +732,7 @@ impl SpillableBlock {
     async fn spill(&mut self, spiller: &Spiller) -> Result<()> {
         let data = self.data.take().unwrap();
         if self.location.is_none() {
-            let location = spiller.spill(vec![data]).await?;
+            let location = spiller.spill_unmanage(vec![data]).await?;
             self.location = Some(location);
         }
         Ok(())
@@ -828,7 +829,10 @@ impl<R: Rows> BoundBlockStream<R> {
         }
 
         let location = block.location.as_ref().unwrap();
-        let data = self.spiller.read_spilled_file(location).await?;
+        let data = self
+            .spiller
+            .read_unmanage_spilled_file(&location.0, &location.1)
+            .await?;
         block.data = Some(if block.processed != 0 {
             debug_assert_eq!(block.rows + block.processed, data.num_rows());
             data.slice(block.processed..data.num_rows())
