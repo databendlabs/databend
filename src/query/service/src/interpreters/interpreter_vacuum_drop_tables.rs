@@ -319,23 +319,23 @@ impl VacuumDropTablesInterpreter {
                 .iter()
                 .map(|t| t.get_id())
                 .collect::<HashSet<_>>();
-            info!("table_ids_in_meta: {:?}", table_ids_in_meta);
             for path in paths {
                 let Some(table_id) = path.split('/').nth(1) else {
                     info!("can not parse table id from path: {}", path);
                     continue;
                 };
-                info!("split table id:{} from path: {}", table_id, path);
                 let Some(table_id) = table_id.parse::<u64>().ok() else {
                     info!("can not parse table id from path: {}", path);
                     continue;
                 };
-                info!("parse table id:{} from path: {}", table_id, path);
                 if !table_ids_in_meta.contains(&table_id) {
                     orphan_paths.push(path);
                 }
             }
-            info!("orphan_paths summary: {:?}", orphan_paths);
+            info!(
+                "orphan_paths summary: {:?}",
+                orphan_paths.iter().take(100).collect::<Vec<_>>()
+            );
             op.remove(orphan_paths).await?;
         }
 
