@@ -180,7 +180,7 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
-            m_cte_temp_table: Arc::new(Default::default()),
+            m_cte_temp_table: Default::default(),
         })
     }
 

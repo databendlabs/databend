@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -22,12 +23,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -37,9 +39,12 @@ use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
@@ -117,8 +122,18 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        vec![]
+    fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        None
+    }
+
+    fn cluster_type(&self) -> Option<ClusterType> {
+        self.cluster_key_meta()?;
+        let cluster_type = self
+            .options()
+            .get(OPT_KEY_CLUSTER_TYPE)
+            .and_then(|s| s.parse::<ClusterType>().ok())
+            .unwrap_or(ClusterType::Linear);
+        Some(cluster_type)
     }
 
     fn change_tracking_enabled(&self) -> bool {
@@ -157,31 +172,6 @@ pub trait Table: Sync + Send {
 
     fn storage_format_as_parquet(&self) -> bool {
         false
-    }
-
-    #[async_backtrace::framed]
-    async fn alter_table_cluster_keys(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        cluster_key: String,
-        cluster_type: String,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, cluster_key, cluster_type);
-
-        Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Altering table cluster keys is not supported for the '{}' engine.",
-            self.engine()
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let _ = ctx;
-
-        Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Dropping table cluster keys is not supported for the '{}' engine.",
-            self.engine()
-        )))
     }
 
     /// Gather partitions to be scanned according to the push_downs
@@ -583,11 +573,6 @@ pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
 }
-
-use std::collections::HashMap;
-
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::UnknownTableId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {
