@@ -34,6 +34,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_metrics::external_server::record_connect_external_duration;
 use databend_common_metrics::external_server::record_error_external;
+use databend_common_metrics::external_server::record_request_external_block_rows;
 use databend_common_metrics::external_server::record_request_external_duration;
 use databend_common_metrics::external_server::record_retry_external;
 use databend_common_metrics::external_server::record_running_requests_external_finish;
@@ -60,15 +61,20 @@ pub struct TransformUdfServer {
 }
 
 impl TransformUdfServer {
-    pub fn new(ctx: Arc<QueryContext>, funcs: Vec<UdfFunctionDesc>) -> Result<Self> {
+    pub fn init_semaphore(ctx: Arc<QueryContext>) -> Result<Arc<Semaphore>> {
+        let settings = ctx.get_settings();
+        let request_max_threads = settings.get_external_server_request_max_threads()? as usize;
+        let semaphore = Arc::new(Semaphore::new(request_max_threads));
+        Ok(semaphore)
+    }
+
+    pub fn init_endpoints(
+        ctx: Arc<QueryContext>,
+        funcs: &[UdfFunctionDesc],
+    ) -> Result<BTreeMap<String, Arc<Endpoint>>> {
         let settings = ctx.get_settings();
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
-        let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
-        let request_max_threads = settings.get_external_server_request_max_threads()? as usize;
-        let retry_times = settings.get_external_server_request_retry_times()? as usize;
-        let semaphore = Arc::new(Semaphore::new(request_max_threads));
-
         let mut endpoints: BTreeMap<String, Arc<Endpoint>> = BTreeMap::new();
         for func in funcs.iter() {
             let server_addr = func.udf_type.as_server().unwrap();
@@ -79,6 +85,19 @@ impl TransformUdfServer {
                 UDFFlightClient::build_endpoint(server_addr, connect_timeout, request_timeout)?;
             endpoints.insert(server_addr.clone(), endpoint);
         }
+        Ok(endpoints)
+    }
+
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        funcs: Vec<UdfFunctionDesc>,
+        semaphore: Arc<Semaphore>,
+        endpoints: BTreeMap<String, Arc<Endpoint>>,
+    ) -> Result<Self> {
+        let settings = ctx.get_settings();
+        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
+        let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
+        let retry_times = settings.get_external_server_request_retry_times()? as usize;
 
         Ok(Self {
             ctx,
@@ -222,6 +241,7 @@ impl AsyncTransform for TransformUdfServer {
             .map(|start| data_block.slice(start..start + batch_rows.min(rows - start)))
             .collect();
         for func in self.funcs.iter() {
+            record_request_external_block_rows(func.func_name.clone(), rows);
             let server_addr = func.udf_type.as_server().unwrap();
             let endpoint = self.endpoints.get(server_addr).unwrap();
             let tasks: Vec<_> = batch_blocks
