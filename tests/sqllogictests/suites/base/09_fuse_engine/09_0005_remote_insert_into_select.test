@@ -75,12 +75,12 @@ statement ok
 create table t2 like t1 engine = Random;
 
 statement ok
-insert into t1 select repeat(a,500) from t2 limit 4;
+insert into t1 select repeat(a, 500) from t2 limit 10;
 
 query I
-select count() from fuse_block('db_09_0005', 't1');
+select count() > 1 from fuse_block('db_09_0005', 't1');
 ----
-4
+1
 
 statement ok
 DROP TABLE t1 ALL

@@ -63,12 +63,11 @@ impl PhysicalPlanBuilder {
         let metadata = self.metadata.read().clone();
         let lazy_columns = metadata.lazy_columns();
         required.extend(lazy_columns.clone());
-        let indices: Vec<_> = union_all
-            .left_outputs
-            .iter()
-            .enumerate()
-            .filter_map(|(index, v)| required.contains(&v.0).then_some(index))
+
+        let indices: Vec<usize> = (0..union_all.left_outputs.len())
+            .filter(|index| required.contains(&union_all.output_indexes[*index]))
             .collect();
+
         let (left_required, right_required) = if indices.is_empty() {
             (
                 HashSet::from([union_all.left_outputs[0].0]),
@@ -98,13 +97,19 @@ impl PhysicalPlanBuilder {
         let fields = union_all
             .left_outputs
             .iter()
-            .filter(|(index, _)| left_required.contains(index))
-            .map(|(index, expr)| {
-                if let Some(expr) = expr {
-                    Ok(DataField::new(&index.to_string(), expr.data_type()?))
+            .enumerate()
+            .filter(|(_, (index, _))| left_required.contains(index))
+            .map(|(i, (index, expr))| {
+                let data_type = if let Some(expr) = expr {
+                    expr.data_type()?
                 } else {
-                    Ok(left_schema.field_with_name(&index.to_string())?.clone())
-                }
+                    left_schema
+                        .field_with_name(&index.to_string())?
+                        .data_type()
+                        .clone()
+                };
+                let output_index = union_all.output_indexes[i];
+                Ok(DataField::new(&output_index.to_string(), data_type))
             })
             .collect::<Result<Vec<_>>>()?;
 
