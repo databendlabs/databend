@@ -1101,7 +1101,17 @@ fn test_query() {
         r#"select * from t1 except select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,
         r#"select * from t1 union select * from t2 union all select * from t3"#,
+        r#"select * from (
+                (SELECT f, g FROM union_fuzz_result1
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result2)
+                UNION ALL
+                (SELECT f, g FROM union_fuzz_result2
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result1)
+        )"#,
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
         r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
@@ -1244,6 +1254,7 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"INTERVAL '1 YEAR'"#,
     ];
 
     for case in cases {
