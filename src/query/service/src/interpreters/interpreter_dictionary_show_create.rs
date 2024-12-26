@@ -126,23 +126,15 @@ impl ShowCreateDictionaryInterpreter {
         {
             let mut create_defs = vec![];
             for field in schema.fields().iter() {
-                let nullable = if field.is_nullable() {
-                    " NULL".to_string()
-                } else {
-                    " NOT NULL".to_string()
-                };
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment = field_comments
                     .get(&field.column_id)
                     .and_then(|c| format!(" COMMENT '{}'", c).into())
                     .unwrap_or_default();
-                let column_str = format!(
-                    "  {} {}{}{}",
-                    display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
-                    field.data_type().remove_recursive_nullable().sql_name(),
-                    nullable,
-                    comment
-                );
+
+                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let data_type = field.data_type().sql_name_explicit_null();
+                let column_str = format!("  {ident} {data_type}{comment}",);
 
                 create_defs.push(column_str);
             }
