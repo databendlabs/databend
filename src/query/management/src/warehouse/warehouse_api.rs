@@ -109,4 +109,6 @@ pub trait WarehouseApi: Sync + Send {
     async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>>;
 
     async fn discover(&self, node_id: &str) -> Result<(bool, Vec<NodeInfo>)>;
+
+    async fn get_node_info(&self, node_id: &str) -> Result<Option<NodeInfo>>;
 }

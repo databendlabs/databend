@@ -1979,4 +1979,12 @@ impl WarehouseApi for WarehouseMgr {
 
         Ok((true, cluster_nodes_info))
     }
+
+    async fn get_node_info(&self, node_id: &str) -> Result<Option<NodeInfo>> {
+        let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
+        match self.metastore.get_kv(&node_key).await? {
+            None => Ok(None),
+            Some(seq) => Ok(Some(serde_json::from_slice(&seq.data)?)),
+        }
+    }
 }

@@ -31,6 +31,9 @@ use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
+use databend_common_cache::Cache;
+use databend_common_cache::LruCache;
+use databend_common_cache::MemSized;
 pub use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -52,7 +55,6 @@ use futures::StreamExt;
 use log::error;
 use log::info;
 use log::warn;
-use parking_lot::RwLock;
 use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
@@ -69,7 +71,7 @@ pub struct ClusterDiscovery {
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
-    cached_cluster: RwLock<Option<Arc<Cluster>>>,
+    lru_cache: parking_lot::Mutex<LruCache<String, CachedNode>>,
 }
 
 // avoid leak FlightClient to common-xxx
@@ -240,7 +242,7 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             flight_address: cfg.query.flight_api_address.clone(),
-            cached_cluster: Default::default(),
+            lru_cache: parking_lot::Mutex::new(LruCache::with_items_capacity(100)),
         }))
     }
 
@@ -311,35 +313,28 @@ impl ClusterDiscovery {
                 );
 
                 let res = Cluster::create(!has_cluster, res, self.local_id.clone());
-                // *self.cached_cluster.write() = Some(res.clone());
                 Ok(res)
             }
         }
     }
 
-    fn cached_cluster(self: &Arc<Self>) -> Option<Arc<Cluster>> {
-        (*self.cached_cluster.read()).clone()
-    }
-
-    pub async fn find_node_by_id(
-        self: Arc<Self>,
-        id: &str,
-        config: &InnerConfig,
-    ) -> Result<Option<Arc<NodeInfo>>> {
-        let (mut cluster, mut is_cached) = if let Some(cluster) = self.cached_cluster() {
-            (cluster, true)
-        } else {
-            (self.discover(config).await?, false)
-        };
-        while is_cached {
-            for node in cluster.get_nodes() {
-                if node.id == id {
-                    return Ok(Some(node.clone()));
-                }
+    pub async fn find_node_by_id(self: Arc<Self>, id: &str) -> Result<Option<Arc<NodeInfo>>> {
+        {
+            let mut lru_cache = self.lru_cache.lock();
+            if let Some(node_info) = lru_cache.get(id) {
+                return Ok(Some(node_info.node.clone()));
             }
-            cluster = self.discover(config).await?;
-            is_cached = false;
         }
+
+        if let Some(node_info) = self.warehouse_manager.get_node_info(id).await? {
+            let cache_object = Arc::new(node_info);
+            let mut lru_cache = self.lru_cache.lock();
+            lru_cache.insert(id.to_string(), CachedNode {
+                node: cache_object.clone(),
+            });
+            return Ok(Some(cache_object));
+        }
+
         Ok(None)
     }
 
@@ -600,4 +595,15 @@ pub struct FlightParams {
     pub(crate) timeout: u64,
     pub(crate) retry_times: u64,
     pub(crate) retry_interval: u64,
+}
+
+#[derive(Clone)]
+pub struct CachedNode {
+    pub node: Arc<NodeInfo>,
+}
+
+impl MemSized for CachedNode {
+    fn mem_bytes(&self) -> usize {
+        0
+    }
 }
