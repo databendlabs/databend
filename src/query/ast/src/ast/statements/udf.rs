@@ -37,12 +37,26 @@ pub enum UDFDefinition {
         handler: String,
         language: String,
     },
-
     UDFScript {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
         code: String,
         handler: String,
+        language: String,
+        runtime_version: String,
+    },
+    UDAFServer {
+        arg_types: Vec<TypeName>,
+        state_fields: Vec<UDAFStateField>,
+        return_type: TypeName,
+        address: String,
+        language: String,
+    },
+    UDAFScript {
+        arg_types: Vec<TypeName>,
+        state_fields: Vec<UDAFStateField>,
+        return_type: TypeName,
+        code: String,
         language: String,
         runtime_version: String,
     },
@@ -66,11 +80,11 @@ impl Display for UDFDefinition {
                 handler,
                 language,
             } => {
-                write!(f, "(")?;
+                write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' ADDRESS = '{address}'"
+                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' ADDRESS = '{address}'"
                 )?;
             }
             UDFDefinition::UDFScript {
@@ -81,14 +95,60 @@ impl Display for UDFDefinition {
                 language,
                 runtime_version: _,
             } => {
-                write!(f, "(")?;
+                write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $$\n{code}\n$$"
+                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $$\n{code}\n$$"
+                )?;
+            }
+            UDFDefinition::UDAFServer {
+                arg_types,
+                state_fields: state_types,
+                return_type,
+                address,
+                language,
+            } => {
+                write!(f, "( ")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(f, " ) STATE {{ ")?;
+                write_comma_separated_list(f, state_types)?;
+                write!(
+                    f,
+                    " }} RETURNS {return_type} LANGUAGE {language} ADDRESS = '{address}'"
+                )?;
+            }
+            UDFDefinition::UDAFScript {
+                arg_types,
+                state_fields: state_types,
+                return_type,
+                code,
+                language,
+                runtime_version: _,
+            } => {
+                write!(f, "( ")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(f, " ) STATE {{ ")?;
+                write_comma_separated_list(f, state_types)?;
+                write!(
+                    f,
+                    " }} RETURNS {return_type} LANGUAGE {language} AS $$\n{code}\n$$"
                 )?;
             }
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct UDAFStateField {
+    pub name: Identifier,
+    pub type_name: TypeName,
+}
+
+impl Display for UDAFStateField {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{} {}", self.name, self.type_name)?;
         Ok(())
     }
 }

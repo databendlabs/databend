@@ -17,13 +17,13 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::executor::physical_plans::AggregateExpand;
@@ -31,10 +31,12 @@ use databend_common_sql::executor::physical_plans::AggregateFinal;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregatePartial;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::UDFType;
 use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
@@ -162,17 +164,19 @@ impl PipelineBuilder {
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if !self.is_exchange_neighbor {
             let operator = DataOperator::instance().operator();
-            let location_prefix =
-                query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
+            let location_prefix = self.ctx.query_id_spill_prefix();
+
             self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(TransformAggregateSpillWriter::create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    operator.clone(),
-                    params.clone(),
-                    location_prefix.clone(),
-                )))
+                Ok(ProcessorPtr::create(
+                    TransformAggregateSpillWriter::try_create(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        operator.clone(),
+                        params.clone(),
+                        location_prefix.clone(),
+                    )?,
+                ))
             })?;
         }
 
@@ -220,7 +224,7 @@ impl PipelineBuilder {
         build_partition_bucket(&mut self.main_pipeline, params.clone())
     }
 
-    pub fn build_aggregator_params(
+    fn build_aggregator_params(
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
@@ -246,17 +250,37 @@ impl PipelineBuilder {
                 let args = agg_func
                     .arg_indices
                     .iter()
-                    .map(|i| {
-                        let index = input_schema.index_of(&i.to_string())?;
-                        Ok(index)
-                    })
+                    .map(|i| input_schema.index_of(&i.to_string()))
                     .collect::<Result<Vec<_>>>()?;
                 agg_args.push(args);
-                AggregateFunctionFactory::instance().get(
-                    agg_func.sig.name.as_str(),
-                    agg_func.sig.params.clone(),
-                    agg_func.sig.args.clone(),
-                )
+
+                match &agg_func.sig.udaf {
+                    None => AggregateFunctionFactory::instance().get(
+                        agg_func.sig.name.as_str(),
+                        agg_func.sig.params.clone(),
+                        agg_func.sig.args.clone(),
+                    ),
+                    Some((UDFType::Script(code), state_fields)) => create_udaf_script_function(
+                        code,
+                        agg_func.sig.name.clone(),
+                        agg_func.display.clone(),
+                        state_fields
+                            .iter()
+                            .map(|f| DataField::new(&f.name, f.data_type.clone()))
+                            .collect(),
+                        agg_func
+                            .sig
+                            .args
+                            .iter()
+                            .enumerate()
+                            .map(|(i, data_type)| {
+                                DataField::new(&format!("arg_{}", i), data_type.clone())
+                            })
+                            .collect(),
+                        agg_func.sig.return_type.clone(),
+                    ),
+                    Some((UDFType::Server(_), _state_fields)) => unimplemented!(),
+                }
             })
             .collect::<Result<_>>()?;
 

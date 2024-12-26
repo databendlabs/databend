@@ -17,6 +17,7 @@ use std::str;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
+use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::InnerConfig;
@@ -227,7 +228,8 @@ impl TestFixture {
     /// Init the license manager.
     /// Register the cluster to the metastore.
     async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
-        set_panic_hook();
+        let binary_version = DATABEND_COMMIT_VERSION.clone();
+        set_panic_hook(binary_version);
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]

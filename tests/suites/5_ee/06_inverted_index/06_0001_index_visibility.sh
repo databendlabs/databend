@@ -10,7 +10,7 @@ echo "drop user if exists u2" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists db1" | $BENDSQL_CLIENT_CONNECT
 echo "create database db1" | $BENDSQL_CLIENT_CONNECT
 echo "create table db1.t1(id int, title string, inverted index idx1(title))" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db1.t1 values(1, 'hello world')" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db1.t1 values(1, 'hello world')" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "create role role2;" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on db1.t1 to role role1;" | $BENDSQL_CLIENT_CONNECT

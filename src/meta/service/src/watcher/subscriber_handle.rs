@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+
 use databend_common_meta_raft_store::state_machine_api::SMEventSender;
+use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
+use futures::stream::BoxStream;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
+use tonic::Status;
 
 use crate::watcher::command::Command;
 use crate::watcher::EventSubscriber;
@@ -30,6 +37,18 @@ pub struct SubscriberHandle {
 impl SMEventSender for SubscriberHandle {
     fn send(&self, change: Change<Vec<u8>, String>) {
         let _ = self.tx.send(Command::KVChange(change));
+    }
+
+    fn send_batch(
+        &self,
+        tx: Sender<Result<WatchResponse, Status>>,
+        strm: BoxStream<'static, Result<(String, SeqV), io::Error>>,
+    ) {
+        self.tx
+            .send(Command::RequestAsync {
+                req: Box::new(move |_d| EventSubscriber::send_stream(tx, strm)),
+            })
+            .ok();
     }
 }
 

@@ -427,11 +427,12 @@ impl Table for StreamTable {
         table_name: &str,
         with_options: &str,
     ) -> Result<String> {
-        let table = self.source_table(ctx).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_desc = format!("{database_name}.{table_name}{with_options}");
         fuse_table
             .get_changes_query(
+                ctx,
                 &self.mode(),
                 &self.snapshot_loc(),
                 table_desc,

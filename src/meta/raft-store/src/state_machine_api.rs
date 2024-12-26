@@ -14,15 +14,29 @@
 
 use std::fmt::Debug;
 
+use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
+use tokio::sync::mpsc;
+use tonic::Status;
 
+use crate::leveled_store::map_api::IOResultStream;
 use crate::leveled_store::map_api::MapApi;
 use crate::state_machine::ExpireKey;
 
 /// Send a key-value change event to subscribers.
 pub trait SMEventSender: Debug + Sync + Send {
     fn send(&self, change: Change<Vec<u8>, String>);
+
+    /// Inform to send all items in `strm` to `tx`.
+    ///
+    /// All event must be sent by the event dispatcher in order to keep the order.
+    fn send_batch(
+        &self,
+        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+        strm: IOResultStream<(String, SeqV)>,
+    );
 }
 
 /// The API a state machine implements

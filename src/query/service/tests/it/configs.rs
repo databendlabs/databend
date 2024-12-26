@@ -926,6 +926,38 @@ protocol = "binary"
     Ok(())
 }
 
+#[test]
+fn test_spill_config() -> Result<()> {
+    let file_path = temp_dir().join("databend_test_spill_config.toml");
+
+    let mut f = fs::File::create(&file_path)?;
+    f.write_all(
+        r#"
+[spill]
+spill_local_disk_path = "/data/spill"
+"#
+        .as_bytes(),
+    )?;
+
+    // Make sure all data flushed.
+    f.flush()?;
+
+    temp_env::with_vars(
+        vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+        || {
+            let cfg = InnerConfig::load_for_test().expect("config load failed");
+
+            assert_eq!(cfg.spill.path, "/data/spill");
+            assert_eq!(cfg.spill.reserved_disk_ratio, 0.3);
+        },
+    );
+
+    // remove temp file
+    fs::remove_file(file_path)?;
+
+    Ok(())
+}
+
 /// Test new hive catalog
 #[test]
 fn test_override_config_new_hive_catalog() -> Result<()> {

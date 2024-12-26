@@ -1,4 +1,10 @@
 onlyif http
+query T
+select interval '1 month 1 hour 1 microsecond ago'
+----
+-1 month -1:00:00.000001
+
+onlyif http
 statement ok
 create or replace table t(c1 interval, c2 interval);
 
@@ -11,7 +17,13 @@ query TT
 select * from t order by c1;
 ----
 -1 year -1 month 0:00:00.000001
--1 month -1 day -1:00:00 0:00:00.001
+-1 month -1:00:00 0:00:00.001
+
+onlyif http
+query TT
+select * from t where c1 > to_interval('-1 year');
+----
+-1 month -1:00:00 0:00:00.001
 
 onlyif http
 statement error 1006
@@ -22,3 +34,111 @@ query T
 select to_interval('1 month 1 hour 1 microsecond');
 ----
 1 month 1:00:00.000001
+
+onlyif http
+query T
+select to_interval('1 month 1 hour 1 microsecond ago');
+----
+-1 month -1:00:00.000001
+
+onlyif http
+query T
+select to_interval('1 month 1 hour 1 microsecond ago');
+----
+-1 month -1:00:00.000001
+
+onlyif http
+query T
+select to_interval('12 month') = to_interval('360 days')
+----
+1
+
+onlyif http
+query T
+select to_interval('12 month') = to_interval('1 year');
+----
+1
+
+onlyif http
+query T
+select to_interval('1 hours') = to_interval('3600 seconds') as eq, to_interval('2 hours') > to_interval('3600 seconds');
+----
+1 1
+
+onlyif http
+query T
+SELECT epoch(10);
+----
+0:00:10
+
+onlyif http
+query T
+SELECT to_centuries(2);
+----
+200 years
+
+onlyif http
+query T
+SELECT to_days(5);
+----
+5 days
+
+onlyif http
+query T
+SELECT to_decades(3);
+----
+30 years
+
+onlyif http
+query T
+SELECT TIMESTAMP '2024-12-20 10:00:00' + to_hours(4);
+----
+2024-12-20 14:00:00.000000
+
+onlyif http
+query T
+SELECT TIMESTAMP '2024-12-20 10:00:00' + to_microseconds(500000);
+----
+2024-12-20 10:00:00.500000
+
+onlyif http
+query T
+SELECT to_millennia(1);
+----
+1000 years
+
+onlyif http
+query T
+SELECT TIMESTAMP '2024-12-20 10:00:00' + to_milliseconds(750);
+----
+2024-12-20 10:00:00.750000
+
+onlyif http
+query T
+SELECT TIMESTAMP '2024-12-20 10:00:00' + to_minutes(30);
+----
+2024-12-20 10:30:00.000000
+
+onlyif http
+query T
+SELECT to_months(3);
+----
+3 months
+
+onlyif http
+query T
+SELECT TIMESTAMP '2024-12-20 10:00:00' + to_seconds(60);
+----
+2024-12-20 10:01:00.000000
+
+onlyif http
+query T
+SELECT to_weeks(2);
+----
+14 days
+
+onlyif http
+query T
+SELECT to_years(10);
+----
+10 years

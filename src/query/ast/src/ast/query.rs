@@ -301,7 +301,18 @@ impl Display for SetExpr {
                 write!(f, "({query})")?;
             }
             SetExpr::SetOperation(set_operation) => {
+                // Check if the left or right expressions are also SetOperations
+                let left_needs_parentheses = matches!(set_operation.left.as_ref(), SetExpr::SetOperation(left_op) if left_op.op < set_operation.op);
+                let right_needs_parentheses = matches!(set_operation.right.as_ref(), SetExpr::SetOperation(right_op) if right_op.op < set_operation.op);
+
+                if left_needs_parentheses {
+                    write!(f, "(")?;
+                }
                 write!(f, "{}", set_operation.left)?;
+                if left_needs_parentheses {
+                    write!(f, ")")?;
+                }
+
                 match set_operation.op {
                     SetOperator::Union => {
                         write!(f, " UNION ")?;
@@ -316,7 +327,14 @@ impl Display for SetExpr {
                 if set_operation.all {
                     write!(f, "ALL ")?;
                 }
+                // Add parentheses if necessary
+                if right_needs_parentheses {
+                    write!(f, "(")?;
+                }
                 write!(f, "{}", set_operation.right)?;
+                if right_needs_parentheses {
+                    write!(f, ")")?;
+                }
             }
             SetExpr::Values { values, .. } => {
                 write!(f, "VALUES")?;
@@ -339,6 +357,18 @@ pub enum SetOperator {
     Union,
     Except,
     Intersect,
+}
+
+impl PartialOrd for SetOperator {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self == other {
+            Some(std::cmp::Ordering::Equal)
+        } else if self == &SetOperator::Intersect {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            Some(std::cmp::Ordering::Less)
+        }
+    }
 }
 
 /// `ORDER BY` clause
@@ -616,6 +646,28 @@ impl Display for WithOptions {
         write!(f, "WITH (")?;
         write_comma_separated_string_map(f, &self.options)?;
         write!(f, ")")
+    }
+}
+
+impl WithOptions {
+    /// Used for build change query.
+    pub fn to_change_query_with_clause(&self) -> String {
+        let mut result = String::from(" WITH (");
+        for (i, (k, v)) in self.options.iter().enumerate() {
+            if i > 0 {
+                result.push_str(", ");
+            }
+
+            if k == "consume" {
+                // The consume stream will be recorded in QueryContext.
+                // Skip 'consume' to avoid unnecessary operations.
+                result.push_str("consume = false");
+            } else {
+                result.push_str(&format!("{k} = '{v}'"));
+            }
+        }
+        result.push(')');
+        result
     }
 }
 

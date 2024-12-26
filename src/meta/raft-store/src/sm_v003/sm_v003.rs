@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::Bound;
 use std::fmt::Debug;
 use std::io;
 
+use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
@@ -22,6 +24,8 @@ use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::info;
 use openraft::RaftLogId;
+use tokio::sync::mpsc;
+use tonic::Status;
 
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::compactor::Compactor;
@@ -31,6 +35,7 @@ use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 use crate::state_machine::ExpireKey;
 use crate::state_machine_api::SMEventSender;
 use crate::state_machine_api::StateMachineApi;
+use crate::state_machine_api_ext::StateMachineApiExt;
 
 #[derive(Debug, Default)]
 pub struct SMV003 {
@@ -61,10 +66,6 @@ impl StateMachineApi for SMV003 {
     fn map_mut(&mut self) -> &mut Self::Map {
         &mut self.levels
     }
-
-    // fn sys_data_ref(&self) -> &SysData {
-    //     self.levels.writable_ref().sys_data_ref()
-    // }
 
     fn sys_data_mut(&mut self) -> &mut SysData {
         self.levels.sys_data_mut()
@@ -125,6 +126,28 @@ impl SMV003 {
 
     pub fn get_snapshot(&self) -> Option<DB> {
         self.levels.persisted().cloned()
+    }
+
+    /// Atomically reads and forwards a range of key-value pairs to the provided `tx`.
+    ///
+    /// - Any data publishing must be queued by the singleton sender to maintain ordering.
+    ///
+    /// - Atomically reading the key-value range within the state machine
+    ///   and sending it to the singleton event sender.
+    ///   Ensuring that there is no event out of order.
+    pub async fn send_range(
+        &mut self,
+        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+        rng: (Bound<String>, Bound<String>),
+    ) -> Result<(), io::Error> {
+        let Some(sender) = self.event_sender() else {
+            return Ok(());
+        };
+
+        let strm = self.range_kv(rng).await?;
+
+        sender.send_batch(tx, strm);
+        Ok(())
     }
 
     #[allow(dead_code)]

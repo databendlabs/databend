@@ -78,7 +78,6 @@ Sort
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 5.00
 
-
 statement ok
 drop table if exists t1;
 

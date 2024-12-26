@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
@@ -96,17 +98,25 @@ async fn apply_block_pruning(
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
-        ctx.get_runtime()?.try_spawn(
-            async move {
+        // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+        GlobalIORuntime::instance().spawn(async move {
+            // avoid block global io runtime
+            let runtime = Runtime::with_worker_threads(2, None)?;
+
+            let join_handler = runtime.spawn(async move {
                 let segment_pruned_result =
                     fuse_pruner.clone().segment_pruning(segment_locs).await?;
                 for segment in segment_pruned_result {
                     let _ = segment_tx.send(Ok(segment)).await;
                 }
                 Ok::<_, ErrorCode>(())
-            },
-            None,
-        )?;
+            });
+            join_handler
+                .await
+                .unwrap()
+                .expect("Join error while in prune pipeline");
+            Ok::<_, ErrorCode>(())
+        });
         Ok(())
     });
 

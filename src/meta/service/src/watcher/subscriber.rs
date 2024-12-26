@@ -13,13 +13,17 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::Bound;
+use std::io;
 use std::sync::Arc;
 
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
+use futures::future::BoxFuture;
+use futures::stream::BoxStream;
+use futures::StreamExt;
 use log::info;
 use log::warn;
 use prost::Message;
@@ -32,7 +36,6 @@ use crate::metrics::server_metrics;
 use crate::watcher::command::Command;
 use crate::watcher::id::WatcherId;
 use crate::watcher::subscriber_handle::SubscriberHandle;
-use crate::watcher::KeyRange;
 use crate::watcher::StreamSender;
 use crate::watcher::WatchDesc;
 
@@ -70,10 +73,42 @@ impl EventSubscriber {
                     self.dispatch(kv_change).await;
                 }
                 Command::Request { req } => req(&mut self),
+                Command::RequestAsync { req } => req(&mut self).await,
             }
         }
 
         info!("EventDispatcher: all event senders are closed. quit.");
+    }
+
+    /// Send a stream of kv changes to a watcher.
+    pub fn send_stream(
+        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+        mut strm: BoxStream<'static, Result<(String, SeqV), io::Error>>,
+    ) -> BoxFuture<'static, ()> {
+        let fu = async move {
+            while let Some(res) = strm.next().await {
+                let (key, seq_v) = match res {
+                    Ok((key, seq)) => (key, seq),
+                    Err(err) => {
+                        warn!("EventSubscriber: recv error from kv stream: {}", err);
+                        tx.send(Err(Status::internal(err.to_string()))).await.ok();
+                        break;
+                    }
+                };
+
+                let resp =
+                    WatchResponse::new(&Change::new(None, Some(seq_v)).with_id(key)).unwrap();
+                let resp_size = resp.encoded_len() as u64;
+
+                if let Err(_err) = tx.send(Ok(resp)).await {
+                    warn!("EventSubscriber: fail to send to watcher; close this stream");
+                    break;
+                } else {
+                    network_metrics::incr_sent_bytes(resp_size);
+                }
+            }
+        };
+        Box::pin(fu)
     }
 
     /// Dispatch a kv change event to interested watchers.
@@ -153,7 +188,7 @@ impl EventSubscriber {
         self.current_watcher_id += 1;
         let watcher_id = self.current_watcher_id;
 
-        let range = Self::build_key_range(key.clone(), &key_end)?;
+        let range = WatchRequest::build_key_range(&key, &key_end)?;
 
         let desc = WatchDesc::new(watcher_id, interested, range);
         Ok(desc)
@@ -168,46 +203,7 @@ impl EventSubscriber {
         server_metrics::incr_watchers(-1);
     }
 
-    pub(crate) fn build_key_range(
-        key: String,
-        key_end: &Option<String>,
-    ) -> Result<KeyRange, &'static str> {
-        let left = Bound::Included(key.clone());
-
-        match key_end {
-            Some(key_end) => {
-                if &key >= key_end {
-                    return Err("empty range");
-                }
-                Ok((left, Bound::Excluded(key_end.to_string())))
-            }
-            None => Ok((left.clone(), left)),
-        }
-    }
-
     pub fn watch_senders(&self) -> BTreeSet<&Arc<StreamSender>> {
         self.watchers.values(..)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_build_key_range() -> Result<(), &'static str> {
-        let x = EventSubscriber::build_key_range(s("a"), &None)?;
-        assert_eq!(x, (Bound::Included(s("a")), Bound::Included(s("a"))));
-
-        let x = EventSubscriber::build_key_range(s("a"), &Some(s("b")))?;
-        assert_eq!(x, (Bound::Included(s("a")), Bound::Excluded(s("b"))));
-
-        let x = EventSubscriber::build_key_range(s("a"), &Some(s("a")));
-        assert_eq!(x, Err("empty range"));
-
-        Ok(())
-    }
-
-    fn s(x: impl ToString) -> String {
-        x.to_string()
     }
 }

@@ -35,7 +35,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -123,6 +123,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
+use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -140,7 +141,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
-#[derive(Clone)]
 pub struct QueryContext {
     version: String,
     mysql_version: String,
@@ -161,7 +161,7 @@ impl QueryContext {
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details
-    pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
+    pub fn create_from(other: &QueryContext) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
 
@@ -316,7 +316,8 @@ impl QueryContext {
         self.shared.set_affect(affect)
     }
 
-    pub fn set_id(&self, id: String) {
+    pub fn update_init_query_id(&self, id: String) {
+        self.shared.spilled_files.write().clear();
         *self.shared.init_query_id.write() = id;
     }
 
@@ -357,6 +358,44 @@ impl QueryContext {
         self.shared.clear_tables_cache()
     }
 
+    pub fn add_spill_file(
+        &self,
+        location: crate::spillers::Location,
+        layout: crate::spillers::Layout,
+    ) {
+        let mut w = self.shared.spilled_files.write();
+        w.insert(location, layout);
+    }
+
+    pub fn get_spill_layout(
+        &self,
+        location: &crate::spillers::Location,
+    ) -> Option<crate::spillers::Layout> {
+        let r = self.shared.spilled_files.read();
+        r.get(location).cloned()
+    }
+
+    pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
+        let r = self.shared.spilled_files.read();
+        r.keys().cloned().collect()
+    }
+
+    pub fn query_tenant_spill_prefix(&self) -> String {
+        let tenant = self.get_tenant();
+        format!("_query_spill/{}", tenant.tenant_name())
+    }
+
+    pub fn query_id_spill_prefix(&self) -> String {
+        let tenant = self.get_tenant();
+        let node_index = self.get_cluster().ordered_index();
+        format!(
+            "_query_spill/{}/{}_{}",
+            tenant.tenant_name(),
+            self.get_id(),
+            node_index
+        )
+    }
+
     #[async_backtrace::framed]
     async fn get_table_from_shared(
         &self,
@@ -387,6 +426,49 @@ impl QueryContext {
             _ => table,
         };
         Ok(table)
+    }
+
+    pub fn unload_spill_meta(&self) {
+        const SPILL_META_SUFFIX: &str = ".list";
+        let mut w = self.shared.spilled_files.write();
+        let mut remote_spill_files = w
+            .iter()
+            .map(|(k, _)| k)
+            .filter_map(|l| match l {
+                crate::spillers::Location::Remote(r) => Some(r),
+                _ => None,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        w.clear();
+
+        if !remote_spill_files.is_empty() {
+            let location_prefix = self.query_tenant_spill_prefix();
+            let node_idx = self.get_cluster().ordered_index();
+            let meta_path = format!(
+                "{}/{}_{}{}",
+                location_prefix,
+                self.get_id(),
+                node_idx,
+                SPILL_META_SUFFIX
+            );
+            let op = DataOperator::instance().operator();
+            // append dir and current meta
+            remote_spill_files.push(meta_path.clone());
+            remote_spill_files.push(format!(
+                "{}/{}_{}/",
+                location_prefix,
+                self.get_id(),
+                node_idx
+            ));
+            let joined_contents = remote_spill_files.join("\n");
+
+            if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
+                Ok(op.write(&meta_path, joined_contents).await?)
+            }) {
+                log::error!("create spill meta file error: {}", e);
+            }
+        }
     }
 }
 
@@ -964,7 +1046,8 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.get_table_from_shared(catalog, database, table, None)
+        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
+        self.get_table_from_shared(catalog, database, table, batch_size)
             .await
     }
 
@@ -980,6 +1063,23 @@ impl TableContext for QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        let max_batch_size = {
+            match max_batch_size {
+                Some(v) => {
+                    // use the batch size specified in the statement
+                    Some(v)
+                }
+                None => {
+                    if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
+                        info!("overriding max_batch_size of stream consumption using value specified in setting: {}", v);
+                        Some(v)
+                    } else {
+                        None
+                    }
+                }
+            }
+        };
+
         let table = self
             .get_table_from_shared(catalog, database, table, max_batch_size)
             .await?;
@@ -988,7 +1088,11 @@ impl TableContext for QueryContext {
             let actual_batch_limit = stream.max_batch_size();
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
-                    "Within the same transaction, the batch size for a stream must remain consistent",
+                    format!(
+                    "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        actual_batch_limit, max_batch_size
+                    )
+
                 ));
             }
         } else if max_batch_size.is_some() {
@@ -1476,10 +1580,6 @@ impl TableContext for QueryContext {
                 .is_temp_table(database_name, table_name)
     }
 
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
-    }
-
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         self.m_cte_temp_table
             .write()
@@ -1515,6 +1615,39 @@ impl TableContext for QueryContext {
         let mut m_cte_temp_table = self.m_cte_temp_table.write();
         m_cte_temp_table.clear();
         Ok(())
+    }
+
+    fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
+        let mut streams = self.shared.streams_refs.write();
+        let stream_key = (
+            catalog.to_string(),
+            database.to_string(),
+            stream.to_string(),
+        );
+        streams
+            .entry(stream_key)
+            .and_modify(|v| {
+                if consume {
+                    *v = true;
+                }
+            })
+            .or_insert(consume);
+    }
+
+    fn get_consume_streams(&self, query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        let streams_refs = self.shared.streams_refs.read();
+        let tables = self.shared.tables_refs.lock();
+        let mut streams_meta = Vec::with_capacity(streams_refs.len());
+        for (stream_key, consume) in streams_refs.iter() {
+            if query && !consume {
+                continue;
+            }
+            let stream = tables
+                .get(stream_key)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            streams_meta.push(stream.clone());
+        }
+        Ok(streams_meta)
     }
 }
 

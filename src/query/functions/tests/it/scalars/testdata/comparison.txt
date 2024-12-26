@@ -116,7 +116,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 32 more
+... and 34 more
 
 
 
@@ -145,6 +145,15 @@ optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
 output         : false
+
+
+ast            : to_interval('1 hour')=to_interval('3600 seconds')
+raw expr       : eq(to_interval('1 hour'), to_interval('3600 seconds'))
+checked expr   : eq<Interval, Interval>(to_interval<String>("1 hour"), to_interval<String>("3600 seconds"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
 
 
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
@@ -350,7 +359,7 @@ candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 32 more
+... and 34 more
 
 
 
@@ -370,6 +379,15 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : to_interval('1 hour')!=to_interval('3600 seconds')
+raw expr       : noteq(to_interval('1 hour'), to_interval('3600 seconds'))
+checked expr   : noteq<Interval, Interval>(to_interval<String>("1 hour"), to_interval<String>("3600 seconds"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
 
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
@@ -531,6 +549,15 @@ output         : true
 ast            : (1, 'a') < (2, 'a')
 raw expr       : lt(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_interval('29 days')<to_interval('1 month')
+raw expr       : lt(to_interval('29 days'), to_interval('1 month'))
+checked expr   : lt<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -717,6 +744,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : to_interval('29 days')<=to_interval('1 month')
+raw expr       : lte(to_interval('29 days'), to_interval('1 month'))
+checked expr   : lte<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
 raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
 checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
@@ -874,6 +910,15 @@ output         : false
 ast            : (1, 'a') > (2, 'a')
 raw expr       : gt(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : to_interval('29 days')>to_interval('1 month')
+raw expr       : gt(to_interval('29 days'), to_interval('1 month'))
+checked expr   : gt<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1072,6 +1117,15 @@ output         : false
 ast            : (1, 'a') >= (2, 'a')
 raw expr       : gte(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : to_interval('29 days')>=to_interval('1 month')
+raw expr       : gte(to_interval('29 days'), to_interval('1 month'))
+checked expr   : gte<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}

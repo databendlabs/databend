@@ -275,19 +275,19 @@ select t1.a from t1, t3 where t1.a = t3.a
 ) t
 ----
 AggregateFinal
-├── output columns: [sum(a) (#4)]
+├── output columns: [sum(a) (#5)]
 ├── group by: []
-├── aggregate functions: [sum(number)]
+├── aggregate functions: [sum(a)]
 ├── estimated rows: 1.00
 └── Exchange
-    ├── output columns: [sum(a) (#4)]
+    ├── output columns: [sum(a) (#5)]
     ├── exchange type: Merge
     └── AggregatePartial
         ├── group by: []
-        ├── aggregate functions: [sum(number)]
+        ├── aggregate functions: [sum(a)]
         ├── estimated rows: 1.00
         └── UnionAll
-            ├── output columns: [numbers.number (#0)]
+            ├── output columns: [a (#4)]
             ├── estimated rows: 10100.00
             ├── HashJoin
             │   ├── output columns: [numbers.number (#0)]
@@ -360,16 +360,16 @@ select sum(t1.a) from t1, t3 where t1.a = t3.a
 ) t
 ----
 AggregateFinal
-├── output columns: [sum(a) (#5)]
+├── output columns: [sum(a) (#6)]
 ├── group by: []
-├── aggregate functions: [sum(number)]
+├── aggregate functions: [sum(a)]
 ├── estimated rows: 1.00
 └── AggregatePartial
     ├── group by: []
-    ├── aggregate functions: [sum(number)]
+    ├── aggregate functions: [sum(a)]
     ├── estimated rows: 1.00
     └── UnionAll
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [a (#5)]
         ├── estimated rows: 10001.00
         ├── Exchange
         │   ├── output columns: [numbers.number (#0)]
@@ -456,19 +456,19 @@ select t1.a from t1
 ) t
 ----
 AggregateFinal
-├── output columns: [sum(a) (#3)]
+├── output columns: [sum(a) (#4)]
 ├── group by: []
-├── aggregate functions: [sum(number)]
+├── aggregate functions: [sum(a)]
 ├── estimated rows: 1.00
 └── Exchange
-    ├── output columns: [sum(a) (#3)]
+    ├── output columns: [sum(a) (#4)]
     ├── exchange type: Merge
     └── AggregatePartial
         ├── group by: []
-        ├── aggregate functions: [sum(number)]
+        ├── aggregate functions: [sum(a)]
         ├── estimated rows: 1.00
         └── UnionAll
-            ├── output columns: [numbers.number (#0)]
+            ├── output columns: [a (#3)]
             ├── estimated rows: 10010.00
             ├── HashJoin
             │   ├── output columns: [numbers.number (#0)]

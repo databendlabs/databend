@@ -1,0 +1,238 @@
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('1 year')
+----
+1993-03-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('0 month')
+----
+1992-03-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('0 month')
+----
+1992-03-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('1 month')
+----
+1992-04-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('1 month')
+----
+1992-02-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('2 month')
+----
+1992-05-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('2 month')
+----
+1992-01-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('3 month')
+----
+1992-06-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('3 month')
+----
+1991-12-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('4 month')
+----
+1992-07-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('4 month')
+----
+1991-11-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('5 month')
+----
+1992-08-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('5 month')
+----
+1991-10-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('6 month')
+----
+1992-09-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('6 month')
+----
+1991-09-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('7 month')
+----
+1992-10-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('7 month')
+----
+1991-08-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('8 month')
+----
+1992-11-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('8 month')
+----
+1991-07-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('9 month')
+----
+1992-12-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('9 month')
+----
+1991-06-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('10 month')
+----
+1993-01-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('10 month')
+----
+1991-05-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('11 month')
+----
+1993-02-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('11 month')
+----
+1991-04-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('12 month')
+----
+1993-03-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('12 month')
+----
+1991-03-01 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('10 day')
+----
+1992-03-11 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('10 day')
+----
+1992-02-20 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1993-03-01' - to_interval('10 day')
+----
+1993-02-19 00:00:00.000000
+
+onlyif http
+query T
+SELECT DATE '1993-03-01' - to_interval('1 second')
+----
+1993-02-28 23:59:59.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' + to_interval('1 second')
+----
+1992-03-01 00:00:01.000000
+
+onlyif http
+query T
+SELECT DATE '1992-03-01' - to_interval('1 second')
+----
+1992-02-29 23:59:59.000000
+
+onlyif http
+query T
+SELECT DATE '1993-03-01' + to_interval('1000000 second')
+----
+1993-03-12 13:46:40.000000
+
+onlyif http
+query T
+SELECT DATE '1993-03-01' - to_interval('1000000 second')
+----
+1993-02-17 10:13:20.000000
+
+onlyif http
+statement error
+SELECT to_interval('1000000 second') - DATE '1993-03-01'
+
+onlyif http
+query T
+SELECT TIMESTAMP '1992-01-01 10:00:00' + to_interval('1 day')
+----
+1992-01-02 10:00:00.000000
+
+onlyif http
+query T
+SELECT to_interval('1 day') + TIMESTAMP '1992-01-01 10:00:00'
+----
+1992-01-02 10:00:00.000000
+
+onlyif http
+query T
+SELECT TIMESTAMP '1992-01-01 10:00:05' + to_interval('17 years 3 months 1 day 2 hours 1 minute 57 seconds')
+----
+2009-04-02 12:02:02.000000
+
+onlyif http
+query T
+SELECT TIMESTAMP '1992-01-01 10:00:00' - to_interval('1 day')
+----
+1991-12-31 10:00:00.000000
+

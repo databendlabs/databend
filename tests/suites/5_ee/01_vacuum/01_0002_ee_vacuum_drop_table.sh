@@ -7,7 +7,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "drop database if exists test_vacuum_drop_dry_run" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE DATABASE test_vacuum_drop_dry_run" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_dry_run.a(c int)" | $BENDSQL_CLIENT_CONNECT
-echo "INSERT INTO test_vacuum_drop_dry_run.a VALUES (1)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_dry_run.a VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "drop table test_vacuum_drop_dry_run.a" | $BENDSQL_CLIENT_CONNECT
 count=$(echo "set data_retention_time_in_days=0; vacuum drop table dry run" | $BENDSQL_CLIENT_CONNECT | wc -l)
 if [[ ! "$count" ]]; then
@@ -30,7 +30,7 @@ echo "drop database if exists test_vacuum_drop_4" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE DATABASE test_vacuum_drop" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop.a(c int)" | $BENDSQL_CLIENT_CONNECT
 
-echo "INSERT INTO test_vacuum_drop.a VALUES (1)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop.a VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "select * from test_vacuum_drop.a" | $BENDSQL_CLIENT_CONNECT
 
@@ -40,7 +40,7 @@ echo "set data_retention_time_in_days=0;vacuum drop table from test_vacuum_drop"
 
 echo "create table test_vacuum_drop.b(c int)" | $BENDSQL_CLIENT_CONNECT
 
-echo "INSERT INTO test_vacuum_drop.b VALUES (2)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop.b VALUES (2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "drop table test_vacuum_drop.b" | $BENDSQL_CLIENT_CONNECT
 
@@ -54,12 +54,12 @@ echo "select * from test_vacuum_drop.b" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE DATABASE test_vacuum_drop_2" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_2.a(c int)" | $BENDSQL_CLIENT_CONNECT
 
-echo "INSERT INTO test_vacuum_drop_2.a VALUES (3)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_2.a VALUES (3)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "CREATE DATABASE test_vacuum_drop_3" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_3.a(c int)" | $BENDSQL_CLIENT_CONNECT
 
-echo "INSERT INTO test_vacuum_drop_3.a VALUES (4)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_3.a VALUES (4)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "select * from test_vacuum_drop_2.a" | $BENDSQL_CLIENT_CONNECT
 echo "select * from test_vacuum_drop_3.a" | $BENDSQL_CLIENT_CONNECT
@@ -87,7 +87,7 @@ table_inserts=(
 )
 
 for i in "${table_inserts[@]}"; do
-  echo "$i" | $BENDSQL_CLIENT_CONNECT
+  echo "$i" | $BENDSQL_CLIENT_OUTPUT_NULL
 done
 
 ## Select table
@@ -100,7 +100,7 @@ echo "set data_retention_time_in_days=0;vacuum drop table" | $BENDSQL_CLIENT_CON
 ## dry run
 echo "CREATE DATABASE test_vacuum_drop_4" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_4.a(c int)" | $BENDSQL_CLIENT_CONNECT
-echo "INSERT INTO test_vacuum_drop_4.a VALUES (1)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_4.a VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "select * from test_vacuum_drop_4.a"  | $BENDSQL_CLIENT_CONNECT
 echo "drop table test_vacuum_drop_4.a" | $BENDSQL_CLIENT_CONNECT
 echo "set data_retention_time_in_days=0;vacuum drop table dry run" | $BENDSQL_CLIENT_CONNECT > /dev/null
@@ -109,17 +109,17 @@ echo "select * from test_vacuum_drop_4.a"  | $BENDSQL_CLIENT_CONNECT
 
 # check vacuum drop table with the same name
 echo "create table test_vacuum_drop_4.b(c int)" | $BENDSQL_CLIENT_CONNECT
-echo "INSERT INTO test_vacuum_drop_4.b VALUES (1)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_4.b VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "drop table test_vacuum_drop_4.b" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_4.b(c int)" | $BENDSQL_CLIENT_CONNECT
-echo "INSERT INTO test_vacuum_drop_4.b VALUES (2)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_4.b VALUES (2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "select * from test_vacuum_drop_4.b"  | $BENDSQL_CLIENT_CONNECT
 echo "set data_retention_time_in_days=0; vacuum drop table" | $BENDSQL_CLIENT_CONNECT > /dev/null
 echo "select * from test_vacuum_drop_4.b"  | $BENDSQL_CLIENT_CONNECT
 
 ## test vacuum table output
 echo "create table test_vacuum_drop_4.c(c int)" | $BENDSQL_CLIENT_CONNECT
-echo "INSERT INTO test_vacuum_drop_4.c VALUES (1)" | $BENDSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_4.c VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 count=$(echo "set data_retention_time_in_days=0; vacuum table test_vacuum_drop_4.c" | $BENDSQL_CLIENT_CONNECT | awk '{print $9}')
 if [[ "$count" != "4" ]]; then
   echo "vacuum table, count:$count"

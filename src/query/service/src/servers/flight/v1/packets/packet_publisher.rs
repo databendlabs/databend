@@ -170,7 +170,7 @@ impl QueryEnv {
             local_id: GlobalConfig::instance().query.node_id.clone(),
         }))?;
 
-        query_ctx.set_id(self.query_id.clone());
+        query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());
 
         Ok(query_ctx)

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -24,13 +23,10 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sql::MetadataRef;
-use databend_common_sql::TableEntry;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -42,9 +38,8 @@ use crate::sessions::QueryContext;
 
 pub async fn dml_build_update_stream_req(
     ctx: Arc<QueryContext>,
-    metadata: &MetadataRef,
 ) -> Result<Vec<UpdateStreamMetaReq>> {
-    let tables = get_stream_table(metadata, |t| t.table().engine() == STREAM_ENGINE)?;
+    let tables = ctx.get_consume_streams(false)?;
     if tables.is_empty() {
         return Ok(vec![]);
     }
@@ -96,38 +91,14 @@ pub async fn dml_build_update_stream_req(
     Ok(reqs)
 }
 
-fn get_stream_table<F>(metadata: &MetadataRef, pred: F) -> Result<Vec<Arc<dyn Table>>>
-where F: Fn(&TableEntry) -> bool {
-    let r_lock = metadata.read();
-    let tables = r_lock.tables();
-    let mut streams = vec![];
-    let mut streams_ids = HashSet::new();
-    for t in tables {
-        if pred(t) {
-            let stream = t.table();
-
-            let stream_id = stream.get_table_info().ident.table_id;
-            if streams_ids.contains(&stream_id) {
-                continue;
-            }
-            streams_ids.insert(stream_id);
-
-            streams.push(stream);
-        }
-    }
-    Ok(streams)
-}
-
 pub struct StreamTableUpdates {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
 }
+
 pub async fn query_build_update_stream_req(
     ctx: &Arc<QueryContext>,
-    metadata: &MetadataRef,
 ) -> Result<Option<StreamTableUpdates>> {
-    let streams = get_stream_table(metadata, |t| {
-        t.is_consume() && t.table().engine() == STREAM_ENGINE
-    })?;
+    let streams = ctx.get_consume_streams(true)?;
     if streams.is_empty() {
         return Ok(None);
     }

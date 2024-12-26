@@ -17,6 +17,7 @@ use core::net::Ipv4Addr;
 use chrono::DateTime;
 use chrono::Utc;
 use cidr::Ipv4Cidr;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
@@ -79,39 +80,58 @@ impl UserApiProvider {
         }
 
         if let Some(name) = user_info.option.network_policy() {
-            let ip_addr: Ipv4Addr = match client_ip {
-                Some(client_ip) => client_ip.parse().unwrap(),
-                None => {
-                    return Err(ErrorCode::AuthenticateFailure("Unknown client ip"));
-                }
-            };
+            self.enforce_network_policy(tenant, name, client_ip).await?;
+        }
+        Ok(user_info)
+    }
 
-            let network_policy = self.get_network_policy(tenant, name.as_str()).await?;
-            for blocked_ip in network_policy.blocked_ip_list {
-                let blocked_cidr: Ipv4Cidr = blocked_ip.parse().unwrap();
-                if blocked_cidr.contains(&ip_addr) {
-                    return Err(ErrorCode::AuthenticateFailure(format!(
-                        "client ip `{}` is blocked",
-                        ip_addr
-                    )));
-                }
+    pub async fn enforce_network_policy(
+        &self,
+        tenant: &Tenant,
+        policy: &str,
+        client_ip: Option<&str>,
+    ) -> Result<()> {
+        let ip_addr: Ipv4Addr = match client_ip {
+            Some(client_ip) => client_ip.parse()?,
+            None => {
+                return Err(ErrorCode::AuthenticateFailure("Unknown client ip"));
             }
-            let mut allow = false;
-            for allowed_ip in network_policy.allowed_ip_list {
-                let allowed_cidr: Ipv4Cidr = allowed_ip.parse().unwrap();
-                if allowed_cidr.contains(&ip_addr) {
-                    allow = true;
-                    break;
-                }
+        };
+
+        let whitelist = &GlobalConfig::instance().query.network_policy_whitelist;
+        for whitelist_ip in whitelist {
+            let cidr: Ipv4Cidr = whitelist_ip.parse()?;
+            if cidr.contains(&ip_addr) {
+                return Ok(());
             }
-            if !allow {
+        }
+
+        let network_policy = self.get_network_policy(tenant, policy).await?;
+        for blocked_ip in network_policy.blocked_ip_list {
+            let blocked_cidr: Ipv4Cidr = blocked_ip.parse()?;
+            if blocked_cidr.contains(&ip_addr) {
                 return Err(ErrorCode::AuthenticateFailure(format!(
-                    "client ip `{}` is not allowed to login",
+                    "client ip `{}` is blocked",
                     ip_addr
                 )));
             }
         }
-        Ok(user_info)
+        let mut allow = false;
+        for allowed_ip in network_policy.allowed_ip_list {
+            let allowed_cidr: Ipv4Cidr = allowed_ip.parse()?;
+            if allowed_cidr.contains(&ip_addr) {
+                allow = true;
+                break;
+            }
+        }
+        if !allow {
+            return Err(ErrorCode::AuthenticateFailure(format!(
+                "client ip `{}` is not allowed to login",
+                ip_addr
+            )));
+        }
+
+        Ok(())
     }
 
     // Get the tenant all users list.

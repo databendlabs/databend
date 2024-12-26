@@ -1,7 +1,8 @@
 === test db/table ===
+1
 200
 === test stage ===
-1	8	374
+1	8	400
 0
 === test udf ===
 2
@@ -53,6 +54,8 @@ Error: APIError: QueryFailed: [1003]Unknown database 'c'
 Error: APIError: QueryFailed: [1063]Permission denied: User 'u1'@'%' does not have the required privileges for database 'default'
 t1
 t2
+1
+1
 1
 2
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'db1'.'t1' for user 'u2'@'%' with roles [public,role2]

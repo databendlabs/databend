@@ -72,7 +72,8 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
 pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
     let make_error = || "failed to init services";
 
-    set_panic_hook();
+    let binary_version = DATABEND_COMMIT_VERSION.clone();
+    set_panic_hook(binary_version);
     set_alloc_error_hook();
 
     #[cfg(target_arch = "x86_64")]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use arrow_array::RecordBatch;
@@ -54,18 +55,16 @@ const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
     inner: FlightServiceClient<Channel>,
-    batch_rows: u64,
+    batch_rows: usize,
     headers: MetadataMap,
 }
 
 impl UDFFlightClient {
-    #[async_backtrace::framed]
-    pub async fn connect(
+    pub fn build_endpoint(
         addr: &str,
         conn_timeout: u64,
         request_timeout: u64,
-        batch_rows: u64,
-    ) -> Result<UDFFlightClient> {
+    ) -> Result<Arc<Endpoint>> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
@@ -86,6 +85,15 @@ impl UDFFlightClient {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Client TLS Config: {err}"))
             })?;
 
+        Ok(Arc::new(endpoint))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn connect(
+        endpoint: Arc<Endpoint>,
+        conn_timeout: u64,
+        batch_rows: usize,
+    ) -> Result<UDFFlightClient> {
         let mut connector = HttpConnector::new_with_resolver(DNSService);
         connector.enforce_http(false);
         connector.set_nodelay(true);
@@ -99,7 +107,8 @@ impl UDFFlightClient {
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(
                     "Cannot connect to UDF Server {}: {:?}",
-                    addr, err
+                    endpoint.uri(),
+                    err
                 ))
             })?;
         let inner =
@@ -189,7 +198,7 @@ impl UDFFlightClient {
         }
 
         let (input_fields, output_fields) = schema.fields().split_at(fields_num - 1);
-        let expect_arg_types = input_fields
+        let remote_arg_types = input_fields
             .iter()
             .map(|f| f.data_type().clone())
             .collect::<Vec<_>>();
@@ -197,10 +206,15 @@ impl UDFFlightClient {
             .iter()
             .map(|f| f.data_type().clone())
             .collect::<Vec<_>>();
-        if expect_arg_types != arg_types {
+        if remote_arg_types != arg_types {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF arg types mismatch, actual arg types: ({:?})",
-                expect_arg_types
+                "UDF arg types mismatch, remote arg types: ({:?}), defined arg types: ({:?})",
+                remote_arg_types
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                arg_types
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
@@ -225,7 +239,7 @@ impl UDFFlightClient {
         input_batch: RecordBatch,
     ) -> Result<RecordBatch> {
         let descriptor = FlightDescriptor::new_path(vec![func_name.to_string()]);
-        let batch_rows = self.batch_rows as usize;
+        let batch_rows = self.batch_rows;
         let batches = (0..input_batch.num_rows())
             .step_by(batch_rows)
             .map(move |start| {

@@ -37,6 +37,7 @@ use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
+use databend_common_ast::ast::Query;
 use databend_common_ast::ast::RenameTableStmt;
 use databend_common_ast::ast::ShowCreateTableStmt;
 use databend_common_ast::ast::ShowDropTablesStmt;
@@ -414,6 +415,12 @@ impl Binder {
         }
     }
 
+    async fn as_query_plan(&mut self, query: &Query) -> Result<Plan> {
+        let stmt = Statement::Query(Box::new(query.clone()));
+        let mut bind_context = BindContext::new();
+        self.bind_statement(&mut bind_context, &stmt).await
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_table(
         &mut self,
@@ -513,35 +520,40 @@ impl Binder {
         }
 
         // Build table schema
-        let (schema, field_comments, inverted_indexes) = match (&source, &as_query) {
+        let (schema, field_comments, inverted_indexes, as_query_plan) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
-                self.analyze_create_table_schema(source).await?
+                let (schema, field_comments, inverted_indexes) =
+                    self.analyze_create_table_schema(source).await?;
+                (schema, field_comments, inverted_indexes, None)
             }
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
-                let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
+                let as_query_plan = self.as_query_plan(query).await?;
+                let bind_context = as_query_plan.bind_context().unwrap();
                 let fields = bind_context
                     .columns
                     .iter()
                     .map(|column_binding| {
                         Ok(TableField::new(
                             &column_binding.column_name,
-                            infer_schema_type(&column_binding.data_type)?,
+                            create_as_select_infer_schema_type(
+                                &column_binding.data_type,
+                                self.is_column_not_null(),
+                            )?,
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![], None)
+                (schema, vec![], None, Some(Box::new(as_query_plan)))
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
                 let (source_schema, source_comments, inverted_indexes) =
                     self.analyze_create_table_schema(source).await?;
-                let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
+                let as_query_plan = self.as_query_plan(query).await?;
+                let bind_context = as_query_plan.bind_context().unwrap();
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -556,9 +568,20 @@ impl Binder {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
                 Self::validate_create_table_schema(&source_schema)?;
-                (source_schema, source_comments, inverted_indexes)
+                (
+                    source_schema,
+                    source_comments,
+                    inverted_indexes,
+                    Some(Box::new(as_query_plan)),
+                )
             }
             _ => {
+                let as_query_plan = if let Some(query) = as_query {
+                    let as_query_plan = self.as_query_plan(query).await?;
+                    Some(Box::new(as_query_plan))
+                } else {
+                    None
+                };
                 match engine {
                     Engine::Iceberg => {
                         let sp =
@@ -569,7 +592,7 @@ impl Binder {
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
-                        (Arc::new(table_schema), vec![], None)
+                        (Arc::new(table_schema), vec![], None, as_query_plan)
                     }
                     Engine::Delta => {
                         let sp =
@@ -581,7 +604,7 @@ impl Binder {
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
                         engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (Arc::new(table_schema), vec![], None)
+                        (Arc::new(table_schema), vec![], None, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
                         "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
@@ -689,14 +712,7 @@ impl Binder {
             options,
             field_comments,
             cluster_key,
-            as_select: if let Some(query) = as_query {
-                let mut bind_context = BindContext::new();
-                let stmt = Statement::Query(Box::new(*query.clone()));
-                let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
-                Some(Box::new(select_plan))
-            } else {
-                None
-            },
+            as_select: as_query_plan,
             inverted_indexes,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
@@ -1765,4 +1781,18 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         .spawn(verification_task)
         .await
         .expect("join must succeed")
+}
+
+fn create_as_select_infer_schema_type(
+    data_type: &DataType,
+    not_null: bool,
+) -> Result<TableDataType> {
+    use DataType::*;
+
+    match (data_type, not_null) {
+        (Null, _) => Ok(TableDataType::Nullable(Box::new(TableDataType::String))),
+        (dt, true) => infer_schema_type(dt),
+        (Nullable(_), false) => infer_schema_type(data_type),
+        (dt, false) => infer_schema_type(&Nullable(Box::new(dt.clone()))),
+    }
 }

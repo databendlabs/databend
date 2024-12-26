@@ -75,7 +75,7 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
         Ok((select_interpreter, update_stream_meta))
     }

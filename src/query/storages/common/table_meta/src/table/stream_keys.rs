@@ -82,3 +82,18 @@ pub fn get_change_type(table_alias_name: &Option<String>) -> Option<ChangeType> 
     }
     change_type
 }
+
+pub fn is_stream_name(table_name: &str, suffix: &str) -> bool {
+    let parts = table_name.split('$').collect::<Vec<_>>();
+    if parts.len() != 3 || parts[0] != "_change" || parts[2] != suffix || parts[1].len() != 8 {
+        return false;
+    }
+    if let Ok(suffix) = i64::from_str_radix(parts[1], 16) {
+        // 2023-01-01 00:00:00.
+        let base_timestamp = 1672502400;
+        if suffix > base_timestamp {
+            return true;
+        }
+    }
+    false
+}

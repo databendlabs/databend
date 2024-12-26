@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use chrono::Duration;
+use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
@@ -38,6 +39,9 @@ use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -45,7 +49,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
 /// Table option keys that can occur in 'create table statement'.
-pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
     r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
@@ -64,12 +68,35 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
 
     r.insert(OPT_KEY_ENGINE);
 
-    r.insert(OPT_KEY_LOCATION);
     r.insert(OPT_KEY_CONNECTION_NAME);
 
-    r.insert(OPT_KEY_RANDOM_SEED);
-
     r.insert("transient");
+    r.insert(OPT_KEY_TEMP_PREFIX);
+    r
+});
+
+pub static CREATE_LAKE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_ENGINE);
+    r.insert(OPT_KEY_LOCATION);
+    r.insert(OPT_KEY_CONNECTION_NAME);
+    r
+});
+
+pub static CREATE_RANDOM_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_ENGINE);
+    r.insert(OPT_KEY_RANDOM_SEED);
+    r.insert(OPT_KEY_RANDOM_MIN_STRING_LEN);
+    r.insert(OPT_KEY_RANDOM_MAX_STRING_LEN);
+    r.insert(OPT_KEY_RANDOM_MAX_ARRAY_LEN);
+    r
+});
+
+pub static CREATE_MEMORY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_ENGINE);
+    r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r
 });
@@ -85,8 +112,16 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r
 });
 
-pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
-    CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
+pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
+    let opt_key = opt_key.as_ref().to_lowercase();
+    let opt_key = opt_key.as_str();
+    match engine {
+        Engine::Fuse => CREATE_FUSE_OPTIONS.contains(opt_key),
+        Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
+        Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
+        Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
+        Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
+    }
 }
 
 pub fn is_valid_block_per_segment(

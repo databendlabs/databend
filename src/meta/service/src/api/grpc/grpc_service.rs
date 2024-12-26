@@ -57,6 +57,7 @@ use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
+use log::error;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -177,12 +178,8 @@ impl MetaServiceImpl {
                 (endpoint, txn_reply)
             }
             Err(err) => {
-                let txn_reply = TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                };
-                (None, txn_reply)
+                error!("txn request failed: {:?}", err);
+                return Err(Status::internal(err.to_string()));
             }
         };
 
@@ -389,13 +386,26 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
+        let watch = request.into_inner();
+
+        let key_range = watch.key_range().map_err(Status::invalid_argument)?;
+        let flush = watch.initial_flush;
+
         let (tx, rx) = mpsc::channel(4);
 
         let mn = &self.meta_node;
 
-        let sender = mn.add_watcher(request.into_inner(), tx).await?;
-
+        let sender = mn.add_watcher(watch, tx.clone()).await?;
         let stream = WatchStream::new(rx, sender, mn.subscriber_handle.clone());
+
+        if flush {
+            let sm = mn.raft_store.state_machine.clone();
+            {
+                let mut sm = sm.write().await;
+                sm.send_range(tx, key_range).await?;
+            }
+        }
+
         Ok(Response::new(Box::pin(stream) as Self::WatchStream))
     }
 
