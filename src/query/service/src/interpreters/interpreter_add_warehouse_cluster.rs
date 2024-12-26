@@ -49,13 +49,17 @@ impl Interpreter for AddWarehouseClusterInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if let Some(cluster_size) = self.plan.options.get("CLUSTER_SIZE") {
+        if let Some(cluster_size) = self.plan.options.get("cluster_size") {
             if !self.plan.nodes.is_empty() {
-                return Err(ErrorCode::InvalidArgument(format!("")));
+                return Err(ErrorCode::InvalidArgument(
+                    "CLUSTER_SIZE option and node list exists in one query.",
+                ));
             }
 
             let Ok(cluster_size) = cluster_size.parse::<usize>() else {
-                return Err(ErrorCode::InvalidArgument(""));
+                return Err(ErrorCode::InvalidArgument(
+                    "CLUSTER_SIZE must be a <number>",
+                ));
             };
 
             GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
@@ -70,7 +74,7 @@ impl Interpreter for AddWarehouseClusterInterpreter {
         }
 
         if self.plan.nodes.is_empty() {
-            return Err(ErrorCode::InvalidArgument(""));
+            return Err(ErrorCode::InvalidArgument("Cluster nodes list is empty"));
         }
 
         let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());

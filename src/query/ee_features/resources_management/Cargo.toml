@@ -13,6 +13,7 @@ test = true
 [dependencies]
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-types = { workspace = true }

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -101,17 +102,80 @@ impl InterpreterFactory {
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker
-            .check(plan)
-            .await
-            .map_err(|e| match e.code() {
-                ErrorCode::PERMISSION_DENIED => {
-                    error!("Access.denied(v2): {:?}", e);
-                    e
+        access_checker.check(plan).await.inspect_err(|e| {
+            if e.code() == ErrorCode::PERMISSION_DENIED {
+                error!("Access.denied(v2): {:?}", e);
+            }
+        })?;
+
+        Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
+    }
+
+    pub fn get_warehouses_interpreter(
+        ctx: Arc<QueryContext>,
+        plan: &Plan,
+        other: impl FnOnce(Arc<QueryContext>, &Plan) -> Result<InterpreterPtr>,
+    ) -> Result<InterpreterPtr> {
+        match plan {
+            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create()?)),
+            Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::ResumeWarehouse(v) => Ok(Arc::new(ResumeWarehouseInterpreter::try_create(
+                *v.clone(),
+            )?)),
+            Plan::SuspendWarehouse(v) => Ok(Arc::new(SuspendWarehouseInterpreter::try_create(
+                *v.clone(),
+            )?)),
+            Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::InspectWarehouse(v) => Ok(Arc::new(InspectWarehouseInterpreter::try_create(
+                *v.clone(),
+            )?)),
+            Plan::AddWarehouseCluster(v) => Ok(Arc::new(
+                AddWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::DropWarehouseCluster(v) => Ok(Arc::new(
+                DropWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::RenameWarehouseCluster(v) => Ok(Arc::new(
+                RenameWarehouseClusterInterpreter::try_create(*v.clone())?,
+            )),
+            Plan::AssignWarehouseNodes(v) => Ok(Arc::new(
+                AssignWarehouseNodesInterpreter::try_create(*v.clone())?,
+            )),
+            Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
+                DropWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
+            )),
+            Plan::Query { metadata, .. } => {
+                let read_guard = metadata.read();
+                for table in read_guard.tables() {
+                    let db = table.database();
+                    // System library access is secure
+                    if db != "system" && db != "information_schema" && ctx.get_cluster().unassign {
+                        return Err(ErrorCode::InvalidWarehouse(format!(
+                            "Node {} has not been assigned warehouse, please assign to warehouse before executing SQL on this node.",
+                            ctx.get_cluster().local_id
+                        )));
+                    }
                 }
-                _ => e,
-            })?;
-        Self::get_inner(ctx, plan)
+                other(ctx, plan)
+            }
+            _ => match ctx.get_cluster().unassign {
+                true => Err(ErrorCode::InvalidWarehouse(format!(
+                    "Node {} has not been assigned warehouse, please assign to warehouse before executing SQL on this node.",
+                    ctx.get_cluster().local_id
+                ))),
+                false => other(ctx, plan),
+            },
+        }
     }
 
     pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
@@ -643,43 +707,10 @@ impl InterpreterFactory {
             // ctx,
             // p.clone(),
             // )?)),
-            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create()?)),
-            Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
-                ctx,
-                *v.clone(),
-            )?)),
-            Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
-                ctx,
-                *v.clone(),
-            )?)),
-            Plan::ResumeWarehouse(v) => Ok(Arc::new(ResumeWarehouseInterpreter::try_create(
-                *v.clone(),
-            )?)),
-            Plan::SuspendWarehouse(v) => Ok(Arc::new(SuspendWarehouseInterpreter::try_create(
-                *v.clone(),
-            )?)),
-            Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
-                ctx,
-                *v.clone(),
-            )?)),
-            Plan::InspectWarehouse(v) => Ok(Arc::new(InspectWarehouseInterpreter::try_create(
-                *v.clone(),
-            )?)),
-            Plan::AddWarehouseCluster(v) => Ok(Arc::new(
-                AddWarehouseClusterInterpreter::try_create(ctx, *v.clone())?,
-            )),
-            Plan::DropWarehouseCluster(v) => Ok(Arc::new(
-                DropWarehouseClusterInterpreter::try_create(ctx, *v.clone())?,
-            )),
-            Plan::RenameWarehouseCluster(v) => Ok(Arc::new(
-                RenameWarehouseClusterInterpreter::try_create(*v.clone())?,
-            )),
-            Plan::AssignWarehouseNodes(v) => Ok(Arc::new(
-                AssignWarehouseNodesInterpreter::try_create(*v.clone())?,
-            )),
-            Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
-                DropWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
-            )),
+            _ => Err(ErrorCode::Unimplemented(format!(
+                "Unimplemented interpreter for {:?} plan",
+                plan
+            ))),
         }
     }
 }

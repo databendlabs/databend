@@ -49,13 +49,17 @@ impl Interpreter for CreateWarehouseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if let Some(warehouse_size) = self.plan.options.get("WAREHOUSE_SIZE") {
+        if let Some(warehouse_size) = self.plan.options.get("warehouse_size") {
             if !self.plan.nodes.is_empty() {
-                return Err(ErrorCode::InvalidArgument(format!("")));
+                return Err(ErrorCode::InvalidArgument(
+                    "WAREHOUSE_SIZE option and node list exists in one query.",
+                ));
             }
 
             let Ok(warehouse_size) = warehouse_size.parse::<usize>() else {
-                return Err(ErrorCode::InvalidArgument(""));
+                return Err(ErrorCode::InvalidArgument(
+                    "WAREHOUSE_SIZE must be a <number>",
+                ));
             };
 
             GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
@@ -69,7 +73,7 @@ impl Interpreter for CreateWarehouseInterpreter {
         }
 
         if self.plan.nodes.is_empty() {
-            return Err(ErrorCode::InvalidArgument(""));
+            return Err(ErrorCode::InvalidArgument("Warehouse nodes list is empty"));
         }
 
         let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());

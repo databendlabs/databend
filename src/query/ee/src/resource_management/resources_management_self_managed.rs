@@ -13,18 +13,42 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::NodeType;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 pub struct SelfManagedResourcesManagement {}
 
+impl SelfManagedResourcesManagement {
+    pub fn create(cfg: &InnerConfig) -> Result<Arc<dyn ResourcesManagement>> {
+        if cfg.query.cluster_id.is_empty() {
+            return Err(ErrorCode::InvalidConfig(
+                "cluster_id is empty with self-managed resources management",
+            ));
+        }
+
+        Ok(Arc::new(SelfManagedResourcesManagement {}))
+    }
+}
+
 #[async_trait::async_trait]
 impl ResourcesManagement for SelfManagedResourcesManagement {
+    async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
+        let config = GlobalConfig::instance();
+        node.cluster_id = config.query.cluster_id.clone();
+        node.warehouse_id = config.query.cluster_id.clone();
+        node.node_type = NodeType::SelfManaged;
+        Ok(())
+    }
+
     async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented create warehouse with self-managed resources management",

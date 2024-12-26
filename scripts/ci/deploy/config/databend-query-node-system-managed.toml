@@ -32,7 +32,6 @@ flight_sql_handler_host = "0.0.0.0"
 flight_sql_handler_port = flight_sql_port
 
 tenant_id = "test_tenant"
-cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
 default_storage_format = 'parquet'
@@ -52,7 +51,7 @@ name = "ping"
 definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815'"
 
 [query.resources_management]
-type = "system"
+type = "system_managed"
 
 [log]
 

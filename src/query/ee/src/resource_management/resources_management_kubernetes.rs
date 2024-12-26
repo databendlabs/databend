@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,8 +24,20 @@ use databend_enterprise_resources_management::ResourcesManagement;
 
 pub struct KubernetesResourcesManagement {}
 
+impl KubernetesResourcesManagement {
+    pub fn create() -> Result<Arc<dyn ResourcesManagement>> {
+        Ok(Arc::new(KubernetesResourcesManagement {}))
+    }
+}
+
 #[async_trait::async_trait]
 impl ResourcesManagement for KubernetesResourcesManagement {
+    async fn init_node(&self, _: &mut NodeInfo) -> Result<()> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented kubernetes resources management",
+        ))
+    }
+
     async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",

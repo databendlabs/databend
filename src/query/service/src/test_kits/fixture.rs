@@ -272,7 +272,7 @@ impl TestFixture {
 
         let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
             self.default_session.clone(),
-            Cluster::create(nodes, local_id),
+            Cluster::create(false, nodes, local_id),
         )?);
 
         dummy_query_context.get_settings().set_max_threads(8)?;

@@ -4790,6 +4790,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "databend-common-base",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-management",
  "databend-common-meta-types",

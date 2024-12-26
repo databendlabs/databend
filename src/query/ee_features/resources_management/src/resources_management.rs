@@ -15,14 +15,18 @@
 use std::collections::HashMap;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::NodeType;
 
 #[async_trait::async_trait]
 pub trait ResourcesManagement: Sync + Send + 'static {
+    async fn init_node(&self, node: &mut NodeInfo) -> Result<()>;
+
     async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()>;
 
     async fn drop_warehouse(&self, name: String) -> Result<()>;
@@ -70,6 +74,14 @@ pub struct DummyResourcesManagement;
 
 #[async_trait::async_trait]
 impl ResourcesManagement for DummyResourcesManagement {
+    async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
+        let config = GlobalConfig::instance();
+        node.cluster_id = config.query.cluster_id.clone();
+        node.warehouse_id = config.query.cluster_id.clone();
+        node.node_type = NodeType::SelfManaged;
+        Ok(())
+    }
+
     async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }

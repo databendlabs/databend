@@ -43,8 +43,8 @@ use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::NodeType;
 use databend_common_metrics::cluster::*;
+use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -75,7 +75,7 @@ pub struct ClusterDiscovery {
 // avoid leak FlightClient to common-xxx
 #[async_trait::async_trait]
 pub trait ClusterHelper {
-    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
+    fn create(unassign: bool, nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
     fn empty() -> Arc<Cluster>;
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
@@ -93,12 +93,17 @@ pub trait ClusterHelper {
 
 #[async_trait::async_trait]
 impl ClusterHelper for Cluster {
-    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
-        Arc::new(Cluster { local_id, nodes })
+    fn create(unassign: bool, nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
+        Arc::new(Cluster {
+            unassign,
+            local_id,
+            nodes,
+        })
     }
 
     fn empty() -> Arc<Cluster> {
         Arc::new(Cluster {
+            unassign: false,
             local_id: String::from(""),
             nodes: Vec::new(),
         })
@@ -247,11 +252,16 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        match self
-            .warehouse_manager
-            .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
-            .await
-        {
+        let nodes = match config.query.cluster_id.is_empty() {
+            true => self.warehouse_manager.discover(&config.query.node_id).await,
+            false => self
+                .warehouse_manager
+                .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
+                .await
+                .map(|x| (true, x)),
+        };
+
+        match nodes {
             Err(cause) => {
                 metric_incr_cluster_error_count(
                     &self.local_id,
@@ -262,7 +272,7 @@ impl ClusterDiscovery {
                 );
                 Err(cause.add_message_back("(while cluster api get_nodes)."))
             }
-            Ok(cluster_nodes) => {
+            Ok((has_cluster, cluster_nodes)) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
                     if node.id != self.local_id {
@@ -289,8 +299,9 @@ impl ClusterDiscovery {
                     &self.flight_address,
                     cluster_nodes.len() as f64,
                 );
-                let res = Cluster::create(res, self.local_id.clone());
-                *self.cached_cluster.write() = Some(res.clone());
+
+                let res = Cluster::create(!has_cluster, res, self.local_id.clone());
+                // *self.cached_cluster.write() = Some(res.clone());
                 Ok(res)
             }
         }
@@ -434,9 +445,8 @@ impl ClusterDiscovery {
             DATABEND_COMMIT_VERSION.to_string(),
         );
 
-        node_info.cluster_id = self.cluster_id.clone();
-        node_info.warehouse_id = self.cluster_id.clone();
-        node_info.node_type = NodeType::SelfManaged;
+        let resources_management = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+        resources_management.init_node(&mut node_info).await?;
 
         self.drop_invalid_nodes(&node_info).await?;
 

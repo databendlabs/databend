@@ -14,28 +14,50 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
-use databend_common_base::base::GlobalInstance;
-use databend_common_config::InnerConfig;
-use databend_common_exception::ErrorCode;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseApi;
 use databend_common_management::WarehouseInfo;
-use databend_common_management::WarehouseMgr;
-use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::NodeType;
 use databend_enterprise_resources_management::ResourcesManagement;
 
-use crate::resource_management::resources_management_self_managed::SelfManagedResourcesManagement;
-
 pub struct SystemResourcesManagement {
-    warehouse_manager: Arc<dyn WarehouseApi>,
+    pub warehouse_manager: Arc<dyn WarehouseApi>,
+}
+
+impl SystemResourcesManagement {
+    pub fn create(warehouse_mgr: Arc<dyn WarehouseApi>) -> Result<Arc<dyn ResourcesManagement>> {
+        Ok(Arc::new(SystemResourcesManagement {
+            warehouse_manager: warehouse_mgr,
+        }))
+    }
 }
 
 #[async_trait::async_trait]
 impl ResourcesManagement for SystemResourcesManagement {
+    async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
+        let config = GlobalConfig::instance();
+        assert!(config.query.cluster_id.is_empty());
+        assert!(config.query.resources_management.is_some());
+
+        if let Some(resources_management) = &config.query.resources_management {
+            assert_eq!(
+                &resources_management.typ.to_ascii_lowercase(),
+                "system_managed"
+            );
+
+            node.cluster_id = String::new();
+            node.warehouse_id = String::new();
+            node.node_type = NodeType::SystemManaged;
+            node.resource_group = resources_management.resource_group.clone();
+        }
+
+        Ok(())
+    }
+
     async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()> {
         self.warehouse_manager.create_warehouse(name, nodes).await
     }
@@ -110,39 +132,5 @@ impl ResourcesManagement for SystemResourcesManagement {
         self.warehouse_manager
             .unassign_warehouse_nodes(&name, nodes)
             .await
-    }
-}
-
-impl SystemResourcesManagement {
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        if !cfg.query.cluster_id.is_empty() && cfg.query.resources_management.is_some() {
-            return Err(ErrorCode::InvalidConfig("Configuration error, cannot set both cluster_id and resources_management at the same time"));
-        }
-
-        let service: Arc<dyn ResourcesManagement> = match &cfg.query.resources_management {
-            None => Arc::new(SelfManagedResourcesManagement {}),
-            Some(_resources_management) => {
-                let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
-                match meta_api_provider.create_meta_store().await {
-                    Err(cause) => {
-                        return Err(ErrorCode::from(cause)
-                            .add_message_back("(while create resources management)."))
-                    }
-                    Ok(metastore) => {
-                        let tenant_id = &cfg.query.tenant_id;
-                        let lift_time = Duration::from_secs(60);
-                        let warehouse_manager =
-                            WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
-
-                        Arc::new(SystemResourcesManagement {
-                            warehouse_manager: Arc::new(warehouse_manager),
-                        })
-                    }
-                }
-            }
-        };
-
-        GlobalInstance::set(service);
-        Ok(())
     }
 }

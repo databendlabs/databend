@@ -360,7 +360,7 @@ impl WarehouseMgr {
     async fn consistent_warehouse_info(&self, id: &str) -> Result<ConsistentWarehouseInfo> {
         let warehouse_key = format!("{}/{}", self.warehouse_key_prefix, escape_for_key(id)?);
 
-        let nodes_prefix = format!("{}/{}", self.meta_key_prefix, escape_for_key(id)?);
+        let nodes_prefix = format!("{}/{}/", self.meta_key_prefix, escape_for_key(id)?);
 
         'retry: for _idx in 0..64 {
             let Some(before_info) = self.metastore.get_kv(&warehouse_key).await? else {
@@ -376,7 +376,7 @@ impl WarehouseMgr {
             let mut cluster_node_seq = Vec::with_capacity(values.len());
 
             for (node_key, value) in values {
-                let suffix = &node_key[nodes_prefix.len() + 1..];
+                let suffix = &node_key[nodes_prefix.len()..];
 
                 if let Some((_cluster, node)) = suffix.split_once('/') {
                     let node_key = format!("{}/{}", self.node_key_prefix, node);
@@ -894,7 +894,7 @@ impl WarehouseApi for WarehouseMgr {
                     "Cannot resume self-managed warehouse.",
                 )),
                 WarehouseInfo::SystemManaged(warehouse) => {
-                    if warehouse.status != "SUSPEND" {
+                    if warehouse.status.to_uppercase() != "SUSPENDED" {
                         return Err(ErrorCode::InvalidWarehouse(format!(
                             "Cannot resume warehouse {:?}, because warehouse state is not suspend",
                             warehouse
@@ -905,7 +905,7 @@ impl WarehouseApi for WarehouseMgr {
                     need_schedule_cluster = warehouse.clusters.clone();
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                         id: warehouse.id.clone(),
-                        status: "RUNNING".to_string(),
+                        status: "Running".to_string(),
                         display_name: warehouse.display_name,
                         clusters: warehouse.clusters,
                     }))
@@ -1012,13 +1012,13 @@ impl WarehouseApi for WarehouseMgr {
                     "Cannot suspend self-managed warehouse",
                 )),
                 WarehouseInfo::SystemManaged(warehouse) => {
-                    if warehouse.status != "RUNNING" {
-                        return Err(ErrorCode::InvalidWarehouse(format!("Cannot suspend warehouse {:?}, because warehouse state is not running.", warehouse)));
+                    if warehouse.status.to_uppercase() != "RUNNING" {
+                        return Err(ErrorCode::InvalidWarehouse(format!("Cannot suspend warehouse {:?}, because warehouse state is not running.", warehouse.display_name)));
                     }
 
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                         id: warehouse.id.clone(),
-                        status: "RUNNING".to_string(),
+                        status: "Suspended".to_string(),
                         display_name: warehouse.display_name,
                         clusters: warehouse.clusters,
                     }))
@@ -1904,20 +1904,20 @@ impl WarehouseApi for WarehouseMgr {
         warehouse: &str,
         cluster: &str,
     ) -> Result<Vec<NodeInfo>> {
-        let cluster_key = format!(
-            "{}/{}/{}",
+        let cluster_prefix = format!(
+            "{}/{}/{}/",
             self.meta_key_prefix,
             escape_for_key(warehouse)?,
             escape_for_key(cluster)?
         );
 
-        let values = self.metastore.prefix_list_kv(&cluster_key).await?;
+        let values = self.metastore.prefix_list_kv(&cluster_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
-            node_info.id = unescape_for_key(&node_key[cluster_key.len() + 1..])?;
+            node_info.id = unescape_for_key(&node_key[cluster_prefix.len()..])?;
             node_info.cluster_id = cluster.to_string();
             node_info.warehouse_id = warehouse.to_string();
             nodes_info.push(node_info);
@@ -1943,12 +1943,40 @@ impl WarehouseApi for WarehouseMgr {
         Ok(online_nodes)
     }
 
-    async fn get_node_info(&self, node_id: &str) -> Result<NodeInfo> {
+    async fn discover(&self, node_id: &str) -> Result<(bool, Vec<NodeInfo>)> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
-        let node_info = self.metastore.get_kv(&node_key).await?;
-        match node_info {
-            None => Err(ErrorCode::NotFoundClusterNode("")),
-            Some(v) => Ok(serde_json::from_slice(&v.data)?),
+        let Some(seq) = self.metastore.get_kv(&node_key).await? else {
+            return Err(ErrorCode::NotFoundClusterNode(format!(
+                "Node {} is offline, Please restart this node.",
+                node_id
+            )));
+        };
+
+        let self_info = serde_json::from_slice::<NodeInfo>(&seq.data)?;
+
+        if self_info.warehouse_id.is_empty() && self_info.cluster_id.is_empty() {
+            return Ok((false, vec![self_info]));
         }
+
+        let cluster_prefix = format!(
+            "{}/{}/{}/",
+            self.meta_key_prefix,
+            escape_for_key(&self_info.warehouse_id)?,
+            escape_for_key(&self_info.cluster_id)?
+        );
+
+        let values = self.metastore.prefix_list_kv(&cluster_prefix).await?;
+
+        let mut cluster_nodes_info = Vec::with_capacity(values.len());
+        for (node_key, value) in values {
+            let mut cluster_node = serde_json::from_slice::<NodeInfo>(&value.data)?;
+
+            cluster_node.id = unescape_for_key(&node_key[cluster_prefix.len()..])?;
+            cluster_node.cluster_id = self_info.cluster_id.clone();
+            cluster_node.warehouse_id = self_info.warehouse_id.clone();
+            cluster_nodes_info.push(cluster_node);
+        }
+
+        Ok((true, cluster_nodes_info))
     }
 }

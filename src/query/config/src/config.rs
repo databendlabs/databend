@@ -2960,12 +2960,12 @@ pub struct SpillConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct ResourcesManagementConfig {
-    #[clap(long = "type", value_name = "VALUE", default_value = "system")]
+    #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
     #[serde(rename = "type")]
     pub typ: String,
 
     #[clap(long, value_name = "VALUE")]
-    pub instance_type: Option<String>,
+    pub resource_group: Option<String>,
 }
 
 mod cache_config_converters {
