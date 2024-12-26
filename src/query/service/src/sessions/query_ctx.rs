@@ -319,6 +319,11 @@ impl QueryContext {
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
         *self.shared.init_query_id.write() = id;
+        self.shared.had_spill_files.store(false, Ordering::Relaxed);
+    }
+
+    pub fn had_spill_files(&self) -> bool {
+        self.shared.had_spill_files.load(Ordering::Acquire)
     }
 
     pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
@@ -450,6 +455,7 @@ impl QueryContext {
         {
             let mut w = self.shared.spilled_files.write();
             w.clear();
+            self.shared.had_spill_files.store(true, Ordering::Relaxed);
         }
 
         let location_prefix = self.query_tenant_spill_prefix();

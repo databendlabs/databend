@@ -143,6 +143,7 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
 
+    pub(in crate::sessions) had_spill_files: AtomicBool,
     pub(in crate::sessions) spilled_files:
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
 }
@@ -201,6 +202,7 @@ impl QueryContextShared {
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
+            had_spill_files: AtomicBool::new(false),
             spilled_files: Default::default(),
         }))
     }

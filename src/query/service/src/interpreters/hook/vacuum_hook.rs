@@ -45,6 +45,15 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 
         let cluster_nodes = query_ctx.get_cluster().get_nodes().len();
         let query_id = query_ctx.get_id();
+        let current_node_index = query_ctx.get_cluster().ordered_index();
+        let mut nodes: Vec<usize> = (0..cluster_nodes).collect();
+        if !query_ctx.had_spill_files() {
+            nodes.remove(current_node_index);
+        }
+
+        if nodes.is_empty() {
+            return Ok(());
+        }
 
         let abort_checker = query_ctx.clone().get_abort_checker();
         let _ = GlobalIORuntime::instance().block_on(async move {
@@ -52,7 +61,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
                 .do_vacuum_temporary_files(
                     abort_checker,
                     spill_prefix.clone(),
-                    &VacuumTempOptions::QueryHook(cluster_nodes, query_id),
+                    &VacuumTempOptions::QueryHook(nodes, query_id),
                     vacuum_limit as usize,
                 )
                 .await;
