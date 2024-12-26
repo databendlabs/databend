@@ -250,7 +250,7 @@ async fn build_update_table_meta_req(
     let previous = fuse_table.read_table_snapshot().await?;
     let snapshot = snapshot_generator.generate_new_snapshot(
         table.schema().as_ref().clone(),
-        fuse_table.cluster_key_meta.clone(),
+        fuse_table.cluster_key_id(),
         previous,
         Some(fuse_table.table_info.ident.seq),
         txn_mgr,

@@ -14,8 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -52,12 +58,36 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let table = catalog
             .get_table(&tenant, &plan.database, &plan.table)
             .await?;
+        // check mutability
+        table.check_mutable()?;
 
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
+        // if new cluster_key_str is the same with old one,
+        // no need to change
+        if let Some(old_cluster_key_str) = fuse_table.cluster_key_str()
+            && *old_cluster_key_str == cluster_key_str
+        {
+            let old_cluster_type = fuse_table.cluster_type();
+            if old_cluster_type.is_some_and(|v| v.to_string().to_lowercase() == plan.cluster_type) {
+                return Ok(PipelineBuildResult::create());
+            }
+        }
 
-        table
-            .alter_table_cluster_keys(self.ctx.clone(), cluster_key_str, plan.cluster_type.clone())
-            .await?;
+        let table_info = fuse_table.get_table_info();
+        let mut new_table_meta = table_info.meta.clone();
+        new_table_meta
+            .options
+            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
+        new_table_meta.default_cluster_key = Some(cluster_key_str);
+        new_table_meta.default_cluster_key_id += 1;
+
+        let req = UpdateTableMetaReq {
+            table_id: table_info.ident.table_id,
+            seq: MatchSeq::Exact(table_info.ident.seq),
+            new_table_meta,
+        };
+        catalog.update_single_table_meta(req, table_info).await?;
 
         Ok(PipelineBuildResult::create())
     }
