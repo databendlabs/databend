@@ -125,4 +125,35 @@ statement error 3130
 drop procedure not_exists_p();
 
 statement ok
+drop procedure if exists sum_even_numbers(Int, Int);
+
+statement ok
+CREATE PROCEDURE sum_even_numbers(start_val Int, end_val Int)
+RETURNS UInt8 NOT NULL
+LANGUAGE SQL
+COMMENT='Calculate the sum of all even numbers'
+AS $$
+BEGIN
+    LET sum := 0;
+    FOR i IN start_val TO end_val DO
+        IF i % 2 = 0 THEN
+            sum := sum + i;
+        END IF;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement error 3130
+call procedure sum_even_numbers(1, 2)
+
+query T
+call procedure sum_even_numbers(1::INT, 2::INT)
+----
+2
+
+statement ok
+drop procedure sum_even_numbers(Int, Int);
+
+statement ok
 unset global enable_experimental_procedure;
