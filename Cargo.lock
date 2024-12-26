@@ -2991,7 +2991,7 @@ version = "0.0.4"
 dependencies = [
  "criterion",
  "derive-visitor",
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "ethnum",
  "fast-float2",
  "fastrace",
@@ -3224,7 +3224,7 @@ dependencies = [
 name = "databend-common-datavalues"
 version = "0.1.0"
 dependencies = [
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "enum_dispatch",
  "serde",
  "serde_json",
@@ -3294,7 +3294,7 @@ dependencies = [
  "databend-common-io",
  "educe 0.4.23",
  "either",
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "ethnum",
  "futures",
  "geo",
@@ -4029,7 +4029,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "derive-visitor",
  "educe 0.4.23",
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "fastrace",
  "globiter",
  "indexmap 2.6.0",
@@ -4175,7 +4175,7 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "fastrace",
  "futures",
  "futures-util",
@@ -4460,7 +4460,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "futures",
  "log",
  "opendal",
@@ -5270,7 +5270,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-native",
  "databend-common-storage",
- "enum-as-inner 0.5.1",
+ "enum-as-inner",
  "log",
  "parquet",
  "rmp-serde",
@@ -5850,18 +5850,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06c36cb11dbde389f4096111698d8b567c0720e3452fd5ac3e6b4e47e1939932"
 dependencies = [
  "thiserror",
-]
-
-[[package]]
-name = "enum-as-inner"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9720bba047d567ffc8a3cba48bf19126600e249ab7f128e9233e6376976a116"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -7958,7 +7946,7 @@ dependencies = [
  "async-trait",
  "cfg-if",
  "data-encoding",
- "enum-as-inner 0.6.0",
+ "enum-as-inner",
  "futures-channel",
  "futures-io",
  "futures-util",
@@ -11526,7 +11514,7 @@ dependencies = [
  "color-eyre",
  "colorchoice-clap",
  "csv",
- "enum-as-inner 0.6.0",
+ "enum-as-inner",
  "env_logger 0.10.2",
  "itertools 0.12.1",
  "log",
@@ -11554,7 +11542,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c98923b046bc48046e3846b14a5fde5a059f681c7c367bd0ab96ebd3ecc33a71"
 dependencies = [
  "anyhow",
- "enum-as-inner 0.6.0",
+ "enum-as-inner",
  "semver",
  "serde",
  "strum 0.26.3",

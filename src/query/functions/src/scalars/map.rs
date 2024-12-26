@@ -590,7 +590,7 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
 fn check_valid_map_key_type(key_type: &DataType) -> bool {
     key_type.is_boolean()
         || key_type.is_string()
-        || key_type.is_numeric()
+        || key_type.is_number()
         || key_type.is_decimal()
         || key_type.is_date_or_date_time()
 }
