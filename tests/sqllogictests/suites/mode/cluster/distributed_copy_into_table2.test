@@ -23,7 +23,7 @@ statement ok
 create table products (id int not null, name string not null, description string not null);
 
 statement ok
-create table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
+create table table_random(a int not null,b string not null,c string not null) ENGINE = Random min_string_len = 1;
 
 statement ok
 copy into @s3 from (select a,b,c from table_random limit 10);

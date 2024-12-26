@@ -4578,6 +4578,442 @@ Query {
 
 
 ---------- Input ----------
+select * from (
+        (SELECT f, g FROM union_fuzz_result1
+        EXCEPT
+        SELECT f, g FROM union_fuzz_result2)
+        UNION ALL
+        (SELECT f, g FROM union_fuzz_result2
+        EXCEPT
+        SELECT f, g FROM union_fuzz_result1)
+)
+---------- Output ---------
+SELECT * FROM ((SELECT f, g FROM union_fuzz_result1 EXCEPT SELECT f, g FROM union_fuzz_result2) UNION ALL (SELECT f, g FROM union_fuzz_result2 EXCEPT SELECT f, g FROM union_fuzz_result1))
+---------- AST ------------
+Query {
+    span: Some(
+        0..245,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..245,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..245,
+                    ),
+                    lateral: false,
+                    subquery: Query {
+                        span: Some(
+                            129..138,
+                        ),
+                        with: None,
+                        body: SetOperation(
+                            SetOperation {
+                                span: Some(
+                                    129..138,
+                                ),
+                                op: Union,
+                                all: true,
+                                left: SetOperation(
+                                    SetOperation {
+                                        span: Some(
+                                            69..75,
+                                        ),
+                                        op: Except,
+                                        all: false,
+                                        left: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    25..60,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                32..33,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            32..33,
+                                                                        ),
+                                                                        name: "f",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                35..36,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            35..36,
+                                                                        ),
+                                                                        name: "g",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                ],
+                                                from: [
+                                                    Table {
+                                                        span: Some(
+                                                            42..60,
+                                                        ),
+                                                        catalog: None,
+                                                        database: None,
+                                                        table: Identifier {
+                                                            span: Some(
+                                                                42..60,
+                                                            ),
+                                                            name: "union_fuzz_result1",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        alias: None,
+                                                        temporal: None,
+                                                        with_options: None,
+                                                        pivot: None,
+                                                        unpivot: None,
+                                                        sample: None,
+                                                    },
+                                                ],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
+                                            },
+                                        ),
+                                        right: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    84..119,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                91..92,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            91..92,
+                                                                        ),
+                                                                        name: "f",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                94..95,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            94..95,
+                                                                        ),
+                                                                        name: "g",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                ],
+                                                from: [
+                                                    Table {
+                                                        span: Some(
+                                                            101..119,
+                                                        ),
+                                                        catalog: None,
+                                                        database: None,
+                                                        table: Identifier {
+                                                            span: Some(
+                                                                101..119,
+                                                            ),
+                                                            name: "union_fuzz_result2",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        alias: None,
+                                                        temporal: None,
+                                                        with_options: None,
+                                                        pivot: None,
+                                                        unpivot: None,
+                                                        sample: None,
+                                                    },
+                                                ],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                right: SetOperation(
+                                    SetOperation {
+                                        span: Some(
+                                            192..198,
+                                        ),
+                                        op: Except,
+                                        all: false,
+                                        left: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    148..183,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                155..156,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            155..156,
+                                                                        ),
+                                                                        name: "f",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                158..159,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            158..159,
+                                                                        ),
+                                                                        name: "g",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                ],
+                                                from: [
+                                                    Table {
+                                                        span: Some(
+                                                            165..183,
+                                                        ),
+                                                        catalog: None,
+                                                        database: None,
+                                                        table: Identifier {
+                                                            span: Some(
+                                                                165..183,
+                                                            ),
+                                                            name: "union_fuzz_result2",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        alias: None,
+                                                        temporal: None,
+                                                        with_options: None,
+                                                        pivot: None,
+                                                        unpivot: None,
+                                                        sample: None,
+                                                    },
+                                                ],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
+                                            },
+                                        ),
+                                        right: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    207..242,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                214..215,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            214..215,
+                                                                        ),
+                                                                        name: "f",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                217..218,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            217..218,
+                                                                        ),
+                                                                        name: "g",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                ],
+                                                from: [
+                                                    Table {
+                                                        span: Some(
+                                                            224..242,
+                                                        ),
+                                                        catalog: None,
+                                                        database: None,
+                                                        table: Identifier {
+                                                            span: Some(
+                                                                224..242,
+                                                            ),
+                                                            name: "union_fuzz_result1",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        alias: None,
+                                                        temporal: None,
+                                                        with_options: None,
+                                                        pivot: None,
+                                                        unpivot: None,
+                                                        sample: None,
+                                                    },
+                                                ],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from t1 union select * from t2 intersect select * from t3
 ---------- Output ---------
 SELECT * FROM t1 UNION SELECT * FROM t2 INTERSECT SELECT * FROM t3
@@ -4751,6 +5187,191 @@ Query {
                             qualify: None,
                         },
                     ),
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+(select * from t1 union select * from t2) intersect select * from t3
+---------- Output ---------
+(SELECT * FROM t1 UNION SELECT * FROM t2) INTERSECT SELECT * FROM t3
+---------- AST ------------
+Query {
+    span: Some(
+        42..51,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                42..51,
+            ),
+            op: Intersect,
+            all: false,
+            left: SetOperation(
+                SetOperation {
+                    span: Some(
+                        18..23,
+                    ),
+                    op: Union,
+                    all: false,
+                    left: Select(
+                        SelectStmt {
+                            span: Some(
+                                1..17,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                StarColumns {
+                                    qualified: [
+                                        Star(
+                                            Some(
+                                                8..9,
+                                            ),
+                                        ),
+                                    ],
+                                    column_filter: None,
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        15..17,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            15..17,
+                                        ),
+                                        name: "t1",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    right: Select(
+                        SelectStmt {
+                            span: Some(
+                                24..40,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                StarColumns {
+                                    qualified: [
+                                        Star(
+                                            Some(
+                                                31..32,
+                                            ),
+                                        ),
+                                    ],
+                                    column_filter: None,
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        38..40,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            38..40,
+                                        ),
+                                        name: "t2",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: Some(
+                        52..68,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        59..60,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                66..68,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    66..68,
+                                ),
+                                name: "t3",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
                 },
             ),
         },

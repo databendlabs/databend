@@ -41,6 +41,7 @@ pub struct UnionAll {
     // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
     // The `cte_scan_names` are `m` and `f`
     pub cte_scan_names: Vec<String>,
+    pub output_indexes: Vec<IndexType>,
 }
 
 impl UnionAll {
@@ -97,12 +98,7 @@ impl Operator for UnionAll {
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
         // Derive output columns
-        let mut output_columns = left_prop.output_columns.clone();
-        output_columns = output_columns
-            .union(&right_prop.output_columns)
-            .cloned()
-            .collect();
-
+        let output_columns = self.output_indexes.iter().cloned().collect();
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
         outer_columns = outer_columns
