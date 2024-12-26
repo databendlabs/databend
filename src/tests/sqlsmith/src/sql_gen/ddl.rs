@@ -63,9 +63,14 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
     TypeName::Geography,
 ];
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_base_tables(&mut self) -> Vec<(DropTableStmt, CreateTableStmt)> {
         let mut tables = Vec::with_capacity(BASE_TABLE_NAMES.len());
+
+        let mut table_options = BTreeMap::new();
+        if self.rng.gen_bool(0.3) {
+            table_options.insert("storage_format".to_string(), "native".to_string());
+        }
         for table_name in BASE_TABLE_NAMES {
             let source = self.gen_table_source();
 
@@ -76,6 +81,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 table: Identifier::from_name(None, table_name),
                 all: false,
             };
+
             let create_table = CreateTableStmt {
                 create_option: CreateOption::CreateIfNotExists,
                 catalog: None,
@@ -85,7 +91,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 engine: Some(Engine::Fuse),
                 uri_location: None,
                 cluster_by: None,
-                table_options: BTreeMap::new(),
+                table_options: table_options.clone(),
                 as_query: None,
                 table_type: TableType::Normal,
             };
@@ -295,5 +301,9 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             value: Literal::Null,
         },
         TypeName::NotNull(box ty) => gen_default_expr(ty),
+        TypeName::Interval => Expr::Literal {
+            span: None,
+            value: Literal::String("1 month 1 hour".to_string()),
+        },
     }
 }

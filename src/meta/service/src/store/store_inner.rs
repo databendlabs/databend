@@ -108,6 +108,7 @@ impl RaftStoreInner {
         info!("RaftLog opened at: {}", raft_log_config.dir);
 
         let state = log.log_state();
+        info!("log_state: {:?}", state);
         let stored_node_id = state.user_data.as_ref().and_then(|x| x.node_id);
 
         let is_open = stored_node_id.is_some();

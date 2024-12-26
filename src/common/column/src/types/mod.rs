@@ -85,8 +85,8 @@ pub enum PrimitiveType {
     Float64,
     /// Two i32 representing days and ms
     DaysMs,
-    /// months_days_ns(i32, i32, i64)
-    MonthDayNano,
+    /// months_days_micros(i32, i32, i64)
+    MonthDayMicros,
 }
 
 mod private {
@@ -114,6 +114,6 @@ mod private {
     impl Sealed for OrderedFloat<f32> {}
     impl Sealed for OrderedFloat<f64> {}
     impl Sealed for super::days_ms {}
-    impl Sealed for super::months_days_ns {}
+    impl Sealed for super::months_days_micros {}
     impl Sealed for View {}
 }

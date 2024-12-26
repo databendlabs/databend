@@ -26,7 +26,7 @@ pub struct DisplayJWTClaims<'a, T> {
     claims: &'a JWTClaims<T>,
 }
 
-impl<'a, T> fmt::Display for DisplayJWTClaims<'a, T>
+impl<T> fmt::Display for DisplayJWTClaims<'_, T>
 where T: fmt::Display
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

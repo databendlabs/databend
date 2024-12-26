@@ -42,3 +42,18 @@ delete from student
 
 statement error (?s)1025,.*Unknown table `default`\.`default`\.student \.
 select * from student
+
+# ISSUE 17094
+statement ok
+CREATE OR REPLACE TABLE T_17094 (City VARCHAR(255), Temperature DECIMAL(10, 2))
+
+statement ok
+alter table T_17094 cluster by(City)
+
+query TTIIT
+select cluster_key, type, total_block_count, constant_block_count, block_depth_histogram  from clustering_information('default','T_17094')
+----
+(City) linear 0 0 {}
+
+statement ok
+drop table T_17094 all

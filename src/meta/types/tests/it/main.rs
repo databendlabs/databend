@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 mod cluster;
+mod txn_serde;
 
 #[test]
 fn test_bin_commit_version() -> anyhow::Result<()> {

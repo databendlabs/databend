@@ -12,11 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::sys_data::SysData;
+use std::fmt::Debug;
 
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::sys_data::SysData;
+use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
+use tokio::sync::mpsc;
+use tonic::Status;
+
+use crate::leveled_store::map_api::IOResultStream;
 use crate::leveled_store::map_api::MapApi;
 use crate::state_machine::ExpireKey;
-use crate::state_machine::StateMachineSubscriber;
+
+/// Send a key-value change event to subscribers.
+pub trait SMEventSender: Debug + Sync + Send {
+    fn send(&self, change: Change<Vec<u8>, String>);
+
+    /// Inform to send all items in `strm` to `tx`.
+    ///
+    /// All event must be sent by the event dispatcher in order to keep the order.
+    fn send_batch(
+        &self,
+        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+        strm: IOResultStream<(String, SeqV)>,
+    );
+}
 
 /// The API a state machine implements
 pub trait StateMachineApi: Send + Sync {
@@ -34,5 +55,5 @@ pub trait StateMachineApi: Send + Sync {
 
     fn sys_data_mut(&mut self) -> &mut SysData;
 
-    fn get_subscriber(&self) -> Option<&dyn StateMachineSubscriber>;
+    fn event_sender(&self) -> Option<&dyn SMEventSender>;
 }

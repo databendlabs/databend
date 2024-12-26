@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::ready;
 use std::io;
 use std::time::Duration;
 
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
+use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
-use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
 use databend_common_meta_types::AppliedState;
@@ -49,9 +52,12 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
+use futures_util::future::BoxFuture;
+use futures_util::StreamExt;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use num::FromPrimitive;
 
 use crate::state_machine_api::StateMachineApi;
@@ -119,9 +125,9 @@ where SM: StateMachineApi + 'static
         };
 
         // Send queued change events to subscriber
-        if let Some(subscriber) = self.sm.get_subscriber() {
+        if let Some(sender) = self.sm.event_sender() {
             for event in self.changes.drain(..) {
-                subscriber.kv_changed(event);
+                sender.send(event);
             }
         }
 
@@ -244,19 +250,39 @@ where SM: StateMachineApi + 'static
     pub(crate) async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
         debug!(txn :% =(req); "apply txn cmd");
 
+        // 1. Evaluate conditional operations one by one.
+        //    Once one of them is successful, execute the corresponding operations and retrun.
+        //    Otherwise, try next.
+        for (i, conditional) in req.operations.iter().enumerate() {
+            let success = if let Some(predicate) = &conditional.predicate {
+                self.eval_bool_expression(predicate).await?
+            } else {
+                true
+            };
+
+            if success {
+                let mut resp: TxnReply = TxnReply::new(format!("operation:{i}"));
+
+                for op in &conditional.operations {
+                    self.txn_execute_operation(op, &mut resp).await?;
+                }
+
+                return Ok(AppliedState::TxnReply(resp));
+            }
+        }
+
+        // 2. For backward compatibility, evaluate the `condition` as the last conditional-operation.
+        //    If success, execute the `if_then` operations
+
         let success = self.eval_txn_conditions(&req.condition).await?;
 
-        let ops = if success {
-            &req.if_then
+        let (ops, path) = if success {
+            (&req.if_then, "then")
         } else {
-            &req.else_then
+            (&req.else_then, "else")
         };
 
-        let mut resp: TxnReply = TxnReply {
-            success,
-            error: "".to_string(),
-            responses: vec![],
-        };
+        let mut resp: TxnReply = TxnReply::new(path);
 
         for op in ops {
             self.txn_execute_operation(op, &mut resp).await?;
@@ -281,6 +307,47 @@ where SM: StateMachineApi + 'static
         Ok(true)
     }
 
+    fn eval_bool_expression<'x>(
+        &'x mut self,
+        tree: &'x BooleanExpression,
+    ) -> BoxFuture<'x, Result<bool, io::Error>> {
+        let op = tree.operator();
+
+        let fu = async move {
+            match op {
+                CombiningOperator::And => {
+                    for expr in tree.sub_expressions.iter() {
+                        if !self.eval_bool_expression(expr).await? {
+                            return Ok(false);
+                        }
+                    }
+
+                    for cond in tree.conditions.iter() {
+                        if !self.eval_one_condition(cond).await? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                CombiningOperator::Or => {
+                    for expr in tree.sub_expressions.iter() {
+                        if self.eval_bool_expression(expr).await? {
+                            return Ok(true);
+                        }
+                    }
+
+                    for cond in tree.conditions.iter() {
+                        if self.eval_one_condition(cond).await? {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+            Ok(true)
+        };
+
+        Box::pin(fu)
+    }
+
     #[fastrace::trace]
     async fn eval_one_condition(&self, cond: &TxnCondition) -> Result<bool, io::Error> {
         debug!(cond :% =(cond); "txn_execute_one_condition");
@@ -299,48 +366,52 @@ where SM: StateMachineApi + 'static
             seqv.value()
         );
 
-        let target = if let Some(target) = &cond.target {
-            target
-        } else {
+        let op = FromPrimitive::from_i32(cond.expected);
+        let Some(op) = op else {
+            warn!(
+                "Invalid condition: {}; TxnCondition: {}",
+                cond.expected, cond
+            );
             return Ok(false);
         };
 
-        let positive = match target {
-            txn_condition::Target::Seq(right) => {
-                Self::eval_seq_condition(seqv.seq(), cond.expected, right)
-            }
-            txn_condition::Target::Value(right) => {
-                if let Some(v) = seqv.value() {
-                    Self::eval_value_condition(v, cond.expected, right)
+        let Some(against) = &cond.target else {
+            return Ok(false);
+        };
+
+        let positive = match against {
+            Target::Seq(against_seq) => Self::eval_compare(seqv.seq(), op, *against_seq),
+            Target::Value(against_value) => {
+                if let Some(stored) = seqv.value() {
+                    Self::eval_compare(stored, op, against_value)
                 } else {
                     false
                 }
+            }
+            Target::KeysWithPrefix(against_n) => {
+                let against_n = *against_n;
+
+                let strm = self.sm.list_kv(key).await?;
+                // Taking at most `against_n + 1` keys is just enough for every predicate.
+                let strm = strm.take((against_n + 1) as usize);
+                let count: u64 = strm.try_fold(0, |acc, _| ready(Ok(acc + 1))).await?;
+
+                Self::eval_compare(count, op, against_n)
             }
         };
         Ok(positive)
     }
 
-    fn eval_seq_condition(left: u64, op: i32, right: &u64) -> bool {
-        match FromPrimitive::from_i32(op) {
-            Some(ConditionResult::Eq) => left == *right,
-            Some(ConditionResult::Gt) => left > *right,
-            Some(ConditionResult::Lt) => left < *right,
-            Some(ConditionResult::Ne) => left != *right,
-            Some(ConditionResult::Ge) => left >= *right,
-            Some(ConditionResult::Le) => left <= *right,
-            _ => false,
-        }
-    }
-
-    fn eval_value_condition(left: &Vec<u8>, op: i32, right: &Vec<u8>) -> bool {
-        match FromPrimitive::from_i32(op) {
-            Some(ConditionResult::Eq) => left == right,
-            Some(ConditionResult::Gt) => left > right,
-            Some(ConditionResult::Lt) => left < right,
-            Some(ConditionResult::Ne) => left != right,
-            Some(ConditionResult::Ge) => left >= right,
-            Some(ConditionResult::Le) => left <= right,
-            _ => false,
+    fn eval_compare<T>(left: T, op: ConditionResult, right: T) -> bool
+    where T: PartialOrd + PartialEq {
+        use ConditionResult::*;
+        match op {
+            Eq => left == right,
+            Gt => left > right,
+            Lt => left < right,
+            Ne => left != right,
+            Ge => left >= right,
+            Le => left <= right,
         }
     }
 

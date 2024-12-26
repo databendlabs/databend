@@ -199,12 +199,11 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             )
             .await;
         assert!(res3.is_err());
-        assert!(
-            res3.err()
-                .unwrap()
-                .to_string()
-                .contains("could not decode token from all available jwt key stores")
-        );
+        assert!(res3
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("could not decode token from all available jwt key stores"));
     }
 
     Ok(())
@@ -260,12 +259,11 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .await;
         assert!(res.is_err());
 
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("missing field `subject` in jwt")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("missing field `subject` in jwt"));
     }
 
     // without custom claims
@@ -284,12 +282,11 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             )
             .await;
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .message()
-                .contains("User 'test'@'%' does not exist")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .message()
+            .contains("User 'test'@'%' does not exist"));
     }
 
     // with custom claims
@@ -310,12 +307,11 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             )
             .await;
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .message()
-                .contains("User 'test'@'%' does not exist")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .message()
+            .contains("User 'test'@'%' does not exist"));
     }
 
     // with create user
@@ -496,12 +492,11 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             )
             .await;
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("missing field `subject` in jwt")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("missing field `subject` in jwt"));
     }
 
     // without custom claims
@@ -520,12 +515,11 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             )
             .await;
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .message()
-                .contains("User 'test'@'%' does not exist")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .message()
+            .contains("User 'test'@'%' does not exist"));
     }
 
     // with custom claims
@@ -546,12 +540,11 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             )
             .await;
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .message()
-                .contains("User 'test'@'%' does not exist")
-        );
+        assert!(res
+            .err()
+            .unwrap()
+            .message()
+            .contains("User 'test'@'%' does not exist"));
     }
 
     // with create user

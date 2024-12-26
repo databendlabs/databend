@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -64,15 +66,15 @@ async fn test_watch_main(
 
     loop {
         if let Ok(Some(resp)) = watch_stream.message().await {
-            if let Some(event) = resp.event {
-                assert!(!watch_events.is_empty());
+            let event = resp.event.unwrap();
 
-                assert_eq!(watch_events.first(), Some(&event));
-                watch_events.remove(0);
+            assert!(!watch_events.is_empty());
 
-                if watch_events.is_empty() {
-                    break;
-                }
+            let want = watch_events.remove(0);
+            assert_eq!(want, event);
+
+            if watch_events.is_empty() {
+                break;
             }
         }
     }
@@ -116,6 +118,44 @@ async fn test_watch_txn_main(
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
+async fn test_watch_single_key() -> anyhow::Result<()> {
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
+
+    let seq: u64 = 1;
+
+    let watch = WatchRequest {
+        key: s("a"),
+        key_end: None,
+        filter_type: FilterType::All.into(),
+        initial_flush: false,
+    };
+
+    let key_a = s("a");
+    let val_a = b("a");
+
+    let watch_events = vec![
+        // set a->a
+        Event {
+            key: key_a.clone(),
+            current: Some(SeqV::new(seq, val_a.clone())),
+            prev: None,
+        },
+    ];
+
+    let updates = vec![UpsertKV::new(
+        "a",
+        MatchSeq::GE(0),
+        Operation::Update(val_a),
+        None,
+    )];
+
+    test_watch_main(addr.clone(), watch, watch_events, updates).await?;
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
@@ -131,6 +171,7 @@ async fn test_watch() -> anyhow::Result<()> {
             key: "a".to_string(),
             key_end: Some("z".to_string()),
             filter_type: FilterType::All.into(),
+            initial_flush: false,
         };
 
         let key_a = s("a");
@@ -189,6 +230,7 @@ async fn test_watch() -> anyhow::Result<()> {
             key_end: None,
             // filter only delete events
             filter_type: FilterType::Delete.into(),
+            initial_flush: false,
         };
 
         let key = s(key_str);
@@ -252,6 +294,7 @@ async fn test_watch() -> anyhow::Result<()> {
             key: start,
             key_end: Some(end),
             filter_type: FilterType::All.into(),
+            initial_flush: false,
         };
 
         let conditions = vec![TxnCondition {
@@ -270,13 +313,7 @@ async fn test_watch() -> anyhow::Result<()> {
             },
         ];
 
-        let else_then: Vec<TxnOp> = vec![];
-
-        let txn = TxnRequest {
-            condition: conditions,
-            if_then,
-            else_then,
-        };
+        let txn = TxnRequest::new(conditions, if_then);
 
         seq = 7;
 
@@ -306,57 +343,113 @@ async fn test_watch() -> anyhow::Result<()> {
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
+async fn test_watch_initial_flush() -> anyhow::Result<()> {
+    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let updates = vec![
+        UpsertKV::update("a", b"a"),
+        UpsertKV::update("b", b"b"),
+        UpsertKV::update("c", b"c"),
+        UpsertKV::update("d", b"d"),
+        UpsertKV::update("z", b"z"),
+    ];
+
+    let client = tc.grpc_client().await?;
+    for update in updates.iter() {
+        client.upsert_kv(update.clone()).await?;
+    }
+
+    let mut strm = {
+        let watch = WatchRequest {
+            key: s("a"),
+            key_end: Some(s("e")),
+            filter_type: FilterType::All.into(),
+            initial_flush: true,
+        };
+        client.request(watch).await?
+    };
+
+    let cache = Arc::new(Mutex::new(BTreeMap::new()));
+
+    let c = cache.clone();
+    let cache_updater = async move {
+        while let Ok(Some(resp)) = strm.message().await {
+            let event = resp.event.unwrap();
+
+            let mut cache = c.lock().unwrap();
+            if let Some(value) = event.current {
+                cache.insert(event.key, value);
+            } else {
+                cache.remove(&event.key);
+            }
+        }
+    };
+
+    let _h = databend_common_base::runtime::spawn(cache_updater);
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let keys = {
+        let cache = cache.lock().unwrap();
+        cache.keys().cloned().collect::<Vec<_>>()
+    };
+
+    assert_eq!(vec![s("a"), s("b"), s("c"), s("d")], keys);
+
+    client.upsert_kv(UpsertKV::update("a", b"a2")).await?;
+    client.upsert_kv(UpsertKV::delete("c")).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let values = {
+        let cache = cache.lock().unwrap();
+        cache
+            .values()
+            .map(|seqv| seqv.data.clone())
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(vec![b("a2"), b("b"), b("d")], values);
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
 async fn test_watch_expired_events() -> anyhow::Result<()> {
     // Test events emitted when cleaning expired key:
     // - Before applying, 32 expired keys will be cleaned.
     // - When applying, touched expired keys will be cleaned.
 
+    fn sec(x: u64) -> Duration {
+        Duration::from_secs(x)
+    }
+
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let watch_prefix = "w_";
     let now_sec = now();
-    let expire = now_sec + 11;
-    // dbg!(now_sec, expire);
 
     info!("--- prepare data that are gonna expire");
     {
         let client = make_client(&addr)?;
 
-        let mut txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![],
-            else_then: vec![],
-        };
+        let mut txn = TxnRequest::new(vec![], vec![]);
 
         // Every apply() will clean all expired keys.
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             txn.if_then
-                .push(TxnOp::put_with_ttl(&k, b(&k), Some(Duration::from_secs(1))));
+                .push(TxnOp::put_with_ttl(&k, b(&k), Some(sec(1))));
         }
 
         // Expired key won't be cleaned when they are read, although read returns None.
 
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b1",
-            b("w_b1"),
-            Some(Duration::from_secs(6)),
-        ));
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b2",
-            b("w_b2"),
-            Some(Duration::from_secs(6)),
-        ));
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b3a",
-            b("w_b3a"),
-            Some(Duration::from_secs(6)),
-        ));
-        txn.if_then.push(TxnOp::put_with_ttl(
-            "w_b3b",
-            b("w_b3b"),
-            Some(Duration::from_secs(11)),
-        ));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b1", b("w_b1"), Some(sec(6))));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b2", b("w_b2"), Some(sec(6))));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b3a", b("w_b3a"), Some(sec(6))));
+        txn.if_then
+            .push(TxnOp::put_with_ttl("w_b3b", b("w_b3b"), Some(sec(15))));
 
         client.transaction(txn).await?;
     }
@@ -369,28 +462,25 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
             key: start,
             key_end: Some(end),
             filter_type: FilterType::All.into(),
+            initial_flush: false,
         };
         watch_client.request(watch).await?
     };
 
-    info!("--- sleep {} for expiration", expire - now_sec);
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    info!("--- sleep 10 for expiration");
+    tokio::time::sleep(sec(10)).await;
 
     info!("--- apply another txn in another thread to override keys");
     {
-        let txn = TxnRequest {
-            condition: vec![],
-            if_then: vec![
-                TxnOp::put("w_b1", b("w_b1_override")),
-                TxnOp::delete("w_b2"),
-                TxnOp {
-                    request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
-                        prefix: s("w_b3"),
-                    })),
-                },
-            ],
-            else_then: vec![],
-        };
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put("w_b1", b("w_b1_override")),
+            TxnOp::delete("w_b2"),
+            TxnOp {
+                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                    prefix: s("w_b3"),
+                })),
+            },
+        ]);
 
         let client = make_client(&addr)?;
         let _h = databend_common_base::runtime::spawn(async move {
@@ -430,20 +520,20 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
                 "w_b3b",
                 seq + 3,
                 "w_b3b",
-                Some(KvMeta::new_expire(now_sec + 16)),
+                Some(KvMeta::new_expire(now_sec + 15)),
             ), // expired
         ];
 
-        // remove the millisecond part of expire_at
+        // The evaluated expire_at could not equal to the real expire_at, so we need to tidy the expire_at.
         fn tidy(mut ev: Event) -> Event {
             if let Some(ref mut prev) = ev.prev {
                 if let Some(ref mut meta) = prev.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 1000 * 1000);
+                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
                 }
             }
             if let Some(ref mut current) = ev.current {
                 if let Some(ref mut meta) = current.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 1000 * 1000);
+                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
                 }
             }
             ev
@@ -469,6 +559,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         key: "a".to_string(),
         key_end: Some("z".to_string()),
         filter_type: FilterType::All.into(),
+        initial_flush: false,
     };
 
     let client1 = make_client(&addr)?;
@@ -476,19 +567,14 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().map(|x| x.get_meta_node()).unwrap();
 
-    let watcher_count = Arc::new(std::sync::Mutex::new(0usize));
-
     info!("one watcher");
     {
-        let cnt = watcher_count.clone();
+        let got = mn
+            .subscriber_handle
+            .request_blocking(move |d| d.watch_senders().len())
+            .await?;
 
-        mn.dispatcher_handle
-            .request_blocking(move |d| {
-                *cnt.lock().unwrap() = d.watchers().count();
-            })
-            .await;
-
-        assert_eq!(1, *watcher_count.lock().unwrap());
+        assert_eq!(1, got);
     }
 
     info!("second watcher");
@@ -496,15 +582,12 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         let client2 = make_client(&addr)?;
         let _watch_stream2 = client2.request(watch_req()).await?;
 
-        let cnt = watcher_count.clone();
+        let got = mn
+            .subscriber_handle
+            .request_blocking(move |d| d.watch_senders().len())
+            .await?;
 
-        mn.dispatcher_handle
-            .request_blocking(move |d| {
-                *cnt.lock().unwrap() = d.watchers().count();
-            })
-            .await;
-
-        assert_eq!(2, *watcher_count.lock().unwrap());
+        assert_eq!(2, got);
     }
 
     info!("wait a while for MetaNode to process stream cleanup");
@@ -512,15 +595,12 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     info!("second watcher is removed");
     {
-        let cnt = watcher_count.clone();
+        let got = mn
+            .subscriber_handle
+            .request_blocking(move |d| d.watch_senders().len())
+            .await?;
 
-        mn.dispatcher_handle
-            .request_blocking(move |d| {
-                *cnt.lock().unwrap() = d.watchers().count();
-            })
-            .await;
-
-        assert_eq!(1, *watcher_count.lock().unwrap());
+        assert_eq!(1, got);
     }
 
     Ok(())

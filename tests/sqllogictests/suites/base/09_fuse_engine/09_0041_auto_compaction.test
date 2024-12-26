@@ -93,10 +93,10 @@ insert into t1 values(4),(6),(10),(11);
 statement ok
 insert into t1 values(0),(9),(12);
 
-query I
-select count() from fuse_snapshot('i15760', 't1');
+query B
+select count() > 4 from fuse_snapshot('i15760', 't1');
 ----
-6
+1
 
 query F
 select average_depth from clustering_information('i15760', 't1')

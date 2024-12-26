@@ -22,6 +22,7 @@ use std::str::FromStr;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
+use percent_encoding::percent_decode_str;
 use url::Url;
 
 use crate::ast::quote::QuotedString;
@@ -78,6 +79,9 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::DisableVariantCheck(v) => self.options.disable_variant_check = v,
             CopyIntoTableOption::ReturnFailedOnly(v) => self.options.return_failed_only = v,
             CopyIntoTableOption::OnError(v) => self.options.on_error = OnErrorMode::from_str(&v)?,
+            CopyIntoTableOption::ColumnMatchMode(v) => {
+                self.options.column_match_mode = Some(ColumnMatchMode::from_str(&v)?)
+            }
         }
         Ok(())
     }
@@ -111,37 +115,7 @@ impl Display for CopyIntoTableStmt {
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
-
-        if !self.options.validation_mode.is_empty() {
-            write!(f, "VALIDATION_MODE = {}", self.options.validation_mode)?;
-        }
-
-        if self.options.size_limit != 0 {
-            write!(f, " SIZE_LIMIT = {}", self.options.size_limit)?;
-        }
-
-        if self.options.max_files != 0 {
-            write!(f, " MAX_FILES = {}", self.options.max_files)?;
-        }
-
-        if self.options.split_size != 0 {
-            write!(f, " SPLIT_SIZE = {}", self.options.split_size)?;
-        }
-
-        write!(f, " PURGE = {}", self.options.purge)?;
-        write!(f, " FORCE = {}", self.options.force)?;
-        write!(
-            f,
-            " DISABLE_VARIANT_CHECK = {}",
-            self.options.disable_variant_check
-        )?;
-        write!(f, " ON_ERROR = {}", self.options.on_error)?;
-        write!(
-            f,
-            " RETURN_FAILED_ONLY = {}",
-            self.options.return_failed_only
-        )?;
-
+        write!(f, " {}", self.options)?;
         Ok(())
     }
 }
@@ -159,6 +133,7 @@ pub struct CopyIntoTableOptions {
     pub disable_variant_check: bool,
     pub return_failed_only: bool,
     pub validation_mode: String,
+    pub column_match_mode: Option<ColumnMatchMode>,
 }
 
 impl CopyIntoTableOptions {
@@ -167,6 +142,10 @@ impl CopyIntoTableOptions {
     }
     fn parse_bool(k: &str, v: &String) -> std::result::Result<bool, String> {
         bool::from_str(v).map_err(|e| format!("can not parse {}={} as bool: {}", k, v, e))
+    }
+
+    pub fn set_column_match_mode(&mut self, mode: ColumnMatchMode) {
+        self.column_match_mode = Some(mode);
     }
 
     pub fn apply(
@@ -182,6 +161,10 @@ impl CopyIntoTableOptions {
                 "on_error" => {
                     let on_error = OnErrorMode::from_str(v)?;
                     self.on_error = on_error;
+                }
+                "column_match_mode" => {
+                    let column_match_mode = ColumnMatchMode::from_str(v)?;
+                    self.column_match_mode = Some(column_match_mode);
                 }
                 "size_limit" => {
                     self.size_limit = Self::parse_uint(k, v)?;
@@ -214,13 +197,30 @@ impl CopyIntoTableOptions {
 
 impl Display for CopyIntoTableOptions {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "OnErrorMode {}", self.on_error)?;
-        write!(f, "SizeLimit {}", self.size_limit)?;
-        write!(f, "MaxFiles {}", self.max_files)?;
-        write!(f, "SplitSize {}", self.split_size)?;
-        write!(f, "Purge {}", self.purge)?;
-        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
-        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
+        if !self.validation_mode.is_empty() {
+            write!(f, "VALIDATION_MODE = {}", self.validation_mode)?;
+        }
+
+        if self.size_limit != 0 {
+            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        }
+
+        if self.max_files != 0 {
+            write!(f, " MAX_FILES = {}", self.max_files)?;
+        }
+
+        if self.split_size != 0 {
+            write!(f, " SPLIT_SIZE = {}", self.split_size)?;
+        }
+
+        write!(f, " PURGE = {}", self.purge)?;
+        write!(f, " FORCE = {}", self.force)?;
+        write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
+        write!(f, " ON_ERROR = {}", self.on_error)?;
+        write!(f, " RETURN_FAILED_ONLY = {}", self.return_failed_only)?;
+        if let Some(mode) = &self.column_match_mode {
+            write!(f, " COLUMN_MATCH_MODE = {}", mode)?;
+        }
         Ok(())
     }
 }
@@ -478,7 +478,9 @@ impl UriLocation {
         let path = if parsed.path().is_empty() {
             "/".to_string()
         } else {
-            parsed.path().to_string()
+            percent_decode_str(parsed.path())
+                .decode_utf8_lossy()
+                .to_string()
         };
 
         Ok(Self {
@@ -572,6 +574,7 @@ pub enum CopyIntoTableOption {
     DisableVariantCheck(bool),
     ReturnFailedOnly(bool),
     OnError(String),
+    ColumnMatchMode(String),
 }
 
 pub enum CopyIntoLocationOption {
@@ -711,6 +714,38 @@ impl FromStr for OnErrorMode {
                     }
                 }
             }
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq)]
+pub enum ColumnMatchMode {
+    CaseSensitive,
+    CaseInsensitive,
+    Position,
+}
+
+impl Display for ColumnMatchMode {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ColumnMatchMode::CaseSensitive => write!(f, "CASE_SENSITIVE"),
+            ColumnMatchMode::CaseInsensitive => write!(f, "CASE_INSENSITIVE"),
+            ColumnMatchMode::Position => write!(f, "POSITION"),
+        }
+    }
+}
+
+const COLUMN_MATCH_MODE_MSG: &str =
+    "ColumnMatchMode must be one of {{ CASE_SENSITIVE | CASE_INSENSITIVE | POSITION }}";
+impl FromStr for ColumnMatchMode {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<Self, &'static str> {
+        match s.to_uppercase().as_str() {
+            "CASE_SENSITIVE" => Ok(Self::CaseSensitive),
+            "CASE_INSENSITIVE" => Ok(Self::CaseInsensitive),
+            "POSITION" => Ok(Self::Position),
+            _ => Err(COLUMN_MATCH_MODE_MSG),
         }
     }
 }

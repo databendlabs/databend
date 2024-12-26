@@ -23,13 +23,11 @@
 #![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]
-#![feature(const_fmt_arguments_new)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
+#![allow(clippy::type_complexity)]
 #![feature(associated_type_defaults)]
-#![feature(const_maybe_uninit_as_mut_ptr)]
 #![feature(anonymous_lifetime_in_impl_trait)]
-#![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![feature(trait_alias)]
 #![feature(vec_into_raw_parts)]
@@ -56,7 +54,9 @@ mod input_columns;
 mod kernels;
 mod property;
 mod register;
+mod register_comparison;
 pub mod row;
+pub mod sampler;
 pub mod schema;
 pub mod type_check;
 pub mod types;
@@ -76,6 +76,7 @@ pub use crate::input_columns::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
+pub use crate::register_comparison::*;
 pub use crate::row::*;
 pub use crate::schema::*;
 pub use crate::utils::block_thresholds::BlockThresholds;

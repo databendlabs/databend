@@ -34,7 +34,6 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -98,6 +97,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    pub(in crate::sessions) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -126,8 +126,6 @@ pub struct QueryContextShared {
 
     // Client User-Agent
     pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
-    /// Key is (cte index, used_count), value contains cte's materialized blocks
-    pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
@@ -144,6 +142,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
+
+    pub(in crate::sessions) spilled_files:
+        Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
 }
 
 impl QueryContextShared {
@@ -171,6 +172,7 @@ impl QueryContextShared {
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
@@ -187,7 +189,6 @@ impl QueryContextShared {
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
-            materialized_cte_tables: Arc::new(Default::default()),
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
@@ -200,6 +201,7 @@ impl QueryContextShared {
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
+            spilled_files: Default::default(),
         }))
     }
 
@@ -237,7 +239,7 @@ impl QueryContextShared {
     }
 
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        *self.on_error_mode.read()
+        self.on_error_mode.read().clone()
     }
 
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
@@ -263,6 +265,10 @@ impl QueryContextShared {
 
     pub fn get_current_catalog(&self) -> String {
         self.session.get_current_catalog()
+    }
+
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session.set_current_catalog(catalog_name)
     }
 
     pub fn get_aborting(&self) -> Arc<AtomicBool> {
@@ -337,7 +343,6 @@ impl QueryContextShared {
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
-
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };

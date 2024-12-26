@@ -13,7 +13,7 @@ echo "create table db_stream.sink(a int)" | $BENDSQL_CLIENT_CONNECT
 # Define function to write data into the base table.
 write_to_base() {
   for i in {1..20}; do
-    echo "insert into db_stream.base select * from db_stream.rand limit 10" | $BENDSQL_CLIENT_CONNECT
+    echo "insert into db_stream.base select * from db_stream.rand limit 10" | $BENDSQL_CLIENT_OUTPUT_NULL
 
     if (( i % 5 == 0 )); then
       echo "optimize table db_stream.base compact" | $BENDSQL_CLIENT_CONNECT
@@ -24,7 +24,7 @@ write_to_base() {
 # Define function to consume data from the stream into the sink table.
 consume_from_stream() {
   for i in {1..10}; do
-    echo "insert into db_stream.sink select a from db_stream.s" | $BENDSQL_CLIENT_CONNECT
+    echo "insert into db_stream.sink select a from db_stream.s" | $BENDSQL_CLIENT_OUTPUT_NULL
   done
 }
 
@@ -40,7 +40,7 @@ wait $write_pid
 wait $consume_pid
 
 # Perform a final consume operation from the stream to ensure all data is consumed
-echo "insert into db_stream.sink select a from db_stream.s" | $BENDSQL_CLIENT_CONNECT
+echo "insert into db_stream.sink select a from db_stream.s" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 # Fetch the counts and sums from both base and sink tables
 base_count=$(echo "SELECT COUNT(*) FROM db_stream.base;" | $BENDSQL_CLIENT_CONNECT)

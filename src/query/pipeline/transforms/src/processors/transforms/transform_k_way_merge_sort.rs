@@ -74,7 +74,6 @@ pub fn add_k_way_merge_sort(
                         schema,
                         stream_size,
                         worker,
-                        sort_desc,
                         block_size,
                         limit,
                         remove_order_col,
@@ -129,7 +128,6 @@ where A: SortAlgorithm
     schema: DataSchemaRef,
     stream_size: usize,
     worker: usize,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     block_size: usize,
     limit: Option<usize>,
     remove_order_col: bool,
@@ -146,7 +144,6 @@ where
             (0..input).map(|_| InputPort::create()).collect(),
             self.worker,
             self.schema.clone(),
-            self.sort_desc.clone(),
             self.block_size,
             self.limit,
         )
@@ -165,7 +162,6 @@ where
             output,
             self.schema.clone(),
             batch_rows,
-            self.sort_desc.clone(),
             self.remove_order_col,
         )
     }
@@ -206,23 +202,21 @@ where
     }
 }
 
-pub fn create_partitioner_pipe<R>(
+fn create_partitioner_pipe<R>(
     inputs_port: Vec<Arc<InputPort>>,
     worker: usize,
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     batch_rows: usize,
     limit: Option<usize>,
 ) -> Pipe
 where
-    R: Rows + Send + 'static,
+    R: Rows + 'static,
 {
     let outputs_port: Vec<_> = (0..worker).map(|_| OutputPort::create()).collect();
     let processor = ProcessorPtr::create(Box::new(KWayMergePartitionerProcessor::<R>::new(
         inputs_port.clone(),
         outputs_port.clone(),
         schema,
-        sort_desc,
         batch_rows,
         limit,
     )));
@@ -249,7 +243,6 @@ impl<R: Rows> KWayMergePartitionerProcessor<R> {
         inputs: Vec<Arc<InputPort>>,
         outputs: Vec<Arc<OutputPort>>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
@@ -259,7 +252,7 @@ impl<R: Rows> KWayMergePartitionerProcessor<R> {
             .collect::<Vec<_>>();
 
         Self {
-            partitioner: KWaySortPartitioner::new(schema, streams, sort_desc, batch_rows, limit),
+            partitioner: KWaySortPartitioner::new(schema, streams, batch_rows, limit),
             inputs,
             outputs,
             task: VecDeque::new(),
@@ -285,7 +278,7 @@ impl<R: Rows> KWayMergePartitionerProcessor<R> {
 }
 
 impl<R> Processor for KWayMergePartitionerProcessor<R>
-where R: Rows + Send + 'static
+where R: Rows + 'static
 {
     fn name(&self) -> String {
         "KWayMergePartitioner".to_string()
@@ -356,7 +349,6 @@ where A: SortAlgorithm
     stream_size: usize,
     schema: DataSchemaRef,
     batch_rows: usize,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
 
     buffer: Vec<DataBlock>,
@@ -374,7 +366,6 @@ where A: SortAlgorithm
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         batch_rows: usize,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
     ) -> Self {
         Self {
@@ -384,7 +375,6 @@ where A: SortAlgorithm
             stream_size,
             schema,
             batch_rows,
-            sort_desc,
             remove_order_col,
             buffer: Vec::new(),
             task: None,
@@ -393,7 +383,7 @@ where A: SortAlgorithm
     }
 
     fn ready(&self) -> bool {
-        self.task.map_or(false, |state| state.done())
+        self.task.is_some_and(|state| state.done())
     }
 
     fn pull(&mut self) -> Result<Event> {
@@ -511,10 +501,9 @@ where A: SortAlgorithm + 'static
         debug_assert!(self.ready());
         let task = self.task.take().unwrap();
 
-        let mut merger = Merger::<A, BlockStream>::create(
+        let mut merger = Merger::<A, _>::create(
             self.schema.clone(),
             self.streams(),
-            self.sort_desc.clone(),
             if task.total > self.batch_rows {
                 task.total / (task.total / self.batch_rows)
             } else {
@@ -718,7 +707,7 @@ impl Processor for KWayMergeCombinerProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() || self.limit.map_or(false, |limit| limit == 0) {
+        if self.output.is_finished() || self.limit == Some(0) {
             self.inputs.iter().for_each(|i| i.finish());
             self.output.finish();
             return Ok(Event::Finished);

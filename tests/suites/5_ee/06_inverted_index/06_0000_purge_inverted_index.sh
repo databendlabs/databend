@@ -28,7 +28,7 @@ echo "###################"
 echo "###1st insertion###"
 echo "###################"
 
-echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_CONNECT
+echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "== number of snapshots (expects 1)=="
 # 1 snapshot for the init insertion
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
@@ -46,7 +46,7 @@ echo "###################"
 echo "###2nd insertion###"
 echo "###################"
 
-echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_CONNECT
+echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "== number of snapshots (expects 1)=="
 # NOTE:
 # - since previous snapshots should be purged,
@@ -67,7 +67,7 @@ echo "###################"
 echo "###3nd insertion###"
 echo "###################"
 
-echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_CONNECT
+echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "== number of snapshots (expects 1)=="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
@@ -101,7 +101,7 @@ echo "###################"
 echo "####new insertion##"
 echo "###################"
 
-echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_CONNECT
+echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "== number of snapshots (expects 1) =="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
 echo "== number of invert index files (expects 4) =="

@@ -17,22 +17,24 @@ use std::collections::HashSet;
 use std::mem;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::select::SelectList;
 use crate::binder::ColumnBindingBuilder;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
 use crate::plans::ProjectSet;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::Binder;
+use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -50,82 +52,22 @@ pub struct SetReturningInfo {
     pub lazy_srf_set: HashSet<usize>,
 }
 
-/// Rewrite Set-returning functions as a BoundColumnRef.
-pub(crate) struct SetReturningRewriter<'a> {
-    pub(crate) bind_context: &'a mut BindContext,
-    // Whether only rewrite the argument of aggregate function.
-    only_agg: bool,
-    // Whether current function is the argument of aggregate function.
-    is_agg_arg: bool,
-}
-
-impl<'a> SetReturningRewriter<'a> {
-    pub(crate) fn new(bind_context: &'a mut BindContext, only_agg: bool) -> Self {
-        Self {
-            bind_context,
-            only_agg,
-            is_agg_arg: false,
-        }
-    }
-}
-
-impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        match expr {
-            ScalarExpr::FunctionCall(func) => {
-                if (self.is_agg_arg || !self.only_agg)
-                    && BUILTIN_FUNCTIONS
-                        .get_property(&func.func_name)
-                        .map(|property| property.kind == FunctionKind::SRF)
-                        .unwrap_or(false)
-                {
-                    let srf_display_name = format_scalar(expr);
-                    if let Some(index) = self.bind_context.srf_info.srfs_map.get(&srf_display_name)
-                    {
-                        let srf_item = &self.bind_context.srf_info.srfs[*index];
-
-                        let column_binding = ColumnBindingBuilder::new(
-                            srf_display_name,
-                            srf_item.index,
-                            Box::new(srf_item.scalar.data_type()?),
-                            Visibility::InVisible,
-                        )
-                        .build();
-                        *expr = BoundColumnRef {
-                            span: None,
-                            column: column_binding,
-                        }
-                        .into();
-
-                        return Ok(());
-                    }
-                    return Err(ErrorCode::Internal("Invalid Set-returning function"));
-                }
-            }
-            ScalarExpr::AggregateFunction(_) => {
-                self.is_agg_arg = true;
-            }
-            _ => {}
-        }
-        walk_expr_mut(self, expr)?;
-
-        self.is_agg_arg = false;
-        Ok(())
-    }
-}
-
 /// Analyze Set-returning functions and create derived columns.
-struct SetReturningAnalyzer<'a> {
+pub(crate) struct SetReturningAnalyzer<'a> {
     bind_context: &'a mut BindContext,
     metadata: MetadataRef,
 }
 
 impl<'a> SetReturningAnalyzer<'a> {
-    fn new(bind_context: &'a mut BindContext, metadata: MetadataRef) -> Self {
+    pub(crate) fn new(bind_context: &'a mut BindContext, metadata: MetadataRef) -> Self {
         Self {
             bind_context,
             metadata,
         }
+    }
+
+    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter {
+        AggregateRewriter::new(self.bind_context, self.metadata.clone())
     }
 }
 
@@ -137,22 +79,66 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 .map(|property| property.kind == FunctionKind::SRF)
                 .unwrap_or(false)
             {
-                let srf_display_name = format_scalar(expr);
+                let mut replaced_args = Vec::with_capacity(func.arguments.len());
+                for arg in func.arguments.iter() {
+                    let mut arg = arg.clone();
+                    let mut aggregate_rewriter = self.as_aggregate_rewriter();
+                    aggregate_rewriter.visit(&mut arg)?;
+                    replaced_args.push(arg);
+                }
+
+                let replaced_expr: ScalarExpr = FunctionCall {
+                    span: func.span,
+                    func_name: func.func_name.clone(),
+                    params: func.params.clone(),
+                    arguments: replaced_args,
+                }
+                .into();
+
+                let srf_display_name = format_scalar(&replaced_expr);
+
+                let srf_info = &mut self.bind_context.srf_info;
+                if let Some(column_binding) =
+                    find_replaced_set_returning_function(srf_info, &srf_display_name)
+                {
+                    *expr = BoundColumnRef {
+                        span: None,
+                        column: column_binding,
+                    }
+                    .into();
+                    return Ok(());
+                }
+
                 let index = self.metadata.write().add_derived_column(
                     srf_display_name.clone(),
-                    expr.data_type()?,
-                    Some(expr.clone()),
+                    replaced_expr.data_type()?,
+                    Some(replaced_expr.clone()),
                 );
 
                 // Add the srf to bind context, build ProjectSet plan later.
                 self.bind_context.srf_info.srfs.push(ScalarItem {
                     index,
-                    scalar: expr.clone(),
+                    scalar: replaced_expr.clone(),
                 });
-                self.bind_context
-                    .srf_info
-                    .srfs_map
-                    .insert(srf_display_name, self.bind_context.srf_info.srfs.len() - 1);
+                self.bind_context.srf_info.srfs_map.insert(
+                    srf_display_name.clone(),
+                    self.bind_context.srf_info.srfs.len() - 1,
+                );
+
+                let column_binding = ColumnBindingBuilder::new(
+                    srf_display_name,
+                    index,
+                    Box::new(replaced_expr.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }
+                .into();
+
                 return Ok(());
             }
         }
@@ -162,22 +148,22 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
 }
 
 /// Check whether the argument of Set-returning functions contains aggregation function or group item.
-/// If true, we need to lazy build `ProjectSet` plan
-struct SetReturningChecker<'a> {
+/// If true, rewrite aggregation function as a BoundColumnRef, and build a lazy `ProjectSet` plan
+struct SetReturningRewriter<'a> {
     bind_context: &'a mut BindContext,
-    has_aggregate_argument: bool,
+    is_lazy_srf: bool,
 }
 
-impl<'a> SetReturningChecker<'a> {
+impl<'a> SetReturningRewriter<'a> {
     fn new(bind_context: &'a mut BindContext) -> Self {
         Self {
             bind_context,
-            has_aggregate_argument: false,
+            is_lazy_srf: false,
         }
     }
 }
 
-impl<'a> VisitorMut<'a> for SetReturningChecker<'a> {
+impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         if self
             .bind_context
@@ -185,18 +171,16 @@ impl<'a> VisitorMut<'a> for SetReturningChecker<'a> {
             .group_items_map
             .contains_key(expr)
         {
-            self.has_aggregate_argument = true;
+            self.is_lazy_srf = true;
         }
 
         if let ScalarExpr::AggregateFunction(agg_func) = expr {
-            self.has_aggregate_argument = true;
-            if let Some(index) = self
+            self.is_lazy_srf = true;
+            if let Some(agg_item) = self
                 .bind_context
                 .aggregate_info
-                .aggregate_functions_map
-                .get(&agg_func.display_name)
+                .get_aggregate_function(&agg_func.display_name)
             {
-                let agg_item = &self.bind_context.aggregate_info.aggregate_functions[*index];
                 let column_binding = ColumnBindingBuilder::new(
                     agg_func.display_name.clone(),
                     agg_item.index,
@@ -235,23 +219,22 @@ impl Binder {
         Ok(())
     }
 
-    pub(crate) fn check_project_set_select(
+    /// Rewrite the argument of project sets and find lazy srfs.
+    /// See [`SetReturningRewriter`] for more details.
+    pub(crate) fn rewrite_project_set_select(
         &mut self,
         bind_context: &mut BindContext,
     ) -> Result<()> {
         let mut srf_info = mem::take(&mut bind_context.srf_info);
-        let mut checker = SetReturningChecker::new(bind_context);
+        let mut rewriter = SetReturningRewriter::new(bind_context);
         for srf_item in srf_info.srfs.iter_mut() {
             let srf_display_name = format_scalar(&srf_item.scalar);
-            checker.has_aggregate_argument = false;
-            checker.visit(&mut srf_item.scalar)?;
+            rewriter.is_lazy_srf = false;
+            rewriter.visit(&mut srf_item.scalar)?;
 
             // If the argument contains aggregation function or group item.
             // add the srf index to lazy set.
-            if checker.has_aggregate_argument {
-                // srf_display_names.push(srf_display_name);
-                // if let Some(index) = bind_context.srf_info.srfs_map.get(&srf_display_name) {
-                //    bind_context.srf_info.lazy_srf_set.insert(*index);
+            if rewriter.is_lazy_srf {
                 if let Some(index) = srf_info.srfs_map.get(&srf_display_name) {
                     srf_info.lazy_srf_set.insert(*index);
                 }
@@ -291,4 +274,22 @@ impl Binder {
 
         Ok(new_expr)
     }
+}
+
+/// Replace [`SetReturningFunction`] with a [`ColumnBinding`] if the function is already replaced.
+pub fn find_replaced_set_returning_function(
+    srf_info: &SetReturningInfo,
+    srf_display_name: &str,
+) -> Option<ColumnBinding> {
+    srf_info.srfs_map.get(srf_display_name).map(|i| {
+        // This expression is already replaced.
+        let scalar_item = &srf_info.srfs[*i];
+        ColumnBindingBuilder::new(
+            srf_display_name.to_string(),
+            scalar_item.index,
+            Box::new(scalar_item.scalar.data_type().unwrap()),
+            Visibility::Visible,
+        )
+        .build()
+    })
 }

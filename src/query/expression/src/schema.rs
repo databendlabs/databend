@@ -207,6 +207,7 @@ pub enum TableDataType {
     Variant,
     Geometry,
     Geography,
+    Interval,
 }
 
 impl DataSchema {
@@ -1178,6 +1179,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Boolean => DataType::Boolean,
             TableDataType::Binary => DataType::Binary,
             TableDataType::String => DataType::String,
+            TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
             TableDataType::Decimal(ty) => DataType::Decimal(*ty),
             TableDataType::Timestamp => DataType::Timestamp,
@@ -1283,21 +1285,77 @@ impl TableDataType {
     pub fn sql_name(&self) -> String {
         match self {
             TableDataType::Number(num_ty) => match num_ty {
-                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
-                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
-                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
-                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
-                NumberDataType::Int8 => "TINYINT".to_string(),
-                NumberDataType::Int16 => "SMALLINT".to_string(),
-                NumberDataType::Int32 => "INT".to_string(),
-                NumberDataType::Int64 => "BIGINT".to_string(),
-                NumberDataType::Float32 => "FLOAT".to_string(),
-                NumberDataType::Float64 => "DOUBLE".to_string(),
-            },
+                NumberDataType::UInt8 => "TINYINT UNSIGNED",
+                NumberDataType::UInt16 => "SMALLINT UNSIGNED",
+                NumberDataType::UInt32 => "INT UNSIGNED",
+                NumberDataType::UInt64 => "BIGINT UNSIGNED",
+                NumberDataType::Int8 => "TINYINT",
+                NumberDataType::Int16 => "SMALLINT",
+                NumberDataType::Int32 => "INT",
+                NumberDataType::Int64 => "BIGINT",
+                NumberDataType::Float32 => "FLOAT",
+                NumberDataType::Float64 => "DOUBLE",
+            }
+            .to_string(),
             TableDataType::String => "VARCHAR".to_string(),
             TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             _ => self.to_string().to_uppercase(),
         }
+    }
+
+    pub fn sql_name_explicit_null(&self) -> String {
+        fn name(ty: &TableDataType, is_null: bool) -> String {
+            let s = match ty {
+                TableDataType::Null => return "NULL".to_string(),
+                TableDataType::Nullable(inner_ty) => return name(inner_ty, true),
+                TableDataType::Array(inner) => {
+                    format!("ARRAY({})", name(inner, false))
+                }
+                TableDataType::Map(inner) => match inner.as_ref() {
+                    TableDataType::Tuple { fields_type, .. } => {
+                        format!(
+                            "MAP({}, {})",
+                            name(&fields_type[0], false),
+                            name(&fields_type[1], false)
+                        )
+                    }
+                    _ => unreachable!(),
+                },
+                TableDataType::Tuple {
+                    fields_name,
+                    fields_type,
+                } => {
+                    format!(
+                        "TUPLE({})",
+                        fields_name
+                            .iter()
+                            .zip(fields_type)
+                            .map(|(n, ty)| format!("{n} {}", name(ty, false)))
+                            .join(", ")
+                    )
+                }
+                TableDataType::EmptyArray
+                | TableDataType::EmptyMap
+                | TableDataType::Number(_)
+                | TableDataType::String
+                | TableDataType::Boolean
+                | TableDataType::Binary
+                | TableDataType::Decimal(_)
+                | TableDataType::Timestamp
+                | TableDataType::Date
+                | TableDataType::Bitmap
+                | TableDataType::Variant
+                | TableDataType::Geometry
+                | TableDataType::Geography
+                | TableDataType::Interval => ty.sql_name(),
+            };
+            if is_null {
+                format!("{} NULL", s)
+            } else {
+                format!("{} NOT NULL", s)
+            }
+        }
+        name(self, false)
     }
 
     // Returns the number of leaf columns of the TableDataType
@@ -1430,6 +1488,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Timestamp => Ok(TableDataType::Timestamp),
         DataType::Decimal(x) => Ok(TableDataType::Decimal(*x)),
         DataType::Date => Ok(TableDataType::Date),
+        DataType::Interval => Ok(TableDataType::Interval),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
             inner_type,
         )?))),
@@ -1531,4 +1590,58 @@ pub fn create_test_complex_schema() -> TableSchema {
     TableSchema::new(vec![
         field1, field2, field3, field4, field5, field6, field7, field8,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sql_name_with_null() {
+        for (expected, data_type) in [
+            ("NULL", TableDataType::Null),
+            (
+                "ARRAY(NOTHING) NULL",
+                TableDataType::EmptyArray.wrap_nullable(),
+            ),
+            (
+                "BIGINT UNSIGNED NOT NULL",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            (
+                "VARCHAR NULL",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            (
+                "ARRAY(VARCHAR NOT NULL) NOT NULL",
+                TableDataType::Array(Box::new(TableDataType::String)),
+            ),
+            (
+                "MAP(BIGINT UNSIGNED NOT NULL, VARCHAR NOT NULL) NOT NULL",
+                TableDataType::Map(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["key".to_string(), "value".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::UInt64),
+                        TableDataType::String,
+                    ],
+                })),
+            ),
+            (
+                "TUPLE(a INT NULL, b INT NOT NULL) NOT NULL",
+                TableDataType::Tuple {
+                    fields_name: vec!["a".to_string(), "b".to_string()],
+                    fields_type: vec![
+                        TableDataType::Nullable(
+                            TableDataType::Number(NumberDataType::Int32).into(),
+                        ),
+                        TableDataType::Number(NumberDataType::Int32),
+                    ],
+                },
+            ),
+        ]
+        .iter()
+        {
+            assert_eq!(expected, &&data_type.sql_name_explicit_null());
+        }
+    }
 }

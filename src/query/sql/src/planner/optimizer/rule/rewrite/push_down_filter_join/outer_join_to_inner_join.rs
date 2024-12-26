@@ -165,7 +165,7 @@ pub fn can_filter_null(
         columns_can_be_replaced: &'a ColumnSet,
     }
 
-    impl<'a> ReplaceColumnBindingsNull<'a> {
+    impl ReplaceColumnBindingsNull<'_> {
         fn replace(&mut self, expr: &mut ScalarExpr) -> Result<()> {
             if !self.can_replace {
                 return Ok(());

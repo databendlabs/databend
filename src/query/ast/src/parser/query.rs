@@ -216,6 +216,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
 
     fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
         let affix = match &input.elem {
+            // https://learn.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-except-and-intersect-transact-sql?view=sql-server-2017
+            // If EXCEPT or INTERSECT is used together with other operators in an expression, it's evaluated in the context of the following precedence:
+            // 1. Expressions in parentheses
+            // 2. The INTERSECT operator
+            // 3. EXCEPT and UNION evaluated from left to right based on their position in the expression
             SetOperationElement::SetOperation { op, .. } => match op {
                 SetOperator::Union | SetOperator::Except => {
                     Affix::Infix(Precedence(10), Associativity::Left)
@@ -1073,10 +1078,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
 }
 
 pub fn group_by_items(i: Input) -> IResult<GroupBy> {
-    let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
-        GroupBy::Normal(groups)
-    });
-
     let all = map(rule! { ALL }, |_| GroupBy::All);
 
     let cube = map(
@@ -1096,10 +1097,31 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
         map(rule! { #expr }, |e| vec![e]),
     ));
     let group_sets = map(
-        rule! { GROUPING ~ SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
+        rule! { GROUPING ~ ^SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
         |(_, _, _, sets, _)| GroupBy::GroupingSets(sets),
     );
-    rule!(#all | #group_sets | #cube | #rollup | #normal)(i)
+
+    // New rule to handle multiple GroupBy items
+    let single_normal = map(rule! { #expr }, |group| GroupBy::Normal(vec![group]));
+    let group_by_item = alt((all, group_sets, cube, rollup, single_normal));
+    map(rule! { ^#comma_separated_list1(group_by_item) }, |items| {
+        if items.len() > 1 {
+            if items.iter().all(|item| matches!(item, GroupBy::Normal(_))) {
+                let items = items
+                    .into_iter()
+                    .flat_map(|item| match item {
+                        GroupBy::Normal(exprs) => exprs,
+                        _ => unreachable!(),
+                    })
+                    .collect();
+                GroupBy::Normal(items)
+            } else {
+                GroupBy::Combined(items)
+            }
+        } else {
+            items.into_iter().next().unwrap()
+        }
+    })(i)
 }
 
 pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {

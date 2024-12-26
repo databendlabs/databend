@@ -47,6 +47,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::WindowFuncType;
@@ -174,13 +175,11 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(input)))
             }
 
-            RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
-                Ok(SExpr::create_binary(
-                    Arc::new(s_expr.plan().clone()),
-                    Arc::new(self.rewrite(s_expr.child(0)?)?),
-                    Arc::new(self.rewrite(s_expr.child(1)?)?),
-                ))
-            }
+            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+                Arc::new(s_expr.plan().clone()),
+                Arc::new(self.rewrite(s_expr.child(0)?)?),
+                Arc::new(self.rewrite(s_expr.child(1)?)?),
+            )),
 
             RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
                 Ok(SExpr::create_unary(
@@ -191,7 +190,6 @@ impl SubqueryRewriter {
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
-            | RelOperator::CteScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
@@ -391,7 +389,7 @@ impl SubqueryRewriter {
                 let expr: ScalarExpr = UDFCall {
                     span: udf.span,
                     name: udf.name.clone(),
-                    func_name: udf.func_name.clone(),
+                    handler: udf.handler.clone(),
                     display_name: udf.display_name.clone(),
                     udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),
@@ -402,7 +400,6 @@ impl SubqueryRewriter {
 
                 Ok((expr, s_expr))
             }
-
             ScalarExpr::UDFLambdaCall(udf) => {
                 let mut s_expr = s_expr.clone();
                 let res = self.try_rewrite_subquery(&udf.scalar, &s_expr, false)?;
@@ -412,6 +409,29 @@ impl SubqueryRewriter {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
                     scalar: Box::new(res.0),
+                }
+                .into();
+
+                Ok((expr, s_expr))
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                let mut args = vec![];
+                let mut s_expr = s_expr.clone();
+                for arg in udaf.arguments.iter() {
+                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
+                    s_expr = res.1;
+                    args.push(res.0);
+                }
+
+                let expr: ScalarExpr = UDAFCall {
+                    span: udaf.span,
+                    name: udaf.name.clone(),
+                    display_name: udaf.display_name.clone(),
+                    udf_type: udaf.udf_type.clone(),
+                    arg_types: udaf.arg_types.clone(),
+                    state_fields: udaf.state_fields.clone(),
+                    return_type: udaf.return_type.clone(),
+                    arguments: args,
                 }
                 .into();
 

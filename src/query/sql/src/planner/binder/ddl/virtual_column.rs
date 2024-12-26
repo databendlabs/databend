@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::mem;
 
 use databend_common_ast::ast::AlterVirtualColumnStmt;
 use databend_common_ast::ast::CreateVirtualColumnStmt;
@@ -26,6 +27,8 @@ use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::get_simple_cast_function;
+use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
@@ -33,14 +36,17 @@ use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DropVirtualColumnPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
+use crate::resolve_type_name;
 use crate::BindContext;
 use crate::SelectBuilder;
+use crate::VirtualColumnRewriter;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -197,10 +203,30 @@ impl Binder {
         &mut self,
         virtual_columns: &[Expr],
         schema: TableSchemaRef,
-    ) -> Result<Vec<String>> {
-        let mut virtual_names = HashSet::with_capacity(virtual_columns.len());
+    ) -> Result<Vec<(String, TableDataType)>> {
+        let mut virtual_names = HashMap::with_capacity(virtual_columns.len());
         for virtual_column in virtual_columns.iter() {
+            let mut typ = None;
             let mut expr = virtual_column;
+            match expr {
+                Expr::Cast {
+                    expr: inner_expr,
+                    target_type,
+                    ..
+                } => {
+                    expr = inner_expr;
+                    typ = Some(target_type);
+                }
+                Expr::TryCast {
+                    expr: inner_expr,
+                    target_type,
+                    ..
+                } => {
+                    expr = inner_expr;
+                    typ = Some(target_type);
+                }
+                _ => {}
+            }
             let mut paths = VecDeque::new();
             while let Expr::MapAccess {
                 expr: inner_expr,
@@ -253,7 +279,30 @@ impl Binder {
                         }
                         virtual_name.push(']');
                     }
-                    virtual_names.insert(virtual_name);
+
+                    let data_type = if let Some(typ) = typ {
+                        let data_type = resolve_type_name(typ, false)?;
+                        let dest_type = DataType::from(&data_type.remove_nullable());
+                        let cast_func_name =
+                            get_simple_cast_function(true, &DataType::Variant, &dest_type);
+                        if cast_func_name.is_none() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "Unsupported cast data type: {:?}",
+                                typ
+                            )));
+                        }
+                        data_type.wrap_nullable()
+                    } else {
+                        TableDataType::Nullable(Box::new(TableDataType::Variant))
+                    };
+
+                    if virtual_names.contains_key(&virtual_name) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Duplicate virtual column: {}",
+                            virtual_name
+                        )));
+                    }
+                    virtual_names.insert(virtual_name, data_type);
                 } else {
                     return Err(ErrorCode::SemanticError(format!(
                         "Column is not exist: {:?}",
@@ -268,8 +317,7 @@ impl Binder {
             }
         }
         let mut virtual_columns: Vec<_> = virtual_names.into_iter().collect();
-        virtual_columns.sort();
-
+        virtual_columns.sort_by(|lv, rv| lv.0.cmp(&rv.0));
         Ok(virtual_columns)
     }
 
@@ -333,5 +381,26 @@ impl Binder {
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVirtualColumns)
             .await
+    }
+
+    // Rewrite virtual columns, add virtual column index to Scan plan.
+    pub(in crate::planner::binder) fn rewrite_virtual_column(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if bind_context
+            .virtual_column_context
+            .virtual_column_indices
+            .is_empty()
+        {
+            return Ok(s_expr);
+        }
+        let virtual_column_indices =
+            mem::take(&mut bind_context.virtual_column_context.virtual_column_indices);
+        let mut s_expr = s_expr.clone();
+        let mut virtual_column_rewriter = VirtualColumnRewriter::new(virtual_column_indices);
+        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+        Ok(s_expr)
     }
 }

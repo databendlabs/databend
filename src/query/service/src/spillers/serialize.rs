@@ -39,10 +39,11 @@ use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
 use parquet::format::FileMetaData;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Layout {
     ArrowIpc(Box<[usize]>),
     Parquet,
+    Aggregate,
 }
 
 pub(super) struct BlocksEncoder {
@@ -116,6 +117,7 @@ pub(super) fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> Da
             DataBlock::new_from_columns(columns)
         }
         Layout::Parquet => bare_blocks_from_parquet(Reader(data)).unwrap(),
+        Layout::Aggregate => unreachable!(),
     }
 }
 

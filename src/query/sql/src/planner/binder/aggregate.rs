@@ -33,7 +33,7 @@ use itertools::Itertools;
 use super::prune_by_children;
 use super::ExprContext;
 use super::Finder;
-use crate::binder::project_set::SetReturningRewriter;
+use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -52,6 +52,7 @@ use crate::plans::FunctionCall;
 use crate::plans::GroupingSets;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::UDAFCall;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
 use crate::BindContext;
@@ -140,7 +141,7 @@ pub struct AggregateInfo {
 
     /// Mapping: (aggregate function display name) -> (index of agg func in `aggregate_functions`)
     /// This is used to find a aggregate function in current context.
-    pub aggregate_functions_map: HashMap<String, usize>,
+    aggregate_functions_map: HashMap<String, usize>,
 
     /// Mapping: (group item) -> (index of group item in `group_items`)
     /// This is used to check if a scalar expression is a group item.
@@ -151,6 +152,20 @@ pub struct AggregateInfo {
 
     /// Information of grouping sets
     pub grouping_sets: Option<GroupingSetsInfo>,
+}
+
+impl AggregateInfo {
+    fn push_aggregate_function(&mut self, item: ScalarItem, display_name: String) {
+        self.aggregate_functions.push(item);
+        self.aggregate_functions_map
+            .insert(display_name, self.aggregate_functions.len() - 1);
+    }
+
+    pub fn get_aggregate_function(&self, display_name: &str) -> Option<&ScalarItem> {
+        self.aggregate_functions_map
+            .get(display_name)
+            .map(|index| &self.aggregate_functions[*index])
+    }
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -169,73 +184,16 @@ impl<'a> AggregateRewriter<'a> {
     /// Replace the arguments of aggregate function with a BoundColumnRef, and
     /// add the replaced aggregate function and the arguments into `AggregateInfo`.
     fn replace_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<ScalarExpr> {
-        let agg_info = &mut self.bind_context.aggregate_info;
-
-        if let Some(column) =
-            find_replaced_aggregate_function(agg_info, aggregate, &aggregate.display_name)
-        {
+        if let Some(column) = find_replaced_aggregate_function(
+            &self.bind_context.aggregate_info,
+            &aggregate.display_name,
+            &aggregate.return_type,
+            &aggregate.display_name,
+        ) {
             return Ok(BoundColumnRef { span: None, column }.into());
         }
 
-        let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(aggregate.args.len());
-
-        for (i, arg) in aggregate.args.iter().enumerate() {
-            let name = format!("{}_arg_{}", &aggregate.func_name, i);
-            if let ScalarExpr::BoundColumnRef(column_ref) = arg {
-                replaced_args.push(column_ref.clone().into());
-                agg_info.aggregate_arguments.push(ScalarItem {
-                    index: column_ref.column.index,
-                    scalar: arg.clone(),
-                });
-            } else if let Some(item) = agg_info
-                .group_items
-                .iter()
-                .chain(agg_info.aggregate_arguments.iter())
-                .find(|x| &x.scalar == arg)
-            {
-                // check if the arg is in group items
-                // we can reuse the index
-                let column_binding = ColumnBindingBuilder::new(
-                    name,
-                    item.index,
-                    Box::new(arg.data_type()?),
-                    Visibility::Visible,
-                )
-                .build();
-
-                replaced_args.push(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: arg.span(),
-                    column: column_binding,
-                }));
-            } else {
-                let index = self.metadata.write().add_derived_column(
-                    name.clone(),
-                    arg.data_type()?,
-                    Some(arg.clone()),
-                );
-
-                // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBindingBuilder::new(
-                    name,
-                    index,
-                    Box::new(arg.data_type()?),
-                    Visibility::Visible,
-                )
-                .build();
-
-                replaced_args.push(
-                    BoundColumnRef {
-                        span: arg.span(),
-                        column: column_binding.clone(),
-                    }
-                    .into(),
-                );
-                agg_info.aggregate_arguments.push(ScalarItem {
-                    index,
-                    scalar: arg.clone(),
-                });
-            }
-        }
+        let replaced_args = self.replace_function_args(&aggregate.args, &aggregate.func_name)?;
 
         let index = self.metadata.write().add_derived_column(
             aggregate.display_name.clone(),
@@ -253,16 +211,129 @@ impl<'a> AggregateRewriter<'a> {
             return_type: aggregate.return_type.clone(),
         };
 
-        agg_info.aggregate_functions.push(ScalarItem {
-            scalar: replaced_agg.clone().into(),
-            index,
-        });
-        agg_info.aggregate_functions_map.insert(
+        self.bind_context.aggregate_info.push_aggregate_function(
+            ScalarItem {
+                scalar: replaced_agg.clone().into(),
+                index,
+            },
             replaced_agg.display_name.clone(),
-            agg_info.aggregate_functions.len() - 1,
         );
 
         Ok(replaced_agg.into())
+    }
+
+    fn replace_udaf_call(&mut self, udaf: &UDAFCall) -> Result<ScalarExpr> {
+        if let Some(column) = find_replaced_aggregate_function(
+            &self.bind_context.aggregate_info,
+            &udaf.display_name,
+            &udaf.return_type,
+            &udaf.display_name,
+        ) {
+            return Ok(BoundColumnRef { span: None, column }.into());
+        }
+
+        let replaced_args = self.replace_function_args(&udaf.arguments, &udaf.name)?;
+
+        let index = self.metadata.write().add_derived_column(
+            udaf.display_name.clone(),
+            *udaf.return_type.clone(),
+            Some(ScalarExpr::UDAFCall(udaf.clone())),
+        );
+
+        let replaced_udaf = UDAFCall {
+            span: udaf.span,
+            name: udaf.name.clone(),
+            display_name: udaf.display_name.clone(),
+            arg_types: udaf.arg_types.clone(),
+            state_fields: udaf.state_fields.clone(),
+            return_type: udaf.return_type.clone(),
+            arguments: replaced_args,
+            udf_type: udaf.udf_type.clone(),
+        };
+
+        self.bind_context.aggregate_info.push_aggregate_function(
+            ScalarItem {
+                scalar: replaced_udaf.clone().into(),
+                index,
+            },
+            replaced_udaf.display_name.clone(),
+        );
+
+        Ok(replaced_udaf.into())
+    }
+
+    fn replace_function_args(
+        &mut self,
+        args: &[ScalarExpr],
+        func_name: &str,
+    ) -> Result<Vec<ScalarExpr>> {
+        let AggregateInfo {
+            ref mut aggregate_arguments,
+            ref group_items,
+            ..
+        } = self.bind_context.aggregate_info;
+
+        args.iter()
+            .enumerate()
+            .map(|(i, arg)| {
+                let name = format!("{}_arg_{}", func_name, i);
+                let data_type = arg.data_type()?;
+                if let ScalarExpr::BoundColumnRef(column_ref) = arg {
+                    aggregate_arguments.push(ScalarItem {
+                        index: column_ref.column.index,
+                        scalar: arg.clone(),
+                    });
+                    return Ok(column_ref.clone());
+                }
+
+                if let Some(item) = group_items
+                    .iter()
+                    .chain(aggregate_arguments.iter())
+                    .find(|x| &x.scalar == arg)
+                {
+                    // check if the arg is in group items
+                    // we can reuse the index
+                    let column_binding = ColumnBindingBuilder::new(
+                        name,
+                        item.index,
+                        Box::new(data_type),
+                        Visibility::Visible,
+                    )
+                    .build();
+
+                    return Ok(BoundColumnRef {
+                        span: arg.span(),
+                        column: column_binding,
+                    });
+                }
+
+                let index = self.metadata.write().add_derived_column(
+                    name.clone(),
+                    data_type.clone(),
+                    Some(arg.clone()),
+                );
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBindingBuilder::new(
+                    name,
+                    index,
+                    Box::new(data_type),
+                    Visibility::Visible,
+                )
+                .build();
+
+                aggregate_arguments.push(ScalarItem {
+                    index,
+                    scalar: arg.clone(),
+                });
+
+                Ok(BoundColumnRef {
+                    span: arg.span(),
+                    column: column_binding.clone(),
+                })
+            })
+            .map(|x| x.map(|x| x.into()))
+            .collect()
     }
 
     fn replace_grouping(&mut self, function: &FunctionCall) -> Result<FunctionCall> {
@@ -314,12 +385,17 @@ impl<'a> AggregateRewriter<'a> {
 
 impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if let ScalarExpr::AggregateFunction(aggregate) = expr {
-            *expr = self.replace_aggregate_function(aggregate)?;
-            return Ok(());
+        match expr {
+            ScalarExpr::AggregateFunction(aggregate) => {
+                *expr = self.replace_aggregate_function(aggregate)?;
+                Ok(())
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                *expr = self.replace_udaf_call(udaf)?;
+                Ok(())
+            }
+            _ => walk_expr_mut(self, expr),
         }
-
-        walk_expr_mut(self, expr)
     }
 
     fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {
@@ -349,13 +425,6 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
-        if !bind_context.srf_info.srfs.is_empty() {
-            // Rewrite the Set-returning functions in Aggregate function as columns.
-            let mut srf_rewriter = SetReturningRewriter::new(bind_context, true);
-            for item in select_list.items.iter_mut() {
-                srf_rewriter.visit(&mut item.scalar)?;
-            }
-        }
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
             rewriter.visit(&mut item.scalar)?;
@@ -393,7 +462,9 @@ impl Binder {
 
         let original_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::GroupClaue);
-        match group_by {
+
+        let group_by = Self::expand_group(group_by.clone())?;
+        match &group_by {
             GroupBy::Normal(exprs) => self.resolve_group_items(
                 bind_context,
                 select_list,
@@ -416,25 +487,83 @@ impl Binder {
             GroupBy::GroupingSets(sets) => {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)?;
             }
-            // TODO: avoid too many clones.
-            GroupBy::Rollup(exprs) => {
-                // ROLLUP (a,b,c) => GROUPING SETS ((a,b,c), (a,b), (a), ())
-                let mut sets = Vec::with_capacity(exprs.len() + 1);
-                for i in (0..=exprs.len()).rev() {
-                    sets.push(exprs[0..i].to_vec());
-                }
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
-            }
-            GroupBy::Cube(exprs) => {
-                // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
-                let sets = (0..=exprs.len())
-                    .flat_map(|count| exprs.clone().into_iter().combinations(count))
-                    .collect::<Vec<_>>();
-                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)?;
-            }
+            _ => unreachable!(),
         }
         bind_context.set_expr_context(original_context);
         Ok(())
+    }
+
+    pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {
+        match group_by {
+            GroupBy::Normal(_) | GroupBy::All | GroupBy::GroupingSets(_) => Ok(group_by),
+            GroupBy::Cube(exprs) => {
+                // Expand CUBE to GroupingSets
+                let sets = Self::generate_cube_sets(exprs);
+                Ok(GroupBy::GroupingSets(sets))
+            }
+            GroupBy::Rollup(exprs) => {
+                // Expand ROLLUP to GroupingSets
+                let sets = Self::generate_rollup_sets(exprs);
+                Ok(GroupBy::GroupingSets(sets))
+            }
+            GroupBy::Combined(groups) => {
+                // Flatten and expand all nested GroupBy variants
+                let mut combined_sets = Vec::new();
+                for group in groups {
+                    match Self::expand_group(group)? {
+                        GroupBy::Normal(exprs) => {
+                            combined_sets = Self::cartesian_product(combined_sets, vec![exprs]);
+                        }
+                        GroupBy::GroupingSets(sets) => {
+                            combined_sets = Self::cartesian_product(combined_sets, sets);
+                        }
+                        other => {
+                            return Err(ErrorCode::SyntaxException(format!(
+                                "COMBINED GROUP BY does not support {other:?}"
+                            )));
+                        }
+                    }
+                }
+                Ok(GroupBy::GroupingSets(combined_sets))
+            }
+        }
+    }
+
+    /// Generate GroupingSets from CUBE (expr1, expr2, ...)
+    fn generate_cube_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+        (0..=exprs.len())
+            .flat_map(|count| exprs.clone().into_iter().combinations(count))
+            .collect::<Vec<_>>()
+    }
+
+    /// Generate GroupingSets from ROLLUP (expr1, expr2, ...)
+    fn generate_rollup_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+        let mut result = Vec::new();
+        for i in (0..=exprs.len()).rev() {
+            result.push(exprs[..i].to_vec());
+        }
+        result
+    }
+
+    /// Perform Cartesian product of two sets of grouping sets
+    fn cartesian_product(set1: Vec<Vec<Expr>>, set2: Vec<Vec<Expr>>) -> Vec<Vec<Expr>> {
+        if set1.is_empty() {
+            return set2;
+        }
+
+        if set2.is_empty() {
+            return set1;
+        }
+
+        let mut result = Vec::new();
+        for s1 in set1 {
+            for s2 in &set2 {
+                let mut combined = s1.clone();
+                combined.extend(s2.clone());
+                result.push(combined);
+            }
+        }
+        result
     }
 
     pub fn bind_aggregate(
@@ -525,6 +654,11 @@ impl Binder {
                 set
             })
             .collect::<Vec<_>>();
+
+        // Because we are not using union all to implement grouping sets
+        // We will remove the duplicated grouping sets here.
+        // For example: SELECT  brand, segment,  SUM (quantity) FROM     sales GROUP BY  GROUPING sets(brand, segment),  GROUPING sets(brand, segment);
+        // brand X segment will not appear twice in the result, the results are not standard but acceptable.
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         let mut dup_group_items = Vec::with_capacity(agg_info.group_items.len());
         for (i, item) in agg_info.group_items.iter().enumerate() {
@@ -649,6 +783,9 @@ impl Binder {
                 .bind(expr)
                 .or_else(|e| self.resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
+            let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
+            analyzer.visit(&mut scalar_expr)?;
+
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
@@ -660,11 +797,6 @@ impl Binder {
             {
                 // The group key is duplicated
                 continue;
-            }
-
-            if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-                srf_rewriter.visit(&mut scalar_expr)?;
             }
 
             let group_item_name = format!("{:#}", expr);
@@ -812,12 +944,7 @@ impl Binder {
                     .set_span(expr.span()),
             )
         } else {
-            let (alias, mut scalar) = available_aliases[result[0]].clone();
-
-            if !bind_context.srf_info.srfs.is_empty() {
-                let mut srf_rewriter = SetReturningRewriter::new(bind_context, false);
-                srf_rewriter.visit(&mut scalar)?;
-            }
+            let (alias, scalar) = available_aliases[result[0]].clone();
 
             // check scalar first, avoid duplicate create column.
             let mut scalar_column_index = None;
@@ -890,20 +1017,19 @@ impl Binder {
 /// Replace [`AggregateFunction`] with a [`ColumnBinding`] if the function is already replaced.
 pub fn find_replaced_aggregate_function(
     agg_info: &AggregateInfo,
-    agg: &AggregateFunction,
+    display_name: &str,
+    return_type: &DataType,
     new_name: &str,
 ) -> Option<ColumnBinding> {
     agg_info
-        .aggregate_functions_map
-        .get(&agg.display_name)
-        .map(|i| {
+        .get_aggregate_function(display_name)
+        .map(|scalar_item| {
             // This expression is already replaced.
-            let scalar_item = &agg_info.aggregate_functions[*i];
-            debug_assert_eq!(scalar_item.scalar.data_type().unwrap(), *agg.return_type);
+            debug_assert_eq!(&scalar_item.scalar.data_type().unwrap(), return_type);
             ColumnBindingBuilder::new(
                 new_name.to_string(),
                 scalar_item.index,
-                agg.return_type.clone(),
+                Box::new(return_type.clone()),
                 Visibility::Visible,
             )
             .build()

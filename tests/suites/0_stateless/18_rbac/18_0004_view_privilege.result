@@ -12,6 +12,8 @@
 >>>> drop view if exists v_t1
 >>>> create table t(id int)
 >>>> insert into t values(1)
+1
+1
 >>>> revoke create on default.* from role role1
 need failed: with 1063
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'owner'@'%' with roles [public,role1]

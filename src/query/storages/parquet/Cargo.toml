@@ -19,6 +19,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -42,9 +43,6 @@ rand = { workspace = true }
 serde = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

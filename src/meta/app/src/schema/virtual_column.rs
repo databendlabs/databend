@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_expression::TableDataType;
 use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
@@ -29,7 +30,7 @@ use crate::tenant::ToTenant;
 pub struct VirtualColumnMeta {
     pub table_id: MetaId,
 
-    pub virtual_columns: Vec<String>,
+    pub virtual_columns: Vec<(String, TableDataType)>,
     pub created_on: DateTime<Utc>,
     pub updated_on: Option<DateTime<Utc>>,
 }
@@ -38,7 +39,7 @@ pub struct VirtualColumnMeta {
 pub struct CreateVirtualColumnReq {
     pub create_option: CreateOption,
     pub name_ident: VirtualColumnIdent,
-    pub virtual_columns: Vec<String>,
+    pub virtual_columns: Vec<(String, TableDataType)>,
 }
 
 impl Display for CreateVirtualColumnReq {
@@ -56,7 +57,7 @@ impl Display for CreateVirtualColumnReq {
 pub struct UpdateVirtualColumnReq {
     pub if_exists: bool,
     pub name_ident: VirtualColumnIdent,
-    pub virtual_columns: Vec<String>,
+    pub virtual_columns: Vec<(String, TableDataType)>,
 }
 
 impl Display for UpdateVirtualColumnReq {

@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::BinaryOperator;
@@ -25,8 +28,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -53,6 +58,7 @@ pub enum ScalarExpr {
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
     UDFCall(UDFCall),
+    UDAFCall(UDAFCall),
     UDFLambdaCall(UDFLambdaCall),
     AsyncFunctionCall(AsyncFunctionCall),
 }
@@ -71,6 +77,7 @@ impl Clone for ScalarExpr {
             ScalarExpr::SubqueryExpr(v) => ScalarExpr::SubqueryExpr(v.clone()),
             ScalarExpr::UDFCall(v) => ScalarExpr::UDFCall(v.clone()),
             ScalarExpr::UDFLambdaCall(v) => ScalarExpr::UDFLambdaCall(v.clone()),
+            ScalarExpr::UDAFCall(v) => ScalarExpr::UDAFCall(v.clone()),
             ScalarExpr::AsyncFunctionCall(v) => ScalarExpr::AsyncFunctionCall(v.clone()),
         }
     }
@@ -94,6 +101,7 @@ impl PartialEq for ScalarExpr {
             (ScalarExpr::SubqueryExpr(l), ScalarExpr::SubqueryExpr(r)) => l.eq(r),
             (ScalarExpr::UDFCall(l), ScalarExpr::UDFCall(r)) => l.eq(r),
             (ScalarExpr::UDFLambdaCall(l), ScalarExpr::UDFLambdaCall(r)) => l.eq(r),
+            (ScalarExpr::UDAFCall(l), ScalarExpr::UDAFCall(r)) => l.eq(r),
             (ScalarExpr::AsyncFunctionCall(l), ScalarExpr::AsyncFunctionCall(r)) => l.eq(r),
             _ => false,
         }
@@ -117,6 +125,7 @@ impl Hash for ScalarExpr {
             ScalarExpr::SubqueryExpr(v) => v.hash(state),
             ScalarExpr::UDFCall(v) => v.hash(state),
             ScalarExpr::UDFLambdaCall(v) => v.hash(state),
+            ScalarExpr::UDAFCall(v) => v.hash(state),
             ScalarExpr::AsyncFunctionCall(v) => v.hash(state),
         }
     }
@@ -197,6 +206,7 @@ impl ScalarExpr {
             ScalarExpr::SubqueryExpr(expr) => expr.span,
             ScalarExpr::UDFCall(expr) => expr.span,
             ScalarExpr::UDFLambdaCall(expr) => expr.span,
+            ScalarExpr::UDAFCall(expr) => expr.span,
             ScalarExpr::AsyncFunctionCall(expr) => expr.span,
         }
     }
@@ -208,6 +218,20 @@ impl ScalarExpr {
         }
 
         impl<'a> Visitor<'a> for EvaluableVisitor {
+            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    self.evaluable = false;
+                } else {
+                    for expr in &func.arguments {
+                        self.visit(expr)?;
+                    }
+                }
+                Ok(())
+            }
             fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
                 self.evaluable = false;
                 Ok(())
@@ -499,6 +523,23 @@ impl TryFrom<ScalarExpr> for UDFLambdaCall {
     }
 }
 
+impl From<UDAFCall> for ScalarExpr {
+    fn from(v: UDAFCall) -> Self {
+        Self::UDAFCall(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for UDAFCall {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::UDAFCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast Scalar to UDAFCall"))
+        }
+    }
+}
+
 impl From<AsyncFunctionCall> for ScalarExpr {
     fn from(v: AsyncFunctionCall) -> Self {
         Self::AsyncFunctionCall(v)
@@ -753,7 +794,7 @@ pub struct UDFCall {
     // name in meta
     pub name: String,
     // name in handler
-    pub func_name: String,
+    pub handler: String,
     pub display_name: String,
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,
@@ -761,10 +802,70 @@ pub struct UDFCall {
     pub udf_type: UDFType,
 }
 
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct UDAFCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub name: String, // name in meta
+    pub display_name: String,
+    pub arg_types: Vec<DataType>,
+    pub state_fields: Vec<UDFField>,
+    pub return_type: Box<DataType>,
+    pub arguments: Vec<ScalarExpr>,
+    pub udf_type: UDFType,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct UDFField {
+    pub name: String,
+    pub data_type: DataType,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum UDFLanguage {
+    JavaScript,
+    WebAssembly,
+    Python,
+}
+
+impl FromStr for UDFLanguage {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.trim().to_lowercase().as_str() {
+            "javascript" => Ok(Self::JavaScript),
+            "wasm" => Ok(Self::WebAssembly),
+            "python" => Ok(Self::Python),
+            _ => Err(ErrorCode::BadArguments(format!(
+                "Unsupported script language: {s}"
+            ))),
+        }
+    }
+}
+
+impl Display for UDFLanguage {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            UDFLanguage::JavaScript => write!(f, "javascript"),
+            UDFLanguage::WebAssembly => write!(f, "wasm"),
+            UDFLanguage::Python => write!(f, "python"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct UDFScriptCode {
+    pub language: UDFLanguage,
+    pub runtime_version: String,
+    pub code: Arc<Box<[u8]>>,
+}
+
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                    // server_addr
-    Script((String, String, Vec<u8>)), // Lang, Version, Code
+    Server(String), // server_addr
+    Script(UDFScriptCode),
 }
 
 impl UDFType {
@@ -808,6 +909,23 @@ pub struct RedisSource {
     pub db_index: Option<i64>,
 }
 
+impl Display for RedisSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "redis://")?;
+        if let Some(username) = &self.username {
+            write!(f, "{}:", username)?
+        }
+        if let Some(password) = &self.password {
+            write!(f, "{}@", password)?;
+        }
+        write!(f, "{}:{}", self.host, self.port)?;
+        if let Some(db_index) = &self.db_index {
+            write!(f, "/{}", db_index)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SqlSource {
@@ -818,7 +936,7 @@ pub struct SqlSource {
     pub value_field: String,
 }
 
-#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Educe, EnumAsInner, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub enum DictionarySource {
     Mysql(SqlSource),
@@ -917,6 +1035,13 @@ pub trait Visitor<'a>: Sized {
         self.visit(&udf.scalar)
     }
 
+    fn visit_udaf_call(&mut self, udaf: &'a UDAFCall) -> Result<()> {
+        for expr in &udaf.arguments {
+            self.visit(expr)?;
+        }
+        Ok(())
+    }
+
     fn visit_async_function_call(&mut self, async_func: &'a AsyncFunctionCall) -> Result<()> {
         for expr in &async_func.arguments {
             self.visit(expr)?;
@@ -937,6 +1062,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::UDAFCall(expr) => visitor.visit_udaf_call(expr),
         ScalarExpr::AsyncFunctionCall(expr) => visitor.visit_async_function_call(expr),
     }
 }
@@ -1019,6 +1145,13 @@ pub trait VisitorMut<'a>: Sized {
         self.visit(&mut udf.scalar)
     }
 
+    fn visit_udaf_call(&mut self, udaf: &'a mut UDAFCall) -> Result<()> {
+        for expr in &mut udaf.arguments {
+            self.visit(expr)?;
+        }
+        Ok(())
+    }
+
     fn visit_async_function_call(&mut self, async_func: &'a mut AsyncFunctionCall) -> Result<()> {
         for expr in &mut async_func.arguments {
             self.visit(expr)?;
@@ -1042,6 +1175,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::UDAFCall(expr) => visitor.visit_udaf_call(expr),
         ScalarExpr::AsyncFunctionCall(expr) => visitor.visit_async_function_call(expr),
     }
 }

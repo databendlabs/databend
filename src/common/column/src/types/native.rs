@@ -13,13 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::convert::TryFrom;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::ops::Neg;
 use std::panic::RefUnwindSafe;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use databend_common_base::base::OrderedFloat;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
 
 use super::PrimitiveType;
 
@@ -243,124 +250,102 @@ impl NativeType for days_ms {
 }
 
 /// The in-memory representation of the MonthDayNano variant of the "Interval" logical type.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    Eq,
+    Zeroable,
+    Pod,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
-pub struct months_days_ns(pub i32, pub i32, pub i64);
+pub struct months_days_micros(pub i128);
 
-impl months_days_ns {
-    /// A new [`months_days_ns`].
-    #[inline]
-    pub fn new(months: i32, days: i32, nanoseconds: i64) -> Self {
-        Self(months, days, nanoseconds)
+const MICROS_PER_DAY: i64 = 24 * 3600 * 1_000_000;
+const MICROS_PER_MONTH: i64 = 30 * MICROS_PER_DAY;
+
+impl Hash for months_days_micros {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.total_micros().hash(state)
     }
-
-    /// The number of months
-    #[inline]
-    pub fn months(&self) -> i32 {
-        self.0
+}
+impl PartialEq for months_days_micros {
+    fn eq(&self, other: &Self) -> bool {
+        self.total_micros() == other.total_micros()
     }
-
-    /// The number of days
-    #[inline]
-    pub fn days(&self) -> i32 {
-        self.1
-    }
-
-    /// The number of nanoseconds
-    #[inline]
-    pub fn ns(&self) -> i64 {
-        self.2
+}
+impl PartialOrd for months_days_micros {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
-impl NativeType for months_days_ns {
-    const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayNano;
+impl Ord for months_days_micros {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let total_micros = self.total_micros();
+        let other_micros = other.total_micros();
+        total_micros.cmp(&other_micros)
+    }
+}
+
+impl months_days_micros {
+    pub fn new(months: i32, days: i32, microseconds: i64) -> Self {
+        let months_bits = (months as i128) << 96;
+        // converting to u32 before i128 ensures we’re working with the raw, unsigned bit pattern of the i32 value,
+        // preventing unwanted sign extension when that value is later used within the i128.
+        let days_bits = ((days as u32) as i128) << 64;
+        let micros_bits = (microseconds as u64) as i128;
+
+        Self(months_bits | days_bits | micros_bits)
+    }
+
+    pub fn months(&self) -> i32 {
+        // Decoding logic
+        ((self.0 >> 96) & 0xFFFFFFFF) as i32
+    }
+
+    pub fn days(&self) -> i32 {
+        ((self.0 >> 64) & 0xFFFFFFFF) as i32
+    }
+
+    pub fn microseconds(&self) -> i64 {
+        (self.0 & 0xFFFFFFFFFFFFFFFF) as i64
+    }
+
+    pub fn total_micros(&self) -> i64 {
+        (self.months() as i64 * MICROS_PER_MONTH)
+            + (self.days() as i64 * MICROS_PER_DAY)
+            + self.microseconds()
+    }
+}
+
+impl NativeType for months_days_micros {
+    const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayMicros;
     type Bytes = [u8; 16];
     #[inline]
     fn to_le_bytes(&self) -> Self::Bytes {
-        let months = self.months().to_le_bytes();
-        let days = self.days().to_le_bytes();
-        let ns = self.ns().to_le_bytes();
-        let mut result = [0; 16];
-        result[0] = months[0];
-        result[1] = months[1];
-        result[2] = months[2];
-        result[3] = months[3];
-        result[4] = days[0];
-        result[5] = days[1];
-        result[6] = days[2];
-        result[7] = days[3];
-        (0..8).for_each(|i| {
-            result[8 + i] = ns[i];
-        });
-        result
+        self.0.to_le_bytes()
     }
 
     #[inline]
     fn to_be_bytes(&self) -> Self::Bytes {
-        let months = self.months().to_be_bytes();
-        let days = self.days().to_be_bytes();
-        let ns = self.ns().to_be_bytes();
-        let mut result = [0; 16];
-        result[0] = months[0];
-        result[1] = months[1];
-        result[2] = months[2];
-        result[3] = months[3];
-        result[4] = days[0];
-        result[5] = days[1];
-        result[6] = days[2];
-        result[7] = days[3];
-        (0..8).for_each(|i| {
-            result[8 + i] = ns[i];
-        });
-        result
+        self.0.to_be_bytes()
     }
 
     #[inline]
     fn from_le_bytes(bytes: Self::Bytes) -> Self {
-        let mut months = [0; 4];
-        months[0] = bytes[0];
-        months[1] = bytes[1];
-        months[2] = bytes[2];
-        months[3] = bytes[3];
-        let mut days = [0; 4];
-        days[0] = bytes[4];
-        days[1] = bytes[5];
-        days[2] = bytes[6];
-        days[3] = bytes[7];
-        let mut ns = [0; 8];
-        (0..8).for_each(|i| {
-            ns[i] = bytes[8 + i];
-        });
-        Self(
-            i32::from_le_bytes(months),
-            i32::from_le_bytes(days),
-            i64::from_le_bytes(ns),
-        )
+        Self(i128::from_le_bytes(bytes))
     }
 
     #[inline]
     fn from_be_bytes(bytes: Self::Bytes) -> Self {
-        let mut months = [0; 4];
-        months[0] = bytes[0];
-        months[1] = bytes[1];
-        months[2] = bytes[2];
-        months[3] = bytes[3];
-        let mut days = [0; 4];
-        days[0] = bytes[4];
-        days[1] = bytes[5];
-        days[2] = bytes[6];
-        days[3] = bytes[7];
-        let mut ns = [0; 8];
-        (0..8).for_each(|i| {
-            ns[i] = bytes[8 + i];
-        });
-        Self(
-            i32::from_be_bytes(months),
-            i32::from_be_bytes(days),
-            i64::from_be_bytes(ns),
-        )
+        Self(i128::from_be_bytes(bytes))
     }
 }
 
@@ -370,9 +355,15 @@ impl std::fmt::Display for days_ms {
     }
 }
 
-impl std::fmt::Display for months_days_ns {
+impl std::fmt::Display for months_days_micros {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}m {}d {}ns", self.months(), self.days(), self.ns())
+        write!(
+            f,
+            "{}m {}d {}micros",
+            self.months(),
+            self.days(),
+            self.microseconds()
+        )
     }
 }
 
@@ -385,12 +376,12 @@ impl Neg for days_ms {
     }
 }
 
-impl Neg for months_days_ns {
+impl Neg for months_days_micros {
     type Output = Self;
 
     #[inline(always)]
     fn neg(self) -> Self::Output {
-        Self::new(-self.months(), -self.days(), -self.ns())
+        Self::new(-self.months(), -self.days(), -self.microseconds())
     }
 }
 

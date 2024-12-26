@@ -208,7 +208,7 @@ where K: Keyable
     }
 }
 
-unsafe impl<'a, K, V> TrustedLen for HashtableIter<'a, K, V> where K: Keyable {}
+unsafe impl<K, V> TrustedLen for HashtableIter<'_, K, V> where K: Keyable {}
 
 pub struct HashtableIterMut<'a, K, V> {
     inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,
@@ -232,11 +232,31 @@ where
     type Key = K;
     type Value = V;
 
-    type EntryRef<'a> = &'a Entry<K, V> where Self: 'a, K:'a, V: 'a;
-    type EntryMutRef<'a> = &'a mut Entry<K, V> where Self: 'a, K:'a, V: 'a;
+    type EntryRef<'a>
+        = &'a Entry<K, V>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
+    type EntryMutRef<'a>
+        = &'a mut Entry<K, V>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
 
-    type Iterator<'a> = HashtableIter<'a, K, V> where Self: 'a, K:'a, V: 'a;
-    type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self: 'a, K:'a, V: 'a;
+    type Iterator<'a>
+        = HashtableIter<'a, K, V>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
+    type IteratorMut<'a>
+        = HashtableIterMut<'a, K, V>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
 
     fn len(&self) -> usize {
         self.len()

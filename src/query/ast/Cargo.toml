@@ -23,6 +23,7 @@ logos = { workspace = true }
 nom = { workspace = true }
 nom-rule = { workspace = true }
 ordered-float = { workspace = true }
+percent-encoding = { workspace = true }
 pratt = { workspace = true }
 pretty = { workspace = true }
 pretty_assertions = { workspace = true }
@@ -39,7 +40,6 @@ url = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 goldenfile = { workspace = true }
-regex = { workspace = true }
 
 [[bench]]
 name = "bench"

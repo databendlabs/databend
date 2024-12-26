@@ -81,6 +81,7 @@ fn run_parser_with_dialect<P, O>(
     }
 }
 
+// UPDATE_GOLDENFILES=1 cargo test --package databend-common-ast --test it -- parser::test_statement
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
@@ -137,6 +138,8 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');"#,
+        r#"select current_catalog();"#,
+        r#"use catalog ctl;"#,
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
@@ -551,6 +554,10 @@ fn test_statement() {
         r#"GRANT usage ON UDF a TO 'test-grant';"#,
         r#"REVOKE usage ON UDF a FROM 'test-grant';"#,
         r#"REVOKE all ON UDF a FROM 'test-grant';"#,
+        r#"GRANT all ON warehouse a TO role 'test-grant';"#,
+        r#"GRANT usage ON warehouse a TO role 'test-grant';"#,
+        r#"REVOKE usage ON warehouse a FROM role 'test-grant';"#,
+        r#"REVOKE all ON warehouse a FROM role 'test-grant';"#,
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
@@ -589,12 +596,16 @@ fn test_statement() {
         "#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY all"#,
+        r#"SELECT * FROM t GROUP BY a, b, c, d"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
+        r#"SELECT * FROM t GROUP BY a, ROLLUP (b, c)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
@@ -762,6 +773,7 @@ fn test_statement() {
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE file format my_orc type = orc"#,
         r#"CREATE file format my_orc type = orc missing_field_as=field_default"#,
@@ -787,6 +799,9 @@ fn test_statement() {
         "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"
             EXECUTE IMMEDIATE
             $$
@@ -972,6 +987,8 @@ fn test_statement_error() {
         r#"REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;"#,
         r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
+        r#"CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
@@ -1084,7 +1101,17 @@ fn test_query() {
         r#"select * from t1 except select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,
         r#"select * from t1 union select * from t2 union all select * from t3"#,
+        r#"select * from (
+                (SELECT f, g FROM union_fuzz_result1
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result2)
+                UNION ALL
+                (SELECT f, g FROM union_fuzz_result2
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result1)
+        )"#,
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
         r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
@@ -1227,6 +1254,7 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"INTERVAL '1 YEAR'"#,
     ];
 
     for case in cases {

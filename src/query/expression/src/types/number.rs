@@ -177,7 +177,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
+        debug_assert!(index < col.len(), "index: {} len: {}", index, col.len());
 
         *col.get_unchecked(index)
     }
@@ -699,6 +699,12 @@ impl NumberColumn {
             ))),
         }
     }
+
+    pub fn data_type(&self) -> NumberDataType {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
+        })
+    }
 }
 
 impl NumberColumnBuilder {
@@ -765,8 +771,8 @@ impl NumberColumnBuilder {
             }
             (this, other) => unreachable!(
                 "unable append column(data type: {:?}) into builder(data type: {:?})",
-                type_name_of(other),
-                type_name_of(this)
+                other.data_type(),
+                this.data_type()
             ),
         })
     }
@@ -788,6 +794,12 @@ impl NumberColumnBuilder {
     pub fn pop(&mut self) -> Option<NumberScalar> {
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumnBuilder::NUM_TYPE(builder) => builder.pop().map(NumberScalar::NUM_TYPE),
+        })
+    }
+
+    pub fn data_type(&self) -> NumberDataType {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
         })
     }
 }
@@ -820,10 +832,6 @@ fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> Op
     // It will have errors if the src type is Inf/NaN
     let dest: U = num_traits::cast(src_clamp)?;
     Some((dest, overflowing))
-}
-
-fn type_name_of<T>(_: T) -> &'static str {
-    std::any::type_name::<T>()
 }
 
 #[macro_export]

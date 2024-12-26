@@ -5,10 +5,10 @@ statement ok
 drop table if exists t2 all
 
 statement ok
-create table t1 as select number as a, number as b from numbers(1)
+settings (ddl_column_type_nullable=0) create table t1 as select number as a, number as b from numbers(1)
 
 statement ok
-create table t2 as select number as a, number as b from numbers(5)
+settings (ddl_column_type_nullable=0) create table t2 as select number as a, number as b from numbers(5)
 
 query T
 explain select t1.a from t1 where a > 0
@@ -310,7 +310,7 @@ query T
 explain syntax with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
 ----
 WITH
-    cte(a, b) AS 
+    cte(a, b) AS
     (
         SELECT
             1,
@@ -329,7 +329,7 @@ query T
 explain syntax with cte (a, b) as (values(1,2),(3,4)) select a, b from cte
 ----
 WITH
-    cte(a, b) AS 
+    cte(a, b) AS
     (
         VALUES(1, 2), (3, 4)
     )
@@ -451,7 +451,7 @@ query T
 explain select a from t1 UNION ALL select a from t2
 ----
 UnionAll
-├── output columns: [t1.a (#0)]
+├── output columns: [a (#4)]
 ├── estimated rows: 6.00
 ├── TableScan
 │   ├── table: default.default.t1
@@ -548,7 +548,7 @@ statement ok
 drop table if exists t3
 
 statement ok
-create table t3 as select number as a, number as b from numbers(10)
+settings (ddl_column_type_nullable=0) create table t3 as select number as a, number as b from numbers(10)
 
 query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
@@ -789,7 +789,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan

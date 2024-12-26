@@ -424,7 +424,7 @@ impl<'a, K: Keyable, V: 'a> EntryRefLike for &'a Entry<K, V> {
     }
 }
 
-impl<'a, K: Keyable, V> EntryMutRefLike for &'a mut Entry<K, V> {
+impl<K: Keyable, V> EntryMutRefLike for &mut Entry<K, V> {
     type Key = K;
     type Value = V;
 

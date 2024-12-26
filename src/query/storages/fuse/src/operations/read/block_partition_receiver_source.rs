@@ -27,7 +27,7 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 
 pub struct BlockPartitionReceiverSource {
-    pub meta_receiver: Receiver<Result<PartInfoPtr>>,
+    pub meta_receiver: Option<Receiver<Result<PartInfoPtr>>>,
 }
 
 impl BlockPartitionReceiverSource {
@@ -37,7 +37,7 @@ impl BlockPartitionReceiverSource {
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
-            meta_receiver: receiver,
+            meta_receiver: Some(receiver),
         })
     }
 }
@@ -49,18 +49,28 @@ impl AsyncSource for BlockPartitionReceiverSource {
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.meta_receiver.recv().await {
-            Ok(Ok(part)) => Ok(Some(DataBlock::empty_with_meta(
-                BlockPartitionMeta::create(vec![part]),
-            ))),
-            Ok(Err(e)) => Err(
-                // The error is occurred in pruning process
-                e,
-            ),
-            Err(_) => {
-                // The channel is closed, we should return None to stop generating
-                Ok(None)
+        if let Some(rx) = &self.meta_receiver {
+            match rx.recv().await {
+                Ok(Ok(part)) => Ok(Some(DataBlock::empty_with_meta(
+                    BlockPartitionMeta::create(vec![part]),
+                ))),
+                Ok(Err(e)) => Err(
+                    // The error is occurred in pruning process
+                    e,
+                ),
+                Err(_) => {
+                    // The channel is closed, we should return None to stop generating
+                    Ok(None)
+                }
             }
+        } else {
+            Ok(None)
         }
+    }
+
+    #[async_backtrace::framed]
+    async fn on_finish(&mut self) -> Result<()> {
+        drop(self.meta_receiver.take());
+        Ok(())
     }
 }

@@ -20,6 +20,7 @@ use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
+pub use databend_common_ast::ast::OnErrorMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
@@ -398,95 +399,6 @@ impl Display for FileFormatOptions {
 #[serde(default)]
 pub struct StageParams {
     pub storage: StorageParams,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
-pub enum OnErrorMode {
-    Continue,
-    SkipFileNum(u64),
-    AbortNum(u64),
-}
-
-impl Default for OnErrorMode {
-    fn default() -> Self {
-        Self::AbortNum(1)
-    }
-}
-
-impl FromStr for OnErrorMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> std::result::Result<Self, String> {
-        match s.to_uppercase().as_str() {
-            "" | "ABORT" => Ok(OnErrorMode::AbortNum(1)),
-            "CONTINUE" => Ok(OnErrorMode::Continue),
-            "SKIP_FILE" => Ok(OnErrorMode::SkipFileNum(1)),
-            v => {
-                if v.starts_with("ABORT_") {
-                    let num_str = v.replace("ABORT_", "");
-                    let nums = num_str.parse::<u64>();
-                    match nums {
-                        Ok(n) if n < 1 => {
-                            Err("OnError mode `ABORT_<num>` num must be greater than 0".to_string())
-                        }
-                        Ok(n) => Ok(OnErrorMode::AbortNum(n)),
-                        Err(_) => Err(format!(
-                            "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",
-                            v
-                        )),
-                    }
-                } else {
-                    let num_str = v.replace("SKIP_FILE_", "");
-                    let nums = num_str.parse::<u64>();
-                    match nums {
-                        Ok(n) if n < 1 => {
-                            Err("OnError mode `SKIP_FILE_<num>` num must be greater than 0"
-                                .to_string())
-                        }
-                        Ok(n) => Ok(OnErrorMode::SkipFileNum(n)),
-                        Err(_) => Err(format!(
-                            "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",
-                            v
-                        )),
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl Display for OnErrorMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            OnErrorMode::Continue => {
-                write!(f, "continue")
-            }
-            OnErrorMode::SkipFileNum(n) => {
-                if *n <= 1 {
-                    write!(f, "skipfile")
-                } else {
-                    write!(f, "skipfile_{}", n)
-                }
-            }
-            OnErrorMode::AbortNum(n) => {
-                if *n <= 1 {
-                    write!(f, "abort")
-                } else {
-                    write!(f, "abort_{}", n)
-                }
-            }
-        }
-    }
-}
-
-impl From<databend_common_ast::ast::OnErrorMode> for OnErrorMode {
-    fn from(opt: databend_common_ast::ast::OnErrorMode) -> Self {
-        match opt {
-            databend_common_ast::ast::OnErrorMode::Continue => OnErrorMode::Continue,
-            databend_common_ast::ast::OnErrorMode::SkipFileNum(n) => OnErrorMode::SkipFileNum(n),
-            databend_common_ast::ast::OnErrorMode::AbortNum(n) => OnErrorMode::AbortNum(n),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]

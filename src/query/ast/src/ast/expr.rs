@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -22,13 +23,23 @@ use ethnum::i256;
 use pratt::Affix;
 use pratt::Associativity;
 
+use super::ColumnFilter;
 use super::ColumnRef;
+use super::GroupBy;
+use super::JoinCondition;
 use super::OrderByExpr;
+use super::Pivot;
+use super::PivotValues;
+use super::SelectTarget;
+use super::TableReference;
+use super::TemporalClause;
+use super::TimeTravelPoint;
 use crate::ast::display_decimal_256;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::SetExpr;
 use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
@@ -1021,6 +1032,7 @@ pub enum TypeName {
     Variant,
     Geometry,
     Geography,
+    Interval,
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -1148,6 +1160,9 @@ impl Display for TypeName {
             }
             TypeName::NotNull(ty) => {
                 write!(f, "{} NOT NULL", ty)?;
+            }
+            TypeName::Interval => {
+                write!(f, "INTERVAL")?;
             }
         }
         Ok(())
@@ -1656,5 +1671,440 @@ pub fn split_equivalent_predicate_expr(expr: &Expr) -> Option<(Expr, Expr)> {
             op, left, right, ..
         } if op == &BinaryOperator::Eq => Some((*left.clone(), *right.clone())),
         _ => None,
+    }
+}
+
+pub struct ExprReplacer {
+    database: String,
+    new_name: HashMap<String, String>,
+}
+
+impl ExprReplacer {
+    pub fn new(database: String, new_name: HashMap<String, String>) -> Self {
+        Self { database, new_name }
+    }
+
+    #[recursive::recursive]
+    pub fn replace_query(&self, query: &mut Query) {
+        if let Some(with) = &mut query.with {
+            for cte in with.ctes.iter_mut() {
+                self.replace_query(&mut cte.query);
+            }
+        }
+
+        self.replace_set_expr(&mut query.body);
+
+        for order_by in query.order_by.iter_mut() {
+            self.replace_expr(&mut order_by.expr);
+        }
+
+        for limit in query.limit.iter_mut() {
+            self.replace_expr(limit);
+        }
+
+        if let Some(offset) = &mut query.offset {
+            self.replace_expr(offset);
+        }
+    }
+
+    fn replace_identifier(&self, identifier: &mut Identifier) {
+        if let Some(new_name) = self.new_name.get(&identifier.name) {
+            identifier.name = new_name.clone();
+        }
+    }
+
+    fn replace_time_travel_point(&self, time_travel_point: &mut TimeTravelPoint) {
+        match time_travel_point {
+            TimeTravelPoint::Timestamp(timestamp) => {
+                self.replace_expr(timestamp);
+            }
+            TimeTravelPoint::Offset(offset) => {
+                self.replace_expr(offset);
+            }
+            _ => (),
+        }
+    }
+
+    fn replace_pivot(&self, pivot: &mut Pivot) {
+        self.replace_expr(&mut pivot.aggregate);
+        match &mut pivot.values {
+            PivotValues::ColumnValues(exprs) => {
+                for expr in exprs.iter_mut() {
+                    self.replace_expr(expr);
+                }
+            }
+            PivotValues::Subquery(subquery) => {
+                self.replace_query(subquery);
+            }
+        }
+    }
+
+    #[recursive::recursive]
+    fn replace_table_table_reference(&self, table_reference: &mut TableReference) {
+        match table_reference {
+            TableReference::Table {
+                database,
+                table,
+                temporal,
+                pivot,
+                ..
+            } => {
+                if database.is_none() || database.as_ref().unwrap().name == self.database {
+                    self.replace_identifier(table);
+                }
+                if let Some(temporal) = temporal {
+                    match temporal {
+                        TemporalClause::TimeTravel(time_travel) => {
+                            self.replace_time_travel_point(time_travel);
+                        }
+                        TemporalClause::Changes(changes) => {
+                            self.replace_time_travel_point(&mut changes.at_point);
+                            if let Some(end_point) = &mut changes.end_point {
+                                self.replace_time_travel_point(end_point);
+                            }
+                        }
+                    }
+                }
+                if let Some(pivot) = pivot {
+                    self.replace_pivot(pivot);
+                }
+            }
+            TableReference::TableFunction {
+                params,
+                named_params,
+                ..
+            } => {
+                for param in params.iter_mut() {
+                    self.replace_expr(param);
+                }
+                for named_param in named_params.iter_mut() {
+                    self.replace_expr(&mut named_param.1);
+                }
+            }
+            TableReference::Subquery {
+                subquery, pivot, ..
+            } => {
+                self.replace_query(subquery);
+                if let Some(pivot) = pivot {
+                    self.replace_pivot(pivot);
+                }
+            }
+            TableReference::Join { join, .. } => {
+                if let JoinCondition::On(expr) = &mut join.condition {
+                    self.replace_expr(expr);
+                }
+                self.replace_table_table_reference(&mut join.left);
+                self.replace_table_table_reference(&mut join.right);
+            }
+            TableReference::Location { .. } => (),
+        }
+    }
+
+    #[recursive::recursive]
+    fn replace_group_by(&self, group_by: &mut GroupBy) {
+        match group_by {
+            GroupBy::Normal(exprs) | GroupBy::Cube(exprs) | GroupBy::Rollup(exprs) => {
+                for expr in exprs.iter_mut() {
+                    self.replace_expr(expr);
+                }
+            }
+            GroupBy::GroupingSets(expr_sets) => {
+                for exprs in expr_sets.iter_mut() {
+                    for expr in exprs.iter_mut() {
+                        self.replace_expr(expr);
+                    }
+                }
+            }
+            GroupBy::Combined(groups) => {
+                for group_by in groups.iter_mut() {
+                    self.replace_group_by(group_by);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn replace_window_spec(&self, window_spec: &mut WindowSpec) {
+        for partition_expr in window_spec.partition_by.iter_mut() {
+            self.replace_expr(partition_expr);
+        }
+        for order_by in window_spec.order_by.iter_mut() {
+            self.replace_expr(&mut order_by.expr);
+        }
+        if let Some(window_frame) = &mut window_spec.window_frame {
+            if let WindowFrameBound::Preceding(expr) | WindowFrameBound::Following(expr) =
+                &mut window_frame.start_bound
+            {
+                if let Some(expr) = expr {
+                    self.replace_expr(expr);
+                }
+            }
+            if let WindowFrameBound::Preceding(expr) | WindowFrameBound::Following(expr) =
+                &mut window_frame.end_bound
+            {
+                if let Some(expr) = expr {
+                    self.replace_expr(expr);
+                }
+            }
+        }
+    }
+
+    #[recursive::recursive]
+    fn replace_set_expr(&self, set_expr: &mut SetExpr) {
+        match set_expr {
+            SetExpr::Query(query) => {
+                self.replace_query(query);
+            }
+            SetExpr::Select(select) => {
+                if let Some(hints) = &mut select.hints {
+                    for hint in hints.hints_list.iter_mut() {
+                        self.replace_expr(&mut hint.expr);
+                    }
+                }
+
+                for select_list_item in select.select_list.iter_mut() {
+                    match select_list_item {
+                        SelectTarget::AliasedExpr { expr, .. } => {
+                            self.replace_expr(expr);
+                        }
+                        SelectTarget::StarColumns { column_filter, .. } => {
+                            if let Some(column_filter) = column_filter
+                                && let ColumnFilter::Lambda(lambda) = column_filter
+                            {
+                                self.replace_expr(&mut lambda.expr);
+                            }
+                        }
+                    }
+                }
+
+                for table_reference in select.from.iter_mut() {
+                    self.replace_table_table_reference(table_reference);
+                }
+
+                if let Some(selection) = &mut select.selection {
+                    self.replace_expr(selection);
+                }
+
+                if let Some(group_by) = &mut select.group_by {
+                    self.replace_group_by(group_by);
+                }
+
+                if let Some(having) = &mut select.having {
+                    self.replace_expr(having);
+                }
+
+                if let Some(window_list) = &mut select.window_list {
+                    for window in window_list.iter_mut() {
+                        self.replace_window_spec(&mut window.spec);
+                    }
+                }
+
+                if let Some(qualify) = &mut select.qualify {
+                    self.replace_expr(qualify);
+                }
+            }
+            SetExpr::SetOperation(set_operation) => {
+                self.replace_set_expr(&mut set_operation.left);
+                self.replace_set_expr(&mut set_operation.right);
+            }
+            SetExpr::Values { values, .. } => {
+                for value in values.iter_mut() {
+                    for expr in value.iter_mut() {
+                        self.replace_expr(expr);
+                    }
+                }
+            }
+        }
+    }
+
+    #[recursive::recursive]
+    fn replace_expr(&self, expr: &mut Expr) {
+        match expr {
+            Expr::ColumnRef { column, .. } => {
+                if column.database.is_none()
+                    || column.database.as_ref().unwrap().name == self.database
+                {
+                    if let Some(table_identifier) = &mut column.table {
+                        self.replace_identifier(table_identifier);
+                    }
+                }
+            }
+            Expr::IsNull { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::IsDistinctFrom { left, right, .. } => {
+                self.replace_expr(left);
+                self.replace_expr(right);
+            }
+
+            Expr::InList { expr, list, .. } => {
+                self.replace_expr(expr);
+                for expr in list.iter_mut() {
+                    self.replace_expr(expr);
+                }
+            }
+            Expr::InSubquery { expr, subquery, .. } => {
+                self.replace_expr(expr);
+                self.replace_query(subquery);
+            }
+            Expr::Between {
+                expr, low, high, ..
+            } => {
+                self.replace_expr(expr);
+                self.replace_expr(low);
+                self.replace_expr(high);
+            }
+            Expr::UnaryOp { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::BinaryOp { left, right, .. } => {
+                self.replace_expr(left);
+                self.replace_expr(right);
+            }
+            Expr::JsonOp { left, right, .. } => {
+                self.replace_expr(left);
+                self.replace_expr(right);
+            }
+            Expr::Cast { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::TryCast { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::Extract { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::DatePart { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => {
+                self.replace_expr(substr_expr);
+                self.replace_expr(str_expr);
+            }
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                self.replace_expr(expr);
+                self.replace_expr(substring_from);
+                if let Some(substring_for) = substring_for {
+                    self.replace_expr(substring_for);
+                }
+            }
+            Expr::Trim {
+                expr, trim_where, ..
+            } => {
+                self.replace_expr(expr);
+                if let Some((_, trim_str)) = trim_where {
+                    self.replace_expr(trim_str);
+                }
+            }
+            Expr::CountAll { window, .. } => {
+                if let Some(window) = window
+                    && let Window::WindowSpec(window_spec) = window
+                {
+                    self.replace_window_spec(window_spec);
+                }
+            }
+            Expr::Tuple { exprs, .. } => {
+                for expr in exprs.iter_mut() {
+                    self.replace_expr(expr);
+                }
+            }
+            Expr::FunctionCall { func, .. } => {
+                for arg in func.args.iter_mut() {
+                    self.replace_expr(arg);
+                }
+                for param in func.params.iter_mut() {
+                    self.replace_expr(param);
+                }
+                if let Some(window_desc) = &mut func.window
+                    && let Window::WindowSpec(window_spec) = &mut window_desc.window
+                {
+                    self.replace_window_spec(window_spec);
+                }
+                if let Some(lambda) = &mut func.lambda {
+                    self.replace_expr(&mut lambda.expr);
+                }
+            }
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => {
+                if let Some(op) = operand {
+                    self.replace_expr(op);
+                }
+                for (cond, res) in conditions.iter_mut().zip(results.iter_mut()) {
+                    self.replace_expr(cond);
+                    self.replace_expr(res);
+                }
+                if let Some(el) = else_result {
+                    self.replace_expr(el);
+                }
+            }
+            Expr::Exists { subquery, .. } => {
+                self.replace_query(subquery);
+            }
+            Expr::Subquery { subquery, .. } => {
+                self.replace_query(subquery);
+            }
+            Expr::MapAccess { expr, accessor, .. } => {
+                self.replace_expr(expr);
+                if let MapAccessor::Bracket { key } = accessor {
+                    self.replace_expr(key);
+                }
+            }
+            Expr::Array { exprs, .. } => {
+                for expr in exprs.iter_mut() {
+                    self.replace_expr(expr);
+                }
+            }
+            Expr::Map { kvs, .. } => {
+                for (_, v) in kvs.iter_mut() {
+                    self.replace_expr(v);
+                }
+            }
+            Expr::Interval { expr, .. } => {
+                self.replace_expr(expr);
+            }
+            Expr::DateAdd { interval, date, .. } => {
+                self.replace_expr(interval);
+                self.replace_expr(date);
+            }
+            Expr::DateDiff {
+                date_start,
+                date_end,
+                ..
+            } => {
+                self.replace_expr(date_start);
+                self.replace_expr(date_end);
+            }
+            Expr::DateSub { interval, date, .. } => {
+                self.replace_expr(interval);
+                self.replace_expr(date);
+            }
+            Expr::DateTrunc { date, .. } => {
+                self.replace_expr(date);
+            }
+            Expr::LastDay { date, .. } => {
+                self.replace_expr(date);
+            }
+            Expr::PreviousDay { date, .. } => {
+                self.replace_expr(date);
+            }
+            Expr::NextDay { date, .. } => {
+                self.replace_expr(date);
+            }
+            Expr::Literal { .. } | Expr::Hole { .. } => (),
+        }
     }
 }

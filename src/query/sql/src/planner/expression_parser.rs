@@ -41,8 +41,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::Settings;
 use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
@@ -71,7 +69,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         false,
         false,
         false,
-        false,
+        None,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
@@ -118,9 +116,8 @@ pub fn parse_exprs(
     sql: &str,
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -131,6 +128,7 @@ pub fn parse_exprs(
     )?;
 
     let tokens = tokenize_sql(sql)?;
+    let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs
         .iter()
@@ -187,7 +185,6 @@ pub fn parse_computed_expr(
     schema: DataSchemaRef,
     sql: &str,
 ) -> Result<Expr> {
-    let settings = Settings::create(Tenant::new_literal("dummy"));
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
@@ -212,8 +209,8 @@ pub fn parse_computed_expr(
         );
     }
 
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect()?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -224,6 +221,7 @@ pub fn parse_computed_expr(
     )?;
 
     let tokens = tokenize_sql(sql)?;
+    let sql_dialect = settings.get_sql_dialect()?;
     let mut asts = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     if asts.len() != 1 {
         return Err(ErrorCode::BadDataValueType(format!(
@@ -242,10 +240,10 @@ pub fn parse_default_expr_to_string(
     field: &TableField,
     ast: &AExpr,
 ) -> Result<(String, bool)> {
-    let settings = Settings::create(Tenant::new_literal("dummy"));
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
 
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -257,6 +255,12 @@ pub fn parse_default_expr_to_string(
     )?;
 
     let (mut scalar, data_type) = *type_checker.resolve(ast)?;
+    if !scalar.evaluable() {
+        return Err(ErrorCode::SemanticError(format!(
+            "default value expression `{:#}` is invalid",
+            ast
+        )));
+    }
     let schema_data_type = DataType::from(field.data_type());
     if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
@@ -279,7 +283,6 @@ pub fn parse_computed_expr_to_string(
     field: &TableField,
     ast: &AExpr,
 ) -> Result<String> {
-    let settings = Settings::create(Tenant::new_literal("dummy"));
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     for (index, field) in table_schema.fields().iter().enumerate() {
@@ -303,6 +306,7 @@ pub fn parse_computed_expr_to_string(
         );
     }
 
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -314,6 +318,12 @@ pub fn parse_computed_expr_to_string(
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
+    if !scalar.evaluable() {
+        return Err(ErrorCode::SemanticError(format!(
+            "computed column expression `{:#}` is invalid",
+            ast
+        )));
+    }
     if data_type != DataType::from(field.data_type()) {
         return Err(ErrorCode::SemanticError(format!(
             "expected computed column expression have type {}, but `{}` has type {}.",
@@ -343,7 +353,6 @@ pub fn parse_lambda_expr(
     columns: &[(String, DataType)],
     ast: &AExpr,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
-    let settings = Settings::create(Tenant::new_literal("dummy"));
     let metadata = Metadata::default();
     bind_context.set_expr_context(ExprContext::InLambdaFunction);
 
@@ -360,6 +369,7 @@ pub fn parse_lambda_expr(
         );
     }
 
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -379,9 +389,8 @@ pub fn parse_cluster_keys(
     cluster_key_str: &str,
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -392,6 +401,7 @@ pub fn parse_cluster_keys(
     )?;
 
     let tokens = tokenize_sql(cluster_key_str)?;
+    let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
     let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     // unwrap tuple.
     if ast_exprs.len() == 1 {
@@ -456,9 +466,8 @@ pub fn parse_hilbert_cluster_key(
     cluster_key_str: &str,
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -469,6 +478,7 @@ pub fn parse_hilbert_cluster_key(
     )?;
 
     let tokens = tokenize_sql(cluster_key_str)?;
+    let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
     let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     // unwrap tuple.
     if ast_exprs.len() == 1 {
@@ -599,7 +609,8 @@ pub fn analyze_cluster_keys(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<(String, Vec<Expr>)> {
-    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let settings = ctx.get_settings();
+    let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
     let tokens = tokenize_sql(sql)?;
     let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     // unwrap tuple.
@@ -610,7 +621,6 @@ pub fn analyze_cluster_keys(
     }
 
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,

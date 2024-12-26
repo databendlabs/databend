@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
-use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -1346,7 +1345,7 @@ impl From<SettingValue> for UserSettingValue {
 
 struct SettingVisitor;
 
-impl<'de> serde::de::Visitor<'de> for SettingVisitor {
+impl serde::de::Visitor<'_> for SettingVisitor {
     type Value = SettingValue;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -1528,7 +1527,14 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
+    /// Interval in seconds to refresh jwks
+    #[clap(long, value_name = "VALUE", default_value = "600")]
+    pub jwks_refresh_interval: u64,
+
+    /// Timeout in seconds to refresh jwks
+    #[clap(long, value_name = "VALUE", default_value = "10")]
+    pub jwks_refresh_timeout: u64,
+
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
@@ -1687,6 +1693,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "50")]
     pub max_cached_queries_profiles: usize,
 
+    /// A list of network that not to be checked by network policy.
+    #[clap(long, value_name = "VALUE")]
+    pub network_policy_whitelist: Vec<String>,
+
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
 }
@@ -1750,6 +1760,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             max_storage_io_requests: self.max_storage_io_requests,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
+            jwks_refresh_interval: self.jwks_refresh_interval,
+            jwks_refresh_timeout: self.jwks_refresh_timeout,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
             builtin: BuiltInConfig {
@@ -1776,6 +1788,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             max_cached_queries_profiles: self.max_cached_queries_profiles,
+            network_policy_whitelist: self.network_policy_whitelist,
             settings: self
                 .settings
                 .into_iter()
@@ -1840,6 +1853,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_storage_io_requests: inner.max_storage_io_requests,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
+            jwks_refresh_interval: inner.jwks_refresh_interval,
+            jwks_refresh_timeout: inner.jwks_refresh_timeout,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
             users: inner.builtin.users,
@@ -1878,6 +1893,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
+            network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
         }
     }
@@ -2904,7 +2920,7 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
@@ -2936,12 +2952,18 @@ pub struct DiskCacheConfig {
     pub sync_data: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+impl Default for DiskCacheConfig {
+    fn default() -> Self {
+        inner::DiskCacheConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
-    pub spill_local_disk_path: OsString,
+    pub spill_local_disk_path: String,
 
     #[clap(long, value_name = "VALUE", default_value = "30")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
@@ -2950,6 +2972,12 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+}
+
+impl Default for SpillConfig {
+    fn default() -> Self {
+        inner::SpillConfig::default().into()
+    }
 }
 
 mod cache_config_converters {
@@ -3022,7 +3050,11 @@ mod cache_config_converters {
             {
                 spill.spill_local_disk_path = PathBuf::from(&cache.disk_cache_config.path)
                     .join("temp/_query_spill")
-                    .into();
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|s| {
+                        ErrorCode::Internal(format!("failed to convert os string to string: {s:?}"))
+                    })?
             };
 
             Ok(InnerConfig {
@@ -3103,20 +3135,20 @@ mod cache_config_converters {
         fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
             let SpillConfig {
                 spill_local_disk_path,
-                spill_local_disk_reserved_space_percentage: spill_local_disk_max_space_percentage,
+                spill_local_disk_reserved_space_percentage: reserved,
                 spill_local_disk_max_bytes,
             } = value;
-            if !spill_local_disk_max_space_percentage.is_normal()
-                || spill_local_disk_max_space_percentage.is_sign_negative()
-                || spill_local_disk_max_space_percentage > OrderedFloat(100.0)
+            if !reserved.is_normal()
+                || reserved.is_sign_negative()
+                || reserved > OrderedFloat(100.0)
             {
-                return Err(ErrorCode::InvalidArgument(
-                    "invalid spill_local_disk_max_space_percentage",
-                ));
+                Err(ErrorCode::InvalidArgument(format!(
+                    "invalid spill_local_disk_reserved_space_percentage: {reserved}"
+                )))?;
             }
             Ok(Self {
                 path: spill_local_disk_path,
-                reserved_disk_ratio: spill_local_disk_max_space_percentage / 100.0,
+                reserved_disk_ratio: reserved / 100.0,
                 global_bytes_limit: spill_local_disk_max_bytes,
             })
         }

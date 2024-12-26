@@ -50,12 +50,12 @@ serde_json = { workspace = true }
 stream-more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
-test-harness = { workspace = true }
 tokio = { workspace = true }
 
 [lints]

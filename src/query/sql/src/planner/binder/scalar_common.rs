@@ -234,3 +234,17 @@ pub fn wrap_cast(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
         target_type: Box::new(target_type.clone()),
     })
 }
+
+pub fn wrap_nullable(scalar: ScalarExpr, source_type: &DataType) -> ScalarExpr {
+    if source_type.is_nullable_or_null() {
+        scalar
+    } else {
+        let target_type = source_type.wrap_nullable();
+        ScalarExpr::CastExpr(CastExpr {
+            span: scalar.span(),
+            is_try: false,
+            argument: Box::new(scalar),
+            target_type: Box::new(target_type),
+        })
+    }
+}

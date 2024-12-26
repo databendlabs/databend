@@ -27,7 +27,6 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,6 +47,7 @@ use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
 use databend_common_storage::init_stage_operator;
 use databend_storages_common_io::Files;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::table::is_stream_name;
 use log::error;
 use log::info;
 use log::warn;
@@ -75,6 +75,7 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowRolesPlan;
+use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 use crate::BindContext;
@@ -105,6 +106,7 @@ pub struct Binder {
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+    pub m_cte_table_name: HashMap<String, String>,
 
     pub enable_result_cache: bool,
 
@@ -131,6 +133,7 @@ impl<'a> Binder {
             metadata,
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            m_cte_table_name: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
         }
@@ -178,8 +181,6 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
-                // Wrap `LogicalMaterializedCte` to `s_expr`
-                s_expr = bind_context.cte_context.wrap_m_cte(s_expr);
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
@@ -255,6 +256,12 @@ impl<'a> Binder {
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
             Statement::CreateCatalog(stmt) => self.bind_create_catalog(stmt).await?,
             Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
+            Statement::UseCatalog {catalog} => {
+                let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+                Plan::UseCatalog(Box::new(UseCatalogPlan {
+                    catalog,
+                }))
+            }
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
@@ -642,17 +649,20 @@ impl<'a> Binder {
                 }
         };
 
-        match plan.kind() {
-            QueryKind::Query { .. } | QueryKind::Explain { .. } => {}
+        match &plan {
+            Plan::Explain { .. }
+            | Plan::ExplainAnalyze { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
+            | Plan::Query { .. } => {}
+            Plan::CreateTable(plan)
+                if is_stream_name(&plan.table, self.ctx.get_id().replace("-", "").as_str()) => {}
             _ => {
-                let meta_data_guard = self.metadata.read();
-                let tables = meta_data_guard.tables();
-                for t in tables {
-                    if t.is_consume() {
-                        return Err(ErrorCode::SyntaxException(
-                            "WITH CONSUME only allowed in query",
-                        ));
-                    }
+                let consume_streams = self.ctx.get_consume_streams(true)?;
+                if !consume_streams.is_empty() {
+                    return Err(ErrorCode::SyntaxException(
+                        "WITH CONSUME only allowed in query",
+                    ));
                 }
             }
         }

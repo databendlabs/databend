@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -215,6 +214,8 @@ pub struct QueryConfig {
 
     pub jwt_key_file: String,
     pub jwt_key_files: Vec<String>,
+    pub jwks_refresh_interval: u64,
+    pub jwks_refresh_timeout: u64,
     pub default_storage_format: String,
     pub default_compression: String,
     pub builtin: BuiltInConfig,
@@ -246,6 +247,9 @@ pub struct QueryConfig {
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
     pub max_cached_queries_profiles: usize,
+
+    pub network_policy_whitelist: Vec<String>,
+
     pub settings: HashMap<String, UserSettingValue>,
 }
 
@@ -298,6 +302,8 @@ impl Default for QueryConfig {
             max_storage_io_requests: None,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
+            jwks_refresh_interval: 600,
+            jwks_refresh_timeout: 10,
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
             builtin: BuiltInConfig::default(),
@@ -322,6 +328,7 @@ impl Default for QueryConfig {
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
             max_cached_queries_profiles: 50,
+            network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
         }
     }
@@ -711,7 +718,7 @@ impl Default for CacheConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
-    pub path: OsString,
+    pub path: String,
 
     /// Ratio of the reserve of the disk space.
     pub reserved_disk_ratio: OrderedFloat<f64>,
@@ -723,7 +730,7 @@ pub struct SpillConfig {
 impl Default for SpillConfig {
     fn default() -> Self {
         Self {
-            path: OsString::from(""),
+            path: "".to_string(),
             reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,
         }

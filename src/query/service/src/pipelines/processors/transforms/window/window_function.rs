@@ -29,8 +29,6 @@ use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::WindowFunction;
 
-use crate::pipelines::processors::transforms::group_by::Area;
-
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
     // (func instance, argument offsets)
@@ -45,9 +43,10 @@ pub enum WindowFunctionInfo {
     CumeDist,
 }
 
+type Arena = bumpalo::Bump;
 pub struct WindowFuncAggImpl {
     // Need to hold arena until `drop`.
-    _arena: Area,
+    _arena: Arena,
     agg: Arc<dyn AggregateFunction>,
     place: StateAddr,
     args: Vec<usize>,
@@ -233,7 +232,7 @@ impl WindowFunctionImpl {
     pub(crate) fn try_create(window: WindowFunctionInfo) -> Result<Self> {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
-                let mut arena = Area::create();
+                let arena = Arena::new();
                 let mut state_offset = Vec::with_capacity(1);
                 let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
                 let place: StateAddr = arena.alloc_layout(layout).into();

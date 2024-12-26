@@ -43,7 +43,7 @@ impl<'a> Token<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for Token<'a> {
+impl std::fmt::Debug for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}({:?})", self.kind, self.span)
     }
@@ -423,6 +423,8 @@ pub enum TokenKind {
     CALL,
     #[token("CASE", ignore(ascii_case))]
     CASE,
+    #[token("CASE_SENSITIVE", ignore(ascii_case))]
+    CASE_SENSITIVE,
     #[token("CAST", ignore(ascii_case))]
     CAST,
     #[token("CATALOG", ignore(ascii_case))]
@@ -455,6 +457,8 @@ pub enum TokenKind {
     CHAR,
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
+    #[token("COLUMN_MATCH_MODE", ignore(ascii_case))]
+    COLUMN_MATCH_MODE,
     #[token("COLUMNS", ignore(ascii_case))]
     COLUMNS,
     #[token("CHARACTER", ignore(ascii_case))]
@@ -1298,6 +1302,8 @@ pub enum TokenKind {
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
+    #[token("STATE", ignore(ascii_case))]
+    STATE,
     #[token("TASK", ignore(ascii_case))]
     TASK,
     #[token("TASKS", ignore(ascii_case))]
