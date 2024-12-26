@@ -430,8 +430,8 @@ impl QueryContext {
 
     pub fn unload_spill_meta(&self) {
         const SPILL_META_SUFFIX: &str = ".list";
-        let mut w = self.shared.spilled_files.write();
-        let mut remote_spill_files = w
+        let r = self.shared.spilled_files.read();
+        let mut remote_spill_files = r
             .iter()
             .map(|(k, _)| k)
             .filter_map(|l| match l {
@@ -440,34 +440,42 @@ impl QueryContext {
             })
             .cloned()
             .collect::<Vec<_>>();
-        w.clear();
 
-        if !remote_spill_files.is_empty() {
-            let location_prefix = self.query_tenant_spill_prefix();
-            let node_idx = self.get_cluster().ordered_index();
-            let meta_path = format!(
-                "{}/{}_{}{}",
-                location_prefix,
-                self.get_id(),
-                node_idx,
-                SPILL_META_SUFFIX
-            );
-            let op = DataOperator::instance().operator();
-            // append dir and current meta
-            remote_spill_files.push(meta_path.clone());
-            remote_spill_files.push(format!(
-                "{}/{}_{}/",
-                location_prefix,
-                self.get_id(),
-                node_idx
-            ));
-            let joined_contents = remote_spill_files.join("\n");
+        drop(r);
 
-            if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
-                Ok(op.write(&meta_path, joined_contents).await?)
-            }) {
-                log::error!("create spill meta file error: {}", e);
-            }
+        if remote_spill_files.is_empty() {
+            return;
+        }
+
+        {
+            let mut w = self.shared.spilled_files.write();
+            w.clear();
+        }
+
+        let location_prefix = self.query_tenant_spill_prefix();
+        let node_idx = self.get_cluster().ordered_index();
+        let meta_path = format!(
+            "{}/{}_{}{}",
+            location_prefix,
+            self.get_id(),
+            node_idx,
+            SPILL_META_SUFFIX
+        );
+        let op = DataOperator::instance().operator();
+        // append dir and current meta
+        remote_spill_files.push(meta_path.clone());
+        remote_spill_files.push(format!(
+            "{}/{}_{}/",
+            location_prefix,
+            self.get_id(),
+            node_idx
+        ));
+        let joined_contents = remote_spill_files.join("\n");
+
+        if let Err(e) = GlobalIORuntime::instance()
+            .block_on::<(), (), _>(async move { Ok(op.write(&meta_path, joined_contents).await?) })
+        {
+            log::error!("create spill meta file error: {}", e);
         }
     }
 }
