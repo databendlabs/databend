@@ -1910,7 +1910,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if inner_expr.as_constant().is_some() {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
@@ -2041,7 +2041,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
@@ -2120,7 +2120,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
@@ -2167,7 +2167,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());

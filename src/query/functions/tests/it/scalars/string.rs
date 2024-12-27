@@ -629,8 +629,11 @@ fn test_repeat(file: &mut impl Write) {
 }
 
 fn test_insert(file: &mut impl Write) {
+    let table = [("a", StringType::from_data(vec!["what", "the", "fuck"]))];
+
     run_ast(file, "insert('Quadratic', 3, 4, 'What', 4)", &[]);
     run_ast(file, "insert('Quadratic', 3, 4)", &[]);
+    run_ast(file, "insert('Quadratic', 3, 4, a)", &table);
     run_ast(file, "insert('Quadratic', 3, 4, 'What')", &[]);
     run_ast(file, "insert('Quadratic', -1, 4, 'What')", &[]);
     run_ast(file, "insert('Quadratic', 3, 100, 'What')", &[]);
