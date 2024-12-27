@@ -318,12 +318,8 @@ impl QueryContext {
 
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
+        self.shared.cluster_spill_file_nums.write().clear();
         *self.shared.init_query_id.write() = id;
-        self.shared.had_spill_files.store(false, Ordering::Relaxed);
-    }
-
-    pub fn had_spill_files(&self) -> bool {
-        self.shared.had_spill_files.load(Ordering::Acquire)
     }
 
     pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
@@ -368,8 +364,31 @@ impl QueryContext {
         location: crate::spillers::Location,
         layout: crate::spillers::Layout,
     ) {
-        let mut w = self.shared.spilled_files.write();
-        w.insert(location, layout);
+        if matches!(location, crate::spillers::Location::Remote(_)) {
+            let current_id = self.get_cluster().local_id();
+            let mut w = self.shared.cluster_spill_file_nums.write();
+            w.entry(current_id).and_modify(|e| *e += 1).or_insert(1);
+        }
+        {
+            let mut w = self.shared.spilled_files.write();
+            w.insert(location, layout);
+        }
+    }
+
+    pub fn set_cluster_spill_file_nums(&self, source_target: &str, num: usize) {
+        if num != 0 {
+            let _ = self
+                .shared
+                .cluster_spill_file_nums
+                .write()
+                .insert(source_target.to_string(), num);
+        }
+    }
+
+    pub fn get_spill_file_nums(&self, node_id: Option<String>) -> usize {
+        let r = self.shared.cluster_spill_file_nums.read();
+        let node_id = node_id.unwrap_or(self.get_cluster().local_id());
+        r.get(&node_id).cloned().unwrap_or(0)
     }
 
     pub fn get_spill_layout(
@@ -455,7 +474,6 @@ impl QueryContext {
         {
             let mut w = self.shared.spilled_files.write();
             w.clear();
-            self.shared.had_spill_files.store(true, Ordering::Relaxed);
         }
 
         let location_prefix = self.query_tenant_spill_prefix();
