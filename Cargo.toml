@@ -485,6 +485,7 @@ tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
 twox-hash = "1.6.3"
 typetag = "0.2.3"
+unicase = "2.8.0"
 unicode-segmentation = "1.10.1"
 unindent = "0.2"
 url = "2.3.1"
