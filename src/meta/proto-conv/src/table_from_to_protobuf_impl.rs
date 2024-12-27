@@ -194,6 +194,8 @@ impl FromToProto for mt::TableMeta {
 
         let default_cluster_key_id = if let Some(cluster_key_id) = p.default_cluster_key_id {
             cluster_key_id
+        } else if p.cluster_keys.is_empty() {
+            0
         } else {
             p.cluster_keys.len() as u32 - 1
         };
