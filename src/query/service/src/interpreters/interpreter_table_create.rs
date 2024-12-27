@@ -412,7 +412,7 @@ impl CreateTableInterpreter {
 
         if let Some(cluster_key) = &self.plan.cluster_key {
             table_meta.default_cluster_key = Some(cluster_key.clone());
-            table_meta.default_cluster_key_id += 1;
+            table_meta.cluster_key_seq += 1;
         }
 
         let req = CreateTableReq {

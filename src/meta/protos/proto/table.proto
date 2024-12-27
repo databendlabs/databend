@@ -87,8 +87,8 @@ message TableMeta {
   // The vector of cluster keys.
   repeated string cluster_keys = 4;
 
-  // The default cluster keys id.
-  optional uint32 default_cluster_key_id = 8;
+  // A sequential number that uniquely identifies changes to the cluster key.
+  optional uint32 cluster_key_seq = 8;
 
   // The time table created.
   string created_on = 20;

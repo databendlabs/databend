@@ -80,7 +80,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             .options
             .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
         new_table_meta.default_cluster_key = Some(cluster_key_str);
-        new_table_meta.default_cluster_key_id += 1;
+        new_table_meta.cluster_key_seq += 1;
 
         let req = UpdateTableMetaReq {
             table_id: table_info.ident.table_id,
