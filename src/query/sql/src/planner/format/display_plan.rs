@@ -214,6 +214,7 @@ impl Plan {
             Plan::ShowCreateDictionary(_) => Ok("ShowCreateDictionary".to_string()),
             Plan::RenameDictionary(_) => Ok("RenameDictionary".to_string()),
             Plan::ShowWarehouses => Ok("ShowWarehouses".to_string()),
+            Plan::ShowOnlineNodes => Ok("ShowOnlineNodes".to_string()),
             Plan::DropWarehouse(_) => Ok("DropWarehouse".to_string()),
             Plan::ResumeWarehouse(_) => Ok("ResumeWarehouse".to_string()),
             Plan::SuspendWarehouse(_) => Ok("SuspendWarehouse".to_string()),

@@ -276,9 +276,14 @@ impl WarehouseMgr {
     async fn leave_cluster(&self, node_info: &mut NodeInfo, seq: u64) -> Result<u64> {
         let mut cluster_id = String::new();
         let mut warehouse_id = String::new();
+        let mut runtime_resource_group = None;
 
         std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
         std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
+        std::mem::swap(
+            &mut node_info.runtime_resource_group,
+            &mut runtime_resource_group,
+        );
 
         let upsert_node = self.upsert_node(node_info.clone(), MatchSeq::Exact(seq));
         match upsert_node.await {
@@ -286,12 +291,20 @@ impl WarehouseMgr {
                 // rollback
                 std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
                 std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
+                std::mem::swap(
+                    &mut node_info.runtime_resource_group,
+                    &mut runtime_resource_group,
+                );
                 Err(err)
             }
             Ok(response) if !response.success => {
                 // rollback
                 std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
                 std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
+                std::mem::swap(
+                    &mut node_info.runtime_resource_group,
+                    &mut runtime_resource_group,
+                );
                 Ok(seq)
             }
             Ok(response) => match response.responses.last() {
@@ -542,7 +555,7 @@ impl WarehouseMgr {
                                 }
                             };
 
-                            break;
+                            continue;
                         };
 
                         let Some((seq, mut node)) = nodes_list.pop() else {
@@ -556,7 +569,7 @@ impl WarehouseMgr {
                                 }
                             };
 
-                            break;
+                            continue;
                         };
 
                         node.runtime_resource_group = None;

@@ -133,4 +133,10 @@ impl ResourcesManagement for SelfManagedResourcesManagement {
             "Unimplemented unassign warehouse nodes with self-managed resources management",
         ))
     }
+
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented list online nodes with self-managed resources management",
+        ))
+    }
 }

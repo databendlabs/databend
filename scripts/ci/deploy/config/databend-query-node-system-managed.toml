@@ -52,6 +52,7 @@ definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLE
 
 [query.resources_management]
 type = "system_managed"
+resource_group
 
 [log]
 

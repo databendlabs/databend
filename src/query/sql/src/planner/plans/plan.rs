@@ -203,6 +203,7 @@ pub enum Plan {
     UseCatalog(Box<UseCatalogPlan>),
 
     // Warehouses
+    ShowOnlineNodes,
     ShowWarehouses,
     CreateWarehouse(Box<CreateWarehousePlan>),
     DropWarehouse(Box<DropWarehousePlan>),
@@ -525,6 +526,14 @@ impl Plan {
                 DataField::new("warehouse", DataType::String),
                 DataField::new("type", DataType::String),
                 DataField::new("status", DataType::String),
+            ]),
+            Plan::ShowOnlineNodes => DataSchemaRefExt::create(vec![
+                DataField::new("id", DataType::String),
+                DataField::new("type", DataType::String),
+                DataField::new("resource_group", DataType::String),
+                DataField::new("warehouse", DataType::String),
+                DataField::new("cluster", DataType::String),
+                DataField::new("version", DataType::String),
             ]),
 
             _ => Arc::new(DataSchema::empty()),

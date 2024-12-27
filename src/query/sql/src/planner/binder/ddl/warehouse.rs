@@ -24,6 +24,7 @@ use databend_common_ast::ast::InspectWarehouseStmt;
 use databend_common_ast::ast::RenameWarehouseClusterStmt;
 use databend_common_ast::ast::RenameWarehouseStmt;
 use databend_common_ast::ast::ResumeWarehouseStmt;
+use databend_common_ast::ast::ShowOnlineNodesStmt;
 use databend_common_ast::ast::ShowWarehousesStmt;
 use databend_common_ast::ast::SuspendWarehouseStmt;
 use databend_common_ast::ast::UnassignWarehouseNodesStmt;
@@ -44,6 +45,13 @@ use crate::plans::UnassignWarehouseNodesPlan;
 use crate::Binder;
 
 impl Binder {
+    pub(in crate::planner::binder) fn bind_show_online_nodes(
+        &mut self,
+        _stmt: &ShowOnlineNodesStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::ShowOnlineNodes)
+    }
+
     pub(in crate::planner::binder) fn bind_show_warehouses(
         &mut self,
         _stmt: &ShowWarehousesStmt,

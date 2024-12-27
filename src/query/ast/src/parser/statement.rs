@@ -523,6 +523,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, catalog)| Statement::UseCatalog { catalog },
     );
 
+    let show_online_nodes = map(
+        rule! {
+            SHOW ~ ONLINE ~ NODES
+        },
+        |(_, _, _)| Statement::ShowOnlineNodes(ShowOnlineNodesStmt {}),
+    );
+
     let show_warehouses = map(
         rule! {
             SHOW ~ WAREHOUSES
@@ -2415,6 +2422,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         // warehouse
         rule!(
             #show_warehouses: "`SHOW WAREHOUSES`"
+            | #show_online_nodes: "`SHOW ONLINE NODES`"
             | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <resources_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
             | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
             | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
@@ -4092,9 +4100,9 @@ pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
 pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
     let nodes_list = map(
         rule! {
-            ASSIGN ~ #literal_u64 ~ (FROM ~ #option_to_string)?
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)?
         },
-        |(_, node_size, resources_group)| (resources_group.map(|(_, x)| x), node_size),
+        |(_, node_size, _, resources_group)| (resources_group.map(|(_, x)| x), node_size),
     );
 
     map(comma_separated_list1(nodes_list), |opts| {

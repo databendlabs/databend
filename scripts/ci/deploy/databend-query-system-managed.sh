@@ -8,9 +8,15 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../.." || exit
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <number> - Start number of databend-query with system-managed mode"
-    exit 1
+if [ $# -eq 1 ]; then
+  num=$1
+  resources_group=""
+elif [ $# -eq 2 ]; then
+  num=$1
+  resources_group=$2
+else
+  echo "Usage: $0 <number> - Start number of databend-query with system-managed mode"
+  exit 1
 fi
 
 if ! [[ "$num" =~ ^[0-9]*$ ]]; then
@@ -60,8 +66,6 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 28302
 # wait for cluster formation to complete.
 sleep 1
 
-num=$1
-
 find_available_port() {
     local base_port=20000
     local max_port=65535
@@ -84,6 +88,7 @@ start_databend_query() {
     local http_port=$1
     local mysql_port=$2
     local log_dir=$3
+    local resources_group=$4
     system_managed_config="./scripts/ci/deploy/config/databend-query-node-system-managed.toml"
 
     temp_file=$(mktemp)
@@ -97,6 +102,7 @@ start_databend_query() {
             -e "s/http_port/${http_port}/g" \
             -e "s/flight_sql_port/$(find_available_port)/g" \
             -e "s/query_logs/${log_dir}/g" \
+            -e "s/resource_group/resource_group=\"${resources_group}\"/g" \
             "$system_managed_config" > "$temp_file"
 
         if [ $? -eq 0 ]; then
@@ -116,11 +122,14 @@ start_databend_query() {
     fi
 }
 
-start_databend_query 8000 3307 "logs_1"
+if ! lsof -i :8000 >/dev/null 2>&1; then
+  start_databend_query 8000 3307 "logs_1" $resources_group
+  num=$(( num - 1 ))
+fi
 
-for (( i=1; i<$num; i++ ))
+for (( i=0; i<$num; i++ ))
 do
     http_port=$(find_available_port)
     mysql_port=$(find_available_port)
-    start_databend_query $http_port $mysql_port "logs_$(( i + 1 ))"
+    start_databend_query $http_port $mysql_port "logs_$http_port" $resources_group
 done

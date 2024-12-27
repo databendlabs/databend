@@ -100,6 +100,7 @@ mod interpreter_sequence_create;
 mod interpreter_sequence_drop;
 mod interpreter_set;
 mod interpreter_set_priority;
+mod interpreter_show_online_nodes;
 mod interpreter_show_warehouses;
 mod interpreter_stream_create;
 mod interpreter_stream_drop;

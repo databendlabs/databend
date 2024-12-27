@@ -1256,6 +1256,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Commit => {}
             Plan::Abort => {}
             Plan::ShowWarehouses => {}
+            Plan::ShowOnlineNodes => {}
             Plan::DropWarehouse(_) => {}
             Plan::ResumeWarehouse(_) => {}
             Plan::SuspendWarehouse(_) => {}

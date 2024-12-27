@@ -122,4 +122,10 @@ impl ResourcesManagement for KubernetesResourcesManagement {
             "Unimplemented kubernetes resources management",
         ))
     }
+
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented kubernetes resources management",
+        ))
+    }
 }

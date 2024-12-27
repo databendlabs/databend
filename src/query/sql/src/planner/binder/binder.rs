@@ -656,6 +656,7 @@ impl<'a> Binder {
                     return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
                 }
             }
+            Statement::ShowOnlineNodes(v) => self.bind_show_online_nodes(v)?,
             Statement::ShowWarehouses(v) => self.bind_show_warehouses(v)?,
             Statement::DropWarehouse(v) => self.bind_drop_warehouse(v)?,
             Statement::CreateWarehouse(v) => self.bind_create_warehouse(v)?,

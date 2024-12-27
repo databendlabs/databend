@@ -67,6 +67,7 @@ use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseCl
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
@@ -118,6 +119,7 @@ impl InterpreterFactory {
     ) -> Result<InterpreterPtr> {
         match plan {
             Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create()?)),
+            Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create()?)),
             Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),

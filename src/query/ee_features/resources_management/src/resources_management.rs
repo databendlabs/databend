@@ -69,6 +69,8 @@ pub trait ResourcesManagement: Sync + Send + 'static {
         name: String,
         nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()>;
+
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>>;
 }
 
 pub struct DummyResourcesManagement;
@@ -141,6 +143,10 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    }
+
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }
 }

@@ -1388,6 +1388,8 @@ pub enum TokenKind {
     NODES,
     #[token("UNASSIGN", ignore(ascii_case))]
     UNASSIGN,
+    #[token("ONLINE", ignore(ascii_case))]
+    ONLINE,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

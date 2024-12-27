@@ -22,6 +22,15 @@ use derive_visitor::DriveMut;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowOnlineNodesStmt {}
+
+impl Display for ShowOnlineNodesStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW ONLINE NODES")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowWarehousesStmt {}
 
 impl Display for ShowWarehousesStmt {
@@ -56,7 +65,7 @@ impl Display for CreateWarehouseStmt {
                 }
             }
 
-            write!(f, "(")?;
+            write!(f, ")")?;
         }
 
         if !self.options.is_empty() {
@@ -242,6 +251,8 @@ impl Display for AssignWarehouseNodesStmt {
             write!(f, " FOR {}", cluster)?;
         }
 
+        write!(f, ")")?;
+
         Ok(())
     }
 }
@@ -269,6 +280,8 @@ impl Display for UnassignWarehouseNodesStmt {
 
             write!(f, " FOR {}", cluster)?;
         }
+
+        write!(f, ")")?;
 
         Ok(())
     }

@@ -133,4 +133,8 @@ impl ResourcesManagement for SystemResourcesManagement {
             .unassign_warehouse_nodes(&name, nodes)
             .await
     }
+
+    async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
+        self.warehouse_manager.list_online_nodes().await
+    }
 }
