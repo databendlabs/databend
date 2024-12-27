@@ -58,7 +58,7 @@ pub trait VacuumHandler: Sync + Send {
 
 #[derive(Debug, Clone)]
 pub enum VacuumTempOptions {
-    // nodes_num, skip_node_id, query_id
+    // nodes, query_id
     QueryHook(Vec<usize>, String),
     VacuumCommand(Option<Duration>),
 }
