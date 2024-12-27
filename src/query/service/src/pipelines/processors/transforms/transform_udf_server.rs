@@ -164,13 +164,18 @@ impl TransformUdfServer {
         record_connect_external_duration(func.func_name.clone(), connect_duration);
 
         Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
+        record_running_requests_external_start(func.name.clone(), 1);
+        record_request_external_block_rows(func.func_name.clone(), num_rows);
+
         let result_batch = client
             .do_exchange(&func.func_name, input_batch.clone())
-            .await?;
+            .await;
 
         let request_duration = instant.elapsed() - connect_duration;
+        record_running_requests_external_finish(func.name.clone(), 1);
         record_request_external_duration(func.func_name.clone(), request_duration);
 
+        let result_batch = result_batch?;
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
         let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
             .map_err(|err| {
@@ -241,7 +246,6 @@ impl AsyncTransform for TransformUdfServer {
             .map(|start| data_block.slice(start..start + batch_rows.min(rows - start)))
             .collect();
         for func in self.funcs.iter() {
-            record_request_external_block_rows(func.func_name.clone(), rows);
             let server_addr = func.udf_type.as_server().unwrap();
             let endpoint = self.endpoints.get(server_addr).unwrap();
             let tasks: Vec<_> = batch_blocks
@@ -285,10 +289,7 @@ impl AsyncTransform for TransformUdfServer {
                 })
                 .collect();
 
-            let task_len = tasks.len() as u64;
-            record_running_requests_external_start(func.name.clone(), task_len);
             let task_results = futures::future::join_all(tasks).await;
-            record_running_requests_external_finish(func.name.clone(), task_len);
             batch_blocks = task_results
                 .into_iter()
                 .map(|b| b.unwrap())
