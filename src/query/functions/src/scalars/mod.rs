@@ -14,25 +14,29 @@
 
 use databend_common_expression::FunctionRegistry;
 
-mod arithmetic;
-mod arithmetic_modulo;
+pub mod math_func {
+    pub use databend_functions_scalar_math::*;
+}
 mod array;
 mod binary;
 mod bitmap;
 mod boolean;
 mod comparison;
 mod control;
-mod datetime;
-mod decimal;
-mod geo;
-mod geo_h3;
-mod geography;
-mod geometry;
+
+pub mod geo_func {
+    pub use databend_functions_scalar_geo::*;
+}
+
 mod hash;
 mod hilbert;
-mod interval;
+
+pub mod dt_func {
+    pub use databend_functions_scalar_datetime::*;
+}
+
 mod map;
-mod math;
+
 mod other;
 mod string;
 mod string_multi_args;
@@ -45,27 +49,27 @@ pub use string::ALL_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
-    arithmetic::register(registry);
+    math_func::arithmetic::register(registry);
     array::register(registry);
     boolean::register(registry);
     control::register(registry);
     comparison::register(registry);
-    datetime::register(registry);
-    math::register(registry);
+    dt_func::datetime::register(registry);
+    math_func::math::register(registry);
     map::register(registry);
     string::register(registry);
     binary::register(registry);
     string_multi_args::register(registry);
     tuple::register(registry);
-    geo::register(registry);
-    geo_h3::register(registry);
+    geo_func::geo::register(registry);
+    geo_func::geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
-    decimal::register_to_decimal(registry);
+    math_func::decimal::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
-    geometry::register(registry);
-    geography::register(registry);
+    geo_func::geometry::register(registry);
+    geo_func::geography::register(registry);
     hilbert::register(registry);
-    interval::register(registry);
+    dt_func::interval::register(registry);
 }

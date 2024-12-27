@@ -70,9 +70,9 @@ use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
 use super::decimal::register_decimal_to_int;
-use crate::scalars::decimal::register_decimal_arithmetic;
-use crate::scalars::decimal::register_decimal_to_float;
-use crate::scalars::decimal::register_decimal_to_string;
+use crate::decimal::register_decimal_arithmetic;
+use crate::decimal::register_decimal_to_float;
+use crate::decimal::register_decimal_to_string;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);

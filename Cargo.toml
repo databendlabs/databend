@@ -36,6 +36,10 @@ members = [
     "src/query/expression",
     "src/query/formats",
     "src/query/functions",
+    "src/query/functions",
+    "src/query/functions/src/scalars/mathematics",
+    "src/query/functions/src/scalars/geographic",
+    "src/query/functions/src/scalars/timestamp",
     "src/query/management",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
@@ -184,6 +188,9 @@ databend-enterprise-storage-quota = { path = "src/query/ee_features/storage_quot
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
 databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
+databend-functions-scalar-datetime = { path = "src/query/functions/src/scalars/timestamp" }
+databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geographic" }
+databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-meta = { path = "src/meta/service" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }

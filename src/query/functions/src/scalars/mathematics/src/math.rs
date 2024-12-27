@@ -35,7 +35,7 @@ use num_traits::AsPrimitive;
 use num_traits::Float;
 use num_traits::Pow;
 
-use crate::scalars::decimal::register_decimal_math;
+use crate::decimal::register_decimal_math;
 
 pub fn register(registry: &mut FunctionRegistry) {
     register_decimal_math(registry);
