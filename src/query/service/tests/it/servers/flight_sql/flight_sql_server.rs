@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::TcpListener;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
@@ -27,7 +26,7 @@ async fn test_flight_sql_server_port_used() -> Result<()> {
 
     let mut srv = FlightSQLServer {
         config: ConfigBuilder::create().build(),
-        abort_notify: Arc::new(Default::default()),
+        abort_notify: Default::default(),
     };
 
     let r = srv.start_with_incoming(local_socket).await;
