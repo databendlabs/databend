@@ -55,7 +55,7 @@ impl AggregateFunctionCombinatorNull {
         properties: AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         // has_null_types
-        if !arguments.is_empty() && arguments.iter().any(|f| f == &DataType::Null) {
+        if arguments.iter().any(|f| f == &DataType::Null) {
             if properties.returns_default_when_only_null {
                 return AggregateNullResultFunction::try_create(DataType::Number(
                     NumberDataType::UInt64,
