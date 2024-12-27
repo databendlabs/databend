@@ -65,6 +65,7 @@ jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 tempfile = { workspace = true }
+uuid = { workspace = true }
 
 # aws sdk
 aws-config = { workspace = true, features = ["behavior-version-latest"] }
