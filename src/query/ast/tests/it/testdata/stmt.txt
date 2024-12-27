@@ -13016,7 +13016,6 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
-            force: false,
         },
     },
 )
@@ -13036,7 +13035,6 @@ VacuumDropTable(
                 false,
             ),
             limit: None,
-            force: false,
         },
     },
 )
@@ -13056,7 +13054,6 @@ VacuumDropTable(
                 true,
             ),
             limit: None,
-            force: false,
         },
     },
 )
@@ -13083,7 +13080,6 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
-            force: false,
         },
     },
 )
@@ -13112,7 +13108,6 @@ VacuumDropTable(
             limit: Some(
                 10,
             ),
-            force: false,
         },
     },
 )

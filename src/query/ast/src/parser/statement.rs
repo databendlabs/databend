@@ -3777,12 +3777,11 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)? ~ FORCE?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(opt_dry_run, opt_limit, opt_force)| VacuumDropTableOption {
+        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
             dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
-            force: opt_force.is_some(),
         },
     ),))(i)
 }

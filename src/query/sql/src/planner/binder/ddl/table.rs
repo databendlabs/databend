@@ -1287,7 +1287,6 @@ impl Binder {
             VacuumDropTableOption {
                 dry_run: option.dry_run,
                 limit: option.limit,
-                force: option.force,
             }
         };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
