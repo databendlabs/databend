@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
@@ -146,7 +147,7 @@ impl ResourcesManagement for DummyResourcesManagement {
 
 impl DummyResourcesManagement {
     pub fn init() -> Result<()> {
-        let instance: Box<dyn ResourcesManagement> = Box::new(DummyResourcesManagement);
+        let instance: Arc<dyn ResourcesManagement> = Arc::new(DummyResourcesManagement);
         GlobalInstance::set(instance);
         Ok(())
     }
