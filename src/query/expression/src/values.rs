@@ -173,6 +173,25 @@ pub enum Column {
     Geography(GeographyColumn),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct RandomOptions {
+    pub seed: Option<u64>,
+    pub min_string_len: usize,
+    pub max_string_len: usize,
+    pub max_array_len: usize,
+}
+
+impl Default for RandomOptions {
+    fn default() -> Self {
+        RandomOptions {
+            seed: None,
+            min_string_len: 0,
+            max_string_len: 5,
+            max_array_len: 3,
+        }
+    }
+}
+
 #[derive(Clone, EnumAsInner, Debug, PartialEq)]
 pub enum ColumnVec {
     Null,
@@ -268,6 +287,24 @@ impl<T: ArgType> Value<T> {
         match self {
             Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar)),
             Value::Column(col) => Value::Column(T::upcast_column(col)),
+        }
+    }
+}
+
+impl<T: ValueType> Value<NullableType<T>> {
+    pub fn validity(&self, num_rows: usize) -> Bitmap {
+        match self {
+            Value::Scalar(None) => Bitmap::new_zeroed(num_rows),
+            Value::Scalar(Some(_)) => Bitmap::new_trued(num_rows),
+            Value::Column(col) => col.validity.clone(),
+        }
+    }
+
+    pub fn value(&self) -> Option<Value<T>> {
+        match self {
+            Value::Scalar(None) => None,
+            Value::Scalar(Some(s)) => Some(Value::Scalar(s.clone())),
+            Value::Column(col) => Some(Value::Column(col.column.clone())),
         }
     }
 }
@@ -1196,15 +1233,22 @@ impl Column {
         }
     }
 
-    pub fn random(ty: &DataType, len: usize, seed: Option<u64>) -> Self {
+    pub fn random(ty: &DataType, len: usize, options: Option<RandomOptions>) -> Self {
         use rand::distributions::Alphanumeric;
         use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
-        let mut rng = match seed {
-            None => SmallRng::from_entropy(),
-            Some(seed) => SmallRng::seed_from_u64(seed),
+        let mut rng = match &options {
+            Some(RandomOptions {
+                seed: Some(seed), ..
+            }) => SmallRng::seed_from_u64(*seed),
+            _ => SmallRng::from_entropy(),
         };
+
+        let min_string_len = options.as_ref().map(|opt| opt.min_string_len).unwrap_or(0);
+        let max_string_len = options.as_ref().map(|opt| opt.max_string_len).unwrap_or(5);
+        let max_arr_len = options.as_ref().map(|opt| opt.max_array_len).unwrap_or(3);
+
         match ty {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
@@ -1215,13 +1259,16 @@ impl Column {
             DataType::Binary => BinaryType::from_data(
                 (0..len)
                     .map(|_| {
-                        let rng = match seed {
-                            None => SmallRng::from_entropy(),
-                            Some(seed) => SmallRng::seed_from_u64(seed),
+                        let mut rng = match &options {
+                            Some(RandomOptions {
+                                seed: Some(seed), ..
+                            }) => SmallRng::seed_from_u64(*seed),
+                            _ => SmallRng::from_entropy(),
                         };
+                        let str_len = rng.gen_range(min_string_len..=max_string_len);
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
-                            .take(5)
+                            .take(str_len)
                             .map(u8::from)
                             .collect::<Vec<_>>()
                     })
@@ -1230,13 +1277,16 @@ impl Column {
             DataType::String => StringType::from_data(
                 (0..len)
                     .map(|_| {
-                        let rng = match seed {
-                            None => SmallRng::from_entropy(),
-                            Some(seed) => SmallRng::seed_from_u64(seed),
+                        let mut rng = match &options {
+                            Some(RandomOptions {
+                                seed: Some(seed), ..
+                            }) => SmallRng::seed_from_u64(*seed),
+                            _ => SmallRng::from_entropy(),
                         };
+                        let str_len = rng.gen_range(min_string_len..=max_string_len);
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
-                            .take(5)
+                            .take(str_len)
                             .map(char::from)
                             .collect::<String>()
                     })
@@ -1277,7 +1327,7 @@ impl Column {
             ),
             DataType::Interval => unimplemented!(),
             DataType::Nullable(ty) => NullableColumn::new_column(
-                Column::random(ty, len, seed),
+                Column::random(ty, len, options),
                 Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
             ),
             DataType::Array(inner_ty) => {
@@ -1285,11 +1335,11 @@ impl Column {
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
                 offsets.push(0);
                 for _ in 0..len {
-                    inner_len += rng.gen_range(0..=3);
+                    inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
                 Column::Array(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, seed),
+                    values: Column::random(inner_ty, inner_len as usize, options),
                     offsets: offsets.into(),
                 }))
             }
@@ -1298,11 +1348,11 @@ impl Column {
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
                 offsets.push(0);
                 for _ in 0..len {
-                    inner_len += rng.gen_range(0..=3);
+                    inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
                 Column::Map(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, seed),
+                    values: Column::random(inner_ty, inner_len as usize, options),
                     offsets: offsets.into(),
                 }))
             }
@@ -1321,7 +1371,7 @@ impl Column {
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()
-                    .map(|ty| Column::random(ty, len, seed))
+                    .map(|ty| Column::random(ty, len, options.clone()))
                     .collect::<Vec<_>>();
                 Column::Tuple(fields)
             }

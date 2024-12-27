@@ -1,4 +1,10 @@
 onlyif http
+query T
+select interval '1 month 1 hour 1 microsecond ago'
+----
+-1 month -1:00:00.000001
+
+onlyif http
 statement ok
 create or replace table t(c1 interval, c2 interval);
 
