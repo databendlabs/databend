@@ -93,6 +93,7 @@ use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -109,6 +110,7 @@ use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
+use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -148,8 +150,11 @@ use crate::plans::ScalarItem;
 use crate::plans::SqlSource;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
+use crate::plans::UDFField;
 use crate::plans::UDFLambdaCall;
+use crate::plans::UDFScriptCode;
 use crate::plans::UDFType;
 use crate::plans::Visitor as ScalarVisitor;
 use crate::plans::WindowFunc;
@@ -190,7 +195,7 @@ pub struct TypeChecker<'a> {
     // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
 
-    // true if current expr is inside an window function.
+    // true if current expr is inside a window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
     forbid_udf: bool,
@@ -727,55 +732,76 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
+                let uni_case_func_name = Ascii::new(func_name);
                 if !is_builtin_function(func_name)
-                    && !Self::all_sugar_functions().contains(&func_name)
+                    && !Self::all_sugar_functions().contains(&uni_case_func_name)
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
                         return Ok(udf);
+                    }
+
+                    // Function not found, try to find and suggest similar function name.
+                    let all_funcs = BUILTIN_FUNCTIONS
+                        .all_function_names()
+                        .into_iter()
+                        .chain(AggregateFunctionFactory::instance().registered_names())
+                        .chain(
+                            GENERAL_WINDOW_FUNCTIONS
+                                .iter()
+                                .cloned()
+                                .map(|ascii| ascii.into_inner().to_string()),
+                        )
+                        .chain(
+                            GENERAL_LAMBDA_FUNCTIONS
+                                .iter()
+                                .cloned()
+                                .map(|ascii| ascii.into_inner().to_string()),
+                        )
+                        .chain(
+                            GENERAL_SEARCH_FUNCTIONS
+                                .iter()
+                                .cloned()
+                                .map(|ascii| ascii.into_inner().to_string()),
+                        )
+                        .chain(
+                            ASYNC_FUNCTIONS
+                                .iter()
+                                .cloned()
+                                .map(|ascii| ascii.into_inner().to_string()),
+                        )
+                        .chain(
+                            Self::all_sugar_functions()
+                                .iter()
+                                .cloned()
+                                .map(|ascii| ascii.into_inner().to_string()),
+                        );
+                    let mut engine: SimSearch<String> = SimSearch::new();
+                    for func_name in all_funcs {
+                        engine.insert(func_name.clone(), &func_name);
+                    }
+                    let possible_funcs = engine
+                        .search(func_name)
+                        .iter()
+                        .map(|name| format!("'{name}'"))
+                        .collect::<Vec<_>>();
+                    if possible_funcs.is_empty() {
+                        return Err(ErrorCode::UnknownFunction(format!(
+                            "no function matches the given name: {func_name}"
+                        ))
+                        .set_span(*span));
                     } else {
-                        // Function not found, try to find and suggest similar function name.
-                        let all_funcs = BUILTIN_FUNCTIONS
-                            .all_function_names()
-                            .into_iter()
-                            .chain(AggregateFunctionFactory::instance().registered_names())
-                            .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
-                            .chain(
-                                Self::all_sugar_functions()
-                                    .iter()
-                                    .cloned()
-                                    .map(str::to_string),
-                            );
-                        let mut engine: SimSearch<String> = SimSearch::new();
-                        for func_name in all_funcs {
-                            engine.insert(func_name.clone(), &func_name);
-                        }
-                        let possible_funcs = engine
-                            .search(func_name)
-                            .iter()
-                            .map(|name| format!("'{name}'"))
-                            .collect::<Vec<_>>();
-                        if possible_funcs.is_empty() {
-                            return Err(ErrorCode::UnknownFunction(format!(
-                                "no function matches the given name: {func_name}"
-                            ))
-                            .set_span(*span));
-                        } else {
-                            return Err(ErrorCode::UnknownFunction(format!(
-                                "no function matches the given name: '{func_name}', do you mean {}?",
-                                possible_funcs.join(", ")
-                            ))
-                                .set_span(*span));
-                        }
+                        return Err(ErrorCode::UnknownFunction(format!(
+                            "no function matches the given name: '{func_name}', do you mean {}?",
+                            possible_funcs.join(", ")
+                        ))
+                        .set_span(*span));
                     }
                 }
 
                 // check window function legal
                 if window.is_some()
                     && !AggregateFunctionFactory::instance().contains(func_name)
-                    && !GENERAL_WINDOW_FUNCTIONS.contains(&func_name)
+                    && !GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name)
                 {
                     return Err(ErrorCode::SemanticError(
                         "only window and aggregate functions allowed in window syntax",
@@ -783,7 +809,7 @@ impl<'a> TypeChecker<'a> {
                     .set_span(*span));
                 }
                 // check lambda function legal
-                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     return Err(ErrorCode::SemanticError(
                         "only lambda functions allowed in lambda syntax",
                     )
@@ -792,7 +818,7 @@ impl<'a> TypeChecker<'a> {
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
+                if GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name) {
                     // general window function
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
@@ -858,7 +884,7 @@ impl<'a> TypeChecker<'a> {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
-                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "function {func_name} must have a lambda expression",
@@ -867,8 +893,8 @@ impl<'a> TypeChecker<'a> {
                     }
                     let lambda = lambda.as_ref().unwrap();
                     self.resolve_lambda_function(*span, func_name, &args, lambda)?
-                } else if GENERAL_SEARCH_FUNCTIONS.contains(&func_name) {
-                    match func_name {
+                } else if GENERAL_SEARCH_FUNCTIONS.contains(&uni_case_func_name) {
+                    match func_name.to_lowercase().as_str() {
                         "score" => self.resolve_score_search_function(*span, func_name, &args)?,
                         "match" => self.resolve_match_search_function(*span, func_name, &args)?,
                         "query" => self.resolve_query_search_function(*span, func_name, &args)?,
@@ -880,7 +906,7 @@ impl<'a> TypeChecker<'a> {
                             .set_span(*span));
                         }
                     }
-                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                } else if ASYNC_FUNCTIONS.contains(&uni_case_func_name) {
                     self.resolve_async_function(*span, func_name, &args)?
                 } else if BUILTIN_FUNCTIONS
                     .get_property(func_name)
@@ -1440,7 +1466,7 @@ impl<'a> TypeChecker<'a> {
         self.in_window_function = false;
 
         // If { IGNORE | RESPECT } NULLS is not specified, the default is RESPECT NULLS
-        // (i.e. a NULL value will be returned if the expression contains a NULL value and it is the first value in the expression).
+        // (i.e. a NULL value will be returned if the expression contains a NULL value, and it is the first value in the expression).
         let ignore_null = if let Some(ignore_null) = window_ignore_null {
             *ignore_null
         } else {
@@ -2085,7 +2111,7 @@ impl<'a> TypeChecker<'a> {
         param_count: usize,
         span: Span,
     ) -> Result<()> {
-        // json lambda functions are casted to array or map, ignored here.
+        // json lambda functions are cast to array or map, ignored here.
         let expected_count = if func_name == "array_reduce" {
             2
         } else if func_name.starts_with("array") {
@@ -3119,37 +3145,38 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    pub fn all_sugar_functions() -> &'static [&'static str] {
-        &[
-            "current_catalog",
-            "database",
-            "currentdatabase",
-            "current_database",
-            "version",
-            "user",
-            "currentuser",
-            "current_user",
-            "current_role",
-            "connection_id",
-            "timezone",
-            "nullif",
-            "ifnull",
-            "nvl",
-            "nvl2",
-            "is_null",
-            "is_error",
-            "error_or",
-            "coalesce",
-            "last_query_id",
-            "array_sort",
-            "array_aggregate",
-            "to_variant",
-            "try_to_variant",
-            "greatest",
-            "least",
-            "stream_has_data",
-            "getvariable",
-        ]
+    pub fn all_sugar_functions() -> &'static [Ascii<&'static str>] {
+        static FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("current_catalog"),
+            Ascii::new("database"),
+            Ascii::new("currentdatabase"),
+            Ascii::new("current_database"),
+            Ascii::new("version"),
+            Ascii::new("user"),
+            Ascii::new("currentuser"),
+            Ascii::new("current_user"),
+            Ascii::new("current_role"),
+            Ascii::new("connection_id"),
+            Ascii::new("timezone"),
+            Ascii::new("nullif"),
+            Ascii::new("ifnull"),
+            Ascii::new("nvl"),
+            Ascii::new("nvl2"),
+            Ascii::new("is_null"),
+            Ascii::new("is_error"),
+            Ascii::new("error_or"),
+            Ascii::new("coalesce"),
+            Ascii::new("last_query_id"),
+            Ascii::new("array_sort"),
+            Ascii::new("array_aggregate"),
+            Ascii::new("to_variant"),
+            Ascii::new("try_to_variant"),
+            Ascii::new("greatest"),
+            Ascii::new("least"),
+            Ascii::new("stream_has_data"),
+            Ascii::new("getvariable"),
+        ];
+        FUNCTIONS
     }
 
     fn try_rewrite_sugar_function(
@@ -3714,6 +3741,9 @@ impl<'a> TypeChecker<'a> {
             UDFDefinition::UDFScript(udf_def) => Ok(Some(
                 self.resolve_udf_script(span, name, arguments, udf_def)?,
             )),
+            UDFDefinition::UDAFScript(udf_def) => Ok(Some(
+                self.resolve_udaf_script(span, name, arguments, udf_def)?,
+            )),
         }
     }
 
@@ -3753,7 +3783,7 @@ impl<'a> TypeChecker<'a> {
             UDFCall {
                 span,
                 name,
-                func_name: udf_definition.handler,
+                handler: udf_definition.handler,
                 display_name,
                 udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types: udf_definition.arg_types,
@@ -3765,21 +3795,17 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
-    async fn resolve_udf_with_stage(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
-        let file_location = match udf_definition.code.strip_prefix('@') {
+    async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
+        let file_location = match code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
             None => {
-                let uri = UriLocation::from_uri(udf_definition.code.clone(), BTreeMap::default());
+                let uri = UriLocation::from_uri(code.clone(), BTreeMap::default());
 
                 match uri {
                     Ok(uri) => FileLocation::Uri(uri),
                     Err(_) => {
                         // fallback to use the code as real code
-                        return Ok(UDFType::Script((
-                            udf_definition.language.clone(),
-                            udf_definition.runtime_version.clone(),
-                            udf_definition.code.clone().into(),
-                        )));
+                        return Ok(code.into());
                     }
                 }
             }
@@ -3790,7 +3816,7 @@ impl<'a> TypeChecker<'a> {
             .map_err(|err| {
                 ErrorCode::SemanticError(format!(
                     "Failed to resolve code location {:?}: {}",
-                    &udf_definition.code, err
+                    code, err
                 ))
             })?;
 
@@ -3826,35 +3852,45 @@ impl<'a> TypeChecker<'a> {
             None => code_blob,
         };
 
-        Ok(UDFType::Script((
-            udf_definition.language.clone(),
-            udf_definition.runtime_version.clone(),
-            code_blob,
-        )))
+        Ok(code_blob)
     }
 
     fn resolve_udf_script(
         &mut self,
         span: Span,
         name: String,
-        arguments: &[Expr],
+        args: &[Expr],
         udf_definition: UDFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut args = Vec::with_capacity(arguments.len());
-        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+        let UDFScript {
+            code,
+            handler,
+            language,
+            arg_types,
+            return_type,
+            runtime_version,
+        } = udf_definition;
+        let language = language.parse()?;
+        let mut arguments = Vec::with_capacity(args.len());
+        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
             if ty != *dest_type {
-                args.push(wrap_cast(&arg, dest_type));
+                arguments.push(wrap_cast(&arg, dest_type));
             } else {
-                args.push(arg);
+                arguments.push(arg);
             }
         }
 
-        let const_udf_type =
-            databend_common_base::runtime::block_on(self.resolve_udf_with_stage(&udf_definition))?;
+        let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
+            .into_boxed_slice();
+        let udf_type = UDFType::Script(UDFScriptCode {
+            language,
+            runtime_version,
+            code: code_blob.into(),
+        });
 
-        let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
-        let display_name = format!("{}({})", udf_definition.handler, arg_names);
+        let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
+        let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
         self.ctx.set_cacheable(false);
@@ -3862,15 +3898,78 @@ impl<'a> TypeChecker<'a> {
             UDFCall {
                 span,
                 name,
-                func_name: udf_definition.handler,
+                handler,
                 display_name,
-                arg_types: udf_definition.arg_types,
-                return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: const_udf_type,
-                arguments: args,
+                arg_types,
+                return_type: Box::new(return_type.clone()),
+                udf_type,
+                arguments,
             }
             .into(),
-            udf_definition.return_type.clone(),
+            return_type,
+        )))
+    }
+
+    fn resolve_udaf_script(
+        &mut self,
+        span: Span,
+        name: String,
+        args: &[Expr],
+        udf_definition: UDAFScript,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let UDAFScript {
+            code,
+            language,
+            arg_types,
+            state_fields,
+            return_type,
+            runtime_version,
+        } = udf_definition;
+        let language = language.parse()?;
+        let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
+            .into_boxed_slice();
+        let udf_type = UDFType::Script(UDFScriptCode {
+            language,
+            runtime_version,
+            code: code_blob.into(),
+        });
+
+        let mut arguments = Vec::with_capacity(arg_types.len());
+        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument)?;
+            if ty != *dest_type {
+                arguments.push(wrap_cast(&arg, dest_type));
+            } else {
+                arguments.push(arg);
+            }
+        }
+
+        let display_name = format!(
+            "{name}({})",
+            arg_types.iter().map(|arg| format!("{arg}")).join(", ")
+        );
+
+        self.bind_context.have_udf_script = true;
+        self.ctx.set_cacheable(false);
+        Ok(Box::new((
+            UDAFCall {
+                span,
+                name,
+                display_name,
+                arg_types,
+                state_fields: state_fields
+                    .iter()
+                    .map(|f| UDFField {
+                        name: f.name().to_string(),
+                        data_type: f.data_type().clone(),
+                    })
+                    .collect(),
+                return_type: Box::new(return_type.clone()),
+                udf_type,
+                arguments,
+            }
+            .into(),
+            return_type,
         )))
     }
 
@@ -5197,6 +5296,14 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         return Ok(data_type.wrap_nullable());
     }
     Ok(data_type)
+}
+
+pub fn resolve_type_name_udf(type_name: &TypeName) -> Result<TableDataType> {
+    let type_name = match type_name {
+        name @ TypeName::Nullable(_) | name @ TypeName::NotNull(_) => name,
+        name => &name.clone().wrap_nullable(),
+    };
+    resolve_type_name(type_name, true)
 }
 
 pub fn validate_function_arg(

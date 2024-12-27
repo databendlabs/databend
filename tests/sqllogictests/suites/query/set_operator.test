@@ -1,0 +1,51 @@
+statement ok
+create or replace table a as select null, 3;
+
+statement ok
+create or replace table b as select null, 3;
+
+query T
+select * from a except select * from b;
+----
+
+query T
+select * from a intersect select * from b;
+----
+NULL 3
+
+query T
+select * from a except select * from b union all select * from b except select * from a;
+----
+
+query T
+select * from a except select * from b union all select * from b intersect select * from a;
+----
+NULL 3
+
+statement ok
+create or replace table a as select null, 3 , '343', 1.2, 3.4, true, 4+5, 5-2;
+
+statement ok
+create or replace table a_r like a;
+
+statement ok
+insert into a select * from a_r limit 100000;
+
+statement ok
+create or replace table b as select * from a;
+
+query T
+select * from a except select * from b;
+----
+
+query T
+select * from a except (select * from a intersect select * from b);
+----
+
+query T
+select * from a except select * from b union all select * from b except select * from a;
+----
+
+query T
+select * from a except (select * from b intersect select * from a);
+----

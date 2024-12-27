@@ -34,6 +34,7 @@ pub use registry::register_gauge_family;
 pub use registry::register_histogram;
 pub use registry::register_histogram_family;
 pub use registry::register_histogram_family_in_milliseconds;
+pub use registry::register_histogram_family_in_rows;
 pub use registry::register_histogram_family_in_seconds;
 pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;

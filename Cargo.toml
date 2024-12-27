@@ -212,9 +212,9 @@ arrow-ipc = { version = "53" }
 arrow-ord = { version = "53" }
 arrow-schema = { version = "53", features = ["serde"] }
 arrow-select = { version = "53" }
-arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
-arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
-arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "80b09d6" }
+arrow-udf-js = { version = "0.5.0" }
+arrow-udf-python = { version = "0.4.0" }
+arrow-udf-wasm = { version = "0.4.1" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
@@ -485,6 +485,7 @@ tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
 twox-hash = "1.6.3"
 typetag = "0.2.3"
+unicase = "2.8.0"
 unicode-segmentation = "1.10.1"
 unindent = "0.2"
 url = "2.3.1"
@@ -609,6 +610,9 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
+arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
+arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
+arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = [

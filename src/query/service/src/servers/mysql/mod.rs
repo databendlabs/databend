@@ -26,4 +26,4 @@ pub use self::mysql_handler::MySQLHandler;
 pub use self::mysql_session::MySQLConnection;
 pub use self::tls::MySQLTlsConfig;
 
-const MYSQL_VERSION: &str = "8.0.26";
+const MYSQL_VERSION: &str = "8.0.90";

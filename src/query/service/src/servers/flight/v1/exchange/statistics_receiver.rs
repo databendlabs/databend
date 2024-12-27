@@ -44,7 +44,7 @@ impl StatisticsReceiver {
         let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-        for (_source, exchange) in statistics_exchanges.into_iter() {
+        for (source_target, exchange) in statistics_exchanges.into_iter() {
             let rx = exchange.convert_to_receiver();
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
@@ -62,7 +62,11 @@ impl StatisticsReceiver {
                                 return Ok(());
                             }
                             Either::Left((Ok(false), recv)) => {
-                                match StatisticsReceiver::recv_data(&ctx, recv.await) {
+                                match StatisticsReceiver::recv_data(
+                                    &ctx,
+                                    &source_target,
+                                    recv.await,
+                                ) {
                                     Ok(true) => {
                                         return Ok(());
                                     }
@@ -71,7 +75,11 @@ impl StatisticsReceiver {
                                         return Err(cause);
                                     }
                                     _ => loop {
-                                        match StatisticsReceiver::recv_data(&ctx, rx.recv().await) {
+                                        match StatisticsReceiver::recv_data(
+                                            &ctx,
+                                            &source_target,
+                                            rx.recv().await,
+                                        ) {
                                             Ok(true) => {
                                                 return Ok(());
                                             }
@@ -86,7 +94,7 @@ impl StatisticsReceiver {
                                 }
                             }
                             Either::Right((res, left)) => {
-                                match StatisticsReceiver::recv_data(&ctx, res) {
+                                match StatisticsReceiver::recv_data(&ctx, &source_target, res) {
                                     Ok(true) => {
                                         return Ok(());
                                     }
@@ -113,7 +121,11 @@ impl StatisticsReceiver {
         })
     }
 
-    fn recv_data(ctx: &Arc<QueryContext>, recv_data: Result<Option<DataPacket>>) -> Result<bool> {
+    fn recv_data(
+        ctx: &Arc<QueryContext>,
+        source_target: &str,
+        recv_data: Result<Option<DataPacket>>,
+    ) -> Result<bool> {
         match recv_data {
             Ok(None) => Ok(true),
             Err(transport_error) => Err(transport_error),
@@ -122,7 +134,7 @@ impl StatisticsReceiver {
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
             Ok(Some(DataPacket::SerializeProgress(progress))) => {
                 for progress_info in progress {
-                    progress_info.inc(ctx);
+                    progress_info.inc(source_target, ctx);
                 }
 
                 Ok(false)

@@ -102,7 +102,13 @@ impl Binder {
                 ScalarExpr::AggregateFunction(agg) => {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
-                    find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                    find_replaced_aggregate_function(
+                        agg_info,
+                        &agg.display_name,
+                        &agg.return_type,
+                        &item.alias,
+                    )
+                    .unwrap()
                 }
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()

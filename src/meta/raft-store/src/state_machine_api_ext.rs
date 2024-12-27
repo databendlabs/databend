@@ -14,6 +14,7 @@
 
 use std::future;
 use std::io;
+use std::ops::RangeBounds;
 
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::EvalExpireTime;
@@ -32,6 +33,7 @@ use crate::leveled_store::map_api::IOResultStream;
 use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
 use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::MarkedOf;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine_api::StateMachineApi;
@@ -102,11 +104,18 @@ pub trait StateMachineApiExt: StateMachineApi {
             // Return only keys with the expected prefix
             .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))))
             // Skip tombstone
-            .try_filter_map(|(k, marked)| {
-                let seqv = Into::<Option<SeqV>>::into(marked);
-                let res = seqv.map(|x| (k, x));
-                future::ready(Ok(res))
-            });
+            .try_filter_map(|(k, marked)| future::ready(Ok(marked_to_seqv(k, marked))));
+
+        Ok(strm.boxed())
+    }
+
+    /// Return a range of kv entries.
+    async fn range_kv<R>(&self, rng: R) -> Result<IOResultStream<(String, SeqV)>, io::Error>
+    where R: RangeBounds<String> + Send + Sync + Clone + 'static {
+        let strm = self.map_ref().str_map().range(rng).await?;
+
+        // Skip tombstone
+        let strm = strm.try_filter_map(|(k, marked)| future::ready(Ok(marked_to_seqv(k, marked))));
 
         Ok(strm.boxed())
     }
@@ -197,3 +206,11 @@ pub trait StateMachineApiExt: StateMachineApi {
 }
 
 impl<T> StateMachineApiExt for T where T: StateMachineApi {}
+
+/// Convert internal data to a public API format.
+///
+/// A tombstone is converted to None.
+fn marked_to_seqv(k: String, marked: MarkedOf<String>) -> Option<(String, SeqV)> {
+    let seqv = Into::<Option<SeqV>>::into(marked);
+    seqv.map(|x| (k, x))
+}

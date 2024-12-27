@@ -55,6 +55,9 @@ mod kernels;
 mod property;
 mod register;
 mod register_comparison;
+#[allow(dead_code)]
+mod register_vectorize;
+
 pub mod row;
 pub mod sampler;
 pub mod schema;
@@ -75,8 +78,8 @@ pub use crate::hilbert::*;
 pub use crate::input_columns::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
-pub use crate::register::*;
 pub use crate::register_comparison::*;
+pub use crate::register_vectorize::*;
 pub use crate::row::*;
 pub use crate::schema::*;
 pub use crate::utils::block_thresholds::BlockThresholds;

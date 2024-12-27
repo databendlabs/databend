@@ -22,6 +22,7 @@ use std::str::FromStr;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
+use percent_encoding::percent_decode_str;
 use url::Url;
 
 use crate::ast::quote::QuotedString;
@@ -477,7 +478,9 @@ impl UriLocation {
         let path = if parsed.path().is_empty() {
             "/".to_string()
         } else {
-            parsed.path().to_string()
+            percent_decode_str(parsed.path())
+                .decode_utf8_lossy()
+                .to_string()
         };
 
         Ok(Self {
