@@ -599,7 +599,7 @@ impl<'a> TypeChecker<'a> {
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
 
-                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
                 }
                 // if the source type is nullable, cast target type should also be nullable.
@@ -642,7 +642,7 @@ impl<'a> TypeChecker<'a> {
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
 
-                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
                 }
 
@@ -1112,7 +1112,6 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
         };
-
         Ok(Box::new((scalar, data_type)))
     }
 
@@ -2775,7 +2774,7 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let mut folded_args = Vec::with_capacity(args.len());
                 for (checked_arg, arg) in checked_args.iter().zip(args.iter()) {
-                    match self.try_fold_constant(checked_arg) {
+                    match self.try_fold_constant(checked_arg, true) {
                         Some(constant) if arg.evaluable() => {
                             folded_args.push(constant.0);
                         }
@@ -2793,7 +2792,7 @@ impl<'a> TypeChecker<'a> {
             self.ctx.set_cacheable(false);
         }
 
-        if let Some(constant) = self.try_fold_constant(&expr) {
+        if let Some(constant) = self.try_fold_constant(&expr, true) {
             return Ok(constant);
         }
 
@@ -5166,12 +5165,17 @@ impl<'a> TypeChecker<'a> {
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
         expr: &EExpr<Index>,
+        enable_shrink: bool,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
-        if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        if expr.is_deterministic(&BUILTIN_FUNCTIONS) && enable_shrink {
             if let (EExpr::Constant { scalar, .. }, _) =
                 ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
-                let scalar = shrink_scalar(scalar);
+                let scalar = if enable_shrink {
+                    shrink_scalar(scalar)
+                } else {
+                    scalar
+                };
                 let ty = scalar.as_ref().infer_data_type();
                 return Some(Box::new((
                     ConstantExpr {
