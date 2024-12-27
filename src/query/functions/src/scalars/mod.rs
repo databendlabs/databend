@@ -45,11 +45,12 @@ mod variant;
 mod vector;
 
 pub use comparison::ALL_COMP_FUNC_NAMES;
+use databend_functions_scalar_arithmetic::arithmetic;
 pub use string::ALL_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
-    math_func::arithmetic::register(registry);
+    arithmetic::register(registry);
     array::register(registry);
     boolean::register(registry);
     control::register(registry);
@@ -65,7 +66,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_func::geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
-    math_func::decimal::register_to_decimal(registry);
+    databend_functions_scalar_decimal_utils::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
     geo_func::geometry::register(registry);

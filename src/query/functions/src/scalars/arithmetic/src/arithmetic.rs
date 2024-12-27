@@ -64,15 +64,14 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_functions_scalar_arithmetic_modulo::arithmetic_modulo::vectorize_modulo;
+use databend_functions_scalar_decimal_utils::register_decimal_arithmetic;
+use databend_functions_scalar_decimal_utils::register_decimal_to_float;
+use databend_functions_scalar_decimal_utils::register_decimal_to_int;
+use databend_functions_scalar_decimal_utils::register_decimal_to_string;
 use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
-
-use super::arithmetic_modulo::vectorize_modulo;
-use super::decimal::register_decimal_to_int;
-use crate::decimal::register_decimal_arithmetic;
-use crate::decimal::register_decimal_to_float;
-use crate::decimal::register_decimal_to_string;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);

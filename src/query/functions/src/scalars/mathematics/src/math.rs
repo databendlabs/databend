@@ -31,11 +31,10 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_functions_scalar_decimal_utils::register_decimal_math;
 use num_traits::AsPrimitive;
 use num_traits::Float;
 use num_traits::Pow;
-
-use crate::decimal::register_decimal_math;
 
 pub fn register(registry: &mut FunctionRegistry) {
     register_decimal_math(registry);

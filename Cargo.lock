@@ -3379,7 +3379,10 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
+ "databend-functions-scalar-arithmetic",
+ "databend-functions-scalar-arithmetic-modulo",
  "databend-functions-scalar-datetime",
+ "databend-functions-scalar-decimal-utils",
  "databend-functions-scalar-geo",
  "databend-functions-scalar-math",
  "ethnum",
@@ -4820,6 +4823,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-functions-scalar-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-arithmetic-modulo",
+ "databend-functions-scalar-decimal-utils",
+ "ethnum",
+ "lexical-core",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-arithmetic-modulo"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "num-traits",
+ "strength_reduce",
+]
+
+[[package]]
 name = "databend-functions-scalar-datetime"
 version = "0.1.0"
 dependencies = [
@@ -4829,6 +4854,17 @@ dependencies = [
  "databend-common-expression",
  "dtparse",
  "jiff",
+ "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-decimal-utils"
+version = "0.1.0"
+dependencies = [
+ "databend-common-base",
+ "databend-common-expression",
+ "ethnum",
+ "match-template",
  "num-traits",
 ]
 
@@ -4857,11 +4893,9 @@ dependencies = [
  "crc32fast",
  "databend-common-base",
  "databend-common-expression",
- "ethnum",
- "lexical-core",
+ "databend-functions-scalar-decimal-utils",
  "match-template",
  "num-traits",
- "strength_reduce",
 ]
 
 [[package]]

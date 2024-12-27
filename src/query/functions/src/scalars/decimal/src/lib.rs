@@ -24,4 +24,17 @@
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
 
-pub mod math;
+mod arithmetic;
+mod cast;
+mod comparison;
+mod math;
+
+pub use arithmetic::register_decimal_arithmetic;
+pub use cast::convert_to_decimal;
+pub use cast::convert_to_decimal_domain;
+pub use cast::register_decimal_to_float;
+pub use cast::register_decimal_to_int;
+pub use cast::register_decimal_to_string;
+pub use cast::register_to_decimal;
+pub use comparison::register_decimal_compare_op;
+pub use math::register_decimal_math;

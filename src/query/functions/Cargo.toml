@@ -26,7 +26,10 @@ databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
+databend-functions-scalar-arithmetic = { workspace = true }
+databend-functions-scalar-arithmetic-modulo = { workspace = true }
 databend-functions-scalar-datetime = { workspace = true }
+databend-functions-scalar-decimal-utils = { workspace = true }
 databend-functions-scalar-geo = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 ethnum = { workspace = true }

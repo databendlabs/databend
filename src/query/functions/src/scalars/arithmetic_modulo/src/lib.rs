@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod cast;
-mod comparison;
-mod math;
+#![allow(clippy::arc_with_non_send_sync)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::ptr_arg)]
+#![allow(clippy::type_complexity)]
+#![allow(internal_features)]
+#![feature(core_intrinsics)]
+#![feature(box_patterns)]
+#![feature(type_ascription)]
+#![feature(try_blocks)]
+#![feature(downcast_unchecked)]
+#![feature(str_internals)]
 
-pub use arithmetic::register_decimal_arithmetic;
-pub use cast::convert_to_decimal;
-pub use cast::convert_to_decimal_domain;
-pub use cast::register_decimal_to_float;
-pub use cast::register_decimal_to_int;
-pub use cast::register_decimal_to_string;
-pub use cast::register_to_decimal;
-pub use comparison::register_decimal_compare_op;
-pub use math::register_decimal_math;
+pub mod arithmetic_modulo;

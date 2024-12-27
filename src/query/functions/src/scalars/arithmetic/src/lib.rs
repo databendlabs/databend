@@ -24,4 +24,4 @@
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
 
-pub mod math;
+pub mod arithmetic;

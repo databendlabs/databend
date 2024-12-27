@@ -51,7 +51,7 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
-use databend_functions_scalar_math::decimal::register_decimal_compare_op;
+use databend_functions_scalar_decimal_utils::register_decimal_compare_op;
 use regex::Regex;
 
 use crate::scalars::string_multi_args::regexp;
