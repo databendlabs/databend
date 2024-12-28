@@ -62,7 +62,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 
-async fn apply_block_pruning(
+async fn apply_snapshot_pruning(
     table_snapshot: Arc<TableSnapshot>,
     schema: TableSchemaRef,
     push_down: &Option<PushDownInfo>,
@@ -102,12 +102,9 @@ async fn apply_block_pruning(
         GlobalIORuntime::instance().spawn(async move {
             // avoid block global io runtime
             let runtime = Runtime::with_worker_threads(2, None)?;
-
             let join_handler = runtime.spawn(async move {
-                let segment_pruned_result =
-                    fuse_pruner.clone().segment_pruning(segment_locs).await?;
-                for segment in segment_pruned_result {
-                    let _ = segment_tx.send(Ok(segment)).await;
+                for segment in segment_locs {
+                    let _ = segment_tx.send(segment).await;
                 }
                 Ok::<_, ErrorCode>(())
             });
@@ -140,7 +137,7 @@ async fn apply_block_pruning(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_block_pruner() -> Result<()> {
+async fn test_snapshot_pruner() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -320,7 +317,7 @@ async fn test_block_pruner() -> Result<()> {
 
     for (id, (extra, expected_blocks, expected_rows)) in extras.into_iter().enumerate() {
         let cache_key = Some(format!("test_block_pruner_{}", id));
-        let parts = apply_block_pruning(
+        let parts = apply_snapshot_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
             &extra,

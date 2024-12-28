@@ -22,19 +22,18 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::pruning_pipeline::pruned_segment_meta::PrunedSegmentMeta;
+use crate::pruning_pipeline::LazySegmentMeta;
 use crate::SegmentLocation;
 
-pub struct PrunedSegmentReceiverSource {
-    pub meta_receiver: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
+pub struct LazySegmentReceiverSource {
+    pub meta_receiver: Receiver<SegmentLocation>,
 }
 
-impl PrunedSegmentReceiverSource {
+impl LazySegmentReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        receiver: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
+        receiver: Receiver<SegmentLocation>,
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
@@ -44,20 +43,16 @@ impl PrunedSegmentReceiverSource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for PrunedSegmentReceiverSource {
-    const NAME: &'static str = "PrunedSegmentReceiverSource";
+impl AsyncSource for LazySegmentReceiverSource {
+    const NAME: &'static str = "LazySegmentReceiverSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.meta_receiver.recv().await {
-            Ok(Ok(segments)) => Ok(Some(DataBlock::empty_with_meta(PrunedSegmentMeta::create(
+            Ok(segments) => Ok(Some(DataBlock::empty_with_meta(LazySegmentMeta::create(
                 segments,
             )))),
-            Ok(Err(e)) => Err(
-                // The error is occurred in pruning process
-                e,
-            ),
             Err(_) => {
                 // The channel is closed, we should return None to stop generating
                 Ok(None)
