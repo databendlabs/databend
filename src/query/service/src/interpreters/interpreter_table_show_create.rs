@@ -246,7 +246,7 @@ impl ShowCreateTableInterpreter {
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
-        if let Some(cluster_keys_str) = &table_info.meta.default_cluster_key {
+        if let Some(cluster_keys_str) = &table_info.meta.cluster_key {
             let cluster_type = table_info
                 .options()
                 .get(OPT_KEY_CLUSTER_TYPE)

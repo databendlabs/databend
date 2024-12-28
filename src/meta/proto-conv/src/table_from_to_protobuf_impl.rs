@@ -192,8 +192,8 @@ impl FromToProto for mt::TableMeta {
             indexes.insert(name, mt::TableIndex::from_pb(index)?);
         }
 
-        let default_cluster_key_id = if let Some(cluster_key_id) = p.default_cluster_key_id {
-            cluster_key_id
+        let cluster_key_seq = if let Some(seq) = p.cluster_key_seq {
+            seq
         } else if p.cluster_keys.is_empty() {
             0
         } else {
@@ -210,8 +210,8 @@ impl FromToProto for mt::TableMeta {
             },
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
-            default_cluster_key: p.default_cluster_key,
-            default_cluster_key_id,
+            cluster_key: p.cluster_key,
+            cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             drop_on: match p.drop_on {
@@ -257,10 +257,10 @@ impl FromToProto for mt::TableMeta {
                 Some(self.part_prefix.clone())
             },
             options: self.options.clone(),
-            default_cluster_key: self.default_cluster_key.clone(),
+            cluster_key: self.cluster_key.clone(),
             // cluster_keys is deprecated.
             cluster_keys: vec![],
-            default_cluster_key_id: Some(self.default_cluster_key_id),
+            cluster_key_seq: Some(self.cluster_key_seq),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             drop_on: match self.drop_on {

@@ -67,7 +67,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_info = fuse_table.get_table_info();
         let mut new_table_meta = table_info.meta.clone();
-        new_table_meta.default_cluster_key = None;
+        new_table_meta.cluster_key = None;
         new_table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
 
         let req = UpdateTableMetaReq {
