@@ -133,7 +133,7 @@ fn test_decode_v10_table_meta() -> anyhow::Result<()> {
         storage_params: None,
         part_prefix: "".to_string(),
         options: btreemap! {s("xyz") => s("foo")},
-        default_cluster_key: Some("(a + 2, b)".to_string()),
+        cluster_key: Some("(a + 2, b)".to_string()),
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),

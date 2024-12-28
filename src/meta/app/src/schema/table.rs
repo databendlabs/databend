@@ -260,8 +260,7 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
-    // The default cluster key.
-    pub default_cluster_key: Option<String>,
+    pub cluster_key: Option<String>,
     /// A sequential number that uniquely identifies changes to the cluster key.
     /// This value increments by 1 each time the cluster key is created or modified,
     /// ensuring a unique identifier for each version of the cluster key.
@@ -411,7 +410,7 @@ impl TableInfo {
 
     pub fn cluster_key(&self) -> Option<(u32, String)> {
         self.meta
-            .default_cluster_key
+            .cluster_key
             .clone()
             .map(|k| (self.meta.cluster_key_seq, k))
     }
@@ -426,7 +425,7 @@ impl Default for TableMeta {
             storage_params: None,
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
-            default_cluster_key: None,
+            cluster_key: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),
             updated_on: Utc::now(),

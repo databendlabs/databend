@@ -714,7 +714,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 v.get_table_info()
                     .meta
-                    .default_cluster_key
+                    .cluster_key
                     .clone()
                     .unwrap_or_else(|| "".to_owned())
             })

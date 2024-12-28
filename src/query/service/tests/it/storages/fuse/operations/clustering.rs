@@ -74,7 +74,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.default_cluster_key_id, 1);
+    assert_eq!(table_info.meta.cluster_key_seq, 1);
     assert_eq!(
         table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE).unwrap(),
         LINEAR_CLUSTER_TYPE
@@ -93,8 +93,8 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.default_cluster_key, None);
-    assert_eq!(table_info.meta.default_cluster_key_id, 1);
+    assert_eq!(table_info.meta.cluster_key, None);
+    assert_eq!(table_info.meta.cluster_key_seq, 1);
 
     Ok(())
 }
