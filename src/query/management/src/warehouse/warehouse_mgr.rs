@@ -135,7 +135,7 @@ impl WarehouseMgr {
         }
 
         let mut txn = TxnRequest::default();
-        let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(&node.id)?);
+        let node_key = self.node_key(&node)?;
 
         txn.condition.push(map_condition(&node_key, seq));
 
@@ -230,7 +230,7 @@ impl WarehouseMgr {
 
     async fn upsert_system_managed(&self, mut node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
         let mut txn = TxnRequest::default();
-        let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(&node.id)?);
+        let node_key = self.node_key(&node)?;
 
         txn.condition.push(map_condition(&node_key, seq));
 
@@ -242,13 +242,7 @@ impl WarehouseMgr {
 
         // If the warehouse has already been assigned.
         if !node.cluster_id.is_empty() && !node.warehouse_id.is_empty() {
-            let cluster_key = format!(
-                "{}/{}/{}/{}",
-                self.meta_key_prefix,
-                escape_for_key(&node.warehouse_id)?,
-                escape_for_key(&node.cluster_id)?,
-                escape_for_key(&node.id)?
-            );
+            let cluster_key = self.cluster_key(&node)?;
 
             node.cluster_id = String::new();
             node.warehouse_id = String::new();
@@ -811,7 +805,7 @@ impl WarehouseApi for WarehouseMgr {
             let mut txn = TxnRequest::default();
 
             for (seq, mut node) in selected_nodes {
-                let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(&node.id)?);
+                let node_key = self.node_key(&node)?;
 
                 txn.condition
                     .push(map_condition(&node_key, MatchSeq::Exact(seq)));
@@ -821,13 +815,7 @@ impl WarehouseApi for WarehouseMgr {
                     Some(self.lift_time * 4),
                 ));
 
-                let cluster_key = format!(
-                    "{}/{}/{}/{}",
-                    self.meta_key_prefix,
-                    escape_for_key(&node.warehouse_id)?,
-                    escape_for_key(&node.cluster_id)?,
-                    escape_for_key(&node.id)?
-                );
+                let cluster_key = self.cluster_key(&node)?;
 
                 node.cluster_id = String::new();
                 node.warehouse_id = String::new();
@@ -1789,115 +1777,6 @@ impl WarehouseApi for WarehouseMgr {
                 }
             }
         }
-        // // if cluster.is_empty() {
-        // //     return Err(ErrorCode::InvalidWarehouse(
-        // //         "Warehouse cluster name is empty.",
-        // //     ));
-        // // }
-        //
-        // for _idx in 0..10 {
-        //     let mut drop_cluster_node_txn = TxnRequest::default();
-        //
-        //     let mut consistent_info = self.consistent_warehouse_info(warehouse).await?;
-        //
-        //     consistent_info.warehouse_info = match consistent_info.warehouse_info {
-        //         WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!(
-        //             "Cannot add cluster for warehouse {:?}, because it's self-managed warehouse.",
-        //             warehouse
-        //         ))),
-        //         WarehouseInfo::SystemManaged(mut info) => match info.clusters.get_mut(cluster) {
-        //             None => Err(ErrorCode::WarehouseClusterNotExists(format!(
-        //                 "Warehouse cluster {:?}.{:?} not exists",
-        //                 warehouse, cluster
-        //             ))),
-        //             Some(cluster) => match nodes.len() == cluster.nodes.len() {
-        //                 true => Err(ErrorCode::EmptyNodesForWarehouse(format!(
-        //                     "Warehouse cluster {:?}.{:?} only has {} nodes, cannot drop all.",
-        //                     warehouse,
-        //                     cluster,
-        //                     nodes.len()
-        //                 ))),
-        //                 false => {
-        //                     for remove_node in &nodes {
-        //                         if consistent_info
-        //                             .consistent_nodes
-        //                             .iter()
-        //                             .any(|x| &x.node_info.id == remove_node)
-        //                         {
-        //                             cluster.nodes.pop();
-        //                             continue;
-        //                         }
-        //
-        //                         return Err(ErrorCode::ClusterUnknownNode(format!(
-        //                             "Warehouse cluster {:?}.{:?} unknown node {:?}",
-        //                             warehouse, cluster, remove_node
-        //                         )));
-        //                     }
-        //
-        //                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-        //                         id: info.id,
-        //                         status: info.status,
-        //                         display_name: info.display_name,
-        //                         clusters: info.clusters,
-        //                     }))
-        //                 }
-        //             },
-        //         },
-        //     }?;
-        //
-        //     let warehouse_key = format!(
-        //         "{}/{}",
-        //         self.warehouse_key_prefix,
-        //         escape_for_key(warehouse)?
-        //     );
-        //
-        //     drop_cluster_node_txn.condition.push(map_condition(
-        //         &warehouse_key,
-        //         MatchSeq::Exact(consistent_info.info_seq),
-        //     ));
-        //
-        //     drop_cluster_node_txn.if_then.push(TxnOp::put(
-        //         warehouse_key.clone(),
-        //         serde_json::to_vec(&consistent_info.warehouse_info)?,
-        //     ));
-        //
-        //     // lock all cluster state
-        //     for mut consistent_node in consistent_info.consistent_nodes {
-        //         let node_key = self.node_key(&consistent_node.node_info)?;
-        //         let cluster_key = self.cluster_key(&consistent_node.node_info)?;
-        //
-        //         drop_cluster_node_txn.condition.push(map_condition(
-        //             &node_key,
-        //             MatchSeq::Exact(consistent_node.node_seq),
-        //         ));
-        //         drop_cluster_node_txn.condition.push(map_condition(
-        //             &cluster_key,
-        //             MatchSeq::Exact(consistent_node.cluster_seq),
-        //         ));
-        //
-        //         if nodes.contains(&consistent_node.node_info.id) {
-        //             // Remove node
-        //             consistent_node.node_info.cluster_id = String::new();
-        //             consistent_node.node_info.warehouse_id = String::new();
-        //
-        //             drop_cluster_node_txn
-        //                 .if_then
-        //                 .push(TxnOp::delete(cluster_key));
-        //             drop_cluster_node_txn.if_then.push(TxnOp::put_with_ttl(
-        //                 node_key,
-        //                 serde_json::to_vec(&consistent_node.node_info)?,
-        //                 Some(self.lift_time * 4),
-        //             ))
-        //         }
-        //     }
-        //
-        //     return match self.metastore.transaction(drop_cluster_node_txn).await? {
-        //         res if res.success => Ok(()),
-        //         _ => {
-        //             continue;
-        //         }
-        //     };
-        // }
 
         Err(ErrorCode::WarehouseOperateConflict(
             "Warehouse operate conflict(tried 10 times while in unassign warehouse nodes).",
