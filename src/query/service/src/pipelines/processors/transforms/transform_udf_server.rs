@@ -34,7 +34,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_metrics::external_server::record_connect_external_duration;
 use databend_common_metrics::external_server::record_error_external;
-use databend_common_metrics::external_server::record_request_external_block_rows;
+use databend_common_metrics::external_server::record_request_external_batch_rows;
 use databend_common_metrics::external_server::record_request_external_duration;
 use databend_common_metrics::external_server::record_retry_external;
 use databend_common_metrics::external_server::record_running_requests_external_finish;
@@ -165,7 +165,7 @@ impl TransformUdfServer {
 
         Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
         record_running_requests_external_start(func.name.clone(), 1);
-        record_request_external_block_rows(func.func_name.clone(), num_rows);
+        record_request_external_batch_rows(func.func_name.clone(), num_rows);
 
         let result_batch = client
             .do_exchange(&func.func_name, input_batch.clone())
