@@ -66,13 +66,13 @@ impl WarehouseMgr {
             lift_time,
             // Prefix for all online nodes of the tenant
             node_key_prefix: format!(
-                "{}/{}/online_nodes",
+                "{}/{}/online_nodes_v2",
                 WAREHOUSE_API_KEY_PREFIX,
                 escape_for_key(tenant)?
             ),
             // Prefix for all online computing clusters of the tenant
             meta_key_prefix: format!(
-                "{}/{}/online_clusters",
+                "{}/{}/online_clusters_v2",
                 WAREHOUSE_API_KEY_PREFIX,
                 escape_for_key(tenant)?
             ),
