@@ -53,15 +53,15 @@ impl Display for CreateWarehouseStmt {
         if !self.node_list.is_empty() {
             write!(f, "(")?;
 
-            for (idx, (resources_group, nodes)) in self.node_list.iter().enumerate() {
+            for (idx, (node_group, nodes)) in self.node_list.iter().enumerate() {
                 if idx != 0 {
                     write!(f, ",")?;
                 }
 
                 write!(f, " ASSIGN {} NODES", nodes)?;
 
-                if let Some(resources_group) = resources_group {
-                    write!(f, " FROM '{}'", resources_group)?;
+                if let Some(node_group) = node_group {
+                    write!(f, " FROM '{}'", node_group)?;
                 }
             }
 
@@ -163,15 +163,15 @@ impl Display for AddWarehouseClusterStmt {
         if !self.node_list.is_empty() {
             write!(f, "(")?;
 
-            for (idx, (resources_group, nodes)) in self.node_list.iter().enumerate() {
+            for (idx, (node_group, nodes)) in self.node_list.iter().enumerate() {
                 if idx != 0 {
                     write!(f, ",")?;
                 }
 
                 write!(f, " ASSIGN {} NODES", nodes)?;
 
-                if let Some(resources_group) = resources_group {
-                    write!(f, " FROM '{}'", resources_group)?;
+                if let Some(node_group) = node_group {
+                    write!(f, " FROM '{}'", node_group)?;
                 }
             }
 

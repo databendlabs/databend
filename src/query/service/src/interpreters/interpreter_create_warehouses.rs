@@ -15,12 +15,16 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::SelectedNode;
 use databend_common_sql::plans::CreateWarehousePlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -49,6 +53,9 @@ impl Interpreter for CreateWarehouseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+
         if let Some(warehouse_size) = self.plan.options.get("warehouse_size") {
             if !self.plan.nodes.is_empty() {
                 return Err(ErrorCode::InvalidArgument(
@@ -86,6 +93,13 @@ impl Interpreter for CreateWarehouseInterpreter {
         GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .create_warehouse(self.plan.warehouse.clone(), selected_nodes)
             .await?;
+
+        let user_info = self.ctx.get_current_user()?;
+        log::info!(
+            target: "databend::log::audit",
+            "{}",
+            serde_json::to_string(&AuditElement::create(&user_info, "create_warehouse", &self.plan))?
+        );
 
         Ok(PipelineBuildResult::create())
     }

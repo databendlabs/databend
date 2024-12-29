@@ -10,10 +10,10 @@ BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 if [ $# -eq 1 ]; then
   num=$1
-  resources_group=""
+  node_group=""
 elif [ $# -eq 2 ]; then
   num=$1
-  resources_group=$2
+  node_group=$2
 else
   echo "Usage: $0 <number> - Start number of databend-query with system-managed mode"
   exit 1
@@ -88,7 +88,7 @@ start_databend_query() {
     local http_port=$1
     local mysql_port=$2
     local log_dir=$3
-    local resources_group=$4
+    local node_group=$4
     system_managed_config="./scripts/ci/deploy/config/databend-query-node-system-managed.toml"
 
     temp_file=$(mktemp)
@@ -102,7 +102,7 @@ start_databend_query() {
             -e "s/http_port/${http_port}/g" \
             -e "s/flight_sql_port/$(find_available_port)/g" \
             -e "s/query_logs/${log_dir}/g" \
-            -e "s/resource_group/resource_group=\"${resources_group}\"/g" \
+            -e "s/node_group/node_group=\"${node_group}\"/g" \
             "$system_managed_config" > "$temp_file"
 
         if [ $? -eq 0 ]; then
@@ -123,7 +123,7 @@ start_databend_query() {
 }
 
 if ! lsof -i :8000 >/dev/null 2>&1; then
-  start_databend_query 8000 3307 "logs_1" $resources_group
+  start_databend_query 8000 3307 "logs_1" $node_group
   num=$(( num - 1 ))
 fi
 
@@ -131,5 +131,5 @@ for (( i=0; i<$num; i++ ))
 do
     http_port=$(find_available_port)
     mysql_port=$(find_available_port)
-    start_databend_query $http_port $mysql_port "logs_$http_port" $resources_group
+    start_databend_query $http_port $mysql_port "logs_$http_port" $node_group
 done

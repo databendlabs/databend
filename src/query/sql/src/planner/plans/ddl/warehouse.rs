@@ -20,29 +20,29 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct CreateWarehousePlan {
     pub warehouse: String,
     pub nodes: HashMap<Option<String>, u64>,
     pub options: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DropWarehousePlan {
     pub warehouse: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ResumeWarehousePlan {
     pub warehouse: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SuspendWarehousePlan {
     pub warehouse: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct RenameWarehousePlan {
     pub warehouse: String,
     pub new_warehouse: String,
@@ -63,7 +63,7 @@ impl InspectWarehousePlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct AddWarehouseClusterPlan {
     pub warehouse: String,
     pub cluster: String,
@@ -71,26 +71,26 @@ pub struct AddWarehouseClusterPlan {
     pub options: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DropWarehouseClusterPlan {
     pub warehouse: String,
     pub cluster: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct RenameWarehouseClusterPlan {
     pub warehouse: String,
     pub cluster: String,
     pub new_cluster: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct AssignWarehouseNodesPlan {
     pub warehouse: String,
     pub assign_clusters: HashMap<String, HashMap<Option<String>, usize>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct UnassignWarehouseNodesPlan {
     pub warehouse: String,
     pub unassign_clusters: HashMap<String, HashMap<Option<String>, usize>>,

@@ -26,10 +26,10 @@ fn test_node_info_ip_port() -> anyhow::Result<()> {
         discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
         node_type: Default::default(),
-        resource_group: None,
+        node_group: None,
         cluster_id: "".to_string(),
         warehouse_id: "".to_string(),
-        runtime_resource_group: None,
+        runtime_node_group: None,
     };
 
     let (ip, port) = n.ip_port()?;
@@ -52,10 +52,10 @@ fn test_serde_node_info() {
         discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
         node_type: Default::default(),
-        resource_group: None,
+        node_group: None,
         cluster_id: String::new(),
         warehouse_id: String::new(),
-        runtime_resource_group: None,
+        runtime_node_group: None,
     };
 
     let json_str = serde_json::to_string(&info).unwrap();

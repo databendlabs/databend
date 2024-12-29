@@ -52,7 +52,7 @@ impl ResourcesManagement for SystemResourcesManagement {
             node.cluster_id = String::new();
             node.warehouse_id = String::new();
             node.node_type = NodeType::SystemManaged;
-            node.resource_group = resources_management.resource_group.clone();
+            node.node_group = resources_management.node_group.clone();
         }
 
         Ok(())

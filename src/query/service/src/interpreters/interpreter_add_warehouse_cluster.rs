@@ -15,18 +15,21 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::SelectedNode;
 use databend_common_sql::plans::AddWarehouseClusterPlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 pub struct AddWarehouseClusterInterpreter {
-    #[allow(dead_code)]
     ctx: Arc<QueryContext>,
     plan: AddWarehouseClusterPlan,
 }
@@ -49,6 +52,9 @@ impl Interpreter for AddWarehouseClusterInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+
         if let Some(cluster_size) = self.plan.options.get("cluster_size") {
             if !self.plan.nodes.is_empty() {
                 return Err(ErrorCode::InvalidArgument(
@@ -91,6 +97,13 @@ impl Interpreter for AddWarehouseClusterInterpreter {
                 selected_nodes,
             )
             .await?;
+
+        let user_info = self.ctx.get_current_user()?;
+        log::info!(
+            target: "databend::log::audit",
+            "{}",
+            serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_add_cluster", &self.plan))?
+        );
 
         Ok(PipelineBuildResult::create())
     }

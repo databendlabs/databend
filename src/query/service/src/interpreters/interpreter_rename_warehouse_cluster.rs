@@ -15,20 +15,26 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::RenameWarehouseClusterPlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
 
 pub struct RenameWarehouseClusterInterpreter {
+    ctx: Arc<QueryContext>,
     plan: RenameWarehouseClusterPlan,
 }
 
 impl RenameWarehouseClusterInterpreter {
-    pub fn try_create(plan: RenameWarehouseClusterPlan) -> Result<Self> {
-        Ok(RenameWarehouseClusterInterpreter { plan })
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RenameWarehouseClusterPlan) -> Result<Self> {
+        Ok(RenameWarehouseClusterInterpreter { ctx, plan })
     }
 }
 
@@ -44,6 +50,9 @@ impl Interpreter for RenameWarehouseClusterInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+
         GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .rename_warehouse_cluster(
                 self.plan.warehouse.clone(),
@@ -51,6 +60,14 @@ impl Interpreter for RenameWarehouseClusterInterpreter {
                 self.plan.new_cluster.clone(),
             )
             .await?;
+
+        let user_info = self.ctx.get_current_user()?;
+        log::info!(
+            target: "databend::log::audit",
+            "{}",
+            serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_rename_cluster", &self.plan))?
+        );
+
         Ok(PipelineBuildResult::create())
     }
 }

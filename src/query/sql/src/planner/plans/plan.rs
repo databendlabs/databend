@@ -530,7 +530,7 @@ impl Plan {
             Plan::ShowOnlineNodes => DataSchemaRefExt::create(vec![
                 DataField::new("id", DataType::String),
                 DataField::new("type", DataType::String),
-                DataField::new("resource_group", DataType::String),
+                DataField::new("node_group", DataType::String),
                 DataField::new("warehouse", DataType::String),
                 DataField::new("cluster", DataType::String),
                 DataField::new("version", DataType::String),

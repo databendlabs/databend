@@ -48,7 +48,6 @@ use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpr
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_create_warehouses::CreateWarehouseInterpreter;
 use crate::interpreters::interpreter_drop_warehouse_cluster::DropWarehouseClusterInterpreter;
-use crate::interpreters::interpreter_drop_warehouse_cluster_node::DropWarehouseClusterNodeInterpreter;
 use crate::interpreters::interpreter_drop_warehouses::DropWarehouseInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
@@ -83,6 +82,7 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
+use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouseNodesInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
@@ -118,8 +118,8 @@ impl InterpreterFactory {
         other: impl FnOnce(Arc<QueryContext>, &Plan) -> Result<InterpreterPtr>,
     ) -> Result<InterpreterPtr> {
         match plan {
-            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create()?)),
-            Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create()?)),
+            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(ctx.clone())?)),
+            Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(ctx.clone())?)),
             Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
@@ -129,9 +129,11 @@ impl InterpreterFactory {
                 *v.clone(),
             )?)),
             Plan::ResumeWarehouse(v) => Ok(Arc::new(ResumeWarehouseInterpreter::try_create(
+                ctx.clone(),
                 *v.clone(),
             )?)),
             Plan::SuspendWarehouse(v) => Ok(Arc::new(SuspendWarehouseInterpreter::try_create(
+                ctx.clone(),
                 *v.clone(),
             )?)),
             Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
@@ -139,6 +141,7 @@ impl InterpreterFactory {
                 *v.clone(),
             )?)),
             Plan::InspectWarehouse(v) => Ok(Arc::new(InspectWarehouseInterpreter::try_create(
+                ctx.clone(),
                 *v.clone(),
             )?)),
             Plan::AddWarehouseCluster(v) => Ok(Arc::new(
@@ -148,13 +151,13 @@ impl InterpreterFactory {
                 DropWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
             )),
             Plan::RenameWarehouseCluster(v) => Ok(Arc::new(
-                RenameWarehouseClusterInterpreter::try_create(*v.clone())?,
+                RenameWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
             )),
             Plan::AssignWarehouseNodes(v) => Ok(Arc::new(
-                AssignWarehouseNodesInterpreter::try_create(*v.clone())?,
+                AssignWarehouseNodesInterpreter::try_create(ctx.clone(), *v.clone())?,
             )),
             Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
-                DropWarehouseClusterNodeInterpreter::try_create(*v.clone())?,
+                UnassignWarehouseNodesInterpreter::try_create(ctx.clone(), *v.clone())?,
             )),
             Plan::Query { metadata, .. } => {
                 let read_guard = metadata.read();

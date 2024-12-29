@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -19,7 +20,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_sql::plans::DropWarehouseClusterPlan;
+use databend_common_management::SelectedNode;
+use databend_common_sql::plans::UnassignWarehouseNodesPlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::util::AuditElement;
@@ -27,22 +29,21 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-pub struct DropWarehouseClusterInterpreter {
-    #[allow(dead_code)]
+pub struct UnassignWarehouseNodesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropWarehouseClusterPlan,
+    plan: UnassignWarehouseNodesPlan,
 }
 
-impl DropWarehouseClusterInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropWarehouseClusterPlan) -> Result<Self> {
-        Ok(DropWarehouseClusterInterpreter { ctx, plan })
+impl UnassignWarehouseNodesInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UnassignWarehouseNodesPlan) -> Result<Self> {
+        Ok(UnassignWarehouseNodesInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropWarehouseClusterInterpreter {
+impl Interpreter for UnassignWarehouseNodesInterpreter {
     fn name(&self) -> &str {
-        "DropWarehouseClusterInterpreter"
+        "DropWarehouseClusterNodeInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -54,15 +55,27 @@ impl Interpreter for DropWarehouseClusterInterpreter {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
+        let mut cluster_selected_nodes = HashMap::with_capacity(self.plan.unassign_clusters.len());
+        for (cluster, nodes_map) in &self.plan.unassign_clusters {
+            let mut selected_nodes = Vec::with_capacity(nodes_map.len());
+            for (group, nodes) in nodes_map {
+                for _ in 0..*nodes {
+                    selected_nodes.push(SelectedNode::Random(group.clone()));
+                }
+            }
+
+            cluster_selected_nodes.insert(cluster.clone(), selected_nodes);
+        }
+
         GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .drop_warehouse_cluster(self.plan.warehouse.clone(), self.plan.cluster.clone())
+            .unassign_warehouse_nodes(self.plan.warehouse.clone(), cluster_selected_nodes)
             .await?;
 
         let user_info = self.ctx.get_current_user()?;
         log::info!(
             target: "databend::log::audit",
             "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_drop_cluster", &self.plan))?
+            serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_unassign_nodes", &self.plan))?
         );
 
         Ok(PipelineBuildResult::create())

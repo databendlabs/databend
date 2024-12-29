@@ -15,20 +15,26 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::SuspendWarehousePlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
 
 pub struct SuspendWarehouseInterpreter {
+    ctx: Arc<QueryContext>,
     plan: SuspendWarehousePlan,
 }
 
 impl SuspendWarehouseInterpreter {
-    pub fn try_create(plan: SuspendWarehousePlan) -> Result<Self> {
-        Ok(SuspendWarehouseInterpreter { plan })
+    pub fn try_create(ctx: Arc<QueryContext>, plan: SuspendWarehousePlan) -> Result<Self> {
+        Ok(SuspendWarehouseInterpreter { ctx, plan })
     }
 }
 
@@ -44,9 +50,20 @@ impl Interpreter for SuspendWarehouseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+
         GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .suspend_warehouse(self.plan.warehouse.clone())
             .await?;
+
+        let user_info = self.ctx.get_current_user()?;
+        log::info!(
+            target: "databend::log::audit",
+            "{}",
+            serde_json::to_string(&AuditElement::create(&user_info, "suspend_warehouse", &self.plan))?
+        );
+
         Ok(PipelineBuildResult::create())
     }
 }

@@ -15,10 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::DropWarehousePlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -47,9 +51,20 @@ impl Interpreter for DropWarehouseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+
         GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .drop_warehouse(self.plan.warehouse.clone())
             .await?;
+
+        let user_info = self.ctx.get_current_user()?;
+        log::info!(
+            target: "databend::log::audit",
+            "{}",
+            serde_json::to_string(&AuditElement::create(&user_info, "drop_warehouse", &self.plan))?
+        );
+
         Ok(PipelineBuildResult::create())
     }
 }

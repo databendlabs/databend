@@ -15,22 +15,28 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseInfo;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
 
-pub struct ShowWarehousesInterpreter {}
+pub struct ShowWarehousesInterpreter {
+    ctx: Arc<QueryContext>,
+}
 
 impl ShowWarehousesInterpreter {
-    pub fn try_create() -> Result<Self> {
-        Ok(ShowWarehousesInterpreter {})
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowWarehousesInterpreter { ctx })
     }
 }
 
@@ -46,6 +52,9 @@ impl Interpreter for ShowWarehousesInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+
         let warehouses = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .list_warehouses()
             .await?;

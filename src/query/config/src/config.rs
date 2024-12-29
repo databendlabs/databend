@@ -2993,7 +2993,7 @@ pub struct ResourcesManagementConfig {
     pub typ: String,
 
     #[clap(long, value_name = "VALUE")]
-    pub resource_group: Option<String>,
+    pub node_group: Option<String>,
 }
 
 mod cache_config_converters {

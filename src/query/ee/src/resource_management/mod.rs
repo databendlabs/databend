@@ -26,10 +26,9 @@ use databend_common_exception::Result;
 use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+pub use resources_management_kubernetes::KubernetesResourcesManagement;
+pub use resources_management_self_managed::SelfManagedResourcesManagement;
 pub use resources_management_system::SystemResourcesManagement;
-
-use crate::resource_management::resources_management_kubernetes::KubernetesResourcesManagement;
-use crate::resource_management::resources_management_self_managed::SelfManagedResourcesManagement;
 
 pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
     let service: Arc<dyn ResourcesManagement> = match &cfg.query.resources_management {
