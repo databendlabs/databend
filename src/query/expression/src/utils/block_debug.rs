@@ -443,7 +443,7 @@ fn render_head(
 
             header.push(cell);
 
-            if field.data_type().is_numeric() {
+            if field.data_type().is_number() {
                 aligns.push(CellAlignment::Right);
             } else {
                 aligns.push(CellAlignment::Left);
@@ -493,7 +493,7 @@ fn render_head(
 
                 header.push(cell);
 
-                if field.data_type().is_numeric() {
+                if field.data_type().is_number() {
                     aligns.push(CellAlignment::Right);
                 } else {
                     aligns.push(CellAlignment::Left);

@@ -76,7 +76,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
             options,
-            default_cluster_key: None,
+            cluster_key: None,
             field_comments,
             drop_on: None,
             statistics: stat,

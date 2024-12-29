@@ -789,7 +789,6 @@ pub struct VacuumDropTableOption {
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
     pub limit: Option<usize>,
-    pub force: bool,
 }
 
 impl Display for VacuumDropTableOption {
@@ -802,9 +801,6 @@ impl Display for VacuumDropTableOption {
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
-        }
-        if self.force {
-            write!(f, " FORCE")?;
         }
         Ok(())
     }

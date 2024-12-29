@@ -3101,6 +3101,29 @@ error:
 
 
 
+ast            : insert('Quadratic', 3, 4, a)
+raw expr       : insert('Quadratic', 3, 4, a::String)
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), a)
+optimized expr : insert<String, Int64, Int64, String>("Quadratic", 3_i64, 4_i64, a)
+evaluation:
++--------+-------------------+-------------+
+|        | a                 | Output      |
++--------+-------------------+-------------+
+| Type   | String            | String      |
+| Domain | {"fuck"..="what"} | {""..}      |
+| Row 0  | 'what'            | 'Quwhattic' |
+| Row 1  | 'the'             | 'Quthetic'  |
+| Row 2  | 'fuck'            | 'Qufucktic' |
++--------+-------------------+-------------+
+evaluation (internal):
++--------+----------------------------------------------+
+| Column | Data                                         |
++--------+----------------------------------------------+
+| a      | StringColumn[what, the, fuck]                |
+| Output | StringColumn[Quwhattic, Quthetic, Qufucktic] |
++--------+----------------------------------------------+
+
+
 ast            : insert('Quadratic', 3, 4, 'What')
 raw expr       : insert('Quadratic', 3, 4, 'What')
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), "What")

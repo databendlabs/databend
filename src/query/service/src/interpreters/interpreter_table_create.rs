@@ -381,7 +381,7 @@ impl CreateTableInterpreter {
             storage_params: self.plan.storage_params.clone(),
             options,
             engine_options: self.plan.engine_options.clone(),
-            default_cluster_key: None,
+            cluster_key: None,
             field_comments,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
@@ -411,7 +411,8 @@ impl CreateTableInterpreter {
         }
 
         if let Some(cluster_key) = &self.plan.cluster_key {
-            table_meta = table_meta.push_cluster_key(cluster_key.clone());
+            table_meta.cluster_key = Some(cluster_key.clone());
+            table_meta.cluster_key_seq += 1;
         }
 
         let req = CreateTableReq {
