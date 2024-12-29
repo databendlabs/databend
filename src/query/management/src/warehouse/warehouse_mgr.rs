@@ -42,7 +42,7 @@ use crate::warehouse::warehouse_api::SystemManagedWarehouse;
 use crate::warehouse::warehouse_api::WarehouseInfo;
 use crate::warehouse::WarehouseApi;
 
-pub static WAREHOUSE_API_KEY_PREFIX: &str = "__fd_clusters_v5";
+pub static WAREHOUSE_API_KEY_PREFIX: &str = "__fd_clusters_v6";
 pub static WAREHOUSE_META_KEY_PREFIX: &str = "__fd_warehouses";
 
 pub struct WarehouseMgr {
@@ -66,13 +66,13 @@ impl WarehouseMgr {
             lift_time,
             // Prefix for all online nodes of the tenant
             node_key_prefix: format!(
-                "{}/{}/online_nodes_v2",
+                "{}/{}/online_nodes",
                 WAREHOUSE_API_KEY_PREFIX,
                 escape_for_key(tenant)?
             ),
             // Prefix for all online computing clusters of the tenant
             meta_key_prefix: format!(
-                "{}/{}/online_clusters_v2",
+                "{}/{}/online_clusters",
                 WAREHOUSE_API_KEY_PREFIX,
                 escape_for_key(tenant)?
             ),

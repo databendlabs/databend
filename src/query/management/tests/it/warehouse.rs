@@ -60,10 +60,10 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
 
     let mut node_info_1 = self_managed_node("test_node_1");
     warehouse_manager.start_node(node_info_1.clone()).await?;
-    let node_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node_1";
+    let node_key = "__fd_clusters_v6/test%2dtenant%2did/online_nodes/test_node_1";
     assert_key_value(&kv, node_key, serde_json::to_vec(&node_info_1)?).await;
 
-    let warehouse_key = "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/test_node_1";
+    let warehouse_key = "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/test_node_1";
 
     node_info_1.cluster_id = String::new();
     node_info_1.warehouse_id = String::new();
@@ -81,10 +81,10 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
     let mut node_info_2 = self_managed_node("test_node_2");
     warehouse_manager.start_node(node_info_2.clone()).await?;
 
-    let node_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node_2";
+    let node_key = "__fd_clusters_v6/test%2dtenant%2did/online_nodes/test_node_2";
     assert_key_value(&kv, node_key, serde_json::to_vec(&node_info_2)?).await;
 
-    let warehouse_key = "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/test_node_2";
+    let warehouse_key = "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/test_node_2";
 
     node_info_2.cluster_id = String::new();
     node_info_2.warehouse_id = String::new();
@@ -109,7 +109,7 @@ async fn test_already_exists_add_self_managed_node() -> Result<()> {
     let node_info = self_managed_node("test_node_1");
     warehouse_manager.start_node(node_info.clone()).await?;
 
-    let node_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node_1";
+    let node_key = "__fd_clusters_v6/test%2dtenant%2did/online_nodes/test_node_1";
     assert_key_value(&kv, node_key, serde_json::to_vec(&node_info)?).await;
 
     // add already exists self-managed node and get failure
@@ -214,11 +214,11 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     let mut node_info = self_managed_node("test_node");
     let seq = warehouse_manager.start_node(node_info.clone()).await?;
 
-    let info_key = "__fd_clusters_v5/test%2dtenant%2did/online_nodes/test_node";
+    let info_key = "__fd_clusters_v6/test%2dtenant%2did/online_nodes/test_node";
     assert_key_value(&kv, info_key, serde_json::to_vec(&node_info)?).await;
     assert_key_expire(&kv, info_key, Duration::from_mins(50)).await;
 
-    let warehouse_key = "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/test_node";
+    let warehouse_key = "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test%2dcluster%2did/test%2dcluster%2did/test_node";
     let mut warehouse_node = node_info.clone();
     warehouse_node.cluster_id = String::new();
     warehouse_node.warehouse_id = String::new();
@@ -271,10 +271,10 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     for node in &nodes {
-        let online_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_nodes/{}", node);
+        let online_node = format!("__fd_clusters_v6/test%2dtenant%2did/online_nodes/{}", node);
         assert_key_seq(&kv, &online_node, MatchSeq::GE(1)).await;
         let warehouse_node = format!(
-            "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test%2dcluster%2did/default/{}",
+            "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test%2dcluster%2did/default/{}",
             node
         );
         assert_no_key(&kv, &warehouse_node).await;
@@ -288,10 +288,10 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
     create_warehouse.await?;
 
     for node in &nodes {
-        let online_node = format!("__fd_clusters_v5/test%2dtenant%2did/online_nodes/{}", node);
+        let online_node = format!("__fd_clusters_v6/test%2dtenant%2did/online_nodes/{}", node);
         assert_key_seq(&kv, &online_node, MatchSeq::GE(1)).await;
         let warehouse_node = format!(
-            "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
+            "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
             node
         );
         assert_key_seq(&kv, &warehouse_node, MatchSeq::GE(1)).await;
@@ -733,7 +733,7 @@ async fn test_rename_warehouses() -> Result<()> {
     warehouse_manager.shutdown_node(self_managed_node_1).await?;
 
     let warehouse_node_key = format!(
-        "__fd_clusters_v5/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
+        "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
         &nodes[0]
     );
 
