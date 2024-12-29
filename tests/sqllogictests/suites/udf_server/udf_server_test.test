@@ -563,6 +563,8 @@ remove @udf_stage;
 statement ok
 drop FUNCTION url_len;
 
+statement ok
+select sleep(2);
 
 query I
 select metric, max(value::Int > 0) from system.metrics where metric in ('external_batch_rows_count', 'external_requests_total', 'external_retry_total') group by metric order by metric;
@@ -572,6 +574,6 @@ external_requests_total 1
 external_retry_total 1
 
 query I
-select sum((value::Int != 0)::Int) from system.metrics where metric = 'external_running_requests_total';
+select sum((value::Int)::Int) from system.metrics where metric = 'external_running_requests_total';
 ----
 0
