@@ -17,16 +17,17 @@ use std::collections::HashMap;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
+// Used to describe the nodes in warehouse, excluding the details of the nodes.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum SelectedNode {
-    Random(Option<String>),
+    // Randomly select a node from the tenant's list of online nodes. The selected node's group must match it if node group is specified.
+    Random(Option<String> /* node group */),
 }
 
-pub type SelectedNodes = Vec<SelectedNode>;
-
+// Used to describe information about the warehouse, including both self-managed and system-managed warehouses to ensure compatibility.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub enum WarehouseInfo {
-    SelfManaged(String),
+    SelfManaged(String /* cluster_id of self-managed cluster */),
     SystemManaged(SystemManagedWarehouse),
 }
 
@@ -57,7 +58,7 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn drop_warehouse(&self, warehouse: String) -> Result<()>;
 
-    async fn create_warehouse(&self, warehouse: String, nodes: SelectedNodes) -> Result<()>;
+    async fn create_warehouse(&self, warehouse: String, nodes: Vec<SelectedNode>) -> Result<()>;
 
     async fn resume_warehouse(&self, warehouse: String) -> Result<()>;
 
@@ -73,7 +74,7 @@ pub trait WarehouseApi: Sync + Send {
         &self,
         warehouse: String,
         cluster: String,
-        nodes: SelectedNodes,
+        nodes: Vec<SelectedNode>,
     ) -> Result<()>;
 
     async fn drop_warehouse_cluster(&self, warehouse: String, cluster: String) -> Result<()>;
@@ -88,13 +89,13 @@ pub trait WarehouseApi: Sync + Send {
     async fn assign_warehouse_nodes(
         &self,
         name: String,
-        nodes: HashMap<String, SelectedNodes>,
+        nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()>;
 
     async fn unassign_warehouse_nodes(
         &self,
         warehouse: &str,
-        nodes: HashMap<String, SelectedNodes>,
+        nodes: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()>;
 
     /// Get the tenant's cluster all nodes.
