@@ -33,14 +33,18 @@ pub enum ProgressInfo {
     ScanProgress(ProgressValues),
     WriteProgress(ProgressValues),
     ResultProgress(ProgressValues),
+    SpillTotalFileNums(usize),
 }
 
 impl ProgressInfo {
-    pub fn inc(&self, ctx: &Arc<QueryContext>) {
+    pub fn inc(&self, source_target: &str, ctx: &Arc<QueryContext>) {
         match self {
             ProgressInfo::ScanProgress(values) => ctx.get_scan_progress().incr(values),
             ProgressInfo::WriteProgress(values) => ctx.get_write_progress().incr(values),
             ProgressInfo::ResultProgress(values) => ctx.get_result_progress().incr(values),
+            ProgressInfo::SpillTotalFileNums(values) => {
+                ctx.set_cluster_spill_file_nums(source_target, *values)
+            }
         };
     }
 
@@ -49,6 +53,11 @@ impl ProgressInfo {
             ProgressInfo::ScanProgress(values) => (1_u8, values),
             ProgressInfo::WriteProgress(values) => (2_u8, values),
             ProgressInfo::ResultProgress(values) => (3_u8, values),
+            ProgressInfo::SpillTotalFileNums(values) => {
+                bytes.write_u8(4)?;
+                bytes.write_u64::<BigEndian>(values as u64)?;
+                return Ok(());
+            }
         };
 
         bytes.write_u8(info_type)?;
@@ -59,6 +68,12 @@ impl ProgressInfo {
 
     pub fn read<T: Read>(bytes: &mut T) -> Result<ProgressInfo> {
         let info_type = bytes.read_u8()?;
+
+        if info_type == 4 {
+            let values = bytes.read_u64::<BigEndian>()? as usize;
+            return Ok(ProgressInfo::SpillTotalFileNums(values));
+        }
+
         let rows = bytes.read_u64::<BigEndian>()? as usize;
         let bytes = bytes.read_u64::<BigEndian>()? as usize;
 

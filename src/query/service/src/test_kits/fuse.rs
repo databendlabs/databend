@@ -210,7 +210,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         Statistics::default(),
         locations,
         None,
-        None,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary =

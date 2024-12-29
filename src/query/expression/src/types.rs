@@ -114,10 +114,6 @@ impl DataType {
         }
     }
 
-    pub fn is_nullable(&self) -> bool {
-        matches!(self, &DataType::Nullable(_))
-    }
-
     pub fn is_nullable_or_null(&self) -> bool {
         matches!(self, &DataType::Nullable(_) | &DataType::Null)
     }
@@ -207,10 +203,6 @@ impl DataType {
         }
     }
 
-    pub fn is_numeric(&self) -> bool {
-        matches!(self, DataType::Number(_))
-    }
-
     #[inline]
     pub fn is_integer(&self) -> bool {
         match self {
@@ -225,11 +217,6 @@ impl DataType {
             DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
             _ => false,
         }
-    }
-
-    #[inline]
-    pub fn is_decimal(&self) -> bool {
-        matches!(self, DataType::Decimal(_ty))
     }
 
     #[inline]
@@ -390,6 +377,14 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
+    }
+
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;

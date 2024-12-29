@@ -291,6 +291,24 @@ impl<T: ArgType> Value<T> {
     }
 }
 
+impl<T: ValueType> Value<NullableType<T>> {
+    pub fn validity(&self, num_rows: usize) -> Bitmap {
+        match self {
+            Value::Scalar(None) => Bitmap::new_zeroed(num_rows),
+            Value::Scalar(Some(_)) => Bitmap::new_trued(num_rows),
+            Value::Column(col) => col.validity.clone(),
+        }
+    }
+
+    pub fn value(&self) -> Option<Value<T>> {
+        match self {
+            Value::Scalar(None) => None,
+            Value::Scalar(Some(s)) => Some(Value::Scalar(s.clone())),
+            Value::Column(col) => Some(Value::Column(col.column.clone())),
+        }
+    }
+}
+
 impl<T: Decimal> Value<DecimalType<T>> {
     pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
         match self {

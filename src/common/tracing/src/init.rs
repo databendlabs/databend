@@ -387,7 +387,7 @@ fn match_prefix(meta: &Metadata, prefixes: &[String]) -> FilterResult {
         }
     }
 
-    FilterResult::Neutral
+    FilterResult::Reject
 }
 
 /// Return true if the log level is considered severe.

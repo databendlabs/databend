@@ -865,7 +865,7 @@ impl HashJoinBuildState {
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
             .filter_map(|(b, p)| p.as_ref().map(|(p, index)| (b, p, index)))
         {
-            if !build_key.data_type().remove_nullable().is_numeric()
+            if !build_key.data_type().remove_nullable().is_number()
                 && !build_key.data_type().remove_nullable().is_string()
             {
                 continue;
@@ -942,7 +942,7 @@ impl HashJoinBuildState {
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !build_key.data_type().remove_nullable().is_numeric()
+        if !build_key.data_type().remove_nullable().is_number()
             && !build_key.data_type().remove_nullable().is_string()
         {
             return Ok(());
