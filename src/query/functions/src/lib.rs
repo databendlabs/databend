@@ -110,5 +110,6 @@ fn builtin_functions() -> FunctionRegistry {
     scalars::register(&mut registry);
     srfs::register(&mut registry);
 
+    registry.check_ambiguity();
     registry
 }
