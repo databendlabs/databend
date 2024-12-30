@@ -13,7 +13,7 @@ inputs:
     description: "logic test handlers, mysql,http,clickhouse"
     required: true
     default: ""
-  handlers:
+  parallel:
     description: "logic test parallel"
     required: false
     default: ""
