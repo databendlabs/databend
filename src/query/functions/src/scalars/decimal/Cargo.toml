@@ -1,5 +1,5 @@
 [package]
-name = "databend-functions-scalar-decimal-utils"
+name = "databend-functions-scalar-decimal"
 version = "0.1.0"
 edition = "2021"
 

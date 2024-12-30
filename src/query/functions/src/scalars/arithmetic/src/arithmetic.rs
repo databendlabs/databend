@@ -59,9 +59,9 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use databend_functions_scalar_decimal_utils::register_decimal_to_float;
-use databend_functions_scalar_decimal_utils::register_decimal_to_int;
-use databend_functions_scalar_decimal_utils::register_decimal_to_string;
+use databend_functions_scalar_decimal::register_decimal_to_float;
+use databend_functions_scalar_decimal::register_decimal_to_int;
+use databend_functions_scalar_decimal::register_decimal_to_string;
 use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
@@ -77,8 +77,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_to_number(registry);
     register_number_to_string(registry);
     register_number_to_number(registry);
-    register_binary_arithmetic(registry);
-    register_unary_arithmetic(registry);
 }
 
 macro_rules! register_bitwise_and {
@@ -162,7 +160,7 @@ macro_rules! register_bitwise_shift {
     }};
 }
 
-fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
+pub fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
     // register bitwise operation : AND/OR/XOR
     for left in ALL_INTEGER_TYPES {
         for right in ALL_INTEGER_TYPES {
@@ -211,7 +209,7 @@ macro_rules! register_unary_arithmetic {
     }};
 }
 
-fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
+pub fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
     for dest_ty in ALL_INTEGER_TYPES {
         with_integer_mapped_type!(|DEST_TYPE| match dest_ty {
             NumberDataType::DEST_TYPE => {

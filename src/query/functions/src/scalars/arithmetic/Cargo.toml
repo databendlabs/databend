@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 databend-common-expression = { workspace = true }
-databend-functions-scalar-decimal-utils = { workspace = true }
+databend-functions-scalar-decimal = { workspace = true }
 ethnum = { workspace = true }
 lexical-core = { workspace = true }
 match-template = { workspace = true }

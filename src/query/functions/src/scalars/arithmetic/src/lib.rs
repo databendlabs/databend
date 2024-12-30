@@ -25,3 +25,5 @@
 #![feature(str_internals)]
 
 pub mod arithmetic;
+
+pub use arithmetic::*;

@@ -192,7 +192,7 @@ databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_hand
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars/arithmetic" }
 databend-functions-scalar-datetime = { path = "src/query/functions/src/scalars/timestamp" }
-databend-functions-scalar-decimal-utils = { path = "src/query/functions/src/scalars/decimal" }
+databend-functions-scalar-decimal = { path = "src/query/functions/src/scalars/decimal" }
 databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geographic" }
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }

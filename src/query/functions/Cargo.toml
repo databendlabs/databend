@@ -28,7 +28,7 @@ databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
 databend-functions-scalar-arithmetic = { workspace = true }
 databend-functions-scalar-datetime = { workspace = true }
-databend-functions-scalar-decimal-utils = { workspace = true }
+databend-functions-scalar-decimal = { workspace = true }
 databend-functions-scalar-geo = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }

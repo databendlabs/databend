@@ -28,7 +28,7 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
-use databend_functions_scalar_decimal_utils::register_decimal_arithmetic;
+use databend_functions_scalar_decimal::register_decimal_arithmetic;
 use num_traits::AsPrimitive;
 
 use crate::arithmetic_modulo::vectorize_modulo;
