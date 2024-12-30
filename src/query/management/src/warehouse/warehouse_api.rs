@@ -17,17 +17,33 @@ use std::collections::HashMap;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
-// Used to describe the nodes in warehouse, excluding the details of the nodes.
+/// Databend-query cluster ID.
+///
+/// A cluster is a collection of databend nodes for computation.
+pub type ClusterId = String;
+
+/// Name of a node group.
+///
+/// It is used to filter nodes in a warehouse when creating a cluster.
+pub type NodeGroupName = String;
+
+/// Specifies how to select nodes in a warehouse without exposing node details.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum SelectedNode {
-    // Randomly select a node from the tenant's list of online nodes. The selected node's group must match it if node group is specified.
-    Random(Option<String> /* node group */),
+    /// Select a random online node from the tenant's node list.
+    /// If `NodeGroupName` is specified, only nodes with this group name will be selected.
+    Random(Option<NodeGroupName>),
 }
 
-// Used to describe information about the warehouse, including both self-managed and system-managed warehouses to ensure compatibility.
+/// Contains warehouse metadata that applies to both self-managed and system-managed warehouses.
+///
+/// This enum allows uniform handling of different warehouse types while maintaining their
+/// distinct properties.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub enum WarehouseInfo {
-    SelfManaged(String /* cluster_id of self-managed cluster */),
+    /// A warehouse managed by the tenant, i.e., the cluster id is statically configured in config file.
+    SelfManaged(ClusterId),
+    /// A warehouse managed by the system, i.e., clusters in it can be dynamically assigned and updated.
     SystemManaged(SystemManagedWarehouse),
 }
 
