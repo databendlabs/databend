@@ -325,7 +325,7 @@ EXPLAIN SELECT station_name, MIN(measurement) AS min_measurement, AVG(measuremen
 ----
 EvalScalar
 ├── output columns: [MIN(measurement) (#2), MAX(measurement) (#5), onebrc.station_name (#0), mean_measurement (#6)]
-├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS UInt64 NULL)]
+├── expressions: [sum(measurement) (#3) / CAST(if(CAST(count(measurement) (#4) = 0 AS Boolean NULL), 1, count(measurement) (#4)) AS Float64 NULL)]
 ├── estimated rows: 0.00
 └── AggregateFinal
     ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0)]
