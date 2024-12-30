@@ -114,7 +114,7 @@ evaluation (internal):
 
 ast            : c + d
 raw expr       : plus(c::UInt32, d::Float64)
-checked expr   : plus<Float64, Float64>(to_float64<UInt32>(c), d)
+checked expr   : plus<UInt32, Float64>(c, d)
 evaluation:
 +--------+-----------+------------+------------+
 |        | c         | d          | Output     |
@@ -366,7 +366,7 @@ evaluation (internal):
 
 ast            : c - d
 raw expr       : minus(c::UInt32, d::Float64)
-checked expr   : minus<Float64, Float64>(to_float64<UInt32>(c), d)
+checked expr   : minus<UInt32, Float64>(c, d)
 evaluation:
 +--------+-----------+------------+------------+
 |        | c         | d          | Output     |
@@ -802,7 +802,7 @@ evaluation (internal):
 
 ast            : c * d
 raw expr       : multiply(c::UInt32, d::Float64)
-checked expr   : multiply<Float64, Float64>(to_float64<UInt32>(c), d)
+checked expr   : multiply<UInt32, Float64>(c, d)
 evaluation:
 +--------+-----------+------------+--------------+
 |        | c         | d          | Output       |
@@ -1120,7 +1120,7 @@ evaluation (internal):
 
 ast            : c / d
 raw expr       : divide(c::UInt32, d::Float64)
-checked expr   : divide<Float64, Float64>(to_float64<UInt32>(c), d)
+checked expr   : divide<UInt32, Float64>(c, d)
 evaluation:
 +--------+-----------+------------+---------+
 |        | c         | d          | Output  |
@@ -1358,8 +1358,8 @@ evaluation (internal):
 
 ast            : c div 0.5
 raw expr       : div(c::UInt32, 0.5)
-checked expr   : div<Float64, Float64>(to_float64<UInt32>(c), to_float64<Decimal(1, 1)>(0.5_d128(1,1)))
-optimized expr : div<Float64, Float64>(to_float64<UInt32>(c), 0.5_f64)
+checked expr   : div<UInt32, Float64>(c, to_float64<Decimal(1, 1)>(0.5_d128(1,1)))
+optimized expr : div<UInt32, Float64>(c, 0.5_f64)
 evaluation:
 +--------+-----------+---------+
 |        | c         | Output  |
@@ -1404,7 +1404,7 @@ evaluation (internal):
 
 ast            : c div d
 raw expr       : div(c::UInt32, d::Float64)
-checked expr   : div<Float64, Float64>(to_float64<UInt32>(c), d)
+checked expr   : div<UInt32, Float64>(c, d)
 evaluation:
 +--------+-----------+------------+---------+
 |        | c         | d          | Output  |
@@ -1551,8 +1551,7 @@ evaluation (internal):
 
 ast            : c % (d - 3)
 raw expr       : modulo(c::UInt32, minus(d::Float64, 3))
-checked expr   : modulo<Float64, Float64>(to_float64<UInt32>(c), minus<Float64, Float32>(d, to_float32<UInt8>(3_u8)))
-optimized expr : modulo<Float64, Float64>(to_float64<UInt32>(c), minus<Float64, Float32>(d, 3_f32))
+checked expr   : modulo<UInt32, Float64>(c, minus<Float64, UInt8>(d, 3_u8))
 evaluation:
 +--------+-----------+------------+---------+
 |        | c         | d          | Output  |

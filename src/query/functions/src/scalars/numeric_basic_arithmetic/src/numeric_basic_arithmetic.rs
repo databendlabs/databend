@@ -298,6 +298,34 @@ pub fn register_numeric_basic_arithmetic(registry: &mut FunctionRegistry) {
         }
     }
 
+    for left in ALL_INTEGER_TYPES {
+        for right in ALL_FLOAT_TYPES {
+            with_integer_mapped_type!(|L| match left {
+                NumberDataType::L => with_float_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_basic_arithmetic!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    for left in ALL_FLOAT_TYPES {
+        for right in ALL_INTEGER_TYPES {
+            with_float_mapped_type!(|L| match left {
+                NumberDataType::L => with_integer_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_basic_arithmetic!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
     for left in ALL_FLOAT_TYPES {
         for right in ALL_FLOAT_TYPES {
             with_float_mapped_type!(|L| match left {
