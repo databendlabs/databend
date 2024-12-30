@@ -55,7 +55,7 @@ pub struct WindowFuncAggImpl {
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
-        self.agg.init_state(self.place);
+        self.agg.init_state(&self.place);
     }
 
     #[inline]
@@ -65,12 +65,12 @@ impl WindowFuncAggImpl {
 
     #[inline]
     pub fn accumulate_row(&self, args: InputColumns, row: usize) -> Result<()> {
-        self.agg.accumulate_row(self.place, args, row)
+        self.agg.accumulate_row(&self.place, args, row)
     }
 
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
-        self.agg.merge_result(self.place, builder)
+        self.agg.merge_result(&self.place, builder)
     }
 }
 
@@ -79,7 +79,7 @@ impl Drop for WindowFuncAggImpl {
         drop_guard(move || {
             if self.agg.need_manual_drop_state() {
                 unsafe {
-                    self.agg.drop_state(self.place);
+                    self.agg.drop_state(&self.place);
                 }
             }
         })
@@ -235,10 +235,8 @@ impl WindowFunctionImpl {
                 let arena = Arena::new();
                 let mut state_offset = Vec::with_capacity(1);
                 let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
-                let place = AggrState {
-                    addr: arena.alloc_layout(layout).into(),
-                    offset: state_offset[0],
-                };
+                let place =
+                    AggrState::with_offset(arena.alloc_layout(layout).into(), state_offset[0]);
                 let agg = WindowFuncAggImpl {
                     _arena: arena,
                     agg,

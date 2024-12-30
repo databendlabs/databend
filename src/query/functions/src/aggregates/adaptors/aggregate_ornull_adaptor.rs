@@ -60,13 +60,13 @@ impl AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    pub fn set_flag(&self, place: AggrState, flag: u8) {
+    pub fn set_flag(&self, place: &AggrState, flag: u8) {
         let c = place.next(self.size_of_data).get::<u8>();
         *c = flag;
     }
 
     #[inline]
-    pub fn get_flag(&self, place: AggrState) -> u8 {
+    pub fn get_flag(&self, place: &AggrState) -> u8 {
         let c = place.next(self.size_of_data).get::<u8>();
         *c
     }
@@ -82,7 +82,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn init_state(&self, place: AggrState) {
+    fn init_state(&self, place: &AggrState) {
         let c = place.next(self.size_of_data).get::<u8>();
         *c = 0;
         self.inner.init_state(place)
@@ -101,7 +101,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     #[inline]
     fn accumulate(
         &self,
-        place: AggrState,
+        place: &AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -151,13 +151,13 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
                 for (&addr, valid) in places.iter().zip(v.iter()) {
                     if valid {
-                        self.set_flag(AggrState { addr, offset }, 1);
+                        self.set_flag(&AggrState::with_offset(addr, offset), 1);
                     }
                 }
             }
             _ => {
                 for &addr in places {
-                    self.set_flag(AggrState { addr, offset }, 1);
+                    self.set_flag(&AggrState::with_offset(addr, offset), 1);
                 }
             }
         }
@@ -166,20 +166,20 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         self.inner.accumulate_row(place, columns, row)?;
         self.set_flag(place, 1);
         Ok(())
     }
 
     #[inline]
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.inner.serialize(place, writer)?;
         writer.write_scalar(&self.get_flag(place))
     }
 
     #[inline]
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let flag = self.get_flag(place) > 0 || reader[reader.len() - 1] > 0;
 
         self.inner.merge(place, &mut &reader[..reader.len() - 1])?;
@@ -187,14 +187,14 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         self.inner.merge_states(place, rhs)?;
         let flag = self.get_flag(place) > 0 || self.get_flag(rhs) > 0;
         self.set_flag(place, u8::from(flag));
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         match builder {
             ColumnBuilder::Nullable(inner_mut) => {
                 if self.get_flag(place) == 0 {
@@ -225,7 +225,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: AggrState) {
+    unsafe fn drop_state(&self, place: &AggrState) {
         self.inner.drop_state(place)
     }
 

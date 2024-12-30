@@ -145,10 +145,7 @@ impl Payload {
                     .enumerate()
                 {
                     aggr.serialize(
-                        AggrState {
-                            addr: *place,
-                            offset: *addr_offset,
-                        },
+                        &AggrState::with_offset(*place, *addr_offset),
                         &mut state_builders[idx].data,
                     )
                     .unwrap();

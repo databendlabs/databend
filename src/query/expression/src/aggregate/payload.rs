@@ -84,7 +84,6 @@ pub struct Page {
 
 pub type Pages = Vec<Page>;
 
-// TODO FIXME
 impl Payload {
     pub fn new(
         arena: Arc<Bump>,
@@ -299,10 +298,7 @@ impl Payload {
 
                 let place = StateAddr::from(place);
                 for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                    aggr.init_state(AggrState {
-                        addr: place,
-                        offset: *offset,
-                    });
+                    aggr.init_state(&AggrState::with_offset(place, *offset));
                 }
             }
         }
@@ -423,10 +419,10 @@ impl Drop for Payload {
                                         self.data_ptr(page, row).add(self.state_offset) as _,
                                     )
                                         as usize);
-                                    aggr.drop_state(AggrState {
-                                        addr: state_place,
-                                        offset: *addr_offset,
-                                    });
+                                    aggr.drop_state(&AggrState::with_offset(
+                                        state_place,
+                                        *addr_offset,
+                                    ));
                                 }
                             }
                         }

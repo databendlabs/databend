@@ -61,14 +61,11 @@ where State: DistinctStateFunc
         self.nested.return_type()
     }
 
-    fn init_state(&self, place: AggrState) {
+    fn init_state(&self, place: &AggrState) {
         place.write(|| State::new());
         let layout = Layout::new::<State>();
-        let nested_place = AggrState {
-            addr: place.addr,
-            offset: place.offset + layout.size(),
-        };
-        self.nested.init_state(nested_place);
+        let nested_place = place.next(layout.size());
+        self.nested.init_state(&nested_place);
     }
 
     fn state_layout(&self) -> Layout {
@@ -80,7 +77,7 @@ where State: DistinctStateFunc
 
     fn accumulate(
         &self,
-        place: AggrState,
+        place: &AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -89,38 +86,34 @@ where State: DistinctStateFunc
         state.batch_add(columns, validity, input_rows)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.add(columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         state.serialize(writer)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs = State::deserialize(reader)?;
 
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         let state = place.get::<State>();
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    #[allow(unused_mut)]
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
 
         let layout = Layout::new::<State>();
-        let nested_place = AggrState {
-            addr: place.addr,
-            offset: place.offset + layout.size(),
-        };
+        let nested_place = place.next(layout.size());
 
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
@@ -133,13 +126,13 @@ where State: DistinctStateFunc
             Ok(())
         } else {
             if state.is_empty() {
-                return self.nested.merge_result(nested_place, builder);
+                return self.nested.merge_result(&nested_place, builder);
             }
             let columns = &state.build_columns(&self.arguments).unwrap();
             self.nested
-                .accumulate(nested_place, columns.into(), None, state.len())?;
+                .accumulate(&nested_place, columns.into(), None, state.len())?;
             // merge_result
-            self.nested.merge_result(nested_place, builder)
+            self.nested.merge_result(&nested_place, builder)
         }
     }
 
@@ -147,16 +140,13 @@ where State: DistinctStateFunc
         true
     }
 
-    unsafe fn drop_state(&self, place: AggrState) {
+    unsafe fn drop_state(&self, place: &AggrState) {
         let state = place.get::<State>();
         std::ptr::drop_in_place(state);
 
         if self.nested.need_manual_drop_state() {
             let layout = Layout::new::<State>();
-            self.nested.drop_state(AggrState {
-                addr: place.addr,
-                offset: place.offset + layout.size(),
-            });
+            self.nested.drop_state(&place.next(layout.size()));
         }
     }
 

@@ -195,44 +195,22 @@ pub fn simulate_two_groups_group_by(
     let arena = Bump::new();
 
     // init state for two groups
-    let addr1 = arena.alloc_layout(func.state_layout());
-    func.init_state(AggrState {
-        addr: addr1.into(),
-        offset: 0,
-    });
-    let addr2 = arena.alloc_layout(func.state_layout());
-    func.init_state(AggrState {
-        addr: addr2.into(),
-        offset: 0,
-    });
+    let addr1 = arena.alloc_layout(func.state_layout()).into();
+    let state1 = AggrState::new(addr1);
+    func.init_state(&state1);
+    let addr2 = arena.alloc_layout(func.state_layout()).into();
+    let state2 = AggrState::new(addr2);
+    func.init_state(&state2);
 
     let places = (0..rows)
-        .map(|i| {
-            if i % 2 == 0 {
-                addr1.into()
-            } else {
-                addr2.into()
-            }
-        })
+        .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
     func.accumulate_keys(&places, 0, columns.into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(
-        AggrState {
-            addr: addr1.into(),
-            offset: 0,
-        },
-        &mut builder,
-    )?;
-    func.merge_result(
-        AggrState {
-            addr: addr2.into(),
-            offset: 0,
-        },
-        &mut builder,
-    )?;
+    func.merge_result(&state1, &mut builder)?;
+    func.merge_result(&state2, &mut builder)?;
 
     Ok((builder.build(), data_type))
 }

@@ -18,6 +18,7 @@ use std::ptr::NonNull;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+// use super::AggrStateRegister;
 use super::AggregateFunctionRef;
 
 #[derive(Clone, Copy, Debug)]
@@ -116,6 +117,12 @@ pub fn get_layout_offsets(
 ) -> Result<Layout> {
     let mut max_align = 0;
     let mut total_size: usize = 0;
+
+    // let mut register = AggrStateRegister::new();
+    // for func in funcs {
+    //     func.register_state(&mut register);
+    //     register.commit();
+    // }
 
     for func in funcs {
         let layout = func.state_layout();

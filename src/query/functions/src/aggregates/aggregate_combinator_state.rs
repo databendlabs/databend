@@ -71,7 +71,7 @@ impl AggregateFunction for AggregateStateCombinator {
         Ok(DataType::Binary)
     }
 
-    fn init_state(&self, place: AggrState) {
+    fn init_state(&self, place: &AggrState) {
         self.nested.init_state(place);
     }
 
@@ -85,7 +85,7 @@ impl AggregateFunction for AggregateStateCombinator {
 
     fn accumulate(
         &self,
-        place: AggrState,
+        place: &AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -104,23 +104,23 @@ impl AggregateFunction for AggregateStateCombinator {
             .accumulate_keys(places, offset, columns, input_rows)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         self.nested.merge(place, reader)
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let str_builder = builder.as_binary_mut().unwrap();
         self.serialize(place, &mut str_builder.data)?;
         str_builder.commit_row();
@@ -131,11 +131,9 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: AggrState) {
-        self.nested.drop_state(AggrState {
-            addr: place.addr,
-            offset: place.offset + self.state_layout().size(),
-        });
+    unsafe fn drop_state(&self, place: &AggrState) {
+        self.nested
+            .drop_state(&place.next(self.state_layout().size()));
     }
 
     fn get_own_null_adaptor(

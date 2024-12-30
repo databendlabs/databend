@@ -56,7 +56,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(DataType::String)
     }
 
-    fn init_state(&self, place: AggrState) {
+    fn init_state(&self, place: &AggrState) {
         place.write(|| StringAggState {
             values: String::new(),
         });
@@ -68,7 +68,7 @@ impl AggregateFunction for AggregateStringAggFunction {
 
     fn accumulate(
         &self,
-        place: AggrState,
+        place: &AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -112,7 +112,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let v = StringType::index_column(&column, row);
         if let Some(v) = v {
@@ -123,27 +123,27 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<StringAggState>();
         borsh_serialize_state(writer, state)?;
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<StringAggState>();
         let rhs: StringAggState = borsh_deserialize_state(reader)?;
         state.values.push_str(&rhs.values);
         Ok(())
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         let state = place.get::<StringAggState>();
         let other = rhs.get::<StringAggState>();
         state.values.push_str(&other.values);
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<StringAggState>();
         let builder = StringType::try_downcast_builder(builder).unwrap();
         if !state.values.is_empty() {
@@ -159,7 +159,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         true
     }
 
-    unsafe fn drop_state(&self, place: AggrState) {
+    unsafe fn drop_state(&self, place: &AggrState) {
         let state = place.get::<StringAggState>();
         std::ptr::drop_in_place(state);
     }

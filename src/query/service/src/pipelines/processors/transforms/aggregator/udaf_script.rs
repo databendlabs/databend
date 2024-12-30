@@ -59,11 +59,8 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(self.runtime.return_type())
     }
 
-    fn init_state(&self, place: AggrState) {
-        place
-            .addr
-            .next(place.offset)
-            .write_state(UdfAggState(self.init_state.0.clone()));
+    fn init_state(&self, place: &AggrState) {
+        place.write_state(UdfAggState(self.init_state.0.clone()));
     }
 
     fn state_layout(&self) -> Layout {
@@ -72,7 +69,7 @@ impl AggregateFunction for AggregateUdfScript {
 
     fn accumulate(
         &self,
-        place: AggrState,
+        place: &AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -83,29 +80,29 @@ impl AggregateFunction for AggregateUdfScript {
             .runtime
             .accumulate(state, &input_batch)
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to accumulate: {e}")))?;
-        place.addr.next(place.offset).write_state(state);
+        place.write_state(state);
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let input_batch = self.create_input_batch_row(columns, row)?;
         let state = place.get::<UdfAggState>();
         let state = self
             .runtime
             .accumulate(state, &input_batch)
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to accumulate_row: {e}")))?;
-        place.addr.next(place.offset).write_state(state);
+        place.write_state(state);
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<UdfAggState>();
         state
             .serialize(writer)
             .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let rhs =
             UdfAggState::deserialize(reader).map_err(|e| ErrorCode::Internal(e.to_string()))?;
@@ -114,11 +111,11 @@ impl AggregateFunction for AggregateUdfScript {
             .runtime
             .merge(&states)
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
-        place.addr.next(place.offset).write_state(state);
+        place.write_state(state);
         Ok(())
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let other = rhs.get::<UdfAggState>();
         let states = arrow_select::concat::concat(&[&state.0, &other.0])
@@ -127,11 +124,11 @@ impl AggregateFunction for AggregateUdfScript {
             .runtime
             .merge(&states)
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge_states: {e}")))?;
-        place.addr.next(place.offset).write_state(state);
+        place.write_state(state);
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let array = self
             .runtime

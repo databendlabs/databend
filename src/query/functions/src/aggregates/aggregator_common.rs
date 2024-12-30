@@ -117,11 +117,8 @@ impl EvalAggr {
     fn new(func: AggregateFunctionRef) -> Self {
         let _arena = Bump::new();
         let place = _arena.alloc_layout(func.state_layout());
-        let addr = AggrState {
-            addr: place.into(),
-            offset: 0,
-        };
-        func.init_state(addr);
+        let addr = AggrState::new(place.into());
+        func.init_state(&addr);
 
         Self { _arena, func, addr }
     }
@@ -132,7 +129,7 @@ impl Drop for EvalAggr {
         drop_guard(move || {
             if self.func.need_manual_drop_state() {
                 unsafe {
-                    self.func.drop_state(self.addr);
+                    self.func.drop_state(&self.addr);
                 }
             }
         })
@@ -152,9 +149,9 @@ pub fn eval_aggr(
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
-    func.accumulate(eval.addr, columns.into(), None, rows)?;
+    func.accumulate(&eval.addr, columns.into(), None, rows)?;
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(eval.addr, &mut builder)?;
+    func.merge_result(&eval.addr, &mut builder)?;
     Ok((builder.build(), data_type))
 }
 
