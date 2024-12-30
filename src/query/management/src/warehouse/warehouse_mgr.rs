@@ -45,12 +45,23 @@ use crate::warehouse::WarehouseApi;
 pub static WAREHOUSE_API_KEY_PREFIX: &str = "__fd_clusters_v6";
 pub static WAREHOUSE_META_KEY_PREFIX: &str = "__fd_warehouses";
 
+// example:
+// __fd_clusters_v6/test_tenant/online_nodes
+//      |- /RUV9DQArNnP4Hej4A74f07: NodeInfo { id: "RUV9DQArNnP4Hej4A74f07", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: Some("test"), cluster_id: "", warehouse_id: "", runtime_node_group: Some("test") }
+// 		|- /9a9DU1KufVmSEIDSPnFLZ: NodeInfo { id: "9a9DU1KufVmSEIDSPnFLZ", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: “test_cluster”, warehouse_id: “test_warehouse”, runtime_node_group: None }
+// 		|- /5jTQoMBGJb4TLHeD4pjoa: NodeInfo { id: "5jTQoMBGJb4TLHeD4pjoa", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: “test_cluster”, warehouse_id: “test_warehouse”, runtime_node_group: None }
+//
+// __fd_clusters_v6/test_tenant/online_clusters
+//      |- /test_warehouse/test_cluster/9a9DU1KufVmSEIDSPnFLZ: NodeInfo { id: "9a9DU1KufVmSEIDSPnFLZ", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
+// 		|- /test_warehouse/test_cluster/5jTQoMBGJb4TLHeD4pjoa: NodeInfo { id: "5jTQoMBGJb4TLHeD4pjoa", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
+// __fd_warehouses/v1/test_tenant
+// 		|- /test_warehouse: SystemManaged(SystemManagedWarehouse { id: "udcQQnniiBBFmfP9jziSy4", status: "Running", display_name: "test_warehouse", clusters: {"test_cluster": SystemManagedCluster { nodes: [Random(Some("test")), Random(None)] }} })
 pub struct WarehouseMgr {
     metastore: MetaStore,
     lift_time: Duration,
     node_key_prefix: String,
-    meta_key_prefix: String,
-    warehouse_key_prefix: String,
+    cluster_node_key_prefix: String,
+    warehouse_info_key_prefix: String,
 }
 
 impl WarehouseMgr {
@@ -71,13 +82,13 @@ impl WarehouseMgr {
                 escape_for_key(tenant)?
             ),
             // Prefix for all online computing clusters of the tenant
-            meta_key_prefix: format!(
+            cluster_node_key_prefix: format!(
                 "{}/{}/online_clusters",
                 WAREHOUSE_API_KEY_PREFIX,
                 escape_for_key(tenant)?
             ),
             // Prefix for all warehouses of the tenant (must ensure compatibility across all versions)
-            warehouse_key_prefix: format!(
+            warehouse_info_key_prefix: format!(
                 "{}/v1/{}",
                 WAREHOUSE_META_KEY_PREFIX,
                 escape_for_key(tenant)?,
@@ -118,7 +129,7 @@ impl WarehouseMgr {
     fn cluster_node_key(&self, node: &NodeInfo) -> Result<String> {
         Ok(format!(
             "{}/{}/{}/{}",
-            self.meta_key_prefix,
+            self.cluster_node_key_prefix,
             escape_for_key(&node.warehouse_id)?,
             escape_for_key(&node.cluster_id)?,
             escape_for_key(&node.id)?
@@ -128,7 +139,7 @@ impl WarehouseMgr {
     fn warehouse_info_key(&self, warehouse: &str) -> Result<String> {
         Ok(format!(
             "{}/{}",
-            self.warehouse_key_prefix,
+            self.warehouse_info_key_prefix,
             escape_for_key(warehouse)?
         ))
     }
@@ -366,7 +377,7 @@ impl WarehouseMgr {
     async fn consistent_warehouse_info(&self, id: &str) -> Result<ConsistentWarehouseInfo> {
         let warehouse_info_key = self.warehouse_info_key(id)?;
 
-        let nodes_prefix = format!("{}/{}/", self.meta_key_prefix, escape_for_key(id)?);
+        let nodes_prefix = format!("{}/{}/", self.cluster_node_key_prefix, escape_for_key(id)?);
 
         'retry: for _idx in 0..64 {
             let Some(before_info) = self.metastore.get_kv(&warehouse_info_key).await? else {
@@ -673,7 +684,7 @@ impl WarehouseApi for WarehouseMgr {
                     if !node_info.cluster_id.is_empty() && !node_info.warehouse_id.is_empty() {
                         txn.if_then.push(TxnOp::delete(format!(
                             "{}/{}/{}/{}",
-                            self.meta_key_prefix,
+                            self.cluster_node_key_prefix,
                             escape_for_key(&node_info.warehouse_id)?,
                             escape_for_key(&node_info.cluster_id)?,
                             escape_for_key(&node_info.id)?
@@ -1054,7 +1065,7 @@ impl WarehouseApi for WarehouseMgr {
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
         let values = self
             .metastore
-            .prefix_list_kv(&self.warehouse_key_prefix)
+            .prefix_list_kv(&self.warehouse_info_key_prefix)
             .await?;
 
         let mut warehouses = Vec::with_capacity(values.len());
@@ -1750,7 +1761,7 @@ impl WarehouseApi for WarehouseMgr {
     ) -> Result<Vec<NodeInfo>> {
         let cluster_prefix = format!(
             "{}/{}/{}/",
-            self.meta_key_prefix,
+            self.cluster_node_key_prefix,
             escape_for_key(warehouse)?,
             escape_for_key(cluster)?
         );
@@ -1804,7 +1815,7 @@ impl WarehouseApi for WarehouseMgr {
 
         let cluster_prefix = format!(
             "{}/{}/{}/",
-            self.meta_key_prefix,
+            self.cluster_node_key_prefix,
             escape_for_key(&self_info.warehouse_id)?,
             escape_for_key(&self_info.cluster_id)?
         );
