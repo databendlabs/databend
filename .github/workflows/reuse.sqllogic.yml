@@ -84,6 +84,7 @@ jobs:
         with:
           dirs: udf_server
           handlers: mysql,http
+          paralle: 1
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()

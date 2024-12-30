@@ -13,6 +13,10 @@ inputs:
     description: "logic test handlers, mysql,http,clickhouse"
     required: true
     default: ""
+  handlers:
+    description: "logic test parallel"
+    required: false
+    default: ""
   storage-format:
     description: "storage format for databend query to test"
     required: true
@@ -38,6 +42,7 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
 
@@ -46,5 +51,6 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-native.sh ${{ inputs.dirs }}
