@@ -3428,6 +3428,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
+ "hyper 0.14.30",
  "hyper 1.4.1",
  "hyper-util",
  "jwt-simple",
@@ -4701,6 +4702,7 @@ dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-s3",
+ "aws-smithy-runtime",
  "base64 0.22.1",
  "chrono",
  "chrono-tz 0.8.6",
@@ -4749,6 +4751,8 @@ dependencies = [
  "derive-visitor",
  "futures",
  "futures-util",
+ "hyper 0.14.30",
+ "hyper-tls 0.5.0",
  "jsonb",
  "jwt-simple",
  "log",
@@ -8256,6 +8260,19 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tower-service",
+]
+
+[[package]]
+name = "hyper-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
+dependencies = [
+ "bytes",
+ "hyper 0.14.30",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
 ]
 
 [[package]]
@@ -12161,7 +12178,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.4.1",
  "hyper-rustls 0.27.2",
- "hyper-tls",
+ "hyper-tls 0.6.0",
  "hyper-util",
  "ipnet",
  "js-sys",
