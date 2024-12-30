@@ -66,7 +66,7 @@
   
 - **Blazing-Fast Performance**: Built with **Rust** for high-speed query execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top)
   
-- **Cost-Effective**: Scalable architecture optimizing **performance** while reducing **storage** and **compute** costs. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch)
+- **Cost-Effective**: Scalable architecture that boosts **performance** and reduces **costs**. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch)
   
 - **AI-Enhanced Analytics**: Leverage built-in **[AI Functions](https://docs.databend.com/guides/ai-functions/)** for smarter data insights.
   
