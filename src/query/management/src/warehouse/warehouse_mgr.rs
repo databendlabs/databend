@@ -47,12 +47,12 @@ pub static WAREHOUSE_META_KEY_PREFIX: &str = "__fd_warehouses";
 
 // example:
 // __fd_clusters_v6/test_tenant/online_nodes
-//      |- /RUV9DQArNnP4Hej4A74f07: NodeInfo { id: "RUV9DQArNnP4Hej4A74f07", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: Some("test"), cluster_id: "", warehouse_id: "", runtime_node_group: Some("test") }
-// 		|- /9a9DU1KufVmSEIDSPnFLZ: NodeInfo { id: "9a9DU1KufVmSEIDSPnFLZ", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: “test_cluster”, warehouse_id: “test_warehouse”, runtime_node_group: None }
-// 		|- /5jTQoMBGJb4TLHeD4pjoa: NodeInfo { id: "5jTQoMBGJb4TLHeD4pjoa", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: “test_cluster”, warehouse_id: “test_warehouse”, runtime_node_group: None }
+//      |- /RUV9DQArNnP4Hej4A74f07: NodeInfo { id: "RUV9DQArNnP4Hej4A74f07", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
+// 		|- /9a9DU1KufVmSEIDSOnFLZ: NodeInfo { id: "9a9DU1KufVmSEIDSOnFLZ", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: Some("test"), cluster_id: "test_cluster", warehouse_id: "test_warehouse", runtime_node_group: Some("test") }
+// 		|- /5jTQoMBGJb4TLHeD4pjoa: NodeInfo { id: "5jTQoMBGJb4TLHeD4pjoa", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "test_cluster", warehouse_id: "test_warehouse", runtime_node_group: None }
 //
 // __fd_clusters_v6/test_tenant/online_clusters
-//      |- /test_warehouse/test_cluster/9a9DU1KufVmSEIDSPnFLZ: NodeInfo { id: "9a9DU1KufVmSEIDSPnFLZ", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
+//      |- /test_warehouse/test_cluster/9a9DU1KufVmSEIDSOnFLZ: NodeInfo { id: "9a9DU1KufVmSEIDSOnFLZ", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
 // 		|- /test_warehouse/test_cluster/5jTQoMBGJb4TLHeD4pjoa: NodeInfo { id: "5jTQoMBGJb4TLHeD4pjoa", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
 // __fd_warehouses/v1/test_tenant
 // 		|- /test_warehouse: SystemManaged(SystemManagedWarehouse { id: "udcQQnniiBBFmfP9jziSy4", status: "Running", display_name: "test_warehouse", clusters: {"test_cluster": SystemManagedCluster { nodes: [Random(Some("test")), Random(None)] }} })
