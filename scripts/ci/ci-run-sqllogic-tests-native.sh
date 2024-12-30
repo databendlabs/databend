@@ -10,7 +10,7 @@ echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone-native.sh
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
-TEST_PARALLEL=${TEST_PARALLEL:8}
+TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""

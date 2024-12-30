@@ -12,7 +12,7 @@ echo "Starting Cluster databend-query"
 export RUST_BACKTRACE=1
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
-TEST_PARALLEL=${TEST_PARALLEL:8}
+TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""
