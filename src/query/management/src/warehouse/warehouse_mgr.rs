@@ -215,7 +215,7 @@ impl WarehouseMgr {
                     return match response.responses.pop().and_then(|x| x.response) {
                         Some(Response::Get(data)) => match data.value {
                             None => Ok(response),
-                            Some(value) if value.seq == 0 => Ok(response),
+                            Some(value) if value.seq == exact_seq => Ok(response),
                             Some(value) => match serde_json::from_slice(&value.data)? {
                                 WarehouseInfo::SystemManaged(_) => {
                                     Err(ErrorCode::WarehouseAlreadyExists(
