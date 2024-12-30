@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_base::base::escape_for_key;
+use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::vec_ext::VecExt;
@@ -24,9 +25,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
 use databend_common_meta_types::TxnCondition;
@@ -35,6 +40,8 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use log::error;
+use log::info;
 
 use crate::warehouse::warehouse_api::SelectedNode;
 use crate::warehouse::warehouse_api::SystemManagedCluster;
@@ -159,93 +166,125 @@ impl WarehouseMgr {
             ));
         }
 
+        // It's a many-to-one map from `node` to `warehouse`.
+        //
+        // In insert mode, there may not be any node registered in the self-managed warehouse,
+        // thus we need to asset either the warehouse does not exist,
+        // or the warehouse is a self-managed warehouse.
+        // Otherwise(warehouse is found a system-managed), return an error immediately.
+        //
+        // In update mode(`!insert`), we already assert the seq of node_key,
+        // and `node` and `warehouse` are always updated together,
+        // so we can be sure that the warehouse is always a self-managed
+        // and is safe to update in this transaction.
+        // If the node changed(node seq does not match),
+        // just ignore, and no retry is required.
+        let is_insert = seq == MatchSeq::Exact(0);
+
+        let node_with_wh = node.clone();
+        self.unload_warehouse_info(&mut node);
+        let node_without_wh = node;
+
+        let node_key = self.node_key(&node_with_wh)?;
+        let cluster_node_key = self.cluster_node_key(&node_with_wh)?;
+        let warehouse_key = self.warehouse_info_key(&node_with_wh.warehouse_id)?;
+        let warehouse = WarehouseInfo::SelfManaged(node_with_wh.warehouse_id.clone());
+
         let mut txn = TxnRequest::default();
-        let node_key = self.node_key(&node)?;
 
         txn.condition.push(map_condition(&node_key, seq));
 
-        txn.if_then.push(TxnOp::put_with_ttl(
-            node_key.clone(),
-            serde_json::to_vec(&node)?,
-            Some(self.lift_time),
-        ));
+        let ttl = Some(self.lift_time);
+        txn.if_then = vec![
+            TxnOp::put_with_ttl(&node_key, serde_json::to_vec(&node_with_wh)?, ttl),
+            TxnOp::put_with_ttl(
+                &cluster_node_key,
+                serde_json::to_vec(&node_without_wh)?,
+                ttl,
+            ),
+            TxnOp::put_with_ttl(&warehouse_key, serde_json::to_vec(&warehouse)?, ttl),
+            TxnOp::get(&node_key),
+        ];
 
-        let cluster_node_key = self.cluster_node_key(&node)?;
-        let warehouse_info = WarehouseInfo::SelfManaged(node.warehouse_id.clone());
-        let warehouse_info_key = self.warehouse_info_key(&node.warehouse_id)?;
+        txn.else_then.push(TxnOp::get(&node_key));
 
-        self.unload_warehouse_info(&mut node);
-        txn.if_then.push(TxnOp::put_with_ttl(
-            cluster_node_key,
-            serde_json::to_vec(&node)?,
-            Some(self.lift_time),
-        ));
-
-        // upsert warehouse info if self-managed.
-
-        txn.if_then.push(TxnOp::put_with_ttl(
-            warehouse_info_key.clone(),
-            serde_json::to_vec(&warehouse_info)?,
-            Some(self.lift_time),
-        ));
-
-        txn.if_then.push(TxnOp::get(node_key.clone()));
-        txn.else_then.push(TxnOp::get(node_key.clone()));
-
-        if seq != MatchSeq::Exact(0) {
+        if !is_insert {
             return Ok(self.metastore.transaction(txn).await?);
         }
 
-        let mut exact_seq = 0;
-        let mut retry_count = 0;
+        let mut wh_seq = 0;
+        let max_retry = 20;
 
-        loop {
+        for retry_count in 0..max_retry {
             let mut warehouse_txn = txn.clone();
 
             // insert if warehouse info is not exists or SelfManaged
             warehouse_txn
                 .condition
-                .push(TxnCondition::eq_seq(warehouse_info_key.clone(), exact_seq));
-            warehouse_txn
-                .else_then
-                .push(TxnOp::get(warehouse_info_key.clone()));
+                .push(TxnCondition::eq_seq(&warehouse_key, wh_seq));
+            warehouse_txn.else_then.push(TxnOp::get(&warehouse_key));
 
-            return match self.metastore.transaction(warehouse_txn).await? {
-                mut response if !response.success => {
-                    return match response.responses.pop().and_then(|x| x.response) {
-                        Some(Response::Get(data)) => match data.value {
-                            None => Ok(response),
-                            Some(value) if value.seq == exact_seq => Ok(response),
-                            Some(value) => match serde_json::from_slice(&value.data)? {
-                                WarehouseInfo::SystemManaged(_) => {
-                                    Err(ErrorCode::WarehouseAlreadyExists(
-                                        "Already exists same name system-managed warehouse.",
-                                    ))
-                                }
-                                WarehouseInfo::SelfManaged(_) => match response.responses.first() {
-                                    // already exists node.
-                                    Some(TxnOpResponse {
-                                        response:
-                                            Some(Response::Get(TxnGetResponse {
-                                                value: Some(value),
-                                                ..
-                                            })),
-                                    }) if value.seq != 0 => Ok(response),
-                                    _ => {
-                                        log::info!("Self-managed warehouse has already been created by other nodes; attempt to join it. Retry count: {}", retry_count);
-                                        retry_count += 1;
-                                        exact_seq = value.seq;
-                                        continue;
-                                    }
-                                },
-                            },
-                        },
-                        _ => Ok(response),
-                    };
+            let mut txn_reply = self.metastore.transaction(warehouse_txn).await?;
+
+            if txn_reply.success {
+                return Ok(txn_reply);
+            }
+
+            // txn_reply includes: 1. get node response 2. get warehouse response
+
+            // 1. Check node state
+            {
+                let first = txn_reply.responses.first();
+
+                let node_get_resp = first.and_then(|r| r.as_get());
+                let node_get_resp = node_get_resp.ok_or_else(|| invalid_get_resp(first))?;
+
+                if seq.match_seq(&node_get_resp.value).is_err() {
+                    // Node changed, no more retry is needed.
+                    return Ok(txn_reply);
                 }
-                response => Ok(response),
-            };
+            }
+
+            // 2. Check warehouse state
+            {
+                // The last response is not meant to be returned.
+                let last = txn_reply.responses.pop();
+
+                let wh_get_resp = last.as_ref().and_then(|r| r.as_get());
+                let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
+
+                if let Some(wh_seqv) = &wh_get_resp.value {
+                    let wh: WarehouseInfo = serde_json::from_slice(&wh_seqv.data)?;
+
+                    match wh {
+                        WarehouseInfo::SystemManaged(_) => {
+                            return Err(ErrorCode::WarehouseAlreadyExists(
+                                "Already exists same name system-managed warehouse.",
+                            ))
+                        }
+                        WarehouseInfo::SelfManaged(_) => {
+                            // Safe to retry with the updated seq of warehouse
+                        }
+                    };
+
+                    info!(
+                        "Self-managed warehouse has already been created by other nodes;\
+                         attempt to join it. Retry count: {}",
+                        retry_count
+                    );
+                };
+
+                // Retry with the updated seq of warehouse
+                wh_seq = wh_get_resp.value.as_ref().map_or(0, |v| v.seq);
+            }
+
+            // upon retry, fallback a little while.
+            tokio::time::sleep(Duration::from_millis(30 * retry_count)).await;
         }
+
+        Err(ErrorCode::WarehouseOperateConflict(format!(
+            "Warehouse operate conflict(tried {max_retry} times)."
+        )))
     }
 
     async fn upsert_system_managed(&self, mut node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
@@ -1842,4 +1881,15 @@ impl WarehouseApi for WarehouseMgr {
             Some(seq) => Ok(Some(serde_json::from_slice(&seq.data)?)),
         }
     }
+}
+
+/// Build an error indicating that databend-meta responded with an unexpected response,
+/// while expecting a TxnGetResponse.
+fn invalid_get_resp(resp: Option<&TxnOpResponse>) -> MetaError {
+    let invalid = InvalidReply::new(
+        "Invalid response while upsert self managed node",
+        &AnyError::error("Expect TxnGetResponse"),
+    );
+    error!("{} got: {:?}", invalid, resp);
+    MetaError::from(invalid)
 }
