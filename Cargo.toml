@@ -40,6 +40,8 @@ members = [
     "src/query/functions/src/scalars/mathematics",
     "src/query/functions/src/scalars/geographic",
     "src/query/functions/src/scalars/timestamp",
+    "src/query/functions/src/scalars/numeric_basic_arithmetic",
+    "src/query/functions/src/scalars/arithmetic",
     "src/query/management",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
@@ -189,11 +191,11 @@ databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_hand
 databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars/arithmetic" }
-databend-functions-scalar-arithmetic-modulo = { path = "src/query/functions/src/scalars/arithmetic_modulo" }
 databend-functions-scalar-datetime = { path = "src/query/functions/src/scalars/timestamp" }
 databend-functions-scalar-decimal-utils = { path = "src/query/functions/src/scalars/decimal" }
 databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geographic" }
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
+databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/service" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }

@@ -3380,11 +3380,11 @@ dependencies = [
  "databend-common-openai",
  "databend-common-vector",
  "databend-functions-scalar-arithmetic",
- "databend-functions-scalar-arithmetic-modulo",
  "databend-functions-scalar-datetime",
  "databend-functions-scalar-decimal-utils",
  "databend-functions-scalar-geo",
  "databend-functions-scalar-math",
+ "databend-functions-scalar-numeric-basic-arithmetic",
  "ethnum",
  "geo",
  "geohash",
@@ -4827,21 +4827,11 @@ name = "databend-functions-scalar-arithmetic"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
- "databend-functions-scalar-arithmetic-modulo",
  "databend-functions-scalar-decimal-utils",
  "ethnum",
  "lexical-core",
  "match-template",
  "num-traits",
-]
-
-[[package]]
-name = "databend-functions-scalar-arithmetic-modulo"
-version = "0.1.0"
-dependencies = [
- "databend-common-expression",
- "num-traits",
- "strength_reduce",
 ]
 
 [[package]]
@@ -4896,6 +4886,17 @@ dependencies = [
  "databend-functions-scalar-decimal-utils",
  "match-template",
  "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-numeric-basic-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-decimal-utils",
+ "match-template",
+ "num-traits",
+ "strength_reduce",
 ]
 
 [[package]]

@@ -24,4 +24,7 @@
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
 
-pub mod arithmetic_modulo;
+mod arithmetic_modulo;
+pub mod numeric_basic_arithmetic;
+
+pub use numeric_basic_arithmetic::register_numeric_basic_arithmetic;

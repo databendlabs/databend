@@ -46,10 +46,13 @@ mod vector;
 
 pub use comparison::ALL_COMP_FUNC_NAMES;
 use databend_functions_scalar_arithmetic::arithmetic;
+use databend_functions_scalar_numeric_basic_arithmetic::register_numeric_basic_arithmetic;
 pub use string::ALL_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
+    // register basic arithmetic operation (+ - * / %)
+    register_numeric_basic_arithmetic(registry);
     arithmetic::register(registry);
     array::register(registry);
     boolean::register(registry);
