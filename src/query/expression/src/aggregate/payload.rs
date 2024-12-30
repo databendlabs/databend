@@ -27,6 +27,7 @@ use crate::get_layout_offsets;
 use crate::read;
 use crate::store;
 use crate::types::DataType;
+use crate::AggrState;
 use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -298,7 +299,10 @@ impl Payload {
 
                 let place = StateAddr::from(place);
                 for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                    aggr.init_state(place.next(*offset));
+                    aggr.init_state(AggrState {
+                        addr: place,
+                        offset: *offset,
+                    });
                 }
             }
         }
@@ -419,8 +423,10 @@ impl Drop for Payload {
                                         self.data_ptr(page, row).add(self.state_offset) as _,
                                     )
                                         as usize);
-
-                                    aggr.drop_state(state_place.next(*addr_offset));
+                                    aggr.drop_state(AggrState {
+                                        addr: state_place,
+                                        offset: *addr_offset,
+                                    });
                                 }
                             }
                         }

@@ -33,6 +33,7 @@ use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
+use crate::aggregates::AggrState;
 
 struct AggregateCountState {
     count: u64,
@@ -74,7 +75,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(DataType::Number(NumberDataType::UInt64))
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         place.write(|| AggregateCountState { count: 0 });
     }
 
@@ -86,7 +87,7 @@ impl AggregateFunction for AggregateCountFunction {
     // if not we use validity as the null signs
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -143,25 +144,25 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, _columns: InputColumns, _row: usize) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         borsh_serialize_state(writer, &state.count)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         let other: u64 = borsh_deserialize_state(reader)?;
         state.count += other;
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         let other = rhs.get::<AggregateCountState>();
         state.count += other.count;
@@ -186,7 +187,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 let state = place.get::<AggregateCountState>();

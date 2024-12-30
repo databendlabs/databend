@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AggrState;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -195,9 +196,15 @@ pub fn simulate_two_groups_group_by(
 
     // init state for two groups
     let addr1 = arena.alloc_layout(func.state_layout());
-    func.init_state(addr1.into());
+    func.init_state(AggrState {
+        addr: addr1.into(),
+        offset: 0,
+    });
     let addr2 = arena.alloc_layout(func.state_layout());
-    func.init_state(addr2.into());
+    func.init_state(AggrState {
+        addr: addr2.into(),
+        offset: 0,
+    });
 
     let places = (0..rows)
         .map(|i| {
@@ -212,8 +219,20 @@ pub fn simulate_two_groups_group_by(
     func.accumulate_keys(&places, 0, columns.into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(addr1.into(), &mut builder)?;
-    func.merge_result(addr2.into(), &mut builder)?;
+    func.merge_result(
+        AggrState {
+            addr: addr1.into(),
+            offset: 0,
+        },
+        &mut builder,
+    )?;
+    func.merge_result(
+        AggrState {
+            addr: addr2.into(),
+            offset: 0,
+        },
+        &mut builder,
+    )?;
 
     Ok((builder.build(), data_type))
 }

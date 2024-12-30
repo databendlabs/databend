@@ -19,6 +19,7 @@ use ethnum::i256;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use super::AggrState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -143,9 +144,14 @@ impl Payload {
                     .zip(self.aggrs.iter())
                     .enumerate()
                 {
-                    let arg_place = place.next(*addr_offset);
-                    aggr.serialize(arg_place, &mut state_builders[idx].data)
-                        .unwrap();
+                    aggr.serialize(
+                        AggrState {
+                            addr: *place,
+                            offset: *addr_offset,
+                        },
+                        &mut state_builders[idx].data,
+                    )
+                    .unwrap();
                     state_builders[idx].commit_row();
                 }
             }

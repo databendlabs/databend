@@ -24,6 +24,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_io::prelude::BinaryWrite;
 
+use crate::aggregates::AggrState;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -49,7 +50,7 @@ impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> 
     }
 
     #[inline]
-    pub fn set_flag(&self, place: StateAddr, flag: u8) {
+    pub fn set_flag(&self, place: AggrState, flag: u8) {
         if NULLABLE_RESULT {
             let c = place.next(self.size_of_data).get::<u8>();
             *c = flag;
@@ -57,7 +58,7 @@ impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> 
     }
 
     #[inline]
-    pub fn init_flag(&self, place: StateAddr) {
+    pub fn init_flag(&self, place: AggrState) {
         if NULLABLE_RESULT {
             let c = place.next(self.size_of_data).get::<u8>();
             *c = 0;
@@ -65,7 +66,7 @@ impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> 
     }
 
     #[inline]
-    pub fn get_flag(&self, place: StateAddr) -> u8 {
+    pub fn get_flag(&self, place: AggrState) -> u8 {
         if NULLABLE_RESULT {
             let c = place.next(self.size_of_data).get::<u8>();
             *c
@@ -90,7 +91,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         }
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         self.init_flag(place);
         self.nested.init_state(place);
     }
@@ -109,7 +110,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     #[inline]
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -156,11 +157,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                 if v.null_count() == v.len() {
                     return Ok(());
                 }
-                for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
+                for (valid, (row, addr)) in v.iter().zip(places.iter().copied().enumerate()) {
                     if valid {
-                        self.set_flag(place.next(offset), 1);
-                        self.nested
-                            .accumulate_row(place.next(offset), not_null_columns, row)?;
+                        let place = AggrState { addr, offset };
+                        self.set_flag(place, 1);
+                        self.nested.accumulate_row(place, not_null_columns, row)?;
                     }
                 }
             }
@@ -169,13 +170,15 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                     .accumulate_keys(places, offset, not_null_columns, input_rows)?;
                 places
                     .iter()
-                    .for_each(|place| self.set_flag(place.next(offset), 1));
+                    .copied()
+                    .map(|addr| AggrState { addr, offset })
+                    .for_each(|place| self.set_flag(place, 1));
             }
         }
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
         let mut validity = None;
         for col in columns.iter() {
@@ -205,7 +208,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.nested.serialize(place, writer)?;
         if NULLABLE_RESULT {
             let flag: u8 = self.get_flag(place);
@@ -214,7 +217,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         if self.get_flag(place) == 0 {
             // initial the state to remove the dirty stats
             self.init_state(place);
@@ -232,7 +235,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         if self.get_flag(place) == 0 {
             // initial the state to remove the dirty stats
             self.init_state(place);
@@ -245,7 +248,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         if NULLABLE_RESULT {
             if self.get_flag(place) == 1 {
                 match builder {
@@ -268,7 +271,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.nested.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         self.nested.drop_state(place)
     }
 

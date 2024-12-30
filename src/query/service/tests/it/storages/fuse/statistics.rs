@@ -640,3 +640,16 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_eval_aggr() -> databend_common_exception::Result<()> {
+    use databend_common_column::bitmap::Bitmap;
+
+    let col = StringType::from_data(vec!["a", "b", "c"]);
+    let validity = Bitmap::new_trued(3);
+    let col = col.wrap_nullable(Some(validity));
+
+    let (col, _) = eval_aggr("min", vec![], &[col], 3)?;
+    println!("{:?}", col);
+    Ok(())
+}

@@ -30,6 +30,7 @@ use databend_common_expression::Scalar;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
+use crate::aggregates::AggrState;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddrs;
@@ -92,7 +93,7 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.return_type()
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         self.nested.init_state(place);
     }
 
@@ -102,7 +103,7 @@ impl AggregateFunction for AggregateIfCombinator {
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -140,7 +141,7 @@ impl AggregateFunction for AggregateIfCombinator {
             .accumulate_keys(new_places_slice, offset, (&columns).into(), row_size)
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let predicate: Bitmap =
             BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
         if predicate.get_bit(row) {
@@ -150,19 +151,19 @@ impl AggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         self.nested.merge(place, reader)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         self.nested.merge_result(place, builder)
     }
 
@@ -170,7 +171,7 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         self.nested.drop_state(place);
     }
 

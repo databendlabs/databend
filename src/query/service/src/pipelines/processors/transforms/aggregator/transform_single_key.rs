@@ -25,6 +25,7 @@ use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AggrState;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
@@ -47,7 +48,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 pub struct PartialSingleStateAggregator {
     #[allow(dead_code)]
     arena: Bump,
-    places: Vec<StateAddr>,
+    addr: StateAddr,
+    offsets: Vec<usize>,
     arg_indices: Vec<Vec<usize>>,
     funcs: Vec<AggregateFunctionRef>,
 
@@ -66,22 +68,19 @@ impl PartialSingleStateAggregator {
             .layout
             .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
 
-        let place: StateAddr = arena.alloc_layout(layout).into();
-        let temp_place: StateAddr = arena.alloc_layout(layout).into();
-        let mut places = Vec::with_capacity(params.offsets_aggregate_states.len());
-
-        for (idx, func) in params.aggregate_functions.iter().enumerate() {
-            let arg_place = place.next(params.offsets_aggregate_states[idx]);
-            func.init_state(arg_place);
-            places.push(arg_place);
-
-            let state_place = temp_place.next(params.offsets_aggregate_states[idx]);
-            func.init_state(state_place);
+        let addr: StateAddr = arena.alloc_layout(layout).into();
+        for (func, &offset) in params
+            .aggregate_functions
+            .iter()
+            .zip(params.offsets_aggregate_states.iter())
+        {
+            func.init_state(AggrState { addr, offset });
         }
 
         Ok(PartialSingleStateAggregator {
             arena,
-            places,
+            addr,
+            offsets: params.offsets_aggregate_states.clone(),
             funcs: params.aggregate_functions.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
             start: Instant::now(),
@@ -108,17 +107,44 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
         let block = block.consume_convert_to_full();
 
-        for (idx, func) in self.funcs.iter().enumerate() {
-            let place = self.places[idx];
-            if is_agg_index_block {
-                // Aggregation states are in the back of the block.
-                let agg_index = block.num_columns() - self.funcs.len() + idx;
-                let agg_state = block.get_by_offset(agg_index).value.as_column().unwrap();
-
+        if is_agg_index_block {
+            for ((place, agg_state), func) in self
+                .offsets
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(idx, offset)| {
+                    let place = AggrState {
+                        addr: self.addr,
+                        offset,
+                    };
+                    // Aggregation states are in the back of the block.
+                    let agg_index = block.num_columns() - self.funcs.len() + idx;
+                    (
+                        place,
+                        block.get_by_offset(agg_index).value.as_column().unwrap(),
+                    )
+                })
+                .zip(self.funcs.iter())
+            {
                 func.batch_merge_single(place, agg_state)?;
-            } else {
-                let columns =
-                    InputColumns::new_block_proxy(self.arg_indices[idx].as_slice(), &block);
+            }
+        } else {
+            for ((place, columns), func) in self
+                .offsets
+                .iter()
+                .copied()
+                .map(|offset| AggrState {
+                    addr: self.addr,
+                    offset,
+                })
+                .zip(
+                    self.arg_indices
+                        .iter()
+                        .map(|indices| InputColumns::new_block_proxy(indices.as_slice(), &block)),
+                )
+                .zip(self.funcs.iter())
+            {
                 func.accumulate(place, columns, None, block.num_rows())?;
             }
         }
@@ -130,29 +156,39 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
     }
 
     fn on_finish(&mut self, generate_data: bool) -> Result<Vec<DataBlock>> {
-        let mut generate_data_block = vec![];
+        let blocks = if generate_data {
+            let columns = self
+                .funcs
+                .iter()
+                .zip(self.offsets.iter().map(|&offset| AggrState {
+                    addr: self.addr,
+                    offset,
+                }))
+                .map(|(func, place)| {
+                    let mut data = Vec::new();
+                    func.serialize(place, &mut data)?;
 
-        if generate_data {
-            let mut columns = Vec::with_capacity(self.funcs.len());
+                    Ok(BlockEntry::new(
+                        DataType::Binary,
+                        Value::Scalar(Scalar::Binary(data)),
+                    ))
+                })
+                .collect::<Result<_>>()?;
 
-            for (idx, func) in self.funcs.iter().enumerate() {
-                let place = self.places[idx];
-
-                let mut data = Vec::with_capacity(4);
-                func.serialize(place, &mut data)?;
-                columns.push(BlockEntry::new(
-                    DataType::Binary,
-                    Value::Scalar(Scalar::Binary(data)),
-                ));
-            }
-
-            generate_data_block = vec![DataBlock::new(columns, 1)];
-        }
+            vec![DataBlock::new(columns, 1)]
+        } else {
+            vec![]
+        };
 
         // destroy states
-        for (place, func) in self.places.iter().zip(self.funcs.iter()) {
+        for (&offset, func) in self.offsets.iter().zip(self.funcs.iter()) {
             if func.need_manual_drop_state() {
-                unsafe { func.drop_state(*place) }
+                unsafe {
+                    func.drop_state(AggrState {
+                        addr: self.addr,
+                        offset,
+                    })
+                }
             }
         }
 
@@ -170,7 +206,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             convert_byte_size(self.bytes as _),
         );
 
-        Ok(generate_data_block)
+        Ok(blocks)
     }
 }
 
@@ -213,11 +249,14 @@ impl FinalSingleStateAggregator {
         let place: StateAddr = self.arena.alloc_layout(self.layout).into();
         self.funcs
             .iter()
-            .enumerate()
-            .map(|(idx, func)| {
-                let arg_place = place.next(self.offsets_aggregate_states[idx]);
+            .zip(self.offsets_aggregate_states.iter())
+            .map(|(func, &offset)| {
+                let arg_place = AggrState {
+                    addr: place,
+                    offset,
+                };
                 func.init_state(arg_place);
-                arg_place
+                place.next(offset)
             })
             .collect()
     }
@@ -254,7 +293,10 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
 
             let main_places = self.new_places();
             for (index, func) in self.funcs.iter().enumerate() {
-                let main_place = main_places[index];
+                let main_place = AggrState {
+                    addr: main_places[index],
+                    offset: 0,
+                };
                 for col in self.to_merge_data[index].iter() {
                     func.batch_merge_single(main_place, col)?;
                 }
@@ -270,7 +312,12 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             // destroy states
             for (place, func) in main_places.iter().zip(self.funcs.iter()) {
                 if func.need_manual_drop_state() {
-                    unsafe { func.drop_state(*place) }
+                    unsafe {
+                        func.drop_state(AggrState {
+                            addr: *place,
+                            offset: 0,
+                        })
+                    }
                 }
             }
 

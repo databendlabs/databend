@@ -27,7 +27,7 @@ use databend_common_expression::Scalar;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
-use super::StateAddr;
+use crate::aggregates::AggrState;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -108,7 +108,7 @@ pub fn assert_variadic_arguments<D: Display>(
 }
 
 struct EvalAggr {
-    addr: StateAddr,
+    addr: AggrState,
     _arena: Bump,
     func: AggregateFunctionRef,
 }
@@ -117,7 +117,10 @@ impl EvalAggr {
     fn new(func: AggregateFunctionRef) -> Self {
         let _arena = Bump::new();
         let place = _arena.alloc_layout(func.state_layout());
-        let addr = place.into();
+        let addr = AggrState {
+            addr: place.into(),
+            offset: 0,
+        };
         func.init_state(addr);
 
         Self { _arena, func, addr }

@@ -29,13 +29,37 @@ use crate::Scalar;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
+#[derive(Debug, Clone, Copy)]
+pub struct AggrState {
+    pub addr: StateAddr,
+    pub offset: usize,
+}
+
+impl AggrState {
+    pub fn get<'a, T>(&self) -> &'a mut T {
+        self.addr.next(self.offset).get::<T>()
+    }
+
+    pub fn write<T, F>(&self, f: F)
+    where F: FnOnce() -> T {
+        self.addr.next(self.offset).write(f);
+    }
+
+    pub fn next(&self, offset: usize) -> AggrState {
+        AggrState {
+            addr: self.addr,
+            offset: self.offset + offset,
+        }
+    }
+}
+
 /// AggregateFunction
 /// In AggregateFunction, all datablock columns are not ConstantColumn, we take the column as Full columns
 pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
     fn return_type(&self) -> Result<DataType>;
 
-    fn init_state(&self, place: StateAddr);
+    fn init_state(&self, place: AggrState);
 
     fn is_state(&self) -> bool {
         false
@@ -47,10 +71,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // common used when there is no group by for aggregate function
     fn accumulate(
         &self,
-        _place: StateAddr,
-        _columns: InputColumns,
-        _validity: Option<&Bitmap>,
-        _input_rows: usize,
+        place: AggrState,
+        columns: InputColumns,
+        validity: Option<&Bitmap>,
+        input_rows: usize,
     ) -> Result<()>;
 
     // used when we need to calculate with group keys
@@ -62,13 +86,20 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         _input_rows: usize,
     ) -> Result<()> {
         for (row, place) in places.iter().enumerate() {
-            self.accumulate_row(place.next(offset), columns, row)?;
+            self.accumulate_row(
+                AggrState {
+                    addr: *place,
+                    offset,
+                },
+                columns,
+                row,
+            )?;
         }
         Ok(())
     }
 
     // Used in aggregate_null_adaptor
-    fn accumulate_row(&self, _place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()>;
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()>;
 
     // serialize  the state into binary array
     fn batch_serialize(
@@ -78,31 +109,43 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         builder: &mut BinaryColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.serialize(place.next(offset), &mut builder.data)?;
+            self.serialize(
+                AggrState {
+                    addr: *place,
+                    offset,
+                },
+                &mut builder.data,
+            )?;
             builder.commit_row();
         }
         Ok(())
     }
 
-    fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
 
     fn serialize_size_per_row(&self) -> Option<usize> {
         None
     }
 
-    fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()>;
 
     /// Batch merge and deserialize the state from binary array
     fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
         let c = column.as_binary().unwrap();
         for (place, mut data) in places.iter().zip(c.iter()) {
-            self.merge(place.next(offset), &mut data)?;
+            self.merge(
+                AggrState {
+                    addr: *place,
+                    offset,
+                },
+                &mut data,
+            )?;
         }
 
         Ok(())
     }
 
-    fn batch_merge_single(&self, place: StateAddr, column: &Column) -> Result<()> {
+    fn batch_merge_single(&self, place: AggrState, column: &Column) -> Result<()> {
         let c = column.as_binary().unwrap();
 
         for mut data in c.iter() {
@@ -118,12 +161,18 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         offset: usize,
     ) -> Result<()> {
         for (place, rhs) in places.iter().zip(rhses.iter()) {
-            self.merge_states(place.next(offset), rhs.next(offset))?;
+            self.merge_states(
+                AggrState {
+                    addr: *place,
+                    offset,
+                },
+                AggrState { addr: *rhs, offset },
+            )?;
         }
         Ok(())
     }
 
-    fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()>;
 
     fn batch_merge_result(
         &self,
@@ -132,12 +181,18 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.merge_result(place.next(offset), builder)?;
+            self.merge_result(
+                AggrState {
+                    addr: *place,
+                    offset,
+                },
+                builder,
+            )?;
         }
         Ok(())
     }
     // TODO append the value into the column builder
-    fn merge_result(&self, _place: StateAddr, _builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()>;
 
     // std::mem::needs_drop::<State>
     // if true will call drop_state
@@ -147,7 +202,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     /// # Safety
     /// The caller must ensure that the [`_place`] has defined memory.
-    unsafe fn drop_state(&self, _place: StateAddr) {}
+    unsafe fn drop_state(&self, _place: AggrState) {}
 
     fn get_own_null_adaptor(
         &self,
