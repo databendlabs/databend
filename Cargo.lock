@@ -304,12 +304,6 @@ checksum = "9d151e35f61089500b617991b791fc8bfd237ae50cd5950803758a179b41e67a"
 
 [[package]]
 name = "arrayvec"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
-
-[[package]]
-name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
@@ -1489,7 +1483,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23285ad32269793932e830392f2fe2f83e26488fd3ec778883a93c8323735780"
 dependencies = [
  "arrayref",
- "arrayvec 0.7.4",
+ "arrayvec",
  "constant_time_eq",
 ]
 
@@ -1500,7 +1494,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9ec96fe9a81b5e365f9db71fe00edc4fe4ca2cc7dcb7861f0603012a7caa210"
 dependencies = [
  "arrayref",
- "arrayvec 0.7.4",
+ "arrayvec",
  "cc",
  "cfg-if",
  "constant_time_eq",
@@ -3001,7 +2995,6 @@ dependencies = [
  "ordered-float 4.5.0",
  "percent-encoding",
  "pratt",
- "pretty",
  "pretty_assertions",
  "recursive",
  "rspack-codespan-reporting",
@@ -10186,7 +10179,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
 dependencies = [
- "arrayvec 0.7.4",
+ "arrayvec",
  "itoa",
 ]
 
@@ -11226,18 +11219,6 @@ checksum = "41b740d195ed3166cd147c8047ec98db0e22ec019eb8eeb76d343b795304fb13"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "pretty"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83f3aa1e3ca87d3b124db7461265ac176b40c277f37e503eaa29c9c75c037846"
-dependencies = [
- "arrayvec 0.5.2",
- "log",
- "typed-arena",
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -12538,7 +12519,7 @@ version = "1.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1790d1c4c0ca81211399e0e0af16333276f375209e71a37b67698a373db5b47a"
 dependencies = [
- "arrayvec 0.7.4",
+ "arrayvec",
  "borsh",
  "bytes",
  "num-traits",
@@ -14842,12 +14823,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "typed-arena"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
-
-[[package]]
 name = "typed-builder"
 version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14944,7 +14919,7 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c8a2469e56e6e5095c82ccd3afb98dad95f7af7929aab6d8ba8d6e0f73657da"
 dependencies = [
- "arrayvec 0.7.4",
+ "arrayvec",
 ]
 
 [[package]]
