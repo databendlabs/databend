@@ -3292,7 +3292,7 @@ SELECT gross_margin,
        i_category,
        i_class,
        lochierarchy,
-       rank() OVER ( PARTITION BY lochierarchy,
+       rank() OVER (PARTITION BY lochierarchy,
                                   CASE
                                       WHEN t_class = 0 THEN i_category
                                   END
@@ -7317,7 +7317,7 @@ SELECT sum(ws_net_paid) AS total_sum ,
        i_category ,
        i_class ,
        grouping(i_category)+grouping(i_class) AS lochierarchy ,
-       rank() OVER ( PARTITION BY grouping(i_category)+grouping(i_class),
+       rank() OVER (PARTITION BY grouping(i_category)+grouping(i_class),
                                   CASE
                                       WHEN grouping(i_class) = 0 THEN i_category
                                   END
