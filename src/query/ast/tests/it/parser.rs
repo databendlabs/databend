@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::pretty_statement;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::expr::*;
@@ -900,6 +901,8 @@ fn test_statement() {
         writeln!(file, "{}", src).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", stmt).unwrap();
+        writeln!(file, "---------- Pretty ---------").unwrap();
+        writeln!(file, "{}", pretty_statement(stmt.clone(), 80).unwrap()).unwrap();
         writeln!(file, "---------- AST ------------").unwrap();
         writeln!(file, "{:#?}", stmt).unwrap();
         writeln!(file, "\n").unwrap();

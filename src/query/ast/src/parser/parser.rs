@@ -16,6 +16,7 @@ use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use pretty_assertions::assert_eq;
 
+use crate::ast::pretty_statement;
 use crate::ast::ExplainKind;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -148,19 +149,29 @@ pub fn run_parser<O>(
 #[allow(dead_code)]
 fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     let stmt = reset_ast(stmt);
+
+    let pretty_sql = pretty_statement(stmt.stmt.clone(), 80).unwrap();
     let new_sql = stmt.to_string();
-    let new_tokens = crate::parser::tokenize_sql(&new_sql).unwrap();
-    let new_stmt = run_parser(
-        &new_tokens,
-        Dialect::PostgreSQL,
-        ParseMode::Default,
-        false,
-        statement,
-    )
-    .map_err(|err| panic!("{}", err.1))
-    .unwrap();
-    let new_stmt = reset_ast(new_stmt);
-    assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql);
+
+    for (index, s) in [new_sql, pretty_sql].iter().enumerate() {
+        let new_tokens = crate::parser::tokenize_sql(&s).unwrap();
+        let new_stmt = run_parser(
+            &new_tokens,
+            Dialect::PostgreSQL,
+            ParseMode::Default,
+            false,
+            statement,
+        )
+        .map_err(|err| panic!("{} in {}", err.1, s))
+        .unwrap();
+
+        let new_stmt = reset_ast(new_stmt);
+        if index == 0 {
+            assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, s);
+        } else {
+            assert_eq!(stmt.stmt, new_stmt.stmt, "\nleft:\n{}\nright:\n{}", sql, s);
+        }
+    }
 }
 
 #[allow(dead_code)]

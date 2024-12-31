@@ -81,12 +81,26 @@ fn pretty_body(body: SetExpr) -> RcDoc<'static> {
         } else {
             RcDoc::text("SELECT")
         }
+        .append(if let Some(t) = select_stmt.top_n {
+            RcDoc::space()
+                .append(RcDoc::text("TOP "))
+                .append(RcDoc::text(t.to_string()))
+        } else {
+            RcDoc::nil()
+        })
         .append(pretty_select_list(select_stmt.select_list))
         .append(pretty_from(select_stmt.from))
         .append(pretty_selection(select_stmt.selection))
         .append(pretty_group_by(select_stmt.group_by))
         .append(pretty_having(select_stmt.having))
-        .append(pretty_window(select_stmt.window_list)),
+        .append(pretty_window(select_stmt.window_list))
+        .append(if let Some(f) = select_stmt.qualify {
+            RcDoc::line()
+                .append(RcDoc::text("QUALIFY "))
+                .append(pretty_expr(f))
+        } else {
+            RcDoc::nil()
+        }),
         SetExpr::Query(query) => parenthesized(pretty_query(*query)),
         SetExpr::SetOperation(set_operation) => pretty_body(*set_operation.left)
             .append(
@@ -314,9 +328,8 @@ fn pretty_window(window: Option<Vec<WindowDefinition>>) -> RcDoc<'static> {
 fn pretty_window_def(def: WindowDefinition) -> RcDoc<'static> {
     RcDoc::text(def.name.to_string())
         .append(RcDoc::space())
-        .append(RcDoc::text("AS ("))
+        .append(RcDoc::text("AS "))
         .append(RcDoc::text(def.spec.to_string()))
-        .append(RcDoc::text(")"))
 }
 
 pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {

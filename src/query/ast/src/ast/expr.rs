@@ -1241,27 +1241,42 @@ pub struct WindowSpec {
 impl Display for WindowSpec {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "(")?;
+
+        let mut write = false;
+
         if let Some(existing_window_name) = &self.existing_window_name {
-            write!(f, " {existing_window_name}")?;
+            write!(f, "{existing_window_name}")?;
+            write = true;
         }
 
         if !self.partition_by.is_empty() {
-            write!(f, " PARTITION BY ")?;
+            if write {
+                write!(f, " ")?;
+            }
+            write = true;
+            write!(f, "PARTITION BY ")?;
             write_comma_separated_list(f, &self.partition_by)?;
         }
 
         if !self.order_by.is_empty() {
-            write!(f, " ORDER BY ")?;
+            if write {
+                write!(f, " ")?;
+            }
+            write = true;
+            write!(f, "ORDER BY ")?;
             write_comma_separated_list(f, &self.order_by)?;
         }
 
         if let Some(frame) = &self.window_frame {
+            if write {
+                write!(f, " ")?;
+            }
             match frame.units {
                 WindowFrameUnits::Rows => {
-                    write!(f, " ROWS")?;
+                    write!(f, "ROWS")?;
                 }
                 WindowFrameUnits::Range => {
-                    write!(f, " RANGE")?;
+                    write!(f, "RANGE")?;
                 }
             }
 
@@ -1281,7 +1296,7 @@ impl Display for WindowSpec {
                 format_frame(&frame.end_bound)
             )?
         }
-        write!(f, " )")?;
+        write!(f, ")")?;
         Ok(())
     }
 }

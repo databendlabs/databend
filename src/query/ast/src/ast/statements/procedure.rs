@@ -94,47 +94,47 @@ impl Display for CreateProcedureStmt {
     // LANGUAGE SQL
     // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
+        write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, "OR REPLACE ")?;
+            write!(f, " OR REPLACE")?;
         }
-        write!(f, "PROCEDURE ")?;
+        write!(f, " PROCEDURE")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, "IF NOT EXISTS ")?;
+            write!(f, " IF NOT EXISTS")?;
         }
-        write!(f, "{}", self.name.name)?;
+        write!(f, " {}", self.name.name)?;
         if let Some(args) = &self.args {
             if args.is_empty() {
-                write!(f, "() ")?;
+                write!(f, " ()")?;
             } else {
-                write!(f, "(")?;
+                write!(f, " (")?;
                 write_comma_separated_list(f, args.clone())?;
-                write!(f, ") ")?;
+                write!(f, ")")?;
             }
         } else {
-            write!(f, "() ")?;
+            write!(f, " ()")?;
         }
         if self.return_type.len() == 1 {
             if let Some(name) = &self.return_type[0].name {
                 write!(
                     f,
-                    "RETURNS TABLE({} {}) ",
+                    " RETURNS TABLE({} {})",
                     name, self.return_type[0].data_type
                 )?;
             } else {
-                write!(f, "RETURNS {} ", self.return_type[0].data_type)?;
+                write!(f, " RETURNS {}", self.return_type[0].data_type)?;
             }
         } else {
-            write!(f, "RETURNS TABLE(")?;
+            write!(f, " RETURNS TABLE(")?;
             write_comma_separated_list(f, self.return_type.clone())?;
-            write!(f, ") ")?;
+            write!(f, ")")?;
         }
 
-        write!(f, "{}", self.language)?;
+        write!(f, " {}", self.language)?;
         if let Some(comment) = &self.comment {
-            write!(f, "COMMENT='{}' ", comment)?;
+            write!(f, " COMMENT='{}'", comment)?;
         }
-        write!(f, "AS $$\n{}\n$$", self.script)?;
+        write!(f, " AS $$\n{}\n$$", self.script)?;
         Ok(())
     }
 }
@@ -167,11 +167,11 @@ impl Display for DescProcedureStmt {
         write!(f, "DESCRIBE PROCEDURE {}", self.name)?;
 
         if self.args.is_empty() {
-            write!(f, "() ")?;
+            write!(f, "()")?;
         } else {
             write!(f, "(")?;
             write_comma_separated_list(f, self.args.clone())?;
-            write!(f, ") ")?;
+            write!(f, ")")?;
         }
 
         Ok(())
