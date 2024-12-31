@@ -22,7 +22,6 @@ use databend_common_exception::Result;
 use super::AggrStateLoc;
 use super::StateAddr;
 use crate::types::DataType;
-use crate::Column;
 use crate::ColumnBuilder;
 use crate::InputColumns;
 use crate::Scalar;
@@ -99,9 +98,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         loc: Box<[AggrStateLoc]>,
-        column: &Column,
+        columns: InputColumns,
     ) -> Result<()> {
-        let c = column.as_binary().unwrap();
+        let idx = *loc[0].as_custom().unwrap().0;
+        let c = columns[idx].as_binary().unwrap();
         for (place, mut data) in places.iter().zip(c.iter()) {
             self.merge(&AggrState::with_loc(*place, loc.clone()), &mut data)?;
         }

@@ -57,7 +57,7 @@ impl SerializedPayload {
         let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
         let mut state = ProbeState::default();
-        let agg_len = aggrs.len();
+        let agg_len = aggrs.len(); // todo check
         let group_len = group_types.len();
         let mut hashtable = AggregateHashTable::new_directly(
             group_types,

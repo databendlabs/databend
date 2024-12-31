@@ -199,32 +199,25 @@ impl AggregateHashTable {
             }
 
             let state_places = &state.state_places.as_slice()[0..row_count];
-
+            let states_layout = self.payload.state_layout.as_ref().unwrap();
             if agg_states.is_empty() {
-                for ((aggr, params), loc) in self.payload.aggrs.iter().zip(params.iter()).zip(
-                    self.payload
-                        .state_layout
-                        .as_ref()
-                        .unwrap()
-                        .loc
-                        .iter()
-                        .cloned(),
-                ) {
+                for ((aggr, params), loc) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(params.iter())
+                    .zip(states_layout.loc.iter().cloned())
+                {
                     aggr.accumulate_keys(state_places, loc, *params, row_count)?;
                 }
             } else {
-                for ((aggr, agg_state), loc) in
-                    self.payload.aggrs.iter().zip(agg_states.iter()).zip(
-                        self.payload
-                            .state_layout
-                            .as_ref()
-                            .unwrap()
-                            .loc
-                            .iter()
-                            .cloned(),
-                    )
+                for (aggr, loc) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(states_layout.loc.iter().cloned())
                 {
-                    aggr.batch_merge(state_places, loc, agg_state)?;
+                    aggr.batch_merge(state_places, loc, agg_states)?;
                 }
             }
         }
@@ -418,16 +411,10 @@ impl AggregateHashTable {
             let state = &mut flush_state.probe_state;
             let places = &state.state_places.as_slice()[0..row_count];
             let rhses = &flush_state.state_places.as_slice()[0..row_count];
-            for (aggr, loc) in self.payload.aggrs.iter().zip(
-                self.payload
-                    .state_layout
-                    .as_ref()
-                    .unwrap()
-                    .loc
-                    .iter()
-                    .cloned(),
-            ) {
-                aggr.batch_merge_states(places, rhses, loc)?;
+            if let Some(layout) = self.payload.state_layout.as_ref() {
+                for (aggr, loc) in self.payload.aggrs.iter().zip(layout.loc.iter().cloned()) {
+                    aggr.batch_merge_states(places, rhses, loc)?;
+                }
             }
         }
 
@@ -435,19 +422,19 @@ impl AggregateHashTable {
     }
 
     pub fn merge_result(&mut self, flush_state: &mut PayloadFlushState) -> Result<bool> {
-        if self.payload.flush(flush_state) {
-            let row_count = flush_state.row_count;
+        if !self.payload.flush(flush_state) {
+            return Ok(false);
+        }
 
-            flush_state.aggregate_results.clear();
-            for (aggr, loc) in self.payload.aggrs.iter().zip(
-                self.payload
-                    .state_layout
-                    .as_ref()
-                    .unwrap()
-                    .loc
-                    .iter()
-                    .cloned(),
-            ) {
+        let row_count = flush_state.row_count;
+        flush_state.aggregate_results.clear();
+        if let Some(states_layout) = self.payload.state_layout.as_ref() {
+            for (aggr, loc) in self
+                .payload
+                .aggrs
+                .iter()
+                .zip(states_layout.loc.iter().cloned())
+            {
                 let return_type = aggr.return_type()?;
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
 
@@ -458,9 +445,8 @@ impl AggregateHashTable {
                 )?;
                 flush_state.aggregate_results.push(builder.build());
             }
-            return Ok(true);
         }
-        Ok(false)
+        Ok(true)
     }
 
     fn maybe_repartition(&mut self) -> bool {
