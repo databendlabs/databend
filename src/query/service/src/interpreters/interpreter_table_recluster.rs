@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -22,9 +23,12 @@ use databend_common_exception::Result;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::Recluster;
+use databend_common_sql::MetadataRef;
 use log::error;
 use log::warn;
 
+use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
@@ -75,6 +79,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let mut times = 0;
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
+        let plan: Recluster = self.s_expr.plan().clone().try_into()?;
         loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
@@ -83,7 +88,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 return Err(err.with_context("failed to execute"));
             }
 
-            let res = self.execute_recluster().await;
+            let res = self.execute_recluster(plan.clone()).await;
 
             match res {
                 Ok(is_break) => {
@@ -130,6 +135,10 @@ impl Interpreter for ReclusterTableInterpreter {
                 );
                 break;
             }
+
+            self.ctx.clear_selected_segment_locations();
+            self.ctx
+                .evict_table_from_cache(&plan.catalog, &plan.database, &plan.table)?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -137,9 +146,8 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
-    async fn execute_recluster(&self) -> Result<bool> {
+    async fn execute_recluster(&self, plan: Recluster) -> Result<bool> {
         let start = SystemTime::now();
-        let plan: Recluster = self.s_expr.plan().clone().try_into()?;
 
         // try to add lock table.
         let lock_guard = self
@@ -148,11 +156,8 @@ impl ReclusterTableInterpreter {
             .acquire_table_lock(&plan.catalog, &plan.database, &plan.table, &self.lock_opt)
             .await?;
 
-        let mut builder = PhysicalPlanBuilder::new(plan.metadata.clone(), self.ctx.clone(), false);
-        let physical_plan = match builder
-            .build(&self.s_expr, plan.bind_context.column_set())
-            .await
-        {
+        let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
+        let physical_plan = match builder.build(&self.s_expr, HashSet::new()).await {
             Ok(res) => res,
             Err(e) => {
                 return if e.code() == ErrorCode::NO_NEED_TO_RECLUSTER {
@@ -165,7 +170,7 @@ impl ReclusterTableInterpreter {
 
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        assert!(build_res.main_pipeline.is_complete_pipeline()?);
+        debug_assert!(build_res.main_pipeline.is_complete_pipeline()?);
 
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         build_res.set_max_threads(max_threads);
@@ -184,6 +189,10 @@ impl ReclusterTableInterpreter {
         drop(complete_executor);
         // make sure the lock guard is dropped before the next loop.
         drop(lock_guard);
+
+        // vacuum temp files.
+        hook_vacuum_temp_files(&self.ctx)?;
+        hook_disk_temp_dir(&self.ctx)?;
 
         InterpreterClusteringHistory::write_log(&self.ctx, start, &plan.database, &plan.table)?;
         Ok(false)
