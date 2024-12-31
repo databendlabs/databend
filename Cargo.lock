@@ -3379,7 +3379,12 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
- "dtparse",
+ "databend-functions-scalar-arithmetic",
+ "databend-functions-scalar-datetime",
+ "databend-functions-scalar-decimal",
+ "databend-functions-scalar-geo",
+ "databend-functions-scalar-math",
+ "databend-functions-scalar-numeric-basic-arithmetic",
  "ethnum",
  "geo",
  "geohash",
@@ -4815,6 +4820,83 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
+]
+
+[[package]]
+name = "databend-functions-scalar-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-decimal",
+ "ethnum",
+ "lexical-core",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-datetime"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "databend-common-column",
+ "databend-common-exception",
+ "databend-common-expression",
+ "dtparse",
+ "jiff",
+ "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-decimal"
+version = "0.1.0"
+dependencies = [
+ "databend-common-base",
+ "databend-common-expression",
+ "ethnum",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-geo"
+version = "0.1.0"
+dependencies = [
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-io",
+ "geo",
+ "geohash",
+ "geozero",
+ "h3o",
+ "hex",
+ "jsonb",
+ "num-traits",
+ "once_cell",
+ "proj4rs",
+]
+
+[[package]]
+name = "databend-functions-scalar-math"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "databend-common-base",
+ "databend-common-expression",
+ "databend-functions-scalar-decimal",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
+name = "databend-functions-scalar-numeric-basic-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-decimal",
+ "match-template",
+ "num-traits",
+ "strength_reduce",
 ]
 
 [[package]]

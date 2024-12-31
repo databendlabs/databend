@@ -1,0 +1,14 @@
+[package]
+name = "databend-functions-scalar-decimal"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+databend-common-base = { workspace = true }
+databend-common-expression = { workspace = true }
+ethnum = { workspace = true }
+match-template = { workspace = true }
+num-traits = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]
