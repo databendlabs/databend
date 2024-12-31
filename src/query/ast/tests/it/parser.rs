@@ -765,6 +765,8 @@ fn test_statement() {
         r#"SELECT first_value(d) respect nulls OVER (w) FROM e;"#,
         r#"SELECT sum(d) IGNORE NULLS OVER (w) FROM e;"#,
         r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
+        r#"SELECT number, rank() OVER ( PARTITION BY number % 3 ORDER BY number )
+  FROM numbers(10) where number > 10 and number > 9 and number > 8;"#,
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,

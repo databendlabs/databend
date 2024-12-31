@@ -22960,6 +22960,299 @@ Query(
 
 
 ---------- Input ----------
+SELECT number, rank() OVER ( PARTITION BY number % 3 ORDER BY number )
+FROM numbers(10) where number > 10 and number > 9 and number > 8;
+---------- Output ---------
+SELECT number, rank() OVER ( PARTITION BY number % 3 ORDER BY number ) FROM numbers(10) WHERE number > 10 AND number > 9 AND number > 8
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..135,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..135,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..13,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..13,
+                                        ),
+                                        name: "number",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                15..70,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        15..19,
+                                    ),
+                                    name: "rank",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                window: Some(
+                                    WindowDesc {
+                                        ignore_nulls: None,
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: None,
+                                                partition_by: [
+                                                    BinaryOp {
+                                                        span: Some(
+                                                            49..50,
+                                                        ),
+                                                        op: Modulo,
+                                                        left: ColumnRef {
+                                                            span: Some(
+                                                                42..48,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            42..48,
+                                                                        ),
+                                                                        name: "number",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        right: Literal {
+                                                            span: Some(
+                                                                51..52,
+                                                            ),
+                                                            value: UInt64(
+                                                                3,
+                                                            ),
+                                                        },
+                                                    },
+                                                ],
+                                                order_by: [
+                                                    OrderByExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                62..68,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            62..68,
+                                                                        ),
+                                                                        name: "number",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        asc: None,
+                                                        nulls_first: None,
+                                                    },
+                                                ],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            76..87,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                76..83,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    84..86,
+                                ),
+                                value: UInt64(
+                                    10,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: Some(
+                            121..124,
+                        ),
+                        op: And,
+                        left: BinaryOp {
+                            span: Some(
+                                106..109,
+                            ),
+                            op: And,
+                            left: BinaryOp {
+                                span: Some(
+                                    101..102,
+                                ),
+                                op: Gt,
+                                left: ColumnRef {
+                                    span: Some(
+                                        94..100,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    94..100,
+                                                ),
+                                                name: "number",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        103..105,
+                                    ),
+                                    value: UInt64(
+                                        10,
+                                    ),
+                                },
+                            },
+                            right: BinaryOp {
+                                span: Some(
+                                    117..118,
+                                ),
+                                op: Gt,
+                                left: ColumnRef {
+                                    span: Some(
+                                        110..116,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    110..116,
+                                                ),
+                                                name: "number",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        119..120,
+                                    ),
+                                    value: UInt64(
+                                        9,
+                                    ),
+                                },
+                            },
+                        },
+                        right: BinaryOp {
+                            span: Some(
+                                132..133,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    125..131,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                125..131,
+                                            ),
+                                            name: "number",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            right: Literal {
+                                span: Some(
+                                    134..135,
+                                ),
+                                value: UInt64(
+                                    8,
+                                ),
+                            },
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  d20_0014.* TO ROLE 'd20_0015_owner'
