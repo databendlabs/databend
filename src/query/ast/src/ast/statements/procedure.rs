@@ -105,14 +105,14 @@ impl Display for CreateProcedureStmt {
         write!(f, " {}", self.name.name)?;
         if let Some(args) = &self.args {
             if args.is_empty() {
-                write!(f, " ()")?;
+                write!(f, "()")?;
             } else {
-                write!(f, " (")?;
+                write!(f, "(")?;
                 write_comma_separated_list(f, args.clone())?;
                 write!(f, ")")?;
             }
         } else {
-            write!(f, " ()")?;
+            write!(f, "()")?;
         }
         if self.return_type.len() == 1 {
             if let Some(name) = &self.return_type[0].name {
